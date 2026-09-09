@@ -354,6 +354,28 @@ for i in range(103):
         found = (len(images) - 1, 0)
     entry.append((found[0], found[1], rx, ry))
 
+# Object sprites are drawn at tile-aligned y (object y = ty*8), so their top scanline sits
+# 2*refy below a char-row boundary whatever the camera does (the wy/wfine terms cancel
+# mod 8).  Snap refy to a multiple of 4 game px wherever that saves a whole char row of
+# blit + erase: the image moves by at most 2 px (nearest multiple; ties move it up).
+# Cleo (0..26) and the boomerang (27..31) are not tile-aligned and are left alone.
+snapped = []
+for i in range(32, 103):
+    e = entry[i]
+    if e is None:
+        continue
+    j, mirror, rx, ry = e
+    lines = images[j][0].shape[0] * 2
+    rows = lambda r: (((-2 * r) % 8) + lines + 7) // 8
+    if ry % 4 == 0:
+        continue
+    down, up = ry - ry % 4, ry + (4 - ry % 4)
+    cand = up if (up - ry) <= (ry - down) else down
+    if rows(cand) < rows(ry):
+        entry[i] = (j, mirror, rx, cand)
+        snapped.append((i, ry, cand))
+print('refy snapped:', snapped)
+
 # Bank 4 layout (sprite table moved to main RAM; ANDY 4K holds the overflow):
 #   FONT $8000 (320)  DIGITS $8140 (640)  BAR $83C0 (1280)  sprite data from $88C0..$C000
 SPR_FONT   = 0x8000
