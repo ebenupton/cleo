@@ -1892,10 +1892,11 @@ build_sections:
         sta SECTAB+22,x
         lda tmp3
         sta SECTAB+23,x
-        ; P2
-        lda w16b+1
+        ; P2 (partial bottom row): the row below the visible playfield, top f lines.
+        ; w16 currently = S + 27*80 (advanced through P1); use it rather than the bar.
+        lda w16+1
         sta SECTAB+24,x
-        lda w16b
+        lda w16
         sta SECTAB+25,x
         lda #0
         sta SECTAB+26,x
