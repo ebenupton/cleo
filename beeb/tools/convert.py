@@ -194,6 +194,14 @@ for cid, orig in enumerate(compact):
 # pre-composited box sprite that needs neither masking nor erasing (see the sprite section)
 DARK_FRAC = 0.6
 tile_class = []
+# solid tiles (the sky, and pure black) are filled by drawrow with a constant instead of
+# being copied: flagged in the page-table entry (hi bit 6 = solid, lo bit 4 = cyan)
+tile_solid = {}
+for cid, col in enumerate(tile_preview):
+    if np.all((col & 7) == 6):
+        tile_solid[cid] = 1
+    elif np.all((col & 7) == 0):
+        tile_solid[cid] = 2
 for col in tile_preview:
     if np.all(col == 6):
         tile_class.append(1)
@@ -315,6 +323,9 @@ for (lv, sub), L in levels.items():
             for i, cid in enumerate(tables[p][0]):
                 lo[i] = ((cid & 3) << 6) | (5 + (cid >> 8))
                 hi[i] = 0x80 | ((cid & 255) >> 2)
+                if cid in tile_solid:
+                    hi[i] |= 0x40
+                    lo[i] |= 0x10 if tile_solid[cid] == 1 else 0
         pack += lo + hi
     pack += bytes(rowpage).ljust(128, b'\0')      # $8400
     hdr = bytearray()

@@ -66,6 +66,7 @@ start:
         jsr loadfile
         lda #FI_ALT
         jsr loadfile
+        jsr music_init              ; period table out of the tile bits into RAM
         lda #$34
         sta seed
         lda #$12
@@ -369,7 +370,3 @@ sfx_die:   .byte $C0|0, 12, $D0, 6, $C0|0, 16, $D1, 6, $C0|0, 22, $D2, 8, $C0|0,
         .code
 SPR_TABLE:
         .incbin "build/SPRTAB"
-; music period table (72 notes x 2); the sequence itself lives in the top two bits of
-; the bank-5 tile bytes (tools/embed_music.py)
-music_tab:
-        .incbin "build/MUSTAB"

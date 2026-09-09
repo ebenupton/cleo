@@ -199,6 +199,7 @@ SFXREQ:    .res 1
 SFXDUR:    .res 1
 MUSON:     .res 1
 MUSTMP:    .res 1                 ; musbyte scratch (ISR context: must not touch tmp)
+music_tab: .res 144               ; SN76489 periods for MIDI 24..95, decoded at start-up
 MUSDUR:    .res 1
 MUSNOTE:   .res 3
 ISRT1:     .res 1
@@ -398,7 +399,10 @@ drawrect:
         stz rc_gi
 @run:
         ldx rc_gi
-        lda GATHERL,x
+        bit GATHERH,x
+        bvc :+
+        jmp @solid                  ; bit 6: solid cyan/black tile, filled not copied
+:       lda GATHERL,x
         and #$0F                    ; bank rides in the low nibble of the pre-shifted lo byte
         cmp curbank
         beq :+
@@ -471,7 +475,7 @@ drawrect:
         CPY1 2
         CPY1 1
         CPY1 0
-        lda sp
+@advsp: lda sp
         clc
         adc tmp
         sta sp
@@ -513,6 +517,83 @@ drawrect:
         jmp @run
 @rowdone:
         rts
+        ; ---- solid tile: store one constant, no bank switch, no source pointer
+@solid: lda GATHERL,x
+        and #$10
+        beq :+
+        lda #$3C                    ; both pixels colour 6 (cyan); else 0 = black
+:       sta tp                      ; fill value (tp is otherwise unused on this path)
+        lda #4
+        sec
+        sbc rc_subc
+        cmp cnt
+        bcc :+
+        lda cnt
+:       sta rc_n
+        asl
+        tax
+        asl
+        asl
+        sta tmp
+        lda rc_wrap
+        beq :+
+        lda tmp
+        adc sp
+        lda sp+1
+        adc #0
+        bpl :+
+        jmp @fslow
+:       lda tp
+        jmp (@ft-2,x)
+@ft:    .word @f7, @f15, @f23, @f31
+.macro FIL1 k
+        ldy #k
+        sta (sp),y
+.endmacro
+@f31:   FIL1 31
+        FIL1 30
+        FIL1 29
+        FIL1 28
+        FIL1 27
+        FIL1 26
+        FIL1 25
+        FIL1 24
+@f23:   FIL1 23
+        FIL1 22
+        FIL1 21
+        FIL1 20
+        FIL1 19
+        FIL1 18
+        FIL1 17
+        FIL1 16
+@f15:   FIL1 15
+        FIL1 14
+        FIL1 13
+        FIL1 12
+        FIL1 11
+        FIL1 10
+        FIL1 9
+        FIL1 8
+@f7:    FIL1 7
+        FIL1 6
+        FIL1 5
+        FIL1 4
+        FIL1 3
+        FIL1 2
+        FIL1 1
+        FIL1 0
+        jmp @advsp
+@fslow: lda rc_n
+        sta tmp2
+@fsc:   lda tp
+        ldy #7
+:       sta (sp),y
+        dey
+        bpl :-
+        spnext
+        dec tmp2
+        bne @fsc
+        jmp @runend
 
 ; ============================================================================
 ; drawrect_clip: like drawrect but clips the rect to the current window
@@ -2570,8 +2651,24 @@ sndwrite:
 ; The sequence (4-byte records: frames, note0..2; frames = 0 -> loop) is hidden in the
 ; top two bits of the bank-5 tile bytes, one music byte per four tile bytes, MSB first
 ; (tools/embed_music.py).  MUSPTR walks the tile data.
-MUSIC_SEQ  = $8000                  ; bank 5
-MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), main RAM
+MUSIC_SEQ  = $8000 + 144*4          ; bank 5, after the hidden period table
+MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), decoded into RAM
+; decode the period table (the first 144 hidden bytes) into music_tab; bank 5 loaded
+music_init:
+        lda #BANK_TIL0
+        sta curbank
+        sta ROMSEL_CPY
+        sta ROMSEL
+        stz MUSPTR
+        lda #$80
+        sta MUSPTR+1
+        ldx #0
+:       jsr musbyte
+        sta music_tab,x
+        inx
+        cpx #144
+        bne :-
+        rts
 music_tick:
         lda MUSON
         beq @done
