@@ -423,9 +423,8 @@ drawrect:
         asl
         asl
         sta tmp                     ; bytes
-        lda rc_wrap
+        ldy rc_wrap
         beq :+                      ; row cannot cross $8000: no per-run check needed
-        lda tmp
         adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
         lda sp+1
         adc #0
