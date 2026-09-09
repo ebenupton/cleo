@@ -1101,10 +1101,17 @@ player_dead:
         jsr gravity
         jsr vy_step
         add16 py, dpx
-        ; if frame > evframe + 60 -> respawn
-        mov16 t16, evframe
-        add16i t16, 60
-        bgt16 frame, t16, @respawn
+        ; if (frame - evframe) > 60 -> respawn (unsigned delta: wrap-safe)
+        lda frame
+        sec
+        sbc evframe
+        sta t16
+        lda frame+1
+        sbc evframe+1
+        bne @respawn
+        lda t16
+        cmp #61
+        bcs @respawn
         bra @draw
 @respawn:
         mov16 px, startx
@@ -1451,19 +1458,33 @@ player_update:
         ; timers
         lda hurt
         beq @afterhurt
-        mov16 t16, evframe
-        add16i t16, 64
-        bgt16 frame, t16, @clrhurt
-        bra @afterhurt
+        ; clear after (frame - evframe) > 64, using an unsigned delta so it works
+        ; across the 16-bit frame wrap (a signed compare stuck the flashing state)
+        lda frame
+        sec
+        sbc evframe
+        sta t16
+        lda frame+1
+        sbc evframe+1
+        bne @clrhurt                ; elapsed >= 256 -> clear
+        lda t16
+        cmp #65
+        bcc @afterhurt
 @clrhurt:
         stz hurt
 @afterhurt:
         lda control
         bne @afterctl
-        mov16 t16, evframe
-        add16i t16, 24
-        bgt16 frame, t16, @setctl
-        bra @afterctl
+        lda frame
+        sec
+        sbc evframe
+        sta t16
+        lda frame+1
+        sbc evframe+1
+        bne @setctl
+        lda t16
+        cmp #25
+        bcc @afterctl
 @setctl:
         lda #1
         sta control
@@ -1826,9 +1847,13 @@ addscore:                           ; A = points
 ob_star:
         lda frame
         and #1
-        bne :+
+        bne @nostep
+        lda fa
+        cmp #18                     ; cap: a collected star's fa must not wrap 8-bit
+        bcs @nostep                 ; (it would make the star reappear ~every 20s)
         inc fa
-:       lda fa
+@nostep:
+        lda fa
         cmp #12
         bne :+
         lda fc
@@ -2164,7 +2189,7 @@ ob_rsnake:
         bra :++
 :       inc q1
 :       mov16 spy, oy
-        add16 spy, t16b
+        add16 spy, rise             ; snake Y = oy + parabola (was t16b: wrong)
         lda q1
         jsr addsprite
 @basket:
