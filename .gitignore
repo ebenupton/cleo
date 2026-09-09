@@ -3,3 +3,7 @@ gx/
 v500/
 *.ssd
 beeb/profile/
+.DS_Store
+*.jar
+screenshots/
+__pycache__/
