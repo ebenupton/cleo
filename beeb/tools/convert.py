@@ -148,6 +148,12 @@ TIL_NOBLACK = {
 }
 
 til_rgb = til_rgb0.copy()
+# hand-painted tile overrides from the tile editor (tools/tile_editor.py):
+#   { original_tile_id: 16x8 MODE2 colour array }.  These replace the auto dither.
+TILE_EDITS = {}
+_edits_path = os.path.join(os.path.dirname(__file__), '..', 'tile_edits.json')
+if os.path.exists(_edits_path):
+    TILE_EDITS = {int(k): np.array(v, np.uint8) for k, v in json.load(open(_edits_path)).items()}
 noblack_idx = {}                 # palette index -> replacement MODE2 colour
 for _i, _c in enumerate(til_rgb0):
     _t = tuple(int(v) for v in _c)
@@ -168,6 +174,8 @@ for cid, orig in enumerate(compact):
             nb[sidx == _pi] = _rc
         nb16 = np.repeat(nb, 2, axis=0)
         col = np.where((col == 8) & (nb16 >= 0), nb16.astype(col.dtype), col)
+    if orig in TILE_EDITS:
+        col = TILE_EDITS[orig]                     # hand-painted override
     tile_preview.append(col)
     b = pack_mode2(col)   # (16, 4)
     # Beeb layout: char row 0 (lines 0-7): chars 0..3 each 8 bytes ; then char row 1
