@@ -395,33 +395,41 @@ for g in range(40):
                 b |= 0x80 >> c
         font.append(b)
 
-# bar: compose 160x8 game px: background pattern col 0..7 tiled, icons squashed 2:1 vertically
+# bar: solid blue (8 game px tall), 1px cyan top border, 1px black bottom
+# separator, icons keyed onto the blue.
 bar_idx, bar_rgb, _ = load_indexed('bar.png')
-bar = np.zeros((16, 160), dtype=np.int32)
-for x in range(0, 160, 8):
-    bar[:, x:x + 8] = bar_idx[:, 0:8]
-bar[:, 152:160] = bar_idx[:, 15:23]
+BAR_BLUE = np.array([0, 0, 255], np.uint8)
+BAR_CYAN = np.array([0, 255, 255], np.uint8)
+BAR_BLACK = np.array([0, 0, 0], np.uint8)
+BAR_BG = {0, 1, 5, 6, 7, 8, 9, 13}      # brick/blue/grey background indices in bar.png
+bar8 = np.zeros((8, 160, 3), np.uint8)
+bar8[:] = BAR_BLACK
 def blit_icon(dstx, sx):
-    icon = bar_idx[:, sx:sx + 13]
-    bar[:, dstx:dstx + 13] = icon
+    reg = bar_idx[::2, sx:sx + 13]      # squash 16->8 rows
+    for yy in range(8):
+        for xx in range(13):
+            v = int(reg[yy, xx])
+            if v not in BAR_BG:
+                bar8[yy, dstx + xx] = bar_rgb[v]
 blit_icon(3, 24)     # cleo head
 blit_icon(31, 37)    # heart
 blit_icon(59, 50)    # star
-# squash 16 -> 8 rows (take every other row) then dither full-res
-bar8 = bar[::2, :]
-barcol = dither(bar_rgb[bar8], np.ones(bar8.shape, bool), full=True)   # 16 lines x 160
-barcol[0, :] = 0    # top scanline black: it is also shown as the first line of the blank section
+barcol = dither(bar8, np.ones((8, 160), bool), full=True)   # 16 lines x 160
 barpk = pack_mode2(barcol)     # 16 x 80
 barbytes = bytearray()
 for crow in range(2):
     for cx in range(80):
         for ra in range(8):
             barbytes.append(int(barpk[crow * 8 + ra, cx]))
-# digits 0..9 from bar.png at (63 + n%5*8, n//5*8), 8x8 -> 64-byte tiles
+# digits 0..9 from bar.png at (63 + n%5*8, n//5*8), 8x8 -> 64-byte tiles.
+# Match the bar: solid blue bg, cyan top border, black bottom separator, so the
+# digits blend into the bar and preserve its border where they are drawn.
 digits = bytearray()
 for n in range(10):
     dx, dy = 63 + (n % 5) * 8, (n // 5) * 8
-    img = bar_rgb[bar_idx[dy:dy + 8, dx:dx + 8]]
+    reg = bar_idx[dy:dy + 8, dx:dx + 8]
+    img = bar_rgb[reg].copy()
+    img[np.isin(reg, list(BAR_BG))] = BAR_BLACK    # background -> black
     col = dither(img, np.ones((8, 8), bool), full=True)
     pk = pack_mode2(col)
     for crow in range(2):
