@@ -31,100 +31,39 @@ def load_indexed(name):
     return idx, rgb, tr
 
 # ---------------------------------------------------------------------------
-# Perceptual ordered dither.
-#
-# Colours are mixed in linear light; the pair for each pixel is chosen to
-# minimise perceptual error plus a penalty on the luminance gap between the two
-# dithered colours (LAMBDA), so isoluminant pairs (red/magenta, yellow/white)
-# are nearly free and high-contrast pairs (red/green, anything against white)
-# are avoided.  The kernel is 2 MODE-2 px wide x 4 scanlines tall (square on
-# screen, invariant under the 2 px horizontal scroll step); at a 50/50 mix it
-# collapses to a vertical sub-pixel pair (alternate scanlines), the finest and
-# least offensive pattern the display can make.
+# Ordered dither: independent per-channel thresholding against an ordered
+# matrix (the original scheme).  The only changes from the first version are a
+# 2x4 kernel instead of 4x4 (square on screen and invariant under the 2 px
+# horizontal scroll step, and it collapses to a vertical sub-pixel pair at a
+# 50% level) and the sky being forced to solid cyan (done at the palette level).
 # ---------------------------------------------------------------------------
-DEC = 2.2                 # sRGB-ish decode gamma (image -> linear light)
-LAMBDA = float(os.environ.get('CLEO_LAMBDA', '0.3'))   # luminance-spread penalty; higher = flatter
-LUMW = np.array([0.2126, 0.7152, 0.0722], dtype=np.float64)
+GAMMA = 1.35   # compromise: pure sRGB thresholding is too bright, linear too dark
 
-_PAL_LIN = (BEEB_RGB.astype(np.float64) / 255.0) ** DEC       # (8,3) linear
-_PAL_Y = _PAL_LIN @ LUMW                                      # (8,) linear luminance
-_PAL_YP = _PAL_Y ** (1.0 / DEC)                               # (8,) perceptual luma
-# all colour pairs a<=b (a==b = solid)
-_PAIRS = [(a, b) for a in range(8) for b in range(a, 8)]
-_PA = np.array([p[0] for p in _PAIRS])
-_PB = np.array([p[1] for p in _PAIRS])
-_DYP2 = (_PAL_YP[_PA] - _PAL_YP[_PB]) ** 2                    # (P,) perceptual luma gap^2
-
-
-def _perc(lin):
-    """linear light -> perceptual space for distance (gamma-companded, luma weighted)."""
-    return (np.clip(lin, 0, None) ** (1.0 / DEC)) * np.sqrt(LUMW)
-
-
-_PERC_PAL = _perc(_PAL_LIN)                                   # (8,3)
-
-# 2x4 kernel: order in which the 8 cells switch to colour 'b' as the mix grows.
-# k=2 -> dispersed; k=4 -> rows 1&3 (vertical sub-pixel pair); k=6 -> dispersed.
-_PRI = [(1, 0), (3, 1), (1, 1), (3, 0), (0, 1), (2, 0), (0, 0), (2, 1)]
-_TH4 = np.zeros((4, 2), np.int32)
-for _r, (_ry, _rx) in enumerate(_PRI):
-    _TH4[_ry, _rx] = _r
-# 2x2 kernel for half-res (no vertical sub-pixel available): checker at 50%.
-_PRI2 = [(0, 0), (1, 1), (0, 1), (1, 0)]
-_TH2 = np.zeros((2, 2), np.int32)
-for _r, (_ry, _rx) in enumerate(_PRI2):
-    _TH2[_ry, _rx] = _r
-
-
-def _choose(lin):
-    """lin: (N,3) linear targets -> (a[N], b[N], f[N]) best pair and mix fraction."""
-    N = lin.shape[0]
-    A = _PAL_LIN[_PA]                       # (P,3)
-    B = _PAL_LIN[_PB]
-    AB = B - A                              # (P,3)
-    ab2 = np.einsum('pi,pi->p', AB, AB)     # (P,)
-    ab2 = np.where(ab2 < 1e-9, 1.0, ab2)
-    # f = clamp(dot(target-A, AB)/|AB|^2, 0, 1)  per (pixel,pair)
-    d = lin[:, None, :] - A[None, :, :]     # (N,P,3)
-    f = np.einsum('npi,pi->np', d, AB) / ab2[None, :]
-    f = np.clip(f, 0.0, 1.0)
-    mixed = A[None, :, :] + f[:, :, None] * AB[None, :, :]    # (N,P,3)
-    pm = _perc(mixed)                       # (N,P,3)
-    tp = _perc(lin)                         # (N,3)
-    err = np.einsum('npi,npi->np', pm - tp[:, None, :], pm - tp[:, None, :])
-    # penalty scales with how visible the pattern is: 4 f (1-f) is 0 at a solid,
-    # 1 at a 50/50 mix, so light dithers and solids stay cheap.
-    vis = 4.0 * f * (1.0 - f)               # (N,P)
-    cost = err + LAMBDA * _DYP2[None, :] * vis
-    best = np.argmin(cost, axis=1)          # (N,)
-    return _PA[best], _PB[best], f[np.arange(N), best]
+# 2x4 ordered matrix (values 0..7).  Arranged so a 50% level lights alternate
+# scanlines (rows 1 & 3) -> a vertical sub-pixel pair; 25%/75% are dispersed.
+BAYER = np.array([[6, 4],
+                  [0, 2],
+                  [5, 7],
+                  [3, 1]], dtype=np.float32)
 
 
 def dither(rgb_img, alpha, x0=0, y0=0, full=True):
     """rgb_img: (h,w,3) uint8 ; alpha: (h,w) bool.
-    Returns MODE 2 colour indices (h2, w), h2 = 2h if full else h.
-    Transparent -> 0, opaque black -> 8."""
+    Returns MODE 2 colour indices (h2, w) with h2 = 2h if full else h.
+    Transparent -> 0, opaque black -> 8.  Ordered 2x4 Bayer dither per channel."""
     h, w, _ = rgb_img.shape
-    lin = (rgb_img.astype(np.float64) / 255.0) ** DEC
-    a, b, f = _choose(lin.reshape(-1, 3))
-    a = a.reshape(h, w); b = b.reshape(h, w); f = f.reshape(h, w)
+    v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
     if full:
-        # 2x4 kernel over 2h scanlines
-        a = np.repeat(a, 2, axis=0); b = np.repeat(b, 2, axis=0)
-        f = np.repeat(f, 2, axis=0); al = np.repeat(alpha, 2, axis=0)
-        hh = 2 * h
-        k = np.rint(f * 8).astype(np.int32)
-        th = _TH4[(np.arange(hh)[:, None] + 2 * y0) % 4, (np.arange(w)[None, :] + x0) % 2]
-        pick_b = th < k
-    else:
-        al = alpha
-        hh = h
-        k = np.rint(f * 4).astype(np.int32)
-        th = _TH2[(np.arange(hh)[:, None] + y0) % 2, (np.arange(w)[None, :] + x0) % 2]
-        pick_b = th < k
-    col = np.where(pick_b, b, a).astype(np.uint8)
-    col = np.where(col == 0, 8, col)                  # opaque black -> 8
-    col = np.where(al, col, 0).astype(np.uint8)       # transparent -> 0
+        v = np.repeat(v, 2, axis=0)
+        alpha = np.repeat(alpha, 2, axis=0)
+    hh = v.shape[0]
+    yy = (np.arange(hh) + (2 * y0 if full else y0)) % 4
+    xx = (np.arange(w) + x0) % 2
+    thr = (BAYER[yy][:, xx] + 0.5) / 8.0
+    bits = (v > thr[:, :, None]).astype(np.uint8)
+    col = bits[:, :, 0] | (bits[:, :, 1] << 1) | (bits[:, :, 2] << 2)
+    col = np.where(col == 0, 8, col).astype(np.uint8)
+    col = np.where(alpha, col, 0).astype(np.uint8)
     return col
 
 
