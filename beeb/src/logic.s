@@ -2656,8 +2656,8 @@ ob_vanish:
         mov16 qx, ox
         mov16 qy, oy
         jsr tilexy
-        stx gx
-        sta gy
+        stx q4                      ; tile x (q4/q5: gx/gy are the live grid-walk cursor)
+        sta q5                      ; tile y
         tay
         lda LV_ROWPAGE,y
         beq :+
@@ -2669,20 +2669,20 @@ ob_vanish:
         sta q2
         lda LV_HDR+9,x
         sta q3
-        ldx gx
-        lda gy
+        ldx q4
+        lda q5
         jsr maptile                 ; sets mapptr, Y = tx
         lda q2
         sta (mapptr),y
         iny
         lda q3
         sta (mapptr),y
-        lda gx
-        ldx gy
+        lda q4
+        ldx q5
         jsr mark_dirty
-        lda gx
+        lda q4
         inc
-        ldx gy
+        ldx q5
         jsr mark_dirty
         lda fe
         cmp #48
@@ -2706,9 +2706,9 @@ ob_switch:
         beq @set
         sta q4
         lda fb
-        sta gy
+        sta q5                      ; row counter (q5: the grid-walk cursor must stay intact)
 @rl:    ldx fa
-        lda gy
+        lda q5
         jsr maptile                 ; mapptr = row, Y = A
         dey
         dey
@@ -2724,13 +2724,13 @@ ob_switch:
         lda q3
         sta (mapptr),y
         lda fa
-        ldx gy
+        ldx q5
         jsr mark_dirty
         lda fa
         inc
-        ldx gy
+        ldx q5
         jsr mark_dirty
-        inc gy
+        inc q5
         dec q4
         bne @rl
 @set:   lda #1
