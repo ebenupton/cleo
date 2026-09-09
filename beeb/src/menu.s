@@ -162,8 +162,21 @@ clear_ring:
         bne @l
         rts
 
-; menu_begin: window at (0,0), buffer 0 as work buffer, cleared
+; load the title pack into bank 7 unless it is still there (a level load replaces it);
+; the palette goes black first so neither the disc load nor the screen build-up shows
+load_title:
+        jsr blank_palette
+        lda title_res
+        bne :+
+        lda #FI_TITLE
+        jsr loadfile
+        inc title_res
+:       rts
+
+; menu_begin: window at (0,0), buffer 0 as work buffer, cleared; screen blanked until
+; menu_show has flipped the finished page in
 menu_begin:
+        jsr blank_palette
         stz wx
         stz wx+1
         stz wy
@@ -197,7 +210,7 @@ menu_show:
         bne :-
         lda #1
         sta curbuf                  ; next game frame renders into the other buffer
-        rts
+        jmp set_palette             ; page is on display: colours back
 
 ; wait one vsync and return new key edges in A (keys pressed now but not last time)
 menu_keys:
@@ -364,10 +377,11 @@ clear_items:
 ; ---------------------------------------------------------------- screens
 ; title menu: returns 0 start, 1 help, 2 exit
 title_menu:
-        lda #FI_TITLE
-        jsr loadfile
-        jsr music_start
-        jsr menu_begin
+        jsr load_title
+        lda MUSON
+        bne :+
+        jsr music_start             ; only if not already playing (back from help)
+:       jsr menu_begin
         mov16i spx, 40
         mov16i spy, 4
         lda #TP_LOGO
@@ -478,9 +492,8 @@ pause_menu:
 ; win/lose: A = 1 win, 0 lose ; score/hiscore shown
 winlose:
         sta tmp4
-        lda #FI_TITLE
-        jsr loadfile
-        jsr music_start
+        jsr load_title
+        jsr music_stop              ; the win/lose screen is silent
         jsr menu_begin
         lda tmp4
         beq @lose
@@ -669,5 +682,6 @@ mstep:     .res 1
 msel:      .res 1
 mclear:    .res 1
 mlast:     .res 1                  ; item index the cursor was last drawn at
+title_res: .res 1                  ; title pack resident in bank 7
 tx:        .res 1
 ty:        .res 1

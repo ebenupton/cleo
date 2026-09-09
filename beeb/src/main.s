@@ -232,6 +232,7 @@ game_main:
         stz hiscore
         stz hiscore+1
         stz maxlevel
+        stz title_res
 title_loop:
         jsr title_menu
         cmp #MENU_HELP
@@ -252,6 +253,7 @@ new_game:
         sta level
 level_loop:
         jsr blank_palette           ; hide the loading and the first-frame build-up
+        stz title_res               ; the level pack replaces the title pack in bank 7
         ldx level
         jsr load_level
         jsr level_init
