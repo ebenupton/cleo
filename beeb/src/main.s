@@ -58,6 +58,8 @@ start:
         jsr disc_init
         lda #FI_SPR
         jsr loadfile
+        lda #FI_SPRAND
+        jsr loadfile
         lda #FI_TIL0
         jsr loadfile
         lda #FI_TIL1
@@ -176,6 +178,7 @@ filetab:
         FILE F_L6B_SEC, F_L6B_N, BANK_LVL, $8000
         FILE F_L7A_SEC, F_L7A_N, BANK_LVL, $8000
         FILE F_L7B_SEC, F_L7B_N, BANK_LVL, $8000
+        FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
 FI_SPR = 0
 FI_TIL0 = 1
 FI_TIL1 = 2
@@ -184,6 +187,7 @@ FI_TITLE = 4
 FI_MUSIC = 5
 FI_L0A = 6
 FI_L0B = 7
+FI_SPRAND = 22
 
 ; ---------------------------------------------------------------- camera clamp
 ; clamp wx to [0, maxwx] (and even), wy to [0, maxwy]
@@ -359,3 +363,8 @@ sfx_hit:   .byte $C0|0, 40, $D0, 4, $C0|0, 48, $D2, 4, $C0|0, 60, $D5, 5, $FF
 sfx_kill:  .byte $C0|0, 6, $D0, 2,  $C0|0, 9, $D1, 2,  $C0|0, 12, $D3, 3, $C0|0, 16, $D6, 3, $FF
 sfx_power: .byte $C0|0, 6, $D0, 3,  $C0|0, 5, $D0, 3,  $C0|0, 4, $D0, 3,  $C0|0, 3, $D0, 6, $FF
 sfx_die:   .byte $C0|0, 12, $D0, 6, $C0|0, 16, $D1, 6, $C0|0, 22, $D2, 8, $C0|0, 30, $D4, 10, $C0|0, 40, $D7, 12, $FF
+
+; ---------------------------------------------------------------- sprite directory (main RAM)
+        .code
+SPR_TABLE:
+        .incbin "build/SPRTAB"

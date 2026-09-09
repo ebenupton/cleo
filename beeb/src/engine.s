@@ -1028,25 +1028,57 @@ draw_sprites:
         rts
 
 ; draw one sprite: A = id ; spx, spy = map px (ref point)
+; A = sprite id. Game sprites (spbank = BANK_SPR): directory is in main RAM at
+; SPR_TABLE; sprite data is in bank 4, or in ANDY ($8000, ROMSEL bit7) when the
+; entry's flag bit2 is set. Title pieces (spbank != BANK_SPR): directory and data
+; both live at $8000 of that bank, as before.
 drawsprite:
         pha
-        lda spbank
-        sta curbank
-        sta ROMSEL_CPY
-        sta ROMSEL
-        pla
-        ; table entry pointer
         stz ptr+1
-        asl
+        asl                         ; id*8 -> offset
         rol ptr+1
         asl
         rol ptr+1
         asl
         rol ptr+1
         sta ptr
+        lda spbank
+        cmp #BANK_SPR
+        bne @titledir
+        ; ---- game: directory in main RAM (always visible), data in bank4/ANDY
+        lda ptr
+        clc
+        adc #<SPR_TABLE
+        sta ptr
         lda ptr+1
-        ora #>SPR_TABLE
+        adc #>SPR_TABLE
         sta ptr+1
+        pla
+        ldy #6
+        lda (ptr),y
+        sta sp_flags
+        ldx #BANK_SPR
+        and #4                      ; bit2 -> data in ANDY
+        beq :+
+        ldx #(BANK_SPR|$80)
+:       stx curbank
+        stx ROMSEL_CPY
+        stx ROMSEL
+        bra @entry2
+@titledir:
+        ; ---- title piece: directory + data at $8000 of bank(spbank)
+        lda ptr+1
+        ora #$80
+        sta ptr+1
+        lda spbank
+        sta curbank
+        sta ROMSEL_CPY
+        sta ROMSEL
+        pla
+        ldy #6
+        lda (ptr),y
+        sta sp_flags
+@entry2:
         ldy #0
         lda (ptr),y
         sta sp_ptr
@@ -1057,10 +1089,7 @@ drawsprite:
         lda (ptr),y
         sta sp_w
         beq @out0
-        ldy #6
-        lda (ptr),y
-        sta sp_flags
-        iny
+        ldy #7
         lda (ptr),y
         sta sp_lines
         sta sp_ext

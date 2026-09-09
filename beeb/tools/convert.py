@@ -268,7 +268,7 @@ for (lv, sub), L in levels.items():
 spr_idx, spr_rgb, spr_tr = load_indexed('spr.png')
 dim = open(os.path.join(SRC, 'dim'), 'rb').read()
 DIM = [struct.unpack('BBBBbb', dim[i * 6:i * 6 + 6]) for i in range(103)]
-FULLRES = set(range(0, 27))        # player frames keep 2-line dither
+FULLRES = set(range(103))          # every sprite full-res (2 stored rows per game px)
 SKIP = {102}                       # BONUS LEVEL banner is drawn as text instead
 crops = []
 for i, (x, y, w, h, rx, ry) in enumerate(DIM):
@@ -297,8 +297,18 @@ for i in range(103):
         found = (len(images) - 1, 0)
     entry.append((found[0], found[1], rx, ry))
 
-sprite_data = bytearray()
-img_off = []
+# Bank 4 layout (sprite table moved to main RAM; ANDY 4K holds the overflow):
+#   FONT $8000 (320)  DIGITS $8140 (640)  BAR $83C0 (1280)  sprite data from $88C0..$C000
+SPR_FONT   = 0x8000
+SPR_DIGITS = 0x8140
+SPR_BAR    = 0x83C0
+SPR_DATA   = 0x88C0
+SPR_ANDY   = 0x8000                     # ANDY 4K RAM, paged at $8000 with ROMSEL bit7
+BANK4_END  = 0xC000
+ANDY_END   = 0x9000
+
+# pack each unique image (column-major MODE2 bytes); assign to bank4 or ANDY
+img_bytes = []
 img_wbytes = []
 preview = []
 for (im, full, src) in images:
@@ -311,20 +321,33 @@ for (im, full, src) in images:
     col = dither(rgb, alpha, full=full)
     preview.append(col)
     packed = pack_mode2(col)            # (lines, W)
-    img_off.append(len(sprite_data))
-    img_wbytes.append(W)
-    # column major
+    b = bytearray()
     for c in range(W):
-        sprite_data += packed[:, c].tobytes()
-print('sprite images', len(images), 'data bytes', len(sprite_data))
+        b += packed[:, c].tobytes()
+    img_bytes.append(bytes(b))
+    img_wbytes.append(W)
 
-# sprite table: 8 bytes each: ptr lo, ptr hi, W, H(game px), refx, refy, flags, colbytes(lines per column)
-SPR_TABLE = 0x8000
-SPR_FONT = 0x8340
-SPR_BAR = 0x8480
-SPR_DIGITS = 0x8980
-SPR_DATA = 0x8C00
-SPR_SFX = 0xBE00
+# greedy assignment: fill bank4 data region first (largest sprites there), rest to ANDY
+order = sorted(range(len(images)), key=lambda j: -len(img_bytes[j]))
+img_addr = [None] * len(images)         # (base_addr, in_andy)
+b4 = SPR_DATA
+an = SPR_ANDY
+for j in order:
+    n = len(img_bytes[j])
+    if b4 + n <= BANK4_END:
+        img_addr[j] = (b4, 0); b4 += n
+    elif an + n <= ANDY_END:
+        img_addr[j] = (an, 1); an += n
+    else:
+        raise SystemExit('sprite data overflow: no room for image %d (%d bytes)' % (j, n))
+n_andy = sum(1 for a in img_addr if a[1])
+print('sprite images', len(images),
+      'bank4 data %d/%d bytes' % (b4 - SPR_DATA, BANK4_END - SPR_DATA),
+      'ANDY %d/%d bytes' % (an - SPR_ANDY, ANDY_END - SPR_ANDY),
+      '(%d imgs in ANDY)' % n_andy)
+
+# sprite table: 8 bytes each: ptr lo, ptr hi, W, H(game px), refx, refy, flags, lines
+# flags: bit0 mirror, bit1 full (always set now), bit2 data in ANDY
 table = bytearray()
 for i in range(103):
     e = entry[i]
@@ -336,11 +359,10 @@ for i in range(103):
     W = img_wbytes[j]
     if mirror:
         rx = (2 * W - 1) - rx
-    ptr = SPR_DATA + img_off[j]
-    flags = (1 if mirror else 0) | (2 if full else 0)
-    lines = 2 * h if full else h
+    ptr, in_andy = img_addr[j]
+    flags = (1 if mirror else 0) | 2 | (4 if in_andy else 0)
+    lines = 2 * h
     table += bytes([ptr & 255, ptr >> 8, W, h, rx & 255, ry & 255, flags, lines])
-assert len(table) <= SPR_FONT - SPR_TABLE
 
 # font: 40 glyphs 8x8 at tit.png y=26.., 10 per row -> 1 bit per pixel
 tit_idx, tit_rgb, tit_tr = load_indexed('tit.png')
@@ -389,14 +411,25 @@ for n in range(10):
                 digits.append(int(pk[crow * 8 + ra, cx]))
 
 bank4 = bytearray(16384)
-bank4[0:len(table)] = table
+andy = bytearray(4096)
 bank4[SPR_FONT - 0x8000:SPR_FONT - 0x8000 + len(font)] = font
 bank4[SPR_BAR - 0x8000:SPR_BAR - 0x8000 + len(barbytes)] = barbytes
 bank4[SPR_DIGITS - 0x8000:SPR_DIGITS - 0x8000 + len(digits)] = digits
-assert SPR_DATA + len(sprite_data) <= SPR_SFX, 'sprite data overflow: %d' % (SPR_DATA + len(sprite_data))
-bank4[SPR_DATA - 0x8000:SPR_DATA - 0x8000 + len(sprite_data)] = sprite_data
+assert len(font) <= SPR_DIGITS - SPR_FONT and len(digits) <= SPR_BAR - SPR_DIGITS
+assert len(barbytes) <= SPR_DATA - SPR_BAR
+for j in range(len(images)):
+    base, in_andy = img_addr[j]
+    if in_andy:
+        andy[base - SPR_ANDY:base - SPR_ANDY + len(img_bytes[j])] = img_bytes[j]
+    else:
+        bank4[base - 0x8000:base - 0x8000 + len(img_bytes[j])] = img_bytes[j]
 open(os.path.join(OUT, 'SPR'), 'wb').write(bank4)
-print('sprite data ends at %04X' % (SPR_DATA + len(sprite_data)))
+# ANDY 4K sprite overflow (loaded with ROMSEL bit7 set)
+an_used = max((b - SPR_ANDY + len(img_bytes[j]) for j,(b,a) in enumerate(img_addr) if a), default=0)
+open(os.path.join(OUT, 'SPRAND'), 'wb').write(andy[:((an_used + 255)//256)*256] if an_used else b'')
+# sprite table -> main RAM (incbin'd into the CLEO binary)
+open(os.path.join(OUT, 'SPRTAB'), 'wb').write(table)
+print('sprite table %d bytes -> main; SPRAND %d bytes' % (len(table), an_used))
 
 # ----------------------------------------------------------------------------
 # Title pack: logo (80x26 full-res), YOU (38x13), WIN (39x13), LOSE (45x13), big cleo 9 frames (26x31 half-res)
@@ -441,8 +474,8 @@ print('title pack', len(titlefile))
 with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by convert.py\n')
     f.write('NTILES = %d\n' % len(compact))
-    f.write('SPR_TABLE = $%04X\nSPR_FONT = $%04X\nSPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_SFX = $%04X\n' %
-            (SPR_TABLE, SPR_FONT, SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_SFX))
+    f.write('SPR_FONT = $%04X\nSPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_ANDY = $%04X\n' %
+            (SPR_FONT, SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_ANDY))
     for i, (name, ptr, W, hpx, lines, full) in enumerate(tdir):
         f.write('TP_%s = %d\n' % (name.upper(), i))
 
