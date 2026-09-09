@@ -177,6 +177,7 @@ BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
 BUF_CY:    .res 2
 BUF_VALID: .res 2
 BUF_BARQ:  .res 2
+BUF_BARADDR: .res 4          ; per buffer: bar CRTC start (hi,lo) x2 (fixes cross-buffer carryover)
 BARDIRTY:  .res 2
 DIRTYLIST: .res 2*2*16            ; per buffer dirty tiles (tx, ty)
 DIRTYCNT:  .res 2
@@ -1781,6 +1782,15 @@ build_sections:
         lda mul80hi,x
         adc #>$600
         sta w16b+1
+        ; remember this buffer's bar CRTC start so the ISR can program R12/R13 for
+        ; the DISPLAYED buffer each frame (the CRTC carryover is a frame/buffer behind)
+        lda curbuf
+        asl
+        tax
+        lda w16b+1
+        sta BUF_BARADDR,x
+        lda w16b
+        sta BUF_BARADDR+1,x
         ; S + $600 -> w16
         lda ringS
         clc
@@ -2140,6 +2150,20 @@ irq_handler:
 @noflip:
         lda DISPSECT
         sta SECIDX
+        ; program the bar CRTC start for the buffer about to display, so the bar
+        ; never shows the other buffer's leftover address during vertical scroll
+        ldx #0
+        lda DISPSECT
+        beq :+
+        ldx #2
+:       lda #12
+        sta CRTC_IDX
+        lda BUF_BARADDR,x
+        sta CRTC_DAT
+        lda #13
+        sta CRTC_IDX
+        lda BUF_BARADDR+1,x
+        sta CRTC_DAT
         jsr scan_keys
         jsr sound_tick
 @exit:
