@@ -66,8 +66,6 @@ start:
         jsr loadfile
         lda #FI_ALT
         jsr loadfile
-        lda #FI_MUSIC
-        jsr loadfile
         lda #$34
         sta seed
         lda #$12
@@ -161,7 +159,6 @@ filetab:
         FILE F_TIL1_SEC,  F_TIL1_N,  BANK_TIL1, $8000
         FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTCLS
         FILE F_TITLE_SEC, F_TITLE_N, BANK_LVL,  $8000
-        FILE F_MUSIC_SEC, F_MUSIC_N, BANK_TIL1, MUSIC_DATA
         FILE F_L0A_SEC, F_L0A_N, BANK_LVL, $8000
         FILE F_L0B_SEC, F_L0B_N, BANK_LVL, $8000
         FILE F_L1A_SEC, F_L1A_N, BANK_LVL, $8000
@@ -184,10 +181,9 @@ FI_TIL0 = 1
 FI_TIL1 = 2
 FI_ALT = 3
 FI_TITLE = 4
-FI_MUSIC = 5
-FI_L0A = 6
-FI_L0B = 7
-FI_SPRAND = 22
+FI_L0A = 5
+FI_L0B = 6
+FI_SPRAND = 21
 
 ; ---------------------------------------------------------------- camera clamp
 ; clamp wx to [0, maxwx] (and even), wy to [0, maxwy]
@@ -373,3 +369,7 @@ sfx_die:   .byte $C0|0, 12, $D0, 6, $C0|0, 16, $D1, 6, $C0|0, 22, $D2, 8, $C0|0,
         .code
 SPR_TABLE:
         .incbin "build/SPRTAB"
+; music period table (72 notes x 2); the sequence itself lives in the top two bits of
+; the bank-5 tile bytes (tools/embed_music.py)
+music_tab:
+        .incbin "build/MUSTAB"

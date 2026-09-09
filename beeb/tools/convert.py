@@ -177,6 +177,8 @@ for cid, orig in enumerate(compact):
     if orig in TILE_EDITS:
         col = TILE_EDITS[orig]                     # hand-painted override
     tile_preview.append(col)
+    col = col & 7            # black = 0 not 8: bits 7/6 of every tile byte stay free (the
+                             # music sequence is hidden there by tools/embed_music.py)
     b = pack_mode2(col)   # (16, 4)
     # Beeb layout: char row 0 (lines 0-7): chars 0..3 each 8 bytes ; then char row 1
     data = bytearray()

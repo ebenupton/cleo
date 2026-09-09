@@ -198,6 +198,7 @@ OLDACR:    .res 1
 SFXREQ:    .res 1
 SFXDUR:    .res 1
 MUSON:     .res 1
+MUSTMP:    .res 1                 ; musbyte scratch (ISR context: must not touch tmp)
 MUSDUR:    .res 1
 MUSNOTE:   .res 3
 ISRT1:     .res 1
@@ -2520,10 +2521,12 @@ sndwrite:
         sta VIA_DDRA
         rts
 
-; ---------------------------------------------------------------- music (bank 6 @ MUSIC_DATA)
-MUSIC_DATA = $B500
-MUSIC_TAB  = MUSIC_DATA             ; 72 x 2 byte periods (MIDI 24..95)
-MUSIC_SEQ  = MUSIC_DATA + 144
+; ---------------------------------------------------------------- music (sequence hidden in bank-5 tile bytes)
+; The sequence (4-byte records: frames, note0..2; frames = 0 -> loop) is hidden in the
+; top two bits of the bank-5 tile bytes, one music byte per four tile bytes, MSB first
+; (tools/embed_music.py).  MUSPTR walks the tile data.
+MUSIC_SEQ  = $8000                  ; bank 5
+MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), main RAM
 music_tick:
         lda MUSON
         beq @done
@@ -2531,40 +2534,70 @@ music_tick:
         bne @done
         lda ROMSEL_CPY
         pha
-        lda #BANK_TIL1
+        lda #BANK_TIL0
         sta ROMSEL_CPY
         sta ROMSEL
-        ldy #0
-        lda (MUSPTR),y
+        jsr musbyte
         bne :+
         lda #<MUSIC_SEQ
         sta MUSPTR
         lda #>MUSIC_SEQ
         sta MUSPTR+1
-        lda (MUSPTR),y
+        jsr musbyte
 :       sta MUSDUR
         ldx #0
-@v:     iny
-        lda (MUSPTR),y
+@v:     jsr musbyte
         cmp MUSNOTE,x
         beq :+
         sta MUSNOTE,x
-        phy
         jsr set_voice
-        ply
 :       inx
         cpx #3
         bne @v
+        pla
+        sta ROMSEL_CPY
+        sta ROMSEL
+@done:  rts
+
+; A = next music byte assembled from the top two bits of the 4 tile bytes at MUSPTR;
+; MUSPTR += 4.  Preserves X.  Z reflects A.
+musbyte:
+        ldy #3
+        lda (MUSPTR),y
+        rol
+        rol
+        rol
+        and #3                      ; bits 1..0
+        sta MUSTMP
+        dey
+        lda (MUSPTR),y
+        and #$C0
+        lsr
+        lsr
+        lsr
+        lsr
+        ora MUSTMP                     ; bits 3..2
+        sta MUSTMP
+        dey
+        lda (MUSPTR),y
+        and #$C0
+        lsr
+        lsr
+        ora MUSTMP                     ; bits 5..4
+        sta MUSTMP
+        dey
+        lda (MUSPTR),y
+        and #$C0
+        ora MUSTMP                     ; bits 7..6
+        sta MUSTMP
         lda MUSPTR
         clc
         adc #4
         sta MUSPTR
         bcc :+
         inc MUSPTR+1
-:       pla
-        sta ROMSEL_CPY
-        sta ROMSEL
-@done:  rts
+:       lda MUSTMP
+        rts
 
 ; X = voice (0..2), A = MIDI note (0 = rest)
 set_voice:
