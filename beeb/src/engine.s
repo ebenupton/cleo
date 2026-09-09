@@ -271,12 +271,13 @@ drawrect:
         bne @row
         rts
 @row:
-        ; ---- tile row ty = rc_y >> 1 ; map row pointer ptr = $8000 | (ty << maplw)
+        ; ---- tile row ty = rc_y >> 1 ; map row pointer ptr = LV_MAP + (ty << maplw),
+        ; computed as (ty*256) >> (8-maplw): at most a couple of shifts (maplw <= 8)
         lda rc_y
         lsr
-        sta ptr
-        stz ptr+1
         tax
+        sta ptr+1
+        stz ptr
         setbank BANK_LVL
         lda LV_ROWPAGE,x
         beq :+
@@ -286,11 +287,16 @@ drawrect:
         sta @pglo+2
         inc
         sta @pgbk+2
-        ldx maplw
-@shl:   asl ptr
-        rol ptr+1
+        lda #8
+        sec
+        sbc maplw
+        beq @shdone
+        tax
+@shr:   lsr ptr+1
+        ror ptr
         dex
-        bne @shl
+        bne @shr
+@shdone:
         lda ptr+1
         clc
         adc #>LV_MAP
@@ -338,6 +344,23 @@ drawrect:
         inx
         dec cnt
         bpl @gl
+        ; ---- draw this char row, and (without re-gathering) the odd row of the same tile row
+        jsr @drawrow
+        inc rc_y
+        dec rc_h
+        beq @done
+        lda rc_y
+        and #1
+        bne @second
+        jmp @row
+@second:
+        jsr @drawrow
+        inc rc_y
+        dec rc_h
+        beq @done
+        jmp @row
+@done:  rts
+@drawrow:
         ; ---- screen base
         lda rc_x
         sta w16
@@ -495,11 +518,7 @@ drawrect:
         inc rc_gi
         jmp @run
 @rowdone:
-        inc rc_y
-        dec rc_h
-        beq :+
-        jmp @row
-:       rts
+        rts
 
 ; ============================================================================
 ; drawrect_clip: like drawrect but clips the rect to the current window
@@ -1769,61 +1788,211 @@ copy_bar:
         sec
         sbc #3
         and #31
-        tax
+        tax                         ; ring row for bar row 0
+        stx tmp2                    ; (X is used as the byte index inside @row)
         lda #BANK_SPR
         sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
         lda #<BARBUF
-        sta @s0+1
+        sta w16
         lda #>BARBUF
-        sta @s0+2
+        sta w16+1
         jsr @row
+        ldx tmp2
         inx
         txa
         and #31
         tax
-@row:   lda RINGLO,x
-        sta @d0+1
+        lda w16
+        clc
+        adc #<640
+        sta w16
+        lda w16+1
+        adc #>640
+        sta w16+1
+@row:   ; one 640-byte ring row: src = w16, dst = RING[x]; 8x unrolled abs,x copy
+        lda RINGLO,x
+        sta w16b
         lda RINGHI,x
+        sta w16b+1
+        lda w16
+        clc
+        adc #0
+        sta @s0+1
+        lda w16+1
+        adc #0
+        sta @s0+2
+        lda w16b
+        clc
+        adc #0
+        sta @d0+1
+        lda w16b+1
+        adc #0
         sta @d0+2
-        ldy #2                      ; 2 full pages
-@pages: phx
-        ldx #0
-@s0:    lda BARBUF,x
-@d0:    sta SCREEN,x
-        inx
-        bne @s0
-        plx
+        lda w16
+        clc
+        adc #1
+        sta @s1+1
+        lda w16+1
+        adc #0
+        sta @s1+2
+        lda w16b
+        clc
+        adc #1
+        sta @d1+1
+        lda w16b+1
+        adc #0
+        sta @d1+2
+        lda w16
+        clc
+        adc #2
+        sta @s2+1
+        lda w16+1
+        adc #0
+        sta @s2+2
+        lda w16b
+        clc
+        adc #2
+        sta @d2+1
+        lda w16b+1
+        adc #0
+        sta @d2+2
+        lda w16
+        clc
+        adc #3
+        sta @s3+1
+        lda w16+1
+        adc #0
+        sta @s3+2
+        lda w16b
+        clc
+        adc #3
+        sta @d3+1
+        lda w16b+1
+        adc #0
+        sta @d3+2
+        lda w16
+        clc
+        adc #4
+        sta @s4+1
+        lda w16+1
+        adc #0
+        sta @s4+2
+        lda w16b
+        clc
+        adc #4
+        sta @d4+1
+        lda w16b+1
+        adc #0
+        sta @d4+2
+        lda w16
+        clc
+        adc #5
+        sta @s5+1
+        lda w16+1
+        adc #0
+        sta @s5+2
+        lda w16b
+        clc
+        adc #5
+        sta @d5+1
+        lda w16b+1
+        adc #0
+        sta @d5+2
+        lda w16
+        clc
+        adc #6
+        sta @s6+1
+        lda w16+1
+        adc #0
+        sta @s6+2
+        lda w16b
+        clc
+        adc #6
+        sta @d6+1
+        lda w16b+1
+        adc #0
+        sta @d6+2
+        lda w16
+        clc
+        adc #7
+        sta @s7+1
+        lda w16+1
+        adc #0
+        sta @s7+2
+        lda w16b
+        clc
+        adc #7
+        sta @d7+1
+        lda w16b+1
+        adc #0
+        sta @d7+2
+        lda #32
+        sta cnt
+        jsr @chunk                  ; bytes 0..255
         inc @s0+2
         inc @d0+2
-        dey
-        bne @pages
-        ; final 128 bytes (same bases as @s0/@d0)
-        lda @s0+1
-        sta @s1+1
-        lda @s0+2
-        sta @s1+2
-        lda @d0+1
-        sta @d1+1
-        lda @d0+2
-        sta @d1+2
-        phx
-        ldx #127
-@s1:    lda BARBUF,x
-@d1:    sta SCREEN,x
-        dex
-        bpl @s1
-        plx
-        ; advance source by 128 for the second row
-        lda @s0+1
-        clc
-        adc #128
-        sta @s0+1
-        bcc :+
+        inc @s1+2
+        inc @d1+2
+        inc @s2+2
+        inc @d2+2
+        inc @s3+2
+        inc @d3+2
+        inc @s4+2
+        inc @d4+2
+        inc @s5+2
+        inc @d5+2
+        inc @s6+2
+        inc @d6+2
+        inc @s7+2
+        inc @d7+2
+        lda #32
+        sta cnt
+        jsr @chunk                  ; bytes 256..511
         inc @s0+2
-:       rts
-@done:  rts
+        inc @d0+2
+        inc @s1+2
+        inc @d1+2
+        inc @s2+2
+        inc @d2+2
+        inc @s3+2
+        inc @d3+2
+        inc @s4+2
+        inc @d4+2
+        inc @s5+2
+        inc @d5+2
+        inc @s6+2
+        inc @d6+2
+        inc @s7+2
+        inc @d7+2
+        lda #16
+        sta cnt                     ; bytes 512..639
+@chunk: ldx #0
+@cp:
+@s0:   lda $FFFF,x
+@d0:   sta $FFFF,x
+@s1:   lda $FFFF,x
+@d1:   sta $FFFF,x
+@s2:   lda $FFFF,x
+@d2:   sta $FFFF,x
+@s3:   lda $FFFF,x
+@d3:   sta $FFFF,x
+@s4:   lda $FFFF,x
+@d4:   sta $FFFF,x
+@s5:   lda $FFFF,x
+@d5:   sta $FFFF,x
+@s6:   lda $FFFF,x
+@d6:   sta $FFFF,x
+@s7:   lda $FFFF,x
+@d7:   sta $FFFF,x
+        txa
+        clc
+        adc #8
+        tax
+        dec cnt
+        bne @cp
+        rts
 
 ; ============================================================================
 ; build_sections: fill SECTAB for current buffer from ringS/barq/wfine
