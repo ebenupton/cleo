@@ -952,16 +952,12 @@ game_frame:
         jsr clamp_window
 @cam:
         setbank BANK_LVL
-        ; ---- bucket range
-        lda wx+1
-        lsr
+        ; ---- bucket range (16-bit >> 6)
         lda wx
-        ror
-        lsr
-        lsr
-        lsr
-        lsr
-        lsr
+        sta t16
+        lda wx+1
+        sta t16+1
+        jsr shr6
         sta gx0
         lda wx
         clc
@@ -969,24 +965,14 @@ game_frame:
         sta t16
         lda wx+1
         adc #0
-        lsr
-        lda t16
-        ror
-        lsr
-        lsr
-        lsr
-        lsr
-        lsr
+        sta t16+1
+        jsr shr6
         sta gx1
-        lda wy+1
-        lsr
         lda wy
-        ror
-        lsr
-        lsr
-        lsr
-        lsr
-        lsr
+        sta t16
+        lda wy+1
+        sta t16+1
+        jsr shr6
         sta gy
         lda wy
         clc
@@ -994,14 +980,8 @@ game_frame:
         sta t16
         lda wy+1
         adc #0
-        lsr
-        lda t16
-        ror
-        lsr
-        lsr
-        lsr
-        lsr
-        lsr
+        sta t16+1
+        jsr shr6
         sta gy1
 @rows:  lda gx0
         sta gx
@@ -1069,6 +1049,15 @@ game_frame:
         bne @alive
         jmp player_dead
 @alive: jmp player_update
+
+; A = t16 >> 6 (t16 < 16384)
+shr6:   ldx #6
+:       lsr t16+1
+        ror t16
+        dex
+        bne :-
+        lda t16
+        rts
 
 ; ============================================================================
 ; player_hit: knock back. hx = relative x of the enemy (sign used)
@@ -1385,11 +1374,12 @@ player_update:
         dec px+1
 :       dec px
 @hmoved:
-        ; if a <= 1: py += a ; alt = 0 else alt = a
+        ; if a <= 1: py += a ; alt = 0 else alt = a   (a may be -1: step up a slope)
         lda q1
+        bmi @step
         cmp #2
         bcs @alt
-        sx16 t16
+@step:  sx16 t16
         add16 py, t16
         stz alt
         bra @hnext
@@ -1727,13 +1717,15 @@ inrange:
         sec
         bra @ret
 @no:    clc
-@ret:   ; return past the 4 bytes: push ptr+4 (RTS adds 1)
+@ret:   ; return past the 4 bytes: push ptr+4 (RTS adds 1); keep the carry result
+        php
         lda ptr
         clc
         adc #4
         tax
         lda ptr+1
         adc #0
+        plp
         pha
         phx
         rts

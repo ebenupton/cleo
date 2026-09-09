@@ -116,6 +116,7 @@ spy:      .res 2
 sp_ptr:   .res 2
 sp_w:     .res 1
 sp_lines: .res 1
+sp_ext:   .res 1                  ; height in scanlines (2*lines for half-res)
 sp_flags: .res 1
 sp_c0:    .res 1
 sp_c1:    .res 1
@@ -519,7 +520,7 @@ drawrect_clip:
         beq @none
         bmi @none
         sta rc_h
-:       ; cols: rel = rc_x - wcx (16 bit)
+:       ; cols: rel = rc_x - wcx (16 bit signed)
         lda rc_x
         sec
         sbc wcx
@@ -527,13 +528,25 @@ drawrect_clip:
         lda rc_x+1
         sbc wcx+1
         sta w16+1
-        bpl :+
-        ; negative: rel + w > 0 ?
+        bpl @right
+        ; rel < 0: visible only if -rel < w
         lda w16
-        clc
-        adc rc_w
-        beq @none
-        bmi @none                   ; (assumes |rel| < 128)
+        eor #$FF
+        sta tmp
+        lda w16+1
+        eor #$FF
+        sta tmp2
+        inc tmp
+        bne :+
+        inc tmp2
+:       lda tmp2
+        bne @none                   ; -rel >= 256 > any width
+        lda tmp
+        cmp rc_w
+        bcs @none
+        lda rc_w
+        sec
+        sbc tmp
         sta rc_w
         lda wcx
         sta rc_x
@@ -541,7 +554,7 @@ drawrect_clip:
         sta rc_x+1
         stz w16
         stz w16+1
-:       lda w16+1
+@right: lda w16+1
         bne @none                   ; rel >= 256 -> off right
         lda w16
         cmp #80
@@ -1050,7 +1063,12 @@ drawsprite:
         iny
         lda (ptr),y
         sta sp_lines
-        ; ---- horizontal: sx = spx - refx - wx ; c0 = sx >> 1
+        sta sp_ext
+        lda sp_flags
+        and #2
+        bne :+
+        asl sp_ext                  ; half-res: two scanlines per stored row
+:       ; ---- horizontal: sx = spx - refx - wx ; c0 = sx >> 1
         ldy #4
         lda (ptr),y
         jsr sext
@@ -1132,10 +1150,10 @@ drawsprite:
         lda w16+1
         adc #0
         sta sp_lb0+1                ; lb0 (16 bit signed)
-        ; lend = lb0 + lines - 1
+        ; lend = lb0 + ext - 1
         lda sp_lb0
         clc
-        adc sp_lines
+        adc sp_ext
         sta w16
         lda sp_lb0+1
         adc #0
@@ -1576,9 +1594,15 @@ copy_partial:
         sta ptr
         bcc :+
         inc ptr+1
-        ; wrap: the adjusted pointer crossing $8000 - wfine ... check real address
+:       ; wrap check on the REAL dest address (ptr + wfine): the adjusted pointer
+        ; can still be $7FFx when the real address has crossed $8000
+        lda ptr
+        clc
+        adc wfine
         lda ptr+1
+        adc #0
         bpl :+
+        lda ptr+1
         sec
         sbc #$50
         sta ptr+1
