@@ -374,6 +374,11 @@ for (im, full, src) in images:
     col = dither(rgb, alpha, full=full)
     preview.append(col)
     packed = pack_mode2(col)            # (lines, W)
+    # tag bytes whose two pixels are both opaque: set bit 3 of both nibbles ($C0) so the
+    # blitter can test 'byte >= $C0' instead of a mask lookup (the palette maps logical
+    # colours 8-15 onto the same steady colours as 0-7, so the tag is invisible)
+    both = (col[:, 0::2] != 0) & (col[:, 1::2] != 0)
+    packed = packed | (both.astype(np.uint8) * 0xC0)
     b = bytearray()
     for c in range(W):
         b += packed[:, c].tobytes()

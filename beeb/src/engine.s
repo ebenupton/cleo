@@ -1420,24 +1420,28 @@ ds_done: rts
 ; ---- inner blocks.  ptr = source column (already offset), sp = screen char,
 ;      tmp = ra0', tmp2 = ra1'.  Full-res: source byte per line.
 .macro SPRLINE k, mirror
-        .local skip, opaque
+        .local done, skip, opaque
         ldy #k
         lda (ptr),y
-        beq skip
+        beq done                    ; 0: both pixels transparent, no store
+        cmp #$C0
+        bcs opaque                  ; >= $C0: both pixels opaque (tagged by the converter)
         tax
 .if mirror
         lda SWAPTAB,x
         tax
 .endif
         lda MASKTAB,x
-        beq opaque
         and (sp),y
         ora IDENT,x
-        sta (sp),y
         bra skip
-opaque: txa
-        sta (sp),y
-skip:
+opaque:
+.if mirror
+        tax
+        lda SWAPTAB,x
+.endif
+skip:   sta (sp),y
+done:
 .endmacro
 
 .macro SPRFULL name, mirror
@@ -1465,18 +1469,23 @@ partial:
         ldy tmp
 pl:     lda (ptr),y
         beq ps
+        cmp #$C0
+        bcs po                      ; both pixels opaque
         tax
 .if mirror
         lda SWAPTAB,x
         tax
 .endif
         lda MASKTAB,x
-        beq po
         and (sp),y
         ora IDENT,x
         sta (sp),y
         bra ps
-po:     txa
+po:
+.if mirror
+        tax
+        lda SWAPTAB,x
+.endif
         sta (sp),y
 ps:     cpy tmp2
         beq pd
