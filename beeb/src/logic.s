@@ -1733,10 +1733,13 @@ ob_none:
 ; returns carry set if inside.  Preserves nothing.
 inrange:
         pla
+        clc
+        adc #5
         sta ptr
         pla
-        sta ptr+1
-        ldy #1
+        adc #0
+        sta ptr+1                   ; ptr = return address past the 4 limit bytes
+        ldy #<-4
         lda (ptr),y
         jsr @gt_rx
         bcc @no
@@ -1752,21 +1755,9 @@ inrange:
         lda (ptr),y
         jsr @lt_ry
         bcc @no
-        sec
-        bra @ret
+        jmp (ptr)                   ; carry set: inside
 @no:    clc
-@ret:   ; return past the 4 bytes: push ptr+4 (RTS adds 1); keep the carry result
-        php
-        lda ptr
-        clc
-        adc #4
-        tax
-        lda ptr+1
-        adc #0
-        plp
-        pha
-        phx
-        rts
+        jmp (ptr)
 ; rx > A (signed 8 bit limit) ?
 @gt_rx: sta q1
         lda rx

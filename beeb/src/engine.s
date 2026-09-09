@@ -110,6 +110,8 @@ rc_gi:    .res 1
 rc_subc:  .res 1
 rc_n:     .res 1
 rc_wrap:  .res 1                  ; row may cross $8000 (needs per-run wrap check)
+irq_x:    .res 1                  ; IRQ handler register save (not reentrant)
+irq_y:    .res 1
 
 ; sprite draw
 spx:      .res 2
@@ -164,7 +166,8 @@ SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
 IDENT:     .res 256               ; identity table: ora IDENT,x == ora X (no temp)
 RINGLO:    .res 32                ; ring row r -> screen address
 RINGHI:    .res 32
-GATHER:    .res 48                ; per-row tile gather (lo,bank pairs)
+GATHERL:   .res 24                ; per-row tile gather: tile address lo
+GATHERB:   .res 24                ;                       tile bank
 SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
 SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
 SPRREC:    .res 2*MAXREC*10       ; per buffer drawn-sprite records: id,xl,xh,yl,yh, cxl,cxh,cy,w,h
@@ -324,24 +327,24 @@ drawrect:
         ror
         lsr tmp
         ror                         ; A = tx0 (map width <= 256 tiles)
-        tay
         sta tmp
-        lda w16
+        clc
+        adc ptr
+        sta ptr                     ; ptr -> first tile of the row (so Y counts from 0)
+        bcc :+
+        inc ptr+1
+:       lda w16
         sec
         sbc tmp
         sta cnt                     ; ntiles-1
-        ldx #0
+        ldy #0
 @gl:    lda (ptr),y
-        phy
-        tay
-@pglo:  lda LV_PAGE0,y
-        sta GATHER,x
-@pgbk:  lda LV_PAGE0+$100,y
-        sta GATHER+1,x
-        ply
+        tax
+@pglo:  lda LV_PAGE0,x
+        sta GATHERL,y
+@pgbk:  lda LV_PAGE0+$100,x
+        sta GATHERB,y
         iny
-        inx
-        inx
         dec cnt
         bpl @gl
         ; ---- draw this char row, and (without re-gathering) the odd row of the same tile row
@@ -394,20 +397,17 @@ drawrect:
         lda cnt
 :       sta rc_n
         ldx rc_gi
-        lda GATHER+1,x
+        lda GATHERB,x
         cmp curbank
         beq :+
         sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
-:       lda GATHER,x
-        pha
+:       lda GATHERL,x
         and #3
+        lsr
         ror
-        ror
-        ror
-        and #$C0
-        clc
+        ror                         ; (idx & 3) << 6, and C is clear
         adc rc_sub
         sta tp
         lda rc_subc
@@ -416,7 +416,7 @@ drawrect:
         asl
         adc tp
         sta tp
-        pla
+        lda GATHERL,x               ; reload: cheaper than pha/pla
         lsr
         lsr
         ora #$80
@@ -514,7 +514,6 @@ drawrect:
         sta cnt
         beq @rowdone
         stz rc_subc
-        inc rc_gi
         inc rc_gi
         jmp @run
 @rowdone:
@@ -1007,43 +1006,31 @@ draw_sprites:
         bcc @next
 @draw:  ldx spi
         ldy sprmul5,x
-        lda SPRLIST+1,y
-        sta spx
-        lda SPRLIST+2,y
-        sta spx+1
-        lda SPRLIST+3,y
-        sta spy
-        lda SPRLIST+4,y
-        sta spy+1
-        lda SPRLIST,y
-        pha
-        ; copy identity into record, clear rect
-        phy
+        tya
+        tax                         ; X = list index, Y = record offset
         ldy #0
+        lda SPRLIST,x
+        sta (rp),y                  ; copy identity into record, clear rect
+        iny
+        lda SPRLIST+1,x
+        sta spx
         sta (rp),y
-        ply
-        lda SPRLIST+1,y
-        pha
-        lda SPRLIST+2,y
-        pha
-        lda SPRLIST+3,y
-        pha
-        lda SPRLIST+4,y
-        ldy #4
+        iny
+        lda SPRLIST+2,x
+        sta spx+1
         sta (rp),y
-        pla
-        dey
+        iny
+        lda SPRLIST+3,x
+        sta spy
         sta (rp),y
-        pla
-        dey
-        sta (rp),y
-        pla
-        dey
+        iny
+        lda SPRLIST+4,x
+        sta spy+1
         sta (rp),y
         ldy #8
         lda #0
         sta (rp),y
-        pla
+        lda SPRLIST,x
         jsr drawsprite
 @next:  lda rp
         clc
@@ -1064,7 +1051,6 @@ draw_sprites:
 ; entry's flag bit2 is set. Title pieces (spbank != BANK_SPR): directory and data
 ; both live at $8000 of that bank, as before.
 drawsprite:
-        pha
         stz ptr+1
         asl                         ; id*8 -> offset
         rol ptr+1
@@ -1084,7 +1070,6 @@ drawsprite:
         lda ptr+1
         adc #>SPR_TABLE
         sta ptr+1
-        pla
         ldy #6
         lda (ptr),y
         sta sp_flags
@@ -1105,7 +1090,6 @@ drawsprite:
         sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
-        pla
         ldy #6
         lda (ptr),y
         sta sp_flags
@@ -2315,8 +2299,8 @@ render_frame:
 ; IRQ handling
 ; ============================================================================
 irq_handler:
-        phx
-        phy
+        stx irq_x
+        sty irq_y
         bit VIA_IFR
         bvc @notT1
         ; ---- rupture chain step (time critical: R9, R4, R6 within the section's first line)
@@ -2407,8 +2391,8 @@ irq_handler:
         jsr scan_keys
         jsr sound_tick
 @exit:
-        ply
-        plx
+        ldy irq_y
+        ldx irq_x
         lda $FC
         rti
 
