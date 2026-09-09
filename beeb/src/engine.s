@@ -1309,6 +1309,15 @@ drawsprite:
         sta sp_step
         stz sp_step+1
 @colbase:
+        ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
+        lda sp_flags
+        and #3
+        asl
+        tax
+        lda sprdisp_tab,x
+        sta ds_dispatch+1
+        lda sprdisp_tab+1,x
+        sta ds_dispatch+2
         ; sp_col = sp_ptr + sp_c * lines
         lda sp_ptr
         sta sp_col
@@ -1324,15 +1333,6 @@ drawsprite:
         inc sp_col+1
 :       dec sp_c
         bne @mul
-        ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
-        lda sp_flags
-        and #3
-        asl
-        tax
-        lda sprdisp_tab,x
-        sta ds_dispatch+1
-        lda sprdisp_tab+1,x
-        sta ds_dispatch+2
 @rows:
         lda sp_r0
         sta sp_row
