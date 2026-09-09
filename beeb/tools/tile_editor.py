@@ -25,7 +25,9 @@ import convert  # noqa: E402  (runs the converter once; gives us dither + level 
 
 ZOOM = 2
 TILE_W, TILE_H = 16, 16          # a tile shown as 16x16 px (8 MODE2 px * 2 wide, 16 scanlines)
-CELL = 22                        # editor pixel size (px), width; height is CELL//2*... kept square-ish
+# editor cell: MODE 2 pixels are 2:1 (twice as wide as a scanline is tall).
+# The grid is 8 pixels wide x 16 scanlines tall; a game pixel is two scanlines.
+CW, CH = 26, 13
 PALETTE_NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
 
 # --- tile colour arrays (16 scanlines x 8), keyed by original tile id ---
@@ -96,7 +98,7 @@ class Editor:
             sw.grid(row=0, column=i, padx=1)
             sw.bind('<Button-1>', lambda e, i=i: self.pick_colour(i))
             self.swatches.append(sw)
-        self.tile_canvas = tk.Canvas(rf, width=8 * CELL, height=8 * CELL, bg='#101010')
+        self.tile_canvas = tk.Canvas(rf, width=8 * CW, height=16 * CH, bg='#101010')
         self.tile_canvas.pack(side=tk.TOP, pady=6)
         self.tile_canvas.bind('<Button-1>', self.on_pixel)
         self.tile_canvas.bind('<B1-Motion>', self.on_pixel)
@@ -163,25 +165,25 @@ class Editor:
         self.tile_canvas.delete('all')
         if self.sel_orig is None:
             return
-        col = tile_cols[self.sel_orig]     # (16,8)
-        # show as 8x8 game pixels: each game px = two scanlines (rows 2k,2k+1)
-        for gy in range(8):
-            for gx in range(8):
-                c = int(col[gy * 2, gx]) & 7
+        col = tile_cols[self.sel_orig]     # (16 scanlines, 8 px)
+        for sy in range(16):
+            for sx in range(8):
+                c = int(col[sy, sx]) & 7
                 r, g, b = convert.BEEB_RGB[c]
+                # a heavier line between game pixels (every 2 scanlines) for clarity
                 self.tile_canvas.create_rectangle(
-                    gx * CELL, gy * CELL, gx * CELL + CELL, gy * CELL + CELL,
-                    fill='#%02x%02x%02x' % (r, g, b), outline='#333')
+                    sx * CW, sy * CH, sx * CW + CW, sy * CH + CH,
+                    fill='#%02x%02x%02x' % (r, g, b),
+                    outline='#555' if sy % 2 else '#222')
 
     def on_pixel(self, e):
         if self.sel_orig is None:
             return
-        gx = e.x // CELL; gy = e.y // CELL
-        if not (0 <= gx < 8 and 0 <= gy < 8):
+        sx = e.x // CW; sy = e.y // CH
+        if not (0 <= sx < 8 and 0 <= sy < 16):
             return
         col = tile_cols[self.sel_orig].copy()
-        col[gy * 2, gx] = self.cur_colour       # set both scanlines of the game pixel
-        col[gy * 2 + 1, gx] = self.cur_colour
+        col[sy, sx] = self.cur_colour           # single scanline (full-res)
         tile_cols[self.sel_orig] = col
         edits[self.sel_orig] = col
         self.draw_tile()
@@ -206,23 +208,22 @@ class Editor:
         auto = auto_cols[orig]
         sidx = convert.til_idx[orig * 8:orig * 8 + 8, :]     # (8,8) source indices
         remap = {}
-        for gy in range(8):
-            for gx in range(8):
-                a = int(auto[gy * 2, gx]); c = int(col[gy * 2, gx])
-                if c != a:                                    # edited pixel
-                    remap[(int(sidx[gy, gx]), a)] = c
+        for sy in range(16):
+            for sx in range(8):
+                a = int(auto[sy, sx]); c = int(col[sy, sx])
+                if c != a:                                    # edited scanline pixel
+                    remap[(int(sidx[sy // 2, sx]), a)] = c
         if not remap:
             self.status.config(text='no edited pixels to generalise from')
             return
         n = 0
-        for gy in range(8):
-            for gx in range(8):
-                a = int(auto[gy * 2, gx]); c = int(col[gy * 2, gx])
+        for sy in range(16):
+            for sx in range(8):
+                a = int(auto[sy, sx]); c = int(col[sy, sx])
                 if c == a:                                    # not yet edited
-                    key = (int(sidx[gy, gx]), a)
+                    key = (int(sidx[sy // 2, sx]), a)
                     if key in remap:
-                        col[gy * 2, gx] = remap[key]
-                        col[gy * 2 + 1, gx] = remap[key]
+                        col[sy, sx] = remap[key]
                         n += 1
         tile_cols[orig] = col
         edits[orig] = col
