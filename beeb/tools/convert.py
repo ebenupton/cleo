@@ -432,16 +432,25 @@ BAR_BLACK = np.array([0, 0, 0], np.uint8)
 BAR_BG = {0, 1, 5, 6, 7, 8, 9, 13}      # brick/blue/grey background indices in bar.png
 bar8 = np.zeros((8, 160, 3), np.uint8)
 bar8[:] = BAR_BLACK
-def blit_icon(dstx, sx):
-    reg = bar_idx[::2, sx:sx + 13]      # squash 16->8 rows
-    for yy in range(8):
-        for xx in range(13):
-            v = int(reg[yy, xx])
-            if v not in BAR_BG:
-                bar8[yy, dstx + xx] = bar_rgb[v]
-blit_icon(3, 24)     # cleo head
-blit_icon(31, 37)    # heart
-blit_icon(59, 50)    # star
+def blit_sprite_icon(dstx, spr_id, crop_h=None, crop_w=None):
+    # take a game sprite, scale to the 8px bar height, key transparency onto black
+    im = crops[spr_id][0]
+    if crop_h:
+        im = im[:crop_h]
+    if crop_w:
+        im = im[:, :crop_w]
+    h, w = im.shape
+    th = 8
+    tw = max(1, int(round(w * th / float(h))))
+    rgba = np.dstack([spr_rgb[im].astype(np.uint8), (im != spr_tr).astype(np.uint8) * 255]).astype(np.uint8)
+    arr = np.array(Image.fromarray(rgba, 'RGBA').resize((tw, th), Image.NEAREST))
+    for yy in range(th):
+        for xx in range(tw):
+            if dstx + xx < 160 and arr[yy, xx, 3] > 0:
+                bar8[yy, dstx + xx] = arr[yy, xx, :3]
+blit_sprite_icon(3, 0, crop_h=12, crop_w=13)   # cleo head (top-left of standing frame)
+blit_sprite_icon(31, 97)                       # heart (health powerup sprite)
+blit_sprite_icon(59, 34)                       # star (collectible)
 barcol = dither(bar8, np.ones((8, 160), bool), full=True)   # 16 lines x 160
 barpk = pack_mode2(barcol)     # 16 x 80
 barbytes = bytearray()
@@ -450,14 +459,14 @@ for crow in range(2):
         for ra in range(8):
             barbytes.append(int(barpk[crow * 8 + ra, cx]))
 # digits 0..9 from bar.png at (63 + n%5*8, n//5*8), 8x8 -> 64-byte tiles.
-# Match the bar: solid blue bg, cyan top border, black bottom separator, so the
-# digits blend into the bar and preserve its border where they are drawn.
+# Tidy font: clean solid-yellow glyph on black (no dither noise).
 digits = bytearray()
 for n in range(10):
     dx, dy = 63 + (n % 5) * 8, (n // 5) * 8
     reg = bar_idx[dy:dy + 8, dx:dx + 8]
-    img = bar_rgb[reg].copy()
-    img[np.isin(reg, list(BAR_BG))] = BAR_BLACK    # background -> black
+    glyph = ~np.isin(reg, list(BAR_BG))            # digit pixels (non-background)
+    img = np.zeros((8, 8, 3), np.uint8)            # black
+    img[glyph] = (255, 255, 0)                     # yellow
     col = dither(img, np.ones((8, 8), bool), full=True)
     pk = pack_mode2(col)
     for crow in range(2):
