@@ -1748,12 +1748,12 @@ ob_none:
 inrange:
         pla
         clc
-        adc #5
+        adc #1
         sta ptr
         pla
         adc #0
-        sta ptr+1                   ; ptr = return address past the 4 limit bytes
-        ldy #<-4
+        sta ptr+1                   ; ptr -> the 4 limit bytes after the JSR
+        ldy #0
         lda (ptr),y
         jsr @gt_rx
         bcc @no
@@ -1769,8 +1769,23 @@ inrange:
         lda (ptr),y
         jsr @lt_ry
         bcc @no
-        jmp (ptr)                   ; carry set: inside
-@no:    clc
+        ; inside: return to ptr+4 with carry set
+        lda ptr
+        adc #3                      ; C = 1 here: +4
+        sta ptr
+        lda ptr+1
+        adc #0
+        sta ptr+1
+        sec
+        jmp (ptr)
+@no:    lda ptr
+        clc
+        adc #4
+        sta ptr
+        lda ptr+1
+        adc #0
+        sta ptr+1
+        clc
         jmp (ptr)
 ; rx > A (signed 8 bit limit) ?
 @gt_rx: sta q1
