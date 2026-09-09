@@ -144,9 +144,7 @@ TIL_SOLID = {
     (136, 238, 255): 6,          # sky -> cyan
 }
 TIL_NOBLACK = {
-    (102, 85, 85): 3, (85, 68, 68): 3, (85, 68, 34): 3, (68, 68, 51): 3,
-    (17, 17, 0): 3,              # dark browns -> black becomes yellow
-    (85, 85, 85): 7, (68, 68, 68): 7, (34, 34, 34): 7,   # greys -> white
+    # (85, 68, 68): 3,   # example: this wall brown's black dither -> yellow
 }
 
 til_rgb = til_rgb0.copy()
@@ -432,25 +430,35 @@ BAR_BLACK = np.array([0, 0, 0], np.uint8)
 BAR_BG = {0, 1, 5, 6, 7, 8, 9, 13}      # brick/blue/grey background indices in bar.png
 bar8 = np.zeros((8, 160, 3), np.uint8)
 bar8[:] = BAR_BLACK
-def blit_sprite_icon(dstx, spr_id, crop_h=None, crop_w=None):
-    # take a game sprite, scale to the 8px bar height, key transparency onto black
-    im = crops[spr_id][0]
+def blit_sprite_icon(dstx, spr_id, y0=0, crop_h=None, crop_w=None, scale=True):
+    # take a game sprite region, optionally scale to the 8px bar height, key onto black
+    im = crops[spr_id][0][y0:]
     if crop_h:
         im = im[:crop_h]
     if crop_w:
         im = im[:, :crop_w]
     h, w = im.shape
     th = 8
-    tw = max(1, int(round(w * th / float(h))))
-    rgba = np.dstack([spr_rgb[im].astype(np.uint8), (im != spr_tr).astype(np.uint8) * 255]).astype(np.uint8)
-    arr = np.array(Image.fromarray(rgba, 'RGBA').resize((tw, th), Image.NEAREST))
+    if scale:
+        tw = max(1, int(round(w * th / float(h))))
+        rgba = np.dstack([spr_rgb[im].astype(np.uint8), (im != spr_tr).astype(np.uint8) * 255]).astype(np.uint8)
+        arr = np.array(Image.fromarray(rgba, 'RGBA').resize((tw, th), Image.LANCZOS))
+    else:
+        # native size, top-aligned into the 8px bar (clip overflow)
+        tw = w
+        rgb = np.zeros((th, tw, 3), np.uint8)
+        al = np.zeros((th, tw), np.uint8)
+        hh = min(h, th)
+        rgb[:hh] = spr_rgb[im[:hh]]
+        al[:hh] = (im[:hh] != spr_tr).astype(np.uint8) * 255
+        arr = np.dstack([rgb, al])
     for yy in range(th):
         for xx in range(tw):
-            if dstx + xx < 160 and arr[yy, xx, 3] > 0:
+            if dstx + xx < 160 and arr[yy, xx, 3] > 96:
                 bar8[yy, dstx + xx] = arr[yy, xx, :3]
-blit_sprite_icon(3, 0, crop_h=12, crop_w=13)   # cleo head (top-left of standing frame)
-blit_sprite_icon(31, 97)                       # heart (health powerup sprite)
-blit_sprite_icon(59, 34)                       # star (collectible)
+blit_sprite_icon(3, 0, y0=3, crop_h=11, crop_w=14)   # cleo head: 3px down, full head width
+blit_sprite_icon(31, 97)                              # heart (health powerup sprite)
+blit_sprite_icon(59, 34, scale=False)                # star: full flat star, native size
 barcol = dither(bar8, np.ones((8, 160), bool), full=True)   # 16 lines x 160
 barpk = pack_mode2(barcol)     # 16 x 80
 barbytes = bytearray()
@@ -458,15 +466,11 @@ for crow in range(2):
     for cx in range(80):
         for ra in range(8):
             barbytes.append(int(barpk[crow * 8 + ra, cx]))
-# digits 0..9 from bar.png at (63 + n%5*8, n//5*8), 8x8 -> 64-byte tiles.
-# Tidy font: clean solid-yellow glyph on black (no dither noise).
+# digits 0..9 from bar.png at (63 + n%5*8, n//5*8), 8x8 -> 64-byte tiles
 digits = bytearray()
 for n in range(10):
     dx, dy = 63 + (n % 5) * 8, (n // 5) * 8
-    reg = bar_idx[dy:dy + 8, dx:dx + 8]
-    glyph = ~np.isin(reg, list(BAR_BG))            # digit pixels (non-background)
-    img = np.zeros((8, 8, 3), np.uint8)            # black
-    img[glyph] = (255, 255, 0)                     # yellow
+    img = bar_rgb[bar_idx[dy:dy + 8, dx:dx + 8]]
     col = dither(img, np.ones((8, 8), bool), full=True)
     pk = pack_mode2(col)
     for crow in range(2):
