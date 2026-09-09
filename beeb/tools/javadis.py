@@ -53,6 +53,7 @@ def main():
             raise SystemExit('bad cp tag %d' % t)
         i += 1
     def s(ix):
+        if ix >= len(cp): return '#%d?' % ix
         e = cp[ix]
         if e is None: return '?'
         if e[0] == 'utf8': return e[1]
@@ -96,6 +97,8 @@ def main():
                 sz = 3
             elif op == 184:
                 arg = s(struct.unpack('>H', code[q+1:q+3])[0]); sz = 3
+            elif op in (200, 201):
+                arg = '->%d' % (q + struct.unpack('>i', code[q+1:q+5])[0]); sz = 5
             elif op in N4:
                 arg = s(struct.unpack('>H', code[q+1:q+3])[0]); sz = 5
             elif op == 196:

@@ -289,11 +289,13 @@ rise    = $DC                     ; 2 bytes
 ; ============================================================================
 ; Map queries (bank 7 must be selected by caller: we select it here)
 ; ============================================================================
-; get map byte at tile (X = tx, A = ty) -> A = byte, q1 = page*2 ($00/$02)
+; get map byte at tile (X = tx, A = ty) -> A = byte, q1 = page (0/1).  The per-page
+; alt-class and attribute tables are 256 bytes apart (q1 used to be page*2, which sent
+; every page-1 row's altitude lookup into LV_MAPROWLO: no ground, Cleo fell through
+; the floor at the Vineyards spawn and wherever else those levels use page 1)
 maptile:
         tay
         lda LV_ROWPAGE,y
-        asl
         sta q1
         lda LV_MAPROWLO,y
         sta mapptr
