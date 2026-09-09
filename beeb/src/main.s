@@ -251,6 +251,7 @@ new_game:
         asl
         sta level
 level_loop:
+        jsr blank_palette           ; hide the loading and the first-frame build-up
         ldx level
         jsr load_level
         jsr level_init
@@ -258,8 +259,13 @@ level_loop:
         jsr draw_health
         jsr draw_stars
         jsr draw_score
-        ; initial camera + full draw
+        ; initial camera; render both buffers before the palette comes back
         jsr game_frame
+        jsr render_frame
+        stz NSPR
+        jsr game_frame
+        jsr render_frame
+        jsr set_palette
         stz NSPR
         lda vsyncs
         sta logicvs

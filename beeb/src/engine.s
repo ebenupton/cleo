@@ -46,7 +46,7 @@ BANK_TIL1 = 6
 BANK_LVL  = 7
 
 ; bank 7 layout
-LV_PAGE0  = $8000                 ; 256 lo, 256 bank
+LV_PAGE0  = $8000                 ; 256 lo ((idx&3)<<6 | bank), 256 hi ($80 | idx>>2)
 LV_PAGE1  = $8200
 LV_ROWPAGE= $8400
 LV_HDR    = $8480
@@ -108,6 +108,7 @@ rc_h:     .res 1
 rc_sub:   .res 1
 rc_gi:    .res 1
 rc_subc:  .res 1
+rowoff:   .res 1                  ; rc_sub | rc_subc*8 : byte offset into the tile for this run
 rc_n:     .res 1
 rc_wrap:  .res 1                  ; row may cross $8000 (needs per-run wrap check)
 irq_x:    .res 1                  ; IRQ handler register save (not reentrant)
@@ -166,8 +167,8 @@ SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
 IDENT:     .res 256               ; identity table: ora IDENT,x == ora X (no temp)
 RINGLO:    .res 32                ; ring row r -> screen address
 RINGHI:    .res 32
-GATHERL:   .res 24                ; per-row tile gather: tile address lo
-GATHERB:   .res 24                ;                       tile bank
+GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank (low nibble)
+GATHERH:   .res 24                ;                       tile address hi
 SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
 SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
 SPRREC:    .res 2*MAXREC*10       ; per buffer drawn-sprite records: id,xl,xh,yl,yh, cxl,cxh,cy,w,h
@@ -343,7 +344,7 @@ drawrect:
 @pglo:  lda LV_PAGE0,x
         sta GATHERL,y
 @pgbk:  lda LV_PAGE0+$100,x
-        sta GATHERB,y
+        sta GATHERH,y
         iny
         dec cnt
         bpl @gl
@@ -385,6 +386,11 @@ drawrect:
         lda rc_x
         and #3
         sta rc_subc
+        asl
+        asl
+        asl
+        ora rc_sub
+        sta rowoff
         lda rc_w
         sta cnt
         stz rc_gi
@@ -397,29 +403,18 @@ drawrect:
         lda cnt
 :       sta rc_n
         ldx rc_gi
-        lda GATHERB,x
+        lda GATHERL,x
+        and #$0F                    ; bank rides in the low nibble of the pre-shifted lo byte
         cmp curbank
         beq :+
         sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
 :       lda GATHERL,x
-        and #3
-        lsr
-        ror
-        ror                         ; (idx & 3) << 6, and C is clear
-        adc rc_sub
+        and #$C0
+        ora rowoff
         sta tp
-        lda rc_subc
-        asl
-        asl
-        asl
-        adc tp
-        sta tp
-        lda GATHERL,x               ; reload: cheaper than pha/pla
-        lsr
-        lsr
-        ora #$80
+        lda GATHERH,x
         sta tp+1
         lda rc_n
         asl
@@ -514,6 +509,8 @@ drawrect:
         sta cnt
         beq @rowdone
         stz rc_subc
+        lda rc_sub
+        sta rowoff                  ; later tiles in the row start at column 0
         inc rc_gi
         jmp @run
 @rowdone:
@@ -2048,10 +2045,22 @@ build_sections:
         sta SECTAB+6,x
         lda #>(VISLINES*LINE-2)
         sta SECTAB+7,x
-        ; P
-        lda w16b+1
+        ; P.  Q starts at the row below the playfield (S + 27*80), not the bar: the 6845
+        ; always displays the first scanline of a frame even with R6 = 0, so whatever Q
+        ; starts at leaks one line onto the bottom of the screen (the vsync ISR sets the
+        ; bar address for T anyway)
+        lda w16
+        clc
+        adc #<(VISROWS*80)
+        sta w16
+        lda w16+1
+        adc #>(VISROWS*80)
+        cmp #$10
+        bcc :+
+        sbc #$0A                    ; ring wrap ($600..$FFF)
+:       sta w16+1
         sta SECTAB+8,x
-        lda w16b
+        lda w16
         sta SECTAB+9,x
         lda #VISROWS-1
         sta SECTAB+10,x

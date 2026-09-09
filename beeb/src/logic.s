@@ -474,30 +474,42 @@ level_init:
         add16 t16, t16b
         inx
         bne @rl
-        ; alt class per page: ALTPAGE[p][b] = ALTCLS[id(b)]
+        ; alt class per page: ALTPAGE[p][b] = ALTCLS[id(b)].  Page entries are pre-shifted
+        ; tile addresses: lo = (id&3)<<6 | bank, hi = $80 | id>>2 (see convert.py)
         ldx #0
-@ap:    ldy LV_PAGE0+256,x          ; bank of tile (5/6) -> hi index
-        lda LV_PAGE0,x
-        cpy #6
-        bne :+
-        tay
-        lda LV_ALTCLS+256,y
-        bra :++
-:       tay
-        lda LV_ALTCLS,y
-:       sta LV_ALTPAGE,x
-        ldy LV_PAGE1+256,x
-        lda LV_PAGE1,x
-        cpy #6
-        bne :+
-        tay
-        lda LV_ALTCLS+256,y
-        bra :++
-:       tay
-        lda LV_ALTCLS,y
-:       sta LV_ALTPAGE+256,x
+@ap:    lda LV_PAGE0+256,x
+        ldy LV_PAGE0,x
+        jsr @altof
+        sta LV_ALTPAGE,x
+        lda LV_PAGE1+256,x
+        ldy LV_PAGE1,x
+        jsr @altof
+        sta LV_ALTPAGE+256,x
         inx
         bne @ap
+        bra @apdone
+        ; A = hi, Y = lo -> A = alt class of that tile (X preserved)
+@altof: asl
+        asl                         ; (id >> 2) << 2 = id & $FC
+        sta t16
+        tya
+        and #$0F
+        sta t16+1                   ; bank 5/6
+        tya
+        asl
+        rol
+        rol
+        and #3                      ; id & 3
+        ora t16
+        tay
+        lda t16+1
+        cmp #6
+        beq :+
+        lda LV_ALTCLS,y
+        rts
+:       lda LV_ALTCLS+256,y
+        rts
+@apdone:
         ; header
         lda LV_HDR+2
         jsr @x8

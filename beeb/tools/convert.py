@@ -280,12 +280,16 @@ for (lv, sub), L in levels.items():
     # $8500 objects, $8900 attr page0, $8A00 attr page1, $8B00 map (row-major)
     pack = bytearray()
     for p in range(2):
-        lo = bytearray(256); bank = bytearray(256)
+        # entry = (lo, hi) of the tile's data address in its bank, pre-shifted so the
+        # renderer needs no arithmetic: tile data at $8000 + (cid & 255) * 64, so
+        #   lo = (cid & 3) << 6 | bank (ROMSEL value 5/6 in the free low bits)
+        #   hi = $80 | (cid & 255) >> 2
+        lo = bytearray(256); hi = bytearray(256)
         if p < npages:
             for i, cid in enumerate(tables[p][0]):
-                lo[i] = cid & 255
-                bank[i] = 5 + (cid >> 8)
-        pack += lo + bank
+                lo[i] = ((cid & 3) << 6) | (5 + (cid >> 8))
+                hi[i] = 0x80 | ((cid & 255) >> 2)
+        pack += lo + hi
     pack += bytes(rowpage).ljust(128, b'\0')      # $8400
     hdr = bytearray()
     hdr += bytes([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1], len(L['objs']), npages])
