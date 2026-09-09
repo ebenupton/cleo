@@ -189,6 +189,30 @@ for cid, orig in enumerate(compact):
     assert len(data) == 64
     tiles_mode2.append(bytes(data))
 
+# star backgrounds: a star whose 2x2 tile neighbourhood is all sky (solid cyan) or all
+# 'dark' (mostly black: noisy low-intensity indoor backgrounds count) is drawn as a
+# pre-composited box sprite that needs neither masking nor erasing (see the sprite section)
+DARK_FRAC = 0.6
+tile_class = []
+for col in tile_preview:
+    if np.all(col == 6):
+        tile_class.append(1)
+    elif np.mean((col & 7) == 0) >= DARK_FRAC:
+        tile_class.append(2)
+    else:
+        tile_class.append(0)
+def star_class(cm, x, y):
+    h, w = cm.shape
+    cls = set()
+    for ty in (y - 1, y):
+        for tx in (x - 1, x):
+            if 0 <= tx < w and 0 <= ty < h:
+                cls.add(tile_class[int(cm[ty, tx])])
+            else:
+                cls.add(0)
+    return cls.pop() if len(cls) == 1 else 0
+star_stats = {}
+
 # tiles are ordered by original id; but put the 'special' animation tiles in known places:
 # we just record their compact ids for the game code
 special = {name: orig2compact[t] for name, t in [('VANISH0', 366), ('FLOWER0', 426)]}
@@ -302,6 +326,9 @@ for (lv, sub), L in levels.items():
     objs = bytearray()
     for (t, x, y, extra) in L['objs']:
         e = (extra + [0, 0, 0])[:3]
+        if t == 0:
+            e[0] = star_class(cm, x, y)
+            star_stats.setdefault((lv, sub), [0, 0, 0])[e[0]] += 1
         objs += bytes([t, x, y] + e)
     pack += objs.ljust(0x400, b'\0')              # $8500..$88FF
     for p in range(2):
@@ -434,8 +461,43 @@ print('sprite images', len(images),
       'ANDY %d/%d bytes' % (an - SPR_ANDY, ANDY_END - SPR_ANDY),
       '(%d imgs in ANDY)' % n_andy)
 
+# box stars: the six spin frames (34..39) composited over cyan and over black in a fixed
+# 7-char x 24-line box (hotspot 6,8) so any frame overwrites any other exactly.  Stored
+# after the tiles in bank 6 (flag bit4), drawn with the copy blitter (flag bit3).
+BOX_W, BOX_H = 7, 12
+box_bytes = []
+for bg in (6, 0):
+    for f in range(6):
+        j, mirror, rx, ry = entry[34 + f]
+        im = images[j][0]
+        h, w = im.shape
+        W = (w + 1) // 2
+        padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
+        padded[:, :w] = im
+        if mirror:
+            padded = padded[:, ::-1]
+            rx = (2 * W - 1) - rx
+        col = dither(spr_rgb[padded], padded != spr_tr, full=True) & 7
+        canvas = np.full((BOX_H * 2, BOX_W * 2), bg, np.uint8)
+        x0 = 6 - rx
+        assert 0 <= x0 and x0 + 2 * W <= BOX_W * 2 and h == BOX_H and ry == 8, (f, rx, ry, h)
+        sub = canvas[:, x0:x0 + 2 * W]
+        canvas[:, x0:x0 + 2 * W] = np.where(col != 0, col, sub)
+        packed = pack_mode2(canvas)
+        b = bytearray()
+        for c in range(BOX_W):
+            b += packed[:, c].tobytes()
+        box_bytes.append(bytes(b))
+BOX_BASE = 0x8000 + len(bank6)
+assert BOX_BASE + 12 * len(box_bytes[0]) <= 0xC000
+open(os.path.join(OUT, 'TIL1'), 'ab').write(b''.join(box_bytes))
+print('box stars: 12 x %d bytes at $%04X in bank 6; classes per level:' % (len(box_bytes[0]), BOX_BASE),
+      ' '.join('L%d%s=%s' % (lv, 'B' if sub == 0 else 'A', '/'.join(map(str, v))) for (lv, sub), v in sorted(star_stats.items())),
+      '(regular/cyan/black)')
+
 # sprite table: 8 bytes each: ptr lo, ptr hi, W, H(game px), refx, refy, flags, lines
-# flags: bit0 mirror, bit1 full (always set now), bit2 data in ANDY
+# flags: bit0 mirror, bit1 full (always set now), bit2 data in ANDY, bit3 copy blitter,
+# bit4 data in bank 6 (box stars 103..114)
 table = bytearray()
 for i in range(103):
     e = entry[i]
@@ -451,6 +513,9 @@ for i in range(103):
     flags = (1 if mirror else 0) | 2 | (4 if in_andy else 0)
     lines = 2 * h
     table += bytes([ptr & 255, ptr >> 8, W, h, rx & 255, ry & 255, flags, lines])
+for k in range(12):                                # 103..108 cyan, 109..114 black
+    ptr = BOX_BASE + k * len(box_bytes[0])
+    table += bytes([ptr & 255, ptr >> 8, BOX_W, BOX_H, 6, 8, 2 | 8 | 16, BOX_H * 2])
 
 # font: 40 glyphs 8x8 at tit.png y=26.., 10 per row -> 1 bit per pixel
 tit_idx, tit_rgb, tit_tr = load_indexed('tit.png')

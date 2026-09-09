@@ -757,12 +757,25 @@ match_sprites:
         stz KEEP,x
         cpx cnt
         bcs @next
+        lda #1
+        sta tmp3                    ; KEEP value if the rest matches
         ldy sprmul5,x
         lda SPRLIST,y
         ldx #0
         cmp (rp,x)
+        beq @pos
+        ; ids differ: two box-star frames of the same colour at the same place overwrite
+        ; each other exactly, so they are redrawn without an erase (KEEP = 2)
+        jsr boxgrp
+        beq @next
+        sta tmp3
+        lda (rp)
+        jsr boxgrp
+        cmp tmp3
         bne @next
-        ldx #1
+        lda #2
+        sta tmp3
+@pos:   ldx #1
         lda SPRLIST+1,y
         cmp (rp,x)
         bne @next
@@ -779,7 +792,7 @@ match_sprites:
         cmp (rp,x)
         bne @next
         ldx tmp4
-        lda #1
+        lda tmp3
         sta KEEP,x
 @next:  lda rp
         clc
@@ -790,6 +803,18 @@ match_sprites:
 :       inc tmp4
         bra @l
 @done:  rts
+; A = sprite id -> A = box-star group: 1 cyan (103..108), 2 black (109..114), else 0
+boxgrp: sec
+        sbc #103
+        bcc @no
+        cmp #12
+        bcs @no
+        cmp #6
+        lda #1
+        adc #0
+        rts
+@no:    lda #0
+        rts
 
 ; erase_old: redraw tiles under old records that are not kept
 erase_old:
@@ -996,7 +1021,8 @@ draw_sprites:
         bcs @done
         ldx spi
         lda KEEP,x
-        beq @draw
+        cmp #1
+        bne @draw                   ; 0: new/changed, 2: box star frame change (no erase)
         jsr rec_overlap
         bcc @next
 @draw:  ldx spi
@@ -1072,6 +1098,10 @@ drawsprite:
         and #4                      ; bit2 -> data in ANDY
         beq :+
         ldx #(BANK_SPR|$80)
+:       lda sp_flags
+        and #$10                    ; bit4 -> data above the tiles in bank 6 (box stars)
+        beq :+
+        ldx #BANK_TIL1
 :       stx curbank
         stx ROMSEL_CPY
         stx ROMSEL
@@ -1290,10 +1320,15 @@ drawsprite:
 @colbase:
         ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
         lda sp_flags
+        and #8
+        beq :+
+        ldx #8                      ; bit3: copy blitter
+        bne :++
+:       lda sp_flags
         and #3
         asl
         tax
-        lda sprdisp_tab,x
+:       lda sprdisp_tab,x
         sta ds_dispatch+1
         lda sprdisp_tab+1,x
         sta ds_dispatch+2
@@ -1375,7 +1410,7 @@ ds_rowloop:
 ds_colloop:
 ds_dispatch:
         jmp sprFN                   ; operand patched per sprite
-sprdisp_tab: .word sprHN, sprHM, sprFN, sprFM
+sprdisp_tab: .word sprHN, sprHM, sprFN, sprFM, sprFC
 sprret:
         ; next column
         lda ptr
@@ -1398,10 +1433,13 @@ ds_done: rts
 
 ; ---- inner blocks.  ptr = source column (already offset), sp = screen char,
 ;      tmp = ra0', tmp2 = ra1'.  Full-res: source byte per line.
-.macro SPRLINE k, mirror
+.macro SPRLINE k, mirror, copy
         .local done, skip, opaque
         ldy #k
         lda (ptr),y
+.if copy
+        sta (sp),y                  ; box sprite: every byte opaque, plain copy
+.else
         beq done                    ; 0: both pixels transparent, no store
         cmp #$C0
         bcs opaque                  ; >= $C0: both pixels opaque (tagged by the converter)
@@ -1421,9 +1459,10 @@ opaque:
 .endif
 skip:   sta (sp),y
 done:
+.endif
 .endmacro
 
-.macro SPRFULL name, mirror
+.macro SPRFULL name, mirror, copy
         .local partial, et, l0, l1, l2, l3, l4, l5, l6, l7, pl, ps, po, pd
 name:
         lda tmp2
@@ -1435,17 +1474,21 @@ name:
         tax
         jmp (et,x)
 et:     .word l0,l1,l2,l3,l4,l5,l6,l7
-l0:     SPRLINE 0, mirror
-l1:     SPRLINE 1, mirror
-l2:     SPRLINE 2, mirror
-l3:     SPRLINE 3, mirror
-l4:     SPRLINE 4, mirror
-l5:     SPRLINE 5, mirror
-l6:     SPRLINE 6, mirror
-l7:     SPRLINE 7, mirror
+l0:     SPRLINE 0, mirror, copy
+l1:     SPRLINE 1, mirror, copy
+l2:     SPRLINE 2, mirror, copy
+l3:     SPRLINE 3, mirror, copy
+l4:     SPRLINE 4, mirror, copy
+l5:     SPRLINE 5, mirror, copy
+l6:     SPRLINE 6, mirror, copy
+l7:     SPRLINE 7, mirror, copy
         jmp sprret
 partial:
         ldy tmp
+.if copy
+pl:     lda (ptr),y
+        sta (sp),y
+.else
 pl:     lda (ptr),y
         beq ps
         cmp #$C0
@@ -1466,6 +1509,7 @@ po:
         lda SWAPTAB,x
 .endif
         sta (sp),y
+.endif
 ps:     cpy tmp2
         beq pd
         iny
@@ -1473,8 +1517,9 @@ ps:     cpy tmp2
 pd:     jmp sprret
 .endmacro
 
-        SPRFULL sprFN, 0
-        SPRFULL sprFM, 1
+        SPRFULL sprFN, 0, 0
+        SPRFULL sprFM, 1, 0
+        SPRFULL sprFC, 0, 1         ; box stars: pre-composited on their background, no mask
 
 ; half res: one source byte -> two screen lines (2k, 2k+1)
 .macro SPRLINE2 k, mirror

@@ -684,7 +684,9 @@ level_init:
         jmp @t12
 :
         jmp @box                    ; 7, 10: defaults
-@t0:    jsr rnd
+@t0:    lda q3
+        sta O_EL,y                  ; e0 = box class from the converter (0 none/1 cyan/2 black)
+        jsr rnd
         jsr mod12
         sta O_AL,y
         inc stars
@@ -1914,10 +1916,18 @@ ob_star:
         cmp #18
         bcs @done
         lsr
+        ldx fe                      ; box class: spin frames on a uniform background use
+        beq @reg                    ; the pre-composited box sprites (no mask, no erase)
+        cmp #6
+        bcs @reg                    ; sparkle frames stay regular
         clc
+        adc boxbase-1,x
+        jmp addsprite
+@reg:   clc
         adc #34
         jmp addsprite
 @done:  rts
+boxbase: .byte 103, 109
 
 ; ---------------------------------------------------------------- TRAMPOLINE (1)
 ob_tramp:
