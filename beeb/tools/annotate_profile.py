@@ -72,9 +72,10 @@ def main():
     total = sum(cyc.values())
     print('hottest line: %d cycles; total profiled: %d' % (mx, total))
     os.makedirs(OUTDIR, exist_ok=True)
-    for fname in sorted({f for f, _ in per_line}):
+    all_files = sorted(set(files.values()) | {f for f, _ in per_line})
+    for fname in all_files:
         src = os.path.join(ROOT, fname)
-        if not os.path.exists(src):
+        if not os.path.exists(src) or not fname.endswith('.s'):
             continue
         out_lines = []
         for i, text in enumerate(open(src).read().split('\n'), 1):
