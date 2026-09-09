@@ -29,7 +29,7 @@ await s.runFor(80_000_000);
 h1.remove();
 if (!hit) throw new Error("title_loop not reached");
 wr(A.title_loop, 0xa9); wr(A.title_loop + 1, 0x00); wr(A.title_loop + 2, 0xea);
-wr(A.level_loop, 0xa2); wr(A.level_loop + 1, 0x02);
+wr(A.level_loop + 3, 0xa2); wr(A.level_loop + 4, 0x02);   // ldx level sits after jsr blank_palette
 await s.runFor(9_000_000);                       // load + spawn
 console.log("nobj", rd(0x85), "level", rd(0x88), "frame", rd(0x5e) | (rd(0x5f) << 8));
 await s.runFor(20_000_000);                      // let spawn invulnerability expire

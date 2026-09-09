@@ -189,6 +189,7 @@ BARDIRTY:  .res 2
 DIRTYLIST: .res 2*2*16            ; per buffer dirty tiles (tx, ty)
 DIRTYCNT:  .res 2
 DISPSECT:  .res 1                 ; SECTAB offset the ISR chain uses (0/48)
+curR7:     .res 1                 ; last R7 written by the chain (for the vsync re-phase)
 NEXTSECT:  .res 1
 SECIDX:    .res 1
 OLDIRQ:    .res 2
@@ -395,13 +396,6 @@ drawrect:
         sta cnt
         stz rc_gi
 @run:
-        lda #4
-        sec
-        sbc rc_subc
-        cmp cnt
-        bcc :+
-        lda cnt
-:       sta rc_n
         ldx rc_gi
         lda GATHERL,x
         and #$0F                    ; bank rides in the low nibble of the pre-shifted lo byte
@@ -416,8 +410,16 @@ drawrect:
         sta tp
         lda GATHERH,x
         sta tp+1
-        lda rc_n
+        ; chars in this run: min(4 - rc_subc, cnt) -> rc_n, X = 2*rc_n, tmp = 8*rc_n
+        lda #4
+        sec
+        sbc rc_subc
+        cmp cnt
+        bcc :+
+        lda cnt
+:       sta rc_n
         asl
+        tax
         asl
         asl
         sta tmp                     ; bytes
@@ -430,10 +432,7 @@ drawrect:
         adc #0
         bpl :+
         jmp @slow
-:       lda rc_n
-        asl
-        tax
-        jmp (@jt-2,x)
+:       jmp (@jt-2,x)
 @jt:    .word @b7, @b15, @b23, @b31
         ; unrolled copy, descending Y so that entry at 8n-1 copies bytes 8n-1..0
 .macro CPY1 k
@@ -2330,6 +2329,7 @@ irq_handler:
         sta CRTC_IDX
         lda SECTAB+5,x
         sta CRTC_DAT
+        sta curR7                   ; the vsync handler re-phases the frame from this
         lda #12
         sta CRTC_IDX
         lda SECTAB,x
@@ -2343,16 +2343,22 @@ irq_handler:
         lda SECTAB+7,x
         sta VIA_T1LH
         lda VIA_T1CL                ; clear T1 flag
+        ; next entry; the chain stops at Q (the only entry with R6 = 0): a late vsync
+        ; must not walk the chain off the end of SECTAB
+        lda SECTAB+4,x
+        beq @stay
         txa
         clc
         adc #8
-        sta SECIDX
-        bra @exit
+        tax
+@stay:  stx SECIDX
+        jmp @exit
 @notT1:
         lda VIA_IFR
         and #$02
-        beq @exit
-        ; ---- vsync: restart T1 first (constant latency), counter = vsync->T, latch = T duration
+        bne :+
+        jmp @exit
+:       ; ---- vsync: restart T1 first (constant latency), counter = vsync->T, latch = T duration
         lda VS2T
         sta VIA_T1LL
         lda VS2T+1
@@ -2363,6 +2369,20 @@ irq_handler:
         sta VIA_T1LH
         lda #$02
         sta VIA_IFR
+        ; re-phase: the vsync fired at row curR7, so end this frame at row curR7+5 with
+        ; 8-line rows -> T starts exactly 48 lines after the vsync even if the CRTC row
+        ; counter had run past its vertical total (which otherwise never recovers)
+        lda #9
+        sta CRTC_IDX
+        lda #7
+        sta CRTC_DAT
+        lda #4
+        sta CRTC_IDX
+        lda curR7
+        clc
+        adc #QROWS-1-QVSYNC
+        and #$7F
+        sta CRTC_DAT
         inc vsyncs
         lda flipreq
         beq @noflip
@@ -2664,6 +2684,8 @@ crtc_init:
         inx
         cpx #14
         bne :-
+        lda crtctab+7
+        sta curR7
         rts
 crtctab: .byte 127,80,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
 

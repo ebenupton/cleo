@@ -19,7 +19,15 @@ drawtext:
         phy
         cmp #' '
         beq @space
-        jsr glyph_index
+        cmp #'_'
+        bne :+
+        lda #<zero8                 ; '_' = erase: draw an all-zero glyph
+        sta w16b
+        lda #>zero8
+        sta w16b+1
+        jsr draw_glyph_rows
+        bra @space
+:       jsr glyph_index
         jsr draw_glyph
 @space: lda tx
         clc
@@ -75,6 +83,7 @@ draw_glyph:
         lda w16b+1
         adc #>SPR_FONT
         sta w16b+1                  ; glyph rows
+draw_glyph_rows:
         lda tx
         lsr
         sta w16
@@ -241,7 +250,6 @@ menu_list:
         stz msel
         lda #$FF
         sta lastkeys
-@redraw:
         jsr clear_items
         ; items
         ldx #0
@@ -262,16 +270,8 @@ menu_list:
         inx
         cpx mcount
         bne @it
-        ; cursor
         lda msel
-        jsr item_y
-        tax
-        lda #<cursor_str
-        sta ptr
-        lda #>cursor_str
-        sta ptr+1
-        lda #8
-        jsr drawtext
+        jsr @cursor
         jsr menu_show
 @loop:  jsr menu_keys
         sta tmp
@@ -280,7 +280,7 @@ menu_list:
         lda msel
         beq :+
         dec msel
-        bra @redraw
+        bra @move
 :       lda tmp
         and #K_DOWN
         beq :+
@@ -289,12 +289,32 @@ menu_list:
         cmp mcount
         bcs :+
         sta msel
-        bra @redraw
+        bra @move
 :       lda tmp
         and #(K_FIRE|K_RIGHT)
         beq @loop
         lda msel
         rts
+        ; cursor moved: the buffer is on display, so touch only the cursor rows (right after
+        ; the vsync menu_keys waited for) rather than clearing and redrawing every item
+@move:  lda mlast
+        ldx #<blank_str
+        ldy #>blank_str
+        jsr @curstr
+        lda msel
+        jsr @cursor
+        bra @loop
+@cursor:
+        sta mlast
+        ldx #<cursor_str
+        ldy #>cursor_str
+@curstr:
+        stx ptr
+        sty ptr+1
+        jsr item_y
+        tax
+        lda #8
+        jmp drawtext
 item_y: sta tmp2
         lda mtop
         ldx tmp2
@@ -305,6 +325,8 @@ item_y: sta tmp2
         bne :-
 :       rts
 cursor_str: .byte ">                 <", 0
+blank_str:  .byte "_                 _", 0
+zero8:      .byte 0, 0, 0, 0, 0, 0, 0, 0
 
 ; clear the item area rows (below the logo): rows from mtop to bottom -> just clear everything below y=36
 clear_items:
@@ -646,5 +668,6 @@ mtop:      .res 1
 mstep:     .res 1
 msel:      .res 1
 mclear:    .res 1
+mlast:     .res 1                  ; item index the cursor was last drawn at
 tx:        .res 1
 ty:        .res 1
