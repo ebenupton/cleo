@@ -209,6 +209,7 @@ for col in tile_preview:
         tile_class.append(2)
     else:
         tile_class.append(0)
+BOX_BLACK = False                  # star-on-black boxes disabled for now (cyan only)
 def star_class(cm, x, y):
     h, w = cm.shape
     cls = set()
@@ -218,7 +219,8 @@ def star_class(cm, x, y):
                 cls.add(tile_class[int(cm[ty, tx])])
             else:
                 cls.add(0)
-    return cls.pop() if len(cls) == 1 else 0
+    c = cls.pop() if len(cls) == 1 else 0
+    return 0 if (c == 2 and not BOX_BLACK) else c
 star_stats = {}
 
 # tiles are ordered by original id; but put the 'special' animation tiles in known places:
