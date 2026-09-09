@@ -96,7 +96,7 @@
         sbc var+1
         bvc :+
         eor #$80
-:       bmi label
+:      bmi label
 .endmacro
 ; branch if var < imm
 .macro blt16i var, imm, label
@@ -106,7 +106,7 @@
         sbc #>(imm)
         bvc :+
         eor #$80
-:       bmi label
+:      bmi label
 .endmacro
 ; branch if var >= imm
 .macro bge16i var, imm, label
@@ -116,7 +116,7 @@
         sbc #>(imm)
         bvc :+
         eor #$80
-:       bpl label
+:      bpl label
 .endmacro
 ; branch if var <= imm
 .macro ble16i var, imm, label
@@ -126,7 +126,7 @@
         sbc var+1
         bvc :+
         eor #$80
-:       bpl label
+:      bpl label
 .endmacro
 ; branch if a > b (both 16-bit vars)
 .macro bgt16 aa, bb, label
@@ -136,7 +136,7 @@
         sbc aa+1
         bvc :+
         eor #$80
-:       bmi label
+:      bmi label
 .endmacro
 .macro blt16 aa, bb, label
         lda aa
@@ -145,7 +145,7 @@
         sbc bb+1
         bvc :+
         eor #$80
-:       bmi label
+:      bmi label
 .endmacro
 .macro bge16 aa, bb, label
         lda aa
@@ -154,7 +154,7 @@
         sbc bb+1
         bvc :+
         eor #$80
-:       bpl label
+:      bpl label
 .endmacro
 .macro bmi16 var, label
         bit var+1
@@ -325,25 +325,36 @@ inmap:
 @out:   clc
         rts
 
+; tilexy: X = qx >> 3, A = qy >> 3 (full 16-bit shifts; results must fit a byte)
+tilexy: lda qx
+        sta q2
+        lda qx+1
+        lsr
+        ror q2
+        lsr
+        ror q2
+        lsr
+        ror q2
+        ldx q2
+        lda qy
+        sta q2
+        lda qy+1
+        lsr
+        ror q2
+        lsr
+        ror q2
+        lsr
+        ror q2
+        lda q2
+        rts
+
 ; getinfo: A = alt byte for pixel (qx, qy), 8 if outside the map
 getinfo:
         jsr inmap
         bcs :+
         lda #8
         rts
-:       lda qx+1
-        lsr
-        lda qx
-        ror
-        lsr
-        lsr                         ; qx >> 3 (qx < 2048)
-        tax
-        lda qy+1
-        lsr
-        lda qy
-        ror
-        lsr
-        lsr
+:       jsr tilexy                  ; X = qx>>3, A = qy>>3
         jsr maptile
         ; alt class = ALTPAGE[page][byte]
         tay
@@ -420,19 +431,7 @@ gettileattr:
         bcs :+
         lda #3
         rts
-:       lda qx+1
-        lsr
-        lda qx
-        ror
-        lsr
-        lsr
-        tax
-        lda qy+1
-        lsr
-        lda qy
-        ror
-        lsr
-        lsr
+:       jsr tilexy                  ; X = qx>>3, A = qy>>3
         jsr maptile
         tay
         lda q1
@@ -595,6 +594,18 @@ level_init:
         sta O_YL,y
         txa
         sta O_YH,y
+        ; all state words start at zero (the level pack only covers the record; O_* is bare RAM)
+        lda #0
+        sta O_AL,y
+        sta O_AH,y
+        sta O_BL,y
+        sta O_BH,y
+        sta O_CL,y
+        sta O_CH,y
+        sta O_DL,y
+        sta O_DH,y
+        sta O_EL,y
+        sta O_EH,y
         ldy #3
         lda (t16),y
         sta q3                      ; e0
@@ -1439,23 +1450,25 @@ player_update:
 @animdone:
         ; timers
         lda hurt
-        beq :+
+        beq @afterhurt
         mov16 t16, evframe
         add16i t16, 64
         bgt16 frame, t16, @clrhurt
-        bra :+
+        bra @afterhurt
 @clrhurt:
         stz hurt
-:       lda control
-        bne :+
+@afterhurt:
+        lda control
+        bne @afterctl
         mov16 t16, evframe
         add16i t16, 24
         bgt16 frame, t16, @setctl
-        bra :+
+        bra @afterctl
 @setctl:
         lda #1
         sta control
-:       ; ---- choose sprite
+@afterctl:
+        ; ---- choose sprite
         lda control
         bne @ctl
         lda #22
@@ -2062,9 +2075,9 @@ ob_rsnake:
         inc fa+1
 :       lda fa
         cmp #17
-        bne :+
+        bne @norst
         lda fa+1
-        bne :+
+        bne @norst
         jsr rnd
         and #63
         clc
@@ -2072,7 +2085,7 @@ ob_rsnake:
         eor #$FF
         inc                         ; -(r&63)-64
         sx16 fa
-:       ; rise = (A*A >> 3) - 28  (A > -16) -> q6/t16b
+@norst: ; rise = (A*A >> 3) - 28  (A > -16) -> q6/t16b
         lda fa+1
         beq @calc
         cmp #$FF
@@ -2108,10 +2121,10 @@ ob_rsnake:
         bcc @hitp
         lda #4
         jsr addscore
-        lda #1
+        ldx #1
         bgt16 ox, px, :+
-        lda #2
-:       sta fb
+        ldx #2
+:       stx fb
         stz fb+1
         lda q6
         beq :+
@@ -2137,13 +2150,14 @@ ob_rsnake:
         jsr player_hit
 @draw:  lda q6
         beq @basket
-        lda #0
+        ldx #0
         bit fa+1
         bmi @fr
-        lda #2
+        ldx #2
         beq16 fa, @fr
-        lda #4
-@fr:    clc
+        ldx #4
+@fr:    txa
+        clc
         adc #54
         sta q1
         bgt16 ox, px, :+
@@ -2169,11 +2183,11 @@ ob_rsnake:
         add16i fd, 16
         bra :++
 :       sub16i fd, 16
-:       lda #54
+:       ldx #54
         bgt16 ox, px, :+
         bra :++
-:       lda #55
-:       sta q1
+:       ldx #55
+:       stx q1
         mov16 spy, oy
         add16 spy, fc
         lda q1
@@ -2375,11 +2389,12 @@ ob_bat:
         mov16 t16, fd
         asr16 t16
         add16 spy, t16
-        lda #65
+        ldx #65
         bgt16 spx, px, :+
         bra :++
-:       lda #66
-:       jmp addsprite
+:       ldx #66
+:       txa
+        jmp addsprite
 @done:  rts
 batoff: .byte 0,1,1,2,2,2,1,1,0,<-1,<-1,<-2,<-2,<-2,<-1,<-1
 
@@ -2488,9 +2503,9 @@ ob_spike:
         inc fa+1
 :       lda fa
         cmp #24
-        bne :+
+        bne @nowrap
         lda fa+1
-        bne :+
+        bne @nowrap
         jsr rnd
         and #63
         clc
@@ -2498,7 +2513,8 @@ ob_spike:
         eor #$FF
         inc
         sx16 fa
-:       lda health
+@nowrap:
+        lda health
         beq @draw
         lda fa+1
         bne @draw
@@ -2582,11 +2598,13 @@ ob_vanish:
         ; rx > -16 && rx <= 0 && ry == 16 && vy == 0
         jsr inrange
         .byte <-16, 1, 15, 17
-        bcc @done
-        bne16 vy, @done
+        bcc @ret
+        lda vy
+        ora vy+1
+        bne @ret
         lda #1
         sta fe
-        rts
+@ret:   rts
 @count: inc fe
         lda fe
         and #3
@@ -2606,19 +2624,10 @@ ob_vanish:
 @six:   lda #6
 @set:   sta q1
         ; tiles at (ox>>3, oy>>3) and +1 : codes from header per page
-        lda ox+1
-        lsr
-        lda ox
-        ror
-        lsr
-        lsr
-        sta gx
-        lda oy+1
-        lsr
-        lda oy
-        ror
-        lsr
-        lsr
+        mov16 qx, ox
+        mov16 qy, oy
+        jsr tilexy
+        stx gx
         sta gy
         tay
         lda LV_ROWPAGE,y
