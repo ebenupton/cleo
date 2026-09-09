@@ -235,12 +235,9 @@ game_main:
 title_loop:
         jsr title_menu
         cmp #MENU_HELP
-        bne :+
+        bne new_game
         jsr help_screen
         bra title_loop
-:       cmp #MENU_EXIT
-        bne new_game
-        jmp ($FFFC)
 new_game:
         stz level
         lda #3

@@ -358,7 +358,7 @@ title_menu:
         sta mstep
         lda #1
         sta mclear
-        lda #3
+        lda #2
         ldx #48
         jmp menu_list
 
@@ -488,7 +488,7 @@ winlose:
         ldx #84
         jsr drawtext
         mov16 t16, score
-        lda #68
+        lda #84                     ; align the score column with the hi-score below
         ldx #84
         jsr draw_number
         lda #<str_hiscore
@@ -610,7 +610,7 @@ draw_number:
         jmp drawtext
 
 ; ---------------------------------------------------------------- strings
-menu1:      .word s_start, s_help, s_exit
+menu1:      .word s_start, s_help
 menu2:      .word s_resume, s_exit
 s_start:    .byte "START GAME", 0
 s_help:     .byte "HELP", 0

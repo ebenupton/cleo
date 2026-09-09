@@ -130,18 +130,46 @@ compact = sorted(used)
 orig2compact = {t: i for i, t in enumerate(compact)}
 print('compact tiles:', len(compact))
 
-til_idx, til_rgb, _ = load_indexed('til.png')
-# sky is forced to solid cyan (user request): remap the source sky colour so the
-# dither picks solid cyan (no pattern) for it.
-til_rgb = til_rgb.copy()
-for _i, _c in enumerate(til_rgb):
-    if tuple(int(v) for v in _c) == (136, 238, 255):
-        til_rgb[_i] = (0, 255, 255)
+til_idx, til_rgb0, _ = load_indexed('til.png')
+
+# ----------------------------------------------------------------------------
+# Tile source-colour overrides.  Keyed by the source RGB in til.png:
+#   TIL_SOLID   source colour -> a solid MODE 2 colour, no dither  (0 blk 1 red
+#               2 grn 3 yel 4 blu 5 mag 6 cyn 7 wht)
+#   TIL_NOBLACK source colour -> the colour that replaces BLACK in its dither
+#               (kills black speckle in wall/ground textures; 3 yellow, 7 white)
+# Edit these tables to tune the look.
+# ----------------------------------------------------------------------------
+TIL_SOLID = {
+    (136, 238, 255): 6,          # sky -> cyan
+}
+TIL_NOBLACK = {
+    (102, 85, 85): 3, (85, 68, 68): 3, (85, 68, 34): 3, (68, 68, 51): 3,
+    (17, 17, 0): 3,              # dark browns -> black becomes yellow
+    (85, 85, 85): 7, (68, 68, 68): 7, (34, 34, 34): 7,   # greys -> white
+}
+
+til_rgb = til_rgb0.copy()
+noblack_idx = {}                 # palette index -> replacement MODE2 colour
+for _i, _c in enumerate(til_rgb0):
+    _t = tuple(int(v) for v in _c)
+    if _t in TIL_SOLID:
+        til_rgb[_i] = BEEB_RGB[TIL_SOLID[_t]]      # dithers to that solid colour
+    if _t in TIL_NOBLACK:
+        noblack_idx[_i] = TIL_NOBLACK[_t]
+
 tiles_mode2 = []
 tile_preview = []
 for cid, orig in enumerate(compact):
-    img = til_rgb[til_idx[orig * 8:orig * 8 + 8, :]]
+    sidx = til_idx[orig * 8:orig * 8 + 8, :]
+    img = til_rgb[sidx]
     col = dither(img, np.ones((8, 8), bool), full=True)   # (16, 8)
+    if noblack_idx:                                # replace black for flagged colours
+        nb = np.full(sidx.shape, -1, np.int32)
+        for _pi, _rc in noblack_idx.items():
+            nb[sidx == _pi] = _rc
+        nb16 = np.repeat(nb, 2, axis=0)
+        col = np.where((col == 8) & (nb16 >= 0), nb16.astype(col.dtype), col)
     tile_preview.append(col)
     b = pack_mode2(col)   # (16, 4)
     # Beeb layout: char row 0 (lines 0-7): chars 0..3 each 8 bytes ; then char row 1
