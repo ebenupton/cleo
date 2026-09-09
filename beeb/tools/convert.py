@@ -358,9 +358,11 @@ for i in range(103):
 # 2*refy below a char-row boundary whatever the camera does (the wy/wfine terms cancel
 # mod 8).  Snap refy to a multiple of 4 game px wherever that saves a whole char row of
 # blit + erase: the image moves by at most 2 px (nearest multiple; ties move it up).
-# Cleo (0..26) and the boomerang (27..31) are not tile-aligned and are left alone.
+# Only the stars (34..39) qualify: they are static.  Cleo, the boomerang, the rising
+# cobra (54..59, y follows a parabola) and the bats (61..66, flying) are not tile-aligned,
+# so shifting them would move the art for no saving.
 snapped = []
-for i in range(32, 103):
+for i in range(34, 40):
     e = entry[i]
     if e is None:
         continue
