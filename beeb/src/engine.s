@@ -109,6 +109,7 @@ rc_sub:   .res 1
 rc_gi:    .res 1
 rc_subc:  .res 1
 rc_n:     .res 1
+rc_wrap:  .res 1                  ; row may cross $8000 (needs per-run wrap check)
 
 ; sprite draw
 spx:      .res 2
@@ -131,6 +132,7 @@ sp_off:   .res 2                  ; row source offset
 sp_row:   .res 1
 sp_c:     .res 1
 sp_lim:   .res 1
+sp_cnt:   .res 1                  ; sprite column countdown
 spi:      .res 1
 lcnt:     .res 1
 lidx:     .res 1
@@ -159,6 +161,7 @@ MUSPTR:   .res 2
         .segment "TABLES"
 MASKTAB:   .res 256               ; data byte -> AND mask
 SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
+IDENT:     .res 256               ; identity table: ora IDENT,x == ora X (no temp)
 RINGLO:    .res 32                ; ring row r -> screen address
 RINGHI:    .res 32
 GATHER:    .res 48                ; per-row tile gather (lo,bank pairs)
@@ -342,6 +345,12 @@ drawrect:
         sta w16+1
         lda rc_y
         jsr ringaddr
+        ; a row spans <= 640 bytes: it can only cross $8000 if sp is within 768 of it
+        lda sp+1
+        cmp #$7D
+        lda #0
+        rol
+        sta rc_wrap
         lda rc_y
         and #1
         beq :+
@@ -389,12 +398,14 @@ drawrect:
         lsr
         ora #$80
         sta tp+1
-        ; wrap check: sp + n*8 crosses $8000 ?
         lda rc_n
         asl
         asl
         asl
         sta tmp                     ; bytes
+        lda rc_wrap
+        beq :+                      ; row cannot cross $8000: no per-run check needed
+        lda tmp
         clc
         adc sp
         lda sp+1
@@ -1294,6 +1305,15 @@ drawsprite:
         inc sp_col+1
 :       dec sp_c
         bne @mul
+        ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
+        lda sp_flags
+        and #3
+        asl
+        tax
+        lda sprdisp_tab,x
+        sta ds_dispatch+1
+        lda sprdisp_tab+1,x
+        sta ds_dispatch+2
 @rows:
         lda sp_r0
         sta sp_row
@@ -1342,43 +1362,34 @@ ds_rowloop:
         ror sp_off+1
         ror sp_off
 @fullres:
+        ; ptr = column base + row offset; advances by step per column (same as tp)
         lda sp_col
-        sta tp
-        lda sp_col+1
-        sta tp+1
-        lda sp_c0
-        sta sp_c
-ds_colloop:
-        ; tp = column base + off
-        lda tp
         clc
         adc sp_off
         sta ptr
-        lda tp+1
+        lda sp_col+1
         adc sp_off+1
         sta ptr+1
-        ; dispatch
-        lda sp_flags
-        and #3
-        asl
-        tax
-        jmp (@disp,x)
-@disp:  .word sprHN, sprHM, sprFN, sprFM
+        lda sp_c1
+        sec
+        sbc sp_c0
+        sta sp_cnt                  ; columns-1 (countdown)
+ds_colloop:
+ds_dispatch:
+        jmp sprFN                   ; operand patched per sprite
+sprdisp_tab: .word sprHN, sprHM, sprFN, sprFM
 sprret:
         ; next column
-        lda tp
+        lda ptr
         clc
         adc sp_step
-        sta tp
-        lda tp+1
+        sta ptr
+        lda ptr+1
         adc sp_step+1
-        sta tp+1
+        sta ptr+1
         spnext
-        lda sp_c
-        cmp sp_c1
-        beq ds_rowdone
-        inc sp_c
-        bra ds_colloop
+        dec sp_cnt
+        bpl ds_colloop
 ds_rowdone:
         lda sp_row
         cmp sp_r1
@@ -1402,9 +1413,7 @@ ds_done: rts
         lda MASKTAB,x
         beq opaque
         and (sp),y
-        sta tmp3
-        txa
-        ora tmp3
+        ora IDENT,x
         sta (sp),y
         bra skip
 opaque: txa
@@ -1445,9 +1454,7 @@ pl:     lda (ptr),y
         lda MASKTAB,x
         beq po
         and (sp),y
-        sta tmp3
-        txa
-        ora tmp3
+        ora IDENT,x
         sta (sp),y
         bra ps
 po:     txa
@@ -1592,6 +1599,61 @@ copy_partial:
         dec ptr+1
 :       lda #80
         sta cnt
+        ; fast path: neither the source row (sp) nor the dest row (ptr, real = ptr+wfine)
+        ; can cross $8000 within 640(+6) bytes if both high bytes are below $7D
+        lda sp+1
+        cmp #$7D
+        bcs @slowpath
+        lda ptr+1
+        cmp #$7D
+        bcs @slowpath
+        lda wfine
+        lsr
+        dec                         ; 2,4,6 -> 0,1,2
+        asl
+        tax
+        lda @ftab,x
+        sta @fjmp+1
+        lda @ftab+1,x
+        sta @fjmp+2
+@fjmp:  jmp @g2                     ; operand patched: @g2/@g4/@g6
+@ftab:  .word @g2, @g4, @g6
+@g2:    ldy #2
+        lda (sp),y
+        sta (ptr),y
+        iny
+        lda (sp),y
+        sta (ptr),y
+        iny
+@g4:    ldy #4
+        lda (sp),y
+        sta (ptr),y
+        iny
+        lda (sp),y
+        sta (ptr),y
+        iny
+@g6:    ldy #6
+        lda (sp),y
+        sta (ptr),y
+        iny
+        lda (sp),y
+        sta (ptr),y
+        lda sp
+        clc
+        adc #8
+        sta sp
+        bcc :+
+        inc sp+1
+:       lda ptr
+        clc
+        adc #8
+        sta ptr
+        bcc :+
+        inc ptr+1
+:       dec cnt
+        beq @done
+        jmp @fjmp
+@slowpath:
         lda wfine
         cmp #4
         beq @f4
@@ -2468,6 +2530,7 @@ blank_palette:
 ; table init
 ; ============================================================================
 init_tables:
+        jsr init_ident
         ldx #0
 @t:     txa
         and #$AA
@@ -2754,4 +2817,13 @@ rnd:    lsr seed+1
         eor #$B4
         sta seed+1
 :       lda seed
+        rts
+
+; identity table for the sprite blitter (A | X without a temp store)
+init_ident:
+        ldx #0
+:       txa
+        sta IDENT,x
+        inx
+        bne :-
         rts

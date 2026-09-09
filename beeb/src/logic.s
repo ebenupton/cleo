@@ -1062,12 +1062,16 @@ game_frame:
 @alive: jmp player_update
 
 ; A = t16 >> 6 (t16 < 16384)
-shr6:   ldx #6
-:       lsr t16+1
-        ror t16
-        dex
-        bne :-
+shr6:   lda t16+1                   ; t16 < 16384: result = (hi<<2) | (lo>>6)
+        asl
+        asl
+        sta t16+1
         lda t16
+        rol                         ; three ROLs bring bits 7,6 down to bits 1,0
+        rol
+        rol
+        and #3
+        ora t16+1
         rts
 
 ; ============================================================================

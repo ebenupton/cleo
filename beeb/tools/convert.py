@@ -436,38 +436,43 @@ BAR_BLUE = np.array([0, 0, 255], np.uint8)
 BAR_CYAN = np.array([0, 255, 255], np.uint8)
 BAR_BLACK = np.array([0, 0, 0], np.uint8)
 BAR_BG = {0, 1, 5, 6, 7, 8, 9, 13}      # brick/blue/grey background indices in bar.png
-bar8 = np.zeros((8, 160, 3), np.uint8)
-bar8[:] = BAR_BLACK
-def blit_sprite_icon(dstx, spr_id, y0=0, crop_h=None, crop_w=None, scale=True):
-    # take a game sprite region, optionally scale to the 8px bar height, key onto black
+# The bar is composited at native half-game-pixel (16-scanline) resolution so the
+# ordered dither operates per scanline, exactly like the playfield.  Each icon is a
+# game sprite region placed into bar16; icons that fit (<=8 game px) go in native
+# (one game px = two scanlines) with an optional half-pixel (1-scanline) offset,
+# taller ones are resampled onto the 16-line grid (LANCZOS) rather than to 8-then-doubled.
+bar16 = np.zeros((16, 160, 3), np.uint8)
+bar16[:] = BAR_BLACK
+def bar_icon(dstx, spr_id, y0=0, crop_h=None, crop_w=None, sub_scan=0, fit=False):
     im = crops[spr_id][0][y0:]
     if crop_h:
         im = im[:crop_h]
     if crop_w:
         im = im[:, :crop_w]
     h, w = im.shape
-    th = 8
-    if scale:
-        tw = max(1, int(round(w * th / float(h))))
+    if fit:
+        # resample the whole crop onto the 16-scanline grid (proper dithering, no
+        # game-px doubling); width kept to true aspect (a game px is 1 line x 2 scanlines)
+        tw = max(1, int(round(w * 16 / float(2 * h))))
         rgba = np.dstack([spr_rgb[im].astype(np.uint8), (im != spr_tr).astype(np.uint8) * 255]).astype(np.uint8)
-        arr = np.array(Image.fromarray(rgba, 'RGBA').resize((tw, th), Image.LANCZOS))
+        arr = np.array(Image.fromarray(rgba, 'RGBA').resize((tw, 16), Image.LANCZOS))
+        for s in range(16):
+            for xx in range(tw):
+                if dstx + xx < 160 and arr[s, xx, 3] > 96:
+                    bar16[s, dstx + xx] = arr[s, xx, :3]
     else:
-        # native size, top-aligned into the 8px bar (clip overflow)
-        tw = w
-        rgb = np.zeros((th, tw, 3), np.uint8)
-        al = np.zeros((th, tw), np.uint8)
-        hh = min(h, th)
-        rgb[:hh] = spr_rgb[im[:hh]]
-        al[:hh] = (im[:hh] != spr_tr).astype(np.uint8) * 255
-        arr = np.dstack([rgb, al])
-    for yy in range(th):
-        for xx in range(tw):
-            if dstx + xx < 160 and arr[yy, xx, 3] > 96:
-                bar8[yy, dstx + xx] = arr[yy, xx, :3]
-blit_sprite_icon(3, 0, y0=3, crop_h=11, crop_w=14)   # cleo head: 3px down, full head width
-blit_sprite_icon(31, 97)                              # heart (health powerup sprite)
-blit_sprite_icon(59, 34, scale=False)                # star: full flat star, native size
-barcol = dither(bar8, np.ones((8, 160), bool), full=True)   # 16 lines x 160
+        # native: one game px -> two scanlines, top-aligned, clipped to the 16 lines
+        for k in range(min(h, 8)):
+            rgb = spr_rgb[im[k]]; op = im[k] != spr_tr
+            for s in (2 * k + sub_scan, 2 * k + sub_scan + 1):
+                if 0 <= s < 16:
+                    for xx in range(w):
+                        if dstx + xx < 160 and op[xx]:
+                            bar16[s, dstx + xx] = rgb[xx]
+bar_icon(3, 0, y0=4, crop_h=8, crop_w=14)             # cleo head: native, two game px up
+bar_icon(31, 97, fit=True)                            # heart: resampled onto the 16-line grid
+bar_icon(59, 34, fit=True)                            # star: resampled onto the 16-line grid (full star fits)
+barcol = dither(bar16, np.ones((16, 160), bool), full=False)   # 16 lines x 160
 barpk = pack_mode2(barcol)     # 16 x 80
 barbytes = bytearray()
 for crow in range(2):
@@ -478,7 +483,10 @@ for crow in range(2):
 digits = bytearray()
 for n in range(10):
     dx, dy = 63 + (n % 5) * 8, (n // 5) * 8
-    img = bar_rgb[bar_idx[dy:dy + 8, dx:dx + 8]]
+    idxblk = bar_idx[dy:dy + 8, dx:dx + 8]
+    img = bar_rgb[idxblk].copy()
+    for bg in BAR_BG:
+        img[idxblk == bg] = BAR_BLACK        # drop the blue/brick surround -> black
     col = dither(img, np.ones((8, 8), bool), full=True)
     pk = pack_mode2(col)
     for crow in range(2):
