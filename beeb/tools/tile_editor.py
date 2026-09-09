@@ -101,7 +101,8 @@ class Editor:
         self.tile_canvas.bind('<Button-1>', self.on_pixel)
         self.tile_canvas.bind('<B1-Motion>', self.on_pixel)
         btns = tk.Frame(rf); btns.pack(side=tk.TOP)
-        tk.Button(btns, text='Revert tile', command=self.revert_tile).pack(side=tk.LEFT)
+        tk.Button(btns, text='Generalise', command=self.generalise).pack(side=tk.LEFT)
+        tk.Button(btns, text='Revert tile', command=self.revert_tile).pack(side=tk.LEFT, padx=6)
         tk.Button(btns, text='Save', command=self.save).pack(side=tk.LEFT, padx=6)
         self.status = tk.Label(rf, text='', fg='#080'); self.status.pack(side=tk.TOP)
 
@@ -193,6 +194,40 @@ class Editor:
         # keep selection highlight
         if self.sel_orig is not None:
             self.info.config(text='tile id %d  [edited]' % self.sel_orig)
+
+    def generalise(self):
+        # Learn how edited pixels were recoloured, keyed by (source colour, the
+        # pixel's automatic dither colour), then apply that mapping to every
+        # not-yet-edited pixel of the tile with a matching (source, auto) pair.
+        if self.sel_orig is None:
+            return
+        orig = self.sel_orig
+        col = tile_cols[orig].copy()
+        auto = auto_cols[orig]
+        sidx = convert.til_idx[orig * 8:orig * 8 + 8, :]     # (8,8) source indices
+        remap = {}
+        for gy in range(8):
+            for gx in range(8):
+                a = int(auto[gy * 2, gx]); c = int(col[gy * 2, gx])
+                if c != a:                                    # edited pixel
+                    remap[(int(sidx[gy, gx]), a)] = c
+        if not remap:
+            self.status.config(text='no edited pixels to generalise from')
+            return
+        n = 0
+        for gy in range(8):
+            for gx in range(8):
+                a = int(auto[gy * 2, gx]); c = int(col[gy * 2, gx])
+                if c == a:                                    # not yet edited
+                    key = (int(sidx[gy, gx]), a)
+                    if key in remap:
+                        col[gy * 2, gx] = remap[key]
+                        col[gy * 2 + 1, gx] = remap[key]
+                        n += 1
+        tile_cols[orig] = col
+        edits[orig] = col
+        self.draw_tile(); self.reload_level()
+        self.status.config(text='generalised to %d more pixel(s) (unsaved)' % n)
 
     def revert_tile(self):
         if self.sel_orig is None:
