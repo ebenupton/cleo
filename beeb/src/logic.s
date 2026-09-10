@@ -1171,8 +1171,7 @@ gravity:
 ; dpx = (vy + 128) >> 8 (signed)
 vy_step:
         mov16 dpx, vy
-        add16i dpx, 128
-        lda dpx+1
+        add16i dpx, 128             ; leaves the high byte in A
         sta dpx
         and #$80
         beq :+
@@ -1366,8 +1365,7 @@ player_update:
 @hmove:
         ; steps = (vx + 128) >> 8 ; dir = sign
         mov16 dpx, vx
-        add16i dpx, 128
-        lda dpx+1
+        add16i dpx, 128             ; leaves the high byte in A
         sta dpx
         and #$80
         beq :+
@@ -1868,8 +1866,7 @@ ob_star:
         ldx fe                      ; box class: spin frames on a uniform background use
         beq @reg                    ; the pre-composited box sprites (no mask, no erase)
         cmp #6
-        bcs @reg                    ; sparkle frames stay regular
-        clc
+        bcs @reg                    ; sparkle frames stay regular (C = 0 below)
         adc boxbase-1,x
         jmp addsprite
 @reg:   clc
@@ -2810,7 +2807,6 @@ draw_score:                         ; 5 digits at 108..140
 @d:     phx
         ; t16 /= 10 -> remainder
         jsr div10_16
-        lda q1
         plx
         phx
         txa

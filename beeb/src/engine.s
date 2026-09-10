@@ -163,7 +163,6 @@ flipreq:  .res 1                  ; 1 = flip pending
 flipvs:   .res 1
 keys:     .res 1                  ; current key bits
 seed:     .res 2
-dispbuf:  .res 1
 SFXPTR:   .res 2
 MUSPTR:   .res 2
 
@@ -246,8 +245,7 @@ NEXTBUF:   .res 1
         bcc :+
         inc sp+1
         bpl :+
-        lda sp+1
-        sec
+        lda sp+1                    ; C = 1 here: the adc #8 above carried
         sbc #$50
         sta sp+1
 :
@@ -699,10 +697,8 @@ scroll_validate:
         cmp #<-79
         bcs :+
         jmp @full
-:
-        ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+30
-        lda w16
-        eor #$FF
+:       ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+30
+        eor #$FF                    ; (A still holds w16)
         inc
         sta rc_w
         lda wcx
@@ -713,11 +709,10 @@ scroll_validate:
 @dxpos: lda w16
         beq @dyc
         cmp #80
-        bcs @full
+        bcs @full                   ; not taken: C = 0 for the adc
         ; dx positive: cols (oldcx+80) .. wcx+79 = dx cols starting at wcx+80-dx
         sta rc_w
         lda wcx
-        clc
         adc #80
         sta rc_x
         lda wcx+1
@@ -753,10 +748,9 @@ scroll_validate:
         sta rc_y
         bra @dorows
 @dypos: cmp #BUFROWS
-        bcs @full
+        bcs @full                   ; not taken: C = 0 for the adc
         sta rc_h
         lda wcy
-        clc
         adc #BUFROWS
         sec
         sbc rc_h
@@ -1119,9 +1113,8 @@ drawsprite:
         bra @vert
 @cpos:  lda w16
         cmp #80
-        bcs @out0
+        bcs @out0                   ; not taken: C = 0 for the adc below
         sta sp_c0
-        clc
         adc sp_w
         dec
         cmp #80
@@ -2319,8 +2312,7 @@ build_sections:
         inc w16+1
 :       lda w16+1
         cmp #$10
-        bcc :+
-        sec
+        bcc :+                      ; not taken: C = 1 for the sbc
         sbc #$0A
         sta w16+1
 :       rts
@@ -2545,13 +2537,11 @@ drawrect_clip:
         bne @none                   ; rel >= 256 -> off right
         lda w16
         cmp #80
-        bcs @none
-        clc
+        bcs @none                   ; not taken: C = 0 for the adc
         adc rc_w
         cmp #81
-        bcc :+
+        bcc :+                      ; not taken: C = 1 for the sbc
         lda #80
-        sec
         sbc w16
         sta rc_w
 :       jmp drawrect
