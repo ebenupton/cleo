@@ -43,8 +43,9 @@ for orig in (70, 71, 102):
     for v in np.unique(til_idx[orig * 8:orig * 8 + 8, :]):
         wall_pal[int(v)] = True
 # tiles whose background is cleaned pixel by pixel (art on a wall backdrop): the EXIT
-# letters and the flower (434 petals, 435 leaves; the animated run 426..429 is not it)
-PIXEL_TILES = {32, 33, 434, 435}
+# letters and the flower (2x2 tiles: 402/403 head, 434/435 stem and leaves; the animated
+# run 426..429 is not it)
+PIXEL_TILES = {32, 33, 402, 403, 434, 435}
 # the one speckle variant the colour rule misses (a lone floating block in the tombs):
 # forced black outright.  Its relatives (223/255/191 = wooden trusses, 183/212/179/180/211
 # = the lattice beside the pillars) are foreground art and must NOT be listed here.
