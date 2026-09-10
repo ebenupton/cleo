@@ -668,6 +668,17 @@ for i in range(103):
     W = img_wbytes[j]
     if mirror:
         rx = (2 * W - 1) - rx
+    if i < 27:
+        # Cleo anchors the camera, which is computed before she moves and rounded down
+        # to an even pixel (clamp_window's `and #$FE`), so her column on screen is
+        # floor((step + 80 + (px & 1) - refx) / 2).  That only stays put while she runs
+        # at an odd number of pixels a step -- which is every speed except 2 -- if refx
+        # is odd; with an even one she jitters a character left and right every step.
+        # Mirroring flips the parity, which is why one direction looked smooth and the
+        # other did not.  A one-pixel shift of the art is the price; rounding down keeps
+        # the mirrored pairs closer to symmetric than rounding up (25 px against 43).
+        if not rx & 1:
+            rx -= 1
     ptr, in_andy = img_addr[j]
     flags = (1 if mirror else 0) | 2 | (4 if in_andy else 0)
     lines = 2 * h
