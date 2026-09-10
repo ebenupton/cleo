@@ -81,7 +81,7 @@ def pack_mode2(col):
     return (spread(l, 1) | spread(r, 0)).astype(np.uint8)
 
 
-def encode_sprite(col, packed):
+def encode_sprite(col, packed, blanks=True):
     """Sprite byte encoding for the blitters (col: (lines, 2W) indices, 0 = transparent,
     8 = opaque black; packed = pack_mode2(col)).
       bit 7 set        : both pixels opaque. Left colour in bits 5,3,1, right in 4,2,0,
@@ -89,6 +89,10 @@ def encode_sprite(col, packed):
                          and the RUN bit are invisible on screen).
       bit 6 (RUN)      : with bit 7: this byte and the next 7 of the column are all
                          both-opaque -> the blitter copies the whole char cell.
+      $41              : this byte and the next 7 are all fully transparent -> the
+                         blitter leaves the whole char cell alone.  A right-hand pixel
+                         of colour 9 would encode as $41 and nothing else does, since
+                         only colour 8 (opaque black) ever sets that bit.
       < $80            : one pixel opaque, decoded through MASKTAB/ORTAB: the old nibble
                          codes, except left-black-only ($80 would clash) -> $44.
     """
@@ -105,7 +109,20 @@ def encode_sprite(col, packed):
     out = np.where(both, 0x80 | bits | (run.astype(np.uint16) << 6), packed.astype(np.uint16))
     single_left_black = (~both) & (l == 8)
     out = np.where(single_left_black, 0x44, out)
+    # and the same trick for empty space: a byte that starts eight transparent ones
+    blank = (l == 0) & (r == 0)
+    brun = np.zeros(blank.shape, bool)
+    for i in range(lines - 7):
+        brun[i] = blank[i:i + 8].all(axis=0)
+    if blanks:                       # the half-res blitter, which draws the title
+        encode_sprite.blank_runs += int(brun.sum())   # pieces, does not decode the tag
+        encode_sprite.cells += int(blank.size)
+        out = np.where(brun, 0x41, out)
     return out.astype(np.uint8)
+
+
+encode_sprite.blank_runs = 0
+encode_sprite.cells = 0
 
 
 def col_to_rgb(col):
@@ -864,7 +881,8 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     if opaque:
         src[im == tr] = 0          # transparent key -> black
     col = dither(src, alpha, full=full)
-    pk = encode_sprite(col, pack_mode2(col))        # same encoding as the game sprites
+    pk = encode_sprite(col, pack_mode2(col), blanks=False)   # no blank-run tags: the
+                                                   # half-res blitter cannot decode them
     data = bytearray()
     for c in range(W):
         data += pk[:, c].tobytes()
@@ -889,6 +907,7 @@ for (name, ptr, W, hpx, lines, full) in tdir:
 titlefile = tdirbytes.ljust(0x80, b'\0') + title
 open(os.path.join(OUT, 'TITLE'), 'wb').write(titlefile)
 print('title pack', len(titlefile))
+print('sprite blank runs: %d tagged bytes of %d' % (encode_sprite.blank_runs, encode_sprite.cells))
 
 # ----------------------------------------------------------------------------
 # constants for the assembler

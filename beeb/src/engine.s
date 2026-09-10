@@ -1407,7 +1407,7 @@ ds_done: rts
 
 ; ---- inner blocks.  ptr = source column (already offset), sp = screen char,
 ;      tmp = ra0', tmp2 = ra1'.  Full-res: source byte per line.
-.macro SPRLINE k, mirror, copy, solid
+.macro SPRLINE k, mirror, copy, solid, blank
         .local done, skip, opaque, masked
 .if k = 0
         lda (ptr)                   ; line 0: non-indexed (Y is not needed)
@@ -1428,7 +1428,8 @@ ds_done: rts
         cmp #$C0
         bcs solid                   ; bit 7+6: this and the next 7 bytes all opaque
         bra opaque
-masked:
+masked: cmp #$41                    ; and the mirror image of that: this and the next 7
+        beq blank                   ; all transparent, so the cell is left alone
   .else
         bmi opaque                  ; bit 7: both pixels opaque (see encode_sprite)
   .endif
@@ -1484,7 +1485,7 @@ done:
 .endmacro
 
 .macro SPRFULL name, mirror, copy
-        .local partial, et, l0, l1, l2, l3, l4, l5, l6, l7, pl, ps, po, pd, solid
+        .local partial, et, l0, l1, l2, l3, l4, l5, l6, l7, pl, ps, po, pd, solid, blank
 .if .not copy
 solid:  ; byte 0 carried the RUN flag: the whole cell is opaque, straight copy
 .if mirror
@@ -1519,14 +1520,22 @@ name:
         tax
         jmp (et,x)
 et:     .word l0,l1,l2,l3,l4,l5,l6,l7
-l0:     SPRLINE 0, mirror, copy, solid
-l1:     SPRLINE 1, mirror, copy, solid
-l2:     SPRLINE 2, mirror, copy, solid
-l3:     SPRLINE 3, mirror, copy, solid
-l4:     SPRLINE 4, mirror, copy, solid
-l5:     SPRLINE 5, mirror, copy, solid
-l6:     SPRLINE 6, mirror, copy, solid
-l7:     SPRLINE 7, mirror, copy, solid
+.if .not copy
+blank:  ; byte 0 was $41: the whole cell is transparent, so there is nothing to do
+.if mirror
+        jmp sprretM
+.else
+        jmp sprretP
+.endif
+.endif
+l0:     SPRLINE 0, mirror, copy, solid, blank
+l1:     SPRLINE 1, mirror, copy, solid, blank
+l2:     SPRLINE 2, mirror, copy, solid, blank
+l3:     SPRLINE 3, mirror, copy, solid, blank
+l4:     SPRLINE 4, mirror, copy, solid, blank
+l5:     SPRLINE 5, mirror, copy, solid, blank
+l6:     SPRLINE 6, mirror, copy, solid, blank
+l7:     SPRLINE 7, mirror, copy, solid, blank
         .if mirror
         jmp sprretM
         .else
@@ -2579,6 +2588,11 @@ init_tables:
         sta SWAPTAB+$40             ; right-black-only <-> left-black-only
         lda #$40
         sta SWAPTAB+$44
+        lda #$FF                    ; $41 marks eight transparent bytes; if it reaches
+        sta MASKTAB+$41             ; the tables (a clipped cell, or as a line 1..7)
+        stz IDENT+$41               ; it must leave the screen byte alone.  $82 is its
+        sta MASKTAB+$82             ; mirror image, and unreachable otherwise
+        stz IDENT+$82
         ; MASKTAB+$80..: the mask of the mirrored byte, so the mirrored blitters do one
         ; lookup instead of SWAPTAB then MASKTAB (only codes < $80 are ever looked up)
         ldx #0
@@ -3454,12 +3468,15 @@ load_tiles:
         jmp @tile
 :       jmp @chunk
 
-; sign extend A -> tmp3 (0 or $FF)
+; sign extend A -> tmp3 (0 or $FF).  In LOW2 (the old MOS vector page) because main
+; RAM below the screen is full: there is room to spare there.
+        .segment "LOW2"
 sext:   and #$80
         beq :+
         lda #$FF
 :       sta tmp3
         rts
+        .segment "CODE"
 
 ; ============================================================================
 ; Random
