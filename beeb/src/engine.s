@@ -111,6 +111,11 @@ rc_subc:  .res 1
 rowoff:   .res 1                  ; rc_sub | rc_subc*8 : byte offset into the tile for this run
 rc_n:     .res 1
 rc_wrap:  .res 1                  ; row may cross $8000 (needs per-run wrap check)
+rc_tx0:   .res 1                  ; per-rect invariants: first tile column,
+rc_nt:    .res 1                  ;   tiles-1 per row,
+rc_sc0:   .res 1                  ;   rc_x & 3 (chars into the first tile),
+rc_ro0:   .res 1                  ;   (rc_x & 3) << 3,
+rc_sp:    .res 2                  ;   screen address of the current char row's first char
 irq_x:    .res 1                  ; IRQ handler register save (not reentrant)
 irq_y:    .res 1
 
@@ -278,8 +283,54 @@ ringaddr:
 ; ============================================================================
 drawrect:
         lda rc_h
-        bne @row
+        bne :+
         rts
+:       ; ---- per-rect invariants: tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
+        lda rc_x
+        clc
+        adc rc_w
+        sta w16
+        lda rc_x+1
+        adc #0
+        sta w16+1
+        lda w16
+        bne :+
+        dec w16+1
+:       dec w16
+        lsr w16+1
+        ror w16
+        lsr w16+1
+        ror w16                     ; w16 = tx1
+        lda rc_x+1
+        lsr
+        sta tmp
+        lda rc_x
+        ror
+        lsr tmp
+        ror                         ; A = tx0 (map width <= 256 tiles)
+        sta rc_tx0
+        lda w16
+        sec
+        sbc rc_tx0
+        sta rc_nt                   ; tiles-1
+        lda rc_x
+        and #3
+        sta rc_sc0
+        asl
+        asl
+        asl
+        sta rc_ro0
+        ; screen address of the first row; later rows add 640 (ring wrap) in @drawrow
+        lda rc_x
+        sta w16
+        lda rc_x+1
+        sta w16+1
+        lda rc_y
+        jsr ringaddr
+        lda sp
+        sta rc_sp
+        lda sp+1
+        sta rc_sp+1
 @row:
         ; ---- tile row ty = rc_y >> 1 ; map row pointer ptr = LV_MAP + (ty << maplw),
         ; computed as (ty*256) >> (8-maplw): at most a couple of shifts (maplw <= 8)
@@ -311,48 +362,20 @@ drawrect:
         clc
         adc #>LV_MAP
         sta ptr+1
-        ; ---- tx0 = rc_x >> 2 ; tx1 = (rc_x + rc_w - 1) >> 2
-        lda rc_x
-        clc
-        adc rc_w
-        sta w16
-        lda rc_x+1
-        adc #0
-        sta w16+1
-        lda w16
-        bne :+
-        dec w16+1
-:       dec w16
-        lsr w16+1
-        ror w16
-        lsr w16+1
-        ror w16                     ; w16 = tx1
-        lda rc_x+1
-        lsr
-        sta tmp
-        lda rc_x
-        ror
-        lsr tmp
-        ror                         ; A = tx0 (map width <= 256 tiles)
-        sta tmp
+        lda rc_tx0
         clc
         adc ptr
         sta ptr                     ; ptr -> first tile of the row (so Y counts from 0)
         bcc :+
         inc ptr+1
-:       lda w16
-        sec
-        sbc tmp
-        sta cnt                     ; ntiles-1
-        ldy #0
+:       ldy rc_nt
 @gl:    lda (ptr),y
         tax
 @pglo:  lda LV_PAGE0,x
         sta GATHERL,y
 @pgbk:  lda LV_PAGE0+$100,x
         sta GATHERH,y
-        iny
-        dec cnt
+        dey
         bpl @gl
         ; ---- draw this char row, and (without re-gathering) the odd row of the same tile row
         jsr @drawrow
@@ -371,15 +394,12 @@ drawrect:
         jmp @row
 @done:  rts
 @drawrow:
-        ; ---- screen base
-        lda rc_x
-        sta w16
-        lda rc_x+1
-        sta w16+1
-        lda rc_y
-        jsr ringaddr
+        ; ---- screen base (per-rect ringaddr, +640 per row)
+        lda rc_sp
+        sta sp
+        lda rc_sp+1
+        sta sp+1
         ; a row spans <= 640 bytes: it can only cross $8000 if sp is within 768 of it
-        lda sp+1
         cmp #$7D
         lda #0
         rol
@@ -389,14 +409,10 @@ drawrect:
         beq :+
         lda #32
 :       sta rc_sub
-        lda rc_x
-        and #3
-        sta rc_subc
-        asl
-        asl
-        asl
-        ora rc_sub
+        ora rc_ro0
         sta rowoff
+        lda rc_sc0
+        sta rc_subc
         lda rc_w
         sta cnt
         stz rc_gi
@@ -519,6 +535,16 @@ drawrect:
         inc rc_gi
         jmp @run
 @rowdone:
+        lda rc_sp                   ; next char row: +640 with ring wrap
+        clc
+        adc #<640
+        sta rc_sp
+        lda rc_sp+1
+        adc #>640
+        bpl :+
+        sec
+        sbc #$50
+:       sta rc_sp+1
         rts
         ; ---- solid tile: store one constant, no bank switch, no source pointer
 @solid: lda GATHERL,x
@@ -681,7 +707,6 @@ drawrect_clip:
 
 ; ============================================================================
 ; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
-; ============================================================================
 scroll_validate:
         stz SV_COLW
         stz SV_ROWH
@@ -819,6 +844,7 @@ scroll_validate:
         sta BUF_CX+1,y
         rts
 
+; ============================================================================
 ; ============================================================================
 ; Persistent sprite records.  match_sprites: KEEP[i] = new sprite i identical to record i
 ; ============================================================================
@@ -1876,50 +1902,6 @@ copy_partial:
 ; ============================================================================
 ; calc_ring: ringS = ((wcy & 31) * 80 + wcx) mod 2560 ; barq = ringS / 80
 ; ============================================================================
-calc_ring:
-        lda wcy
-        and #31
-        tax
-        lda mul80lo,x
-        clc
-        adc wcx
-        sta ringS
-        lda mul80hi,x
-        adc wcx+1
-        sta ringS+1
-        cmp #>2560
-        bcc :+
-        bne @sub
-        lda ringS
-        cmp #<2560
-        bcc :+
-@sub:   lda ringS
-        sec
-        sbc #<2560
-        sta ringS
-        lda ringS+1
-        sbc #>2560
-        sta ringS+1
-:       ; q = S / 80
-        lda ringS
-        sta w16
-        lda ringS+1
-        sta w16+1
-        ldx #0
-@div:   lda w16
-        sec
-        sbc #80
-        tay
-        lda w16+1
-        sbc #0
-        bcc @dd
-        sta w16+1
-        sty w16
-        inx
-        bra @div
-@dd:    stx barq
-        rts
-
 ; copy_bar: if this buffer's bar rows are stale, write bar image into ring slots q-3, q-2
 copy_bar:
         ldx curbuf
@@ -2467,6 +2449,54 @@ wait_flip:
         lda flipreq
         bne wait_flip
         rts
+
+
+        .segment "HAZEL"           ; render-time helpers moved out of the crowded CODE segment
+calc_ring:
+        lda wcy
+        and #31
+        tax
+        lda mul80lo,x
+        clc
+        adc wcx
+        sta ringS
+        lda mul80hi,x
+        adc wcx+1
+        sta ringS+1
+        cmp #>2560
+        bcc :+
+        bne @sub
+        lda ringS
+        cmp #<2560
+        bcc :+
+@sub:   lda ringS
+        sec
+        sbc #<2560
+        sta ringS
+        lda ringS+1
+        sbc #>2560
+        sta ringS+1
+:       ; q = S / 80
+        lda ringS
+        sta w16
+        lda ringS+1
+        sta w16+1
+        ldx #0
+@div:   lda w16
+        sec
+        sbc #80
+        tay
+        lda w16+1
+        sbc #0
+        bcc @dd
+        sta w16+1
+        sty w16
+        inx
+        bra @div
+@dd:    stx barq
+        rts
+
+        .segment "CODE"
 
 ; ============================================================================
 ; IRQ handling
