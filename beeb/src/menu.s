@@ -177,6 +177,7 @@ load_title:
 ; menu_show has flipped the finished page in
 menu_begin:
         jsr blank_palette
+        jsr wait_flip               ; the game may still have a flip pending
         stz wx
         stz wx+1
         stz wy

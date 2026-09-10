@@ -298,7 +298,13 @@ frame_loop:
         beq @wait
         cmp #3
         bcc :+
+        ; more than 6 vsyncs behind: run 3 steps and drop the lost time, otherwise
+        ; the deficit is carried forward and the game runs fast for ever after
         lda #3
+        sta lsteps
+        lda vsyncs
+        sta logicvs
+        bra @steps
 :       sta lsteps
         asl
         clc

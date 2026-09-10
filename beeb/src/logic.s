@@ -271,6 +271,7 @@ q6      = $C8
 obj     = $C9
 gx      = $CA
 gy      = $CB
+grow    = $DE                   ; bucket walk: gy << gridsh
 gx0     = $CC
 gx1     = $CD
 gy1     = $CE
@@ -306,58 +307,50 @@ maptile:
         lda (mapptr),y
         rts
 
-; in bounds check for qx/qy: returns carry clear if outside
-inmap:
-        lda qx+1
-        bmi @out
-        lda qy+1
-        bmi @out
+; tilexy: X = qx >> 3, A = qy >> 3, carry set if (qx,qy) is inside the map.
+; Map sizes are multiples of 256 px, so "0 <= q < size" is just a compare of the high
+; byte, and with that byte < 8 the tile coordinate is (hi << 5) | (lo >> 3) in one byte.
+tilexy: lda qx+1
+        cmp mapw+1
+        bcs @out
+        asl
+        asl
+        asl
+        asl
+        asl
+        sta q2
         lda qx
-        cmp mapw
-        lda qx+1
-        sbc mapw+1
-        bcs @out
-        lda qy
-        cmp maph
+        lsr
+        lsr
+        lsr
+        ora q2
+        tax
         lda qy+1
-        sbc maph+1
+        cmp maph+1
         bcs @out
+        asl
+        asl
+        asl
+        asl
+        asl
+        sta q2
+        lda qy
+        lsr
+        lsr
+        lsr
+        ora q2
         sec
         rts
 @out:   clc
         rts
 
-; tilexy: X = qx >> 3, A = qy >> 3 (full 16-bit shifts; results must fit a byte)
-tilexy: lda qx
-        sta q2
-        lda qx+1
-        lsr
-        ror q2
-        lsr
-        ror q2
-        lsr
-        ror q2
-        ldx q2
-        lda qy
-        sta q2
-        lda qy+1
-        lsr
-        ror q2
-        lsr
-        ror q2
-        lsr
-        ror q2
-        lda q2
-        rts
-
 ; getinfo: A = alt byte for pixel (qx, qy), 8 if outside the map
 getinfo:
-        jsr inmap
+        jsr tilexy                  ; X = qx>>3, A = qy>>3
         bcs :+
         lda #8
         rts
-:       jsr tilexy                  ; X = qx>>3, A = qy>>3
-        jsr maptile
+:       jsr maptile
         ; alt class = ALTPAGE[page][byte]
         tay
         lda q1
@@ -429,12 +422,11 @@ getaltitude:
 
 ; gettileattr: A = attribute byte for the tile at (qx,qy): bits0-2 push+3, bit7 kill ; 3 if outside
 gettileattr:
-        jsr inmap
+        jsr tilexy                  ; X = qx>>3, A = qy>>3
         bcs :+
         lda #3
         rts
-:       jsr tilexy                  ; X = qx>>3, A = qy>>3
-        jsr maptile
+:       jsr maptile
         tay
         lda q1
         clc
@@ -1012,13 +1004,15 @@ game_frame:
         sta gy1
 @rows:  lda gx0
         sta gx
-@cells: lda gy
+        lda gy                      ; row base = gy << gridsh, once per row
         ldx gridsh
         beq :++
 :       asl
         dex
         bne :-
-:       clc
+:       sta grow
+@cells: lda grow
+        clc
         adc gx
         tax
         lda LV_GRID,x
@@ -1745,105 +1739,60 @@ process_object:
 ob_none:
         rts
 
-; range check helper: rx > lo && rx < hi && ry > lo2 && ry < hi2 ; limits follow the JSR as 4 signed bytes.
-; returns carry set if inside.  Preserves nothing.
+; range check: rx > lo && rx < hi && ry > lo2 && ry < hi2 ; X = offset of the limit
+; quad in RNGTAB (limits stored +128 so the test is an unsigned byte compare on r^$80,
+; after checking r fits in -128..127 - anything wider fails every limit anyway).
+; Returns carry set if inside. Clobbers A, X.
 inrange:
-        pla
-        clc
-        adc #1
-        sta ptr
-        pla
-        adc #0
-        sta ptr+1                   ; ptr -> the 4 limit bytes after the JSR
-        ldy #0
-        lda (ptr),y
-        jsr @gt_rx
-        bcc @no
-        iny
-        lda (ptr),y
-        jsr @lt_rx
-        bcc @no
-        iny
-        lda (ptr),y
-        jsr @gt_ry
-        bcc @no
-        iny
-        lda (ptr),y
-        jsr @lt_ry
-        bcc @no
-        ; inside: return to ptr+4 with carry set
-        lda ptr
-        adc #3                      ; C = 1 here: +4
-        sta ptr
-        lda ptr+1
-        adc #0
-        sta ptr+1
-        sec
-        jmp (ptr)
-@no:    lda ptr
-        clc
-        adc #4
-        sta ptr
-        lda ptr+1
-        adc #0
-        sta ptr+1
-        clc
-        jmp (ptr)
-; rx > A (signed 8 bit limit) ?
-@gt_rx: sta q1
+        lda rx+1
+        inc                         ; $FF -> 0, 0 -> 1, anything else >= 2
+        cmp #2
+        bcs @no
         lda rx
-        ldx rx+1
-        bra @gt
-@gt_ry: sta q1
-        lda ry
-        ldx ry+1
-@gt:    ; compute (val - lim) > 0 : lim sign-extended
-        stx q2
-        ldx #0
-        bit q1
-        bpl :+
-        dex
-:       stx q3
-        sec
-        sbc q1
-        sta q4
-        lda q2
-        sbc q3
-        bvc :+
-        eor #$80
-:       bmi @false
-        ; result >= 0 ; need > 0 : check nonzero
-        ora q4
-        beq @false
-        sec
-        rts
-@false: clc
-        rts
-@lt_rx: sta q1
+        eor rx+1                    ; low byte sign must agree with the high byte
+        bmi @no
         lda rx
-        ldx rx+1
-        bra @lt
-@lt_ry: sta q1
-        lda ry
-        ldx ry+1
-@lt:    stx q2
-        ldx #0
-        bit q1
-        bpl :+
-        dex
-:       stx q3
-        ; val - lim < 0
-        sec
-        sbc q1
-        lda q2
-        sbc q3
-        bvc :+
         eor #$80
-:       bmi @true
-        clc
+        cmp RNGTAB,x
+        bcc @no
+        beq @no                     ; rx > lo
+        cmp RNGTAB+1,x
+        bcs @no                     ; rx < hi
+        lda ry+1
+        inc
+        cmp #2
+        bcs @no
+        lda ry
+        eor ry+1
+        bmi @no
+        lda ry
+        eor #$80
+        cmp RNGTAB+2,x
+        bcc @no
+        beq @no
+        cmp RNGTAB+3,x
+        bcs @no
+        sec
         rts
-@true:  sec
+@no:    clc
         rts
+RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, each +128
+        .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
+        .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
+        .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
+        .byte 112, 144, 104, 140        ; 12: <-16, 16, <-24, 12
+        .byte 120, 136, 112, 132        ; 16: <-8, 8, <-16, 4
+        .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
+        .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
+        .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
+        .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
+        .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
+        .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
+        .byte 118, 138, 112, 136        ; 44: <-10, 10, <-16, 8
+        .byte 120, 128, 104, 136        ; 48: <-8, 0, <-24, 8
+        .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
+        .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
+        .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
 
 ; boomerang-relative position: sx = spx - bx ; sy = spy - by  (uses spx/spy as the object's draw pos)
 boomrel:
@@ -1889,8 +1838,8 @@ ob_star:
         bne @anim
         lda health
         beq @tryboom
+        ldx #0
         jsr inrange
-        .byte <-16, 16, <-16, 20
         bcs @collect
 @tryboom:
         lda bactive
@@ -1898,8 +1847,8 @@ ob_star:
         jsr boomrel
         mov16 rx, sx
         mov16 ry, sy
+        ldx #4
         jsr inrange
-        .byte <-8, 8, <-8, 8
         bcc @anim
 @collect:
         lda #12
@@ -1940,8 +1889,8 @@ ob_tramp:
         stz fa
 :       lda health
         beq @draw
+        ldx #8
         jsr inrange
-        .byte <-9, 17, 0, 8
         bcc @draw
         bmi16 vy, @draw
         beq16 vy, @draw
@@ -2022,8 +1971,8 @@ ob_snake:
         add16 spx, fb
         lda health
         beq @boom
+        ldx #12
         jsr inrange
-        .byte <-16, 16, <-24, 12
         bcc @boom
         lda fc
         cmp #4
@@ -2059,8 +2008,8 @@ ob_snake:
         jsr boomrel
         mov16 rx, sx
         mov16 ry, sy
+        ldx #16
         jsr inrange
-        .byte <-8, 8, <-16, 4
         bcc @draw
         lda fc
         cmp #4
@@ -2175,8 +2124,8 @@ ob_rsnake:
         jsr boomrel
         mov16 rx, sx
         mov16 ry, sy
+        ldx #20
         jsr inrange
-        .byte <-12, 12, <-18, 2
         bcc @hitp
         lda #4
         jsr addscore
@@ -2200,8 +2149,8 @@ ob_rsnake:
         mov16 ry, oy
         add16 ry, rise
         sub16 ry, py
+        ldx #24
         jsr inrange
-        .byte <-10, 10, <-8, 16
         bcc @draw
         lda hurt
         bne @draw
@@ -2334,8 +2283,8 @@ ob_bat:
         jsr boomrel
         mov16 rx, sx
         mov16 ry, sy
+        ldx #28
         jsr inrange
-        .byte <-12, 12, <-12, 12
         php
         mov16 rx, t16
         mov16 ry, t16b
@@ -2348,8 +2297,8 @@ ob_bat:
 @player:
         lda health
         beq @draw
+        ldx #32
         jsr inrange
-        .byte <-16, 16, <-12, 16
         bcc @draw
         ble16i ry, 4, @nostomp
         bmi16 vy, @nostomp
@@ -2361,8 +2310,8 @@ ob_bat:
 @nostomp:
         lda hurt
         bne @draw
+        ldx #36
         jsr inrange
-        .byte <-12, 12, <-128, 127
         bcc @draw
         mov16 hx, rx
         jsr player_hit
@@ -2494,8 +2443,8 @@ ob_walker:
         add16 spx, fb
         lda health
         beq @boom
+        ldx #40
         jsr inrange
-        .byte <-16, 16, <-24, 20
         bcc @boom
         lda hurt
         bne @boom
@@ -2506,8 +2455,8 @@ ob_walker:
         jsr boomrel
         mov16 rx, sx
         mov16 ry, sy
+        ldx #44
         jsr inrange
-        .byte <-10, 10, <-16, 8
         bcc @draw
         bit bvx+1
         bmi @bleft
@@ -2584,9 +2533,10 @@ ob_spike:
         lda fa
         inc
         asl
-        sta @lim+1
+        eor #$80                    ; biased limit
+        sta RNGTAB+49
+        ldx #48
         jsr inrange
-@lim:   .byte <-8, 0, <-24, 8
         bcc @draw
         lda hurt
         bne @draw
@@ -2627,8 +2577,8 @@ ob_powerup:
         beq @draw
         cmp #3
         bcs @draw
+        ldx #52
         jsr inrange
-        .byte <-16, 16, <-24, 12
         bcc @draw
         lda #1
         sta fa
@@ -2655,8 +2605,8 @@ ob_vanish:
         lda fe
         bne @count
         ; rx > -16 && rx <= 0 && ry == 16 && vy == 0
+        ldx #56
         jsr inrange
-        .byte <-16, 1, 15, 17
         bcc @ret
         lda vy
         ora vy+1
@@ -2724,8 +2674,8 @@ ob_vanish:
 ob_switch:
         lda fd
         bne @draw
+        ldx #60
         jsr inrange
-        .byte <-16, 16, <-24, 12
         bcc @draw
         lda #20
         jsr addscore

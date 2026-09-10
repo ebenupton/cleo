@@ -131,7 +131,10 @@ sp_ra0:   .res 1
 sp_ra1:   .res 1
 sp_col:   .res 2                  ; current column base pointer
 sp_step:  .res 2
-sp_off:   .res 2                  ; row source offset
+sp_rb:    .res 2                  ; screen address of the current row's first char
+sp_rp:    .res 2                  ; source pointer for the current row (col base + row offset)
+sp_rinc:  .res 1                  ; source bytes per row: 8 (full res) or 4 (half res)
+sp_ncol:  .res 1                  ; columns-1
 sp_row:   .res 1
 sp_c:     .res 1
 sp_lim:   .res 1
@@ -1431,8 +1434,7 @@ drawsprite:
 @rows:
         lda sp_r0
         sta sp_row
-ds_rowloop:
-        ; screen base for (wcx + c0, wcy + row)
+        ; screen base for (wcx + c0, wcy + r0): one ringaddr, then +80 chars per row
         lda wcx
         clc
         adc sp_c0
@@ -1442,8 +1444,53 @@ ds_rowloop:
         sta w16+1
         lda wcy
         clc
-        adc sp_row
+        adc sp_r0
         jsr ringaddr
+        lda sp
+        sta sp_rb
+        lda sp+1
+        sta sp_rb+1
+        ; source row pointer = column base + r0*8 - lb0 (>>1 for half res); +8 (+4) per row
+        lda sp_r0
+        asl
+        asl
+        asl
+        sec
+        sbc sp_lb0
+        sta w16
+        lda #0
+        sbc sp_lb0+1
+        sta w16+1
+        lda #8
+        sta sp_rinc
+        lda sp_flags
+        and #2
+        bne :+
+        lda w16+1
+        cmp #$80
+        ror w16+1
+        ror w16
+        lsr sp_rinc
+:       lda sp_col
+        clc
+        adc w16
+        sta sp_rp
+        lda sp_col+1
+        adc w16+1
+        sta sp_rp+1
+        lda sp_c1
+        sec
+        sbc sp_c0
+        sta sp_ncol                 ; columns-1
+ds_rowloop:
+        lda sp_rb
+        sta sp
+        lda sp_rb+1
+        sta sp+1
+        lda sp_rp
+        sta ptr
+        lda sp_rp+1
+        sta ptr+1
         ; ra range for this row
         ldx #0
         lda sp_row
@@ -1456,37 +1503,7 @@ ds_rowloop:
         bne :+
         ldx sp_ra1
 :       stx tmp2                    ; ra1'
-        ; row source offset = row*8 - lb0  (>>1 for half res)
-        lda sp_row
-        stz sp_off+1
-        asl
-        asl
-        asl
-        sec
-        sbc sp_lb0
-        sta sp_off
-        lda #0
-        sbc sp_lb0+1
-        sta sp_off+1
-        lda sp_flags
-        and #2
-        bne @fullres
-        lda sp_off+1
-        cmp #$80
-        ror sp_off+1
-        ror sp_off
-@fullres:
-        ; ptr = column base + row offset; advances by step per column (same as tp)
-        lda sp_col
-        clc
-        adc sp_off
-        sta ptr
-        lda sp_col+1
-        adc sp_off+1
-        sta ptr+1
-        lda sp_c1
-        sec
-        sbc sp_c0
+        lda sp_ncol
         sta sp_cnt                  ; columns-1 (countdown)
 ds_colloop:
 ds_dispatch:
@@ -1509,6 +1526,22 @@ ds_rowdone:
         cmp sp_r1
         beq ds_done
         inc sp_row
+        lda sp_rp
+        clc
+        adc sp_rinc
+        sta sp_rp
+        bcc :+
+        inc sp_rp+1
+:       lda sp_rb                   ; next char row: +640 with ring wrap
+        clc
+        adc #<640
+        sta sp_rb
+        lda sp_rb+1
+        adc #>640
+        bpl :+
+        sec
+        sbc #$50
+:       sta sp_rb+1
         jmp ds_rowloop
 ds_done: rts
 
@@ -2378,7 +2411,8 @@ select_backbuf:
 
 ; render everything queued for the current back buffer and request flip
 render_frame:
-        jsr select_backbuf
+        jsr wait_flip               ; the previous frame's flip must land before we
+        jsr select_backbuf          ; draw into the buffer it is leaving
         ; derive char window
         lda wx
         sta wcx
@@ -2420,12 +2454,18 @@ render_frame:
 :       sta NEXTSECT
         lda #1
         sta flipreq
-        ; wait for flip
-:       lda flipreq
-        bne :-
+render_done:                        ; (label for the phase timer harness)
+        ; no wait here: the next logic step runs while the flip is pending and
+        ; the next render_frame waits for it before touching the buffer
         lda curbuf
         eor #1
         sta curbuf
+        rts
+
+; spin until any pending flip has been taken by the vsync ISR
+wait_flip:
+        lda flipreq
+        bne wait_flip
         rts
 
 ; ============================================================================
