@@ -108,32 +108,43 @@ bank 4 is where the menu overlay itself lands.
 
 ## Bank layout
 
-| Bank | Contents | Bytes |
-|---|---|---|
-| 4 | SPR data; the menu overlay replaces its first 2240 bytes | 16384 |
-| 5 | this level's tiles, ids 0-255 | 16384 |
-| 6 | this level's remaining tiles, box stars, SPRAND, the map | about 15000 |
-| 7 | logic code and the level's small tables | about 14800 |
+As built.  Everything below is in place and running on the Master.
 
-The split of the level pack between banks 6 and 7 is the point of the design.  The
-logic reads the page tables, object list, object state, attributes and grid on nearly
-every call, so those sit in the same bank as the logic code and cost nothing.  The
-map is the one big item, 8K, and it moves to bank 6 with the tile overflow.
+| Bank | Contents |
+|---|---|
+| 4 | SPR: font, digits and status bar image at the front, sprite data from $88C0 |
+| 5 | this level's tiles, ids 0-255 |
+| 6 | tiles 256 and up at $8000, row page $8400, page tables $8500 and $8700, map $8900, the row address tables at $A900, box stars $B000, music $B800 |
+| 7 | header $8000, objects $8100, attributes $8500 and $8600, alt classes $8700, **free $8900-$AFFF**, object state $B000, alt page $BC00, alt class table $BE00 |
+
+The title pack loads into bank 6 at $8900, where the map goes during a level.
+SPRAND is still in the Master's ANDY and needs a home on a Model B: 2240 bytes of
+it can go where the menu art is paged out of bank 4, and the rest in bank 6, which
+has about 1.3K spare.
+
+Bank 7 is free from $8900 to $AFFF, 10496 bytes, against 8054 bytes of logic and
+menu code.
 
 ## Cross-bank calls
 
 Main RAM is always visible, so code in a bank may call main RAM freely.  Two things
-need help:
+need help, and the traffic is small: eleven entry points into the logic, and fifteen
+routines the logic calls back into.
 
-- Main RAM calling the logic: a trampoline pages in bank 7, calls, restores the
-  caller's bank.  This happens a handful of times per frame, at frame granularity.
-- The logic reading or writing the map: a main-RAM helper pages bank 6, does the
-  access, and restores bank 7.  A trace of level 2 shows 6.6 map queries per frame
-  standing still; even a busy frame is under a hundred, so the roughly 25 cycles per
-  call is noise against a 320000 cycle frame.
+- Main RAM calling the logic: page in bank 7, then tail-jump to the routine, so its
+  own return goes straight back to the original caller.  Six bytes per entry plus a
+  shared eight-byte paging routine.
+- The logic calling main RAM: `jsr` the routine, then jump to a shared routine that
+  puts bank 7 back and returns.  Six bytes per call plus eight shared.
+
+That is about 170 bytes of stubs, and main RAM has roughly 160 bytes spare in the
+old MOS vector and NMI pages plus the 60 the HAZEL copy loop gives back.  It fits,
+but only just, which is the same squeeze the 6502 expansions face.
 
 The renderer stays in main RAM because it alternates between the sprite bank and the
 tile bank inside a single frame, which is exactly what bank-resident code cannot do.
+The logic reaches the map through the bank-6 selection in maptile, which costs about
+twenty cycles a call against six to a hundred calls a frame.
 
 ## Disc
 
@@ -172,13 +183,16 @@ the least room.  `stz` is the one to audit: the backward liveness pass in
 
 ## Staging
 
-1. Disc driver for both boards.  Done and verified.
-2. Machine detection and a loader that reads the right binaries into banks.
-3. Screen setup: 64 x 20 window, two carousels, vsync flip, no rupture.
-4. Solid tiles numbered out of the tile data.  Done.
-5. Per-level tile numbering and the scatter loader.
-6. Split of the level pack across banks 6 and 7, and the map trampoline.
-7. Logic relocated into bank 7, with the eleven entry points and fifteen call-backs
-   routed through main-RAM stubs.
-8. Menus and their art paged in as an overlay over the front of bank 4.
-9. 6502 expansions and the code-size audit.
+1. Disc driver for both boards.  **Done**, and both read the disc byte for byte.
+2. Solid tiles numbered out of the tile data.  **Done**.
+3. Per-level tile numbering and the scatter loader.  **Done**.
+4. The level pack split across banks 6 and 7, freeing $8900-$AFFF in bank 7.
+   **Done**, with the title pack moved to bank 6 and the map queries selecting it.
+5. Logic and menus relocated into bank 7, with the twenty-six stubs above.  This can
+   be tested on a Master, where it costs a little speed and gains nothing, so both
+   machines will run the same layout rather than two.
+6. Screen: 64 x 20 window, two 10K carousels in the one 20K ring, vsync flip, and
+   the rupture sections rebuilt for a 64-char pitch with no status bar.
+7. Menu art paged in over the front of bank 4, and SPRAND into the space it leaves.
+8. 6502 expansions and the code-size audit.
+9. Machine detection at boot, and a second link configuration.
