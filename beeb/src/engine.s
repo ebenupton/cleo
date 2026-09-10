@@ -465,26 +465,39 @@ drawrect:
         ; unrolled copy, one block per char in descending char order so that entry at
         ; char n-1 copies chars n-1..0.  A cell whose first byte has bit 7 set repeats
         ; lines 0..3 as 4..7 (flagged by convert.py): 4 loads, 8 stores.
-.macro CPY1 k
-        ldy #k
+.macro CPYN                         ; next line: A = (tp),y -> (sp),y ; y++
         lda (tp),y
         sta (sp),y
+        iny
 .endmacro
 .macro CHARCPY c, per
+.if c = 0
+        lda (tp)                    ; line 0 non-indexed
+        bmi per
+        sta (sp)
+        ldy #1
+.else
         ldy #8*c
         lda (tp),y
         bmi per
         sta (sp),y
-        CPY1 8*c+1
-        CPY1 8*c+2
-        CPY1 8*c+3
-        CPY1 8*c+4
-        CPY1 8*c+5
-        CPY1 8*c+6
-        CPY1 8*c+7
-.endmacro
-.macro CHARPER c, next              ; A = line 0, Y = 8c
+        iny
+.endif
+        CPYN
+        CPYN
+        CPYN
+        CPYN
+        CPYN
+        CPYN
+        lda (tp),y                  ; line 7
         sta (sp),y
+.endmacro
+.macro CHARPER c, next              ; A = line 0 (Y = 8c unless c = 0)
+.if c = 0
+        sta (sp)
+.else
+        sta (sp),y
+.endif
         ldy #8*c+4
         sta (sp),y
         ldy #8*c+1
@@ -602,38 +615,42 @@ drawrect:
         ldy #k
         sta (sp),y
 .endmacro
+.macro FILN                         ; next line down: y-- ; A -> (sp),y
+        dey
+        sta (sp),y
+.endmacro
 @f31:   FIL1 31
-        FIL1 30
-        FIL1 29
-        FIL1 28
-        FIL1 27
-        FIL1 26
-        FIL1 25
-        FIL1 24
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
 @f23:   FIL1 23
-        FIL1 22
-        FIL1 21
-        FIL1 20
-        FIL1 19
-        FIL1 18
-        FIL1 17
-        FIL1 16
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
 @f15:   FIL1 15
-        FIL1 14
-        FIL1 13
-        FIL1 12
-        FIL1 11
-        FIL1 10
-        FIL1 9
-        FIL1 8
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
 @f7:    FIL1 7
-        FIL1 6
-        FIL1 5
-        FIL1 4
-        FIL1 3
-        FIL1 2
-        FIL1 1
-        FIL1 0
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        FILN
+        sta (sp)                    ; line 0 non-indexed
         jmp @advsp
 @fslow: lda rc_n
         sta tmp2
@@ -1043,10 +1060,9 @@ drawsprite:
         lda (ptr),y
         sta sp_flags
 @entry2:
-        ldy #0
-        lda (ptr),y
+        lda (ptr)
         sta sp_ptr
-        iny
+        ldy #1
         lda (ptr),y
         sta sp_ptr+1
         iny
@@ -1397,36 +1413,57 @@ ds_done: rts
 ;      tmp = ra0', tmp2 = ra1'.  Full-res: source byte per line.
 .macro SPRLINE k, mirror, copy, solid
         .local done, skip, opaque, masked
+.if k = 0
+        lda (ptr)                   ; line 0: non-indexed (Y is not needed)
+.else
         ldy #k
         lda (ptr),y
+.endif
 .if copy
-        sta (sp),y                  ; box sprite: every byte opaque, plain copy
+  .if k = 0
+        sta (sp)                    ; box sprite: every byte opaque, plain copy
+  .else
+        sta (sp),y
+  .endif
 .else
         beq done                    ; 0: both pixels transparent, no store
-.if k = 0
+  .if k = 0
         bpl masked                  ; (N from the load: cmp would set it from the subtraction)
         cmp #$C0
         bcs solid                   ; bit 7+6: this and the next 7 bytes all opaque
         bra opaque
 masked:
-.else
+  .else
         bmi opaque                  ; bit 7: both pixels opaque (see encode_sprite)
-.endif
+  .endif
         tax
-.if mirror
-        lda SWAPTAB,x
-        tax
-.endif
+  .if mirror
+        lda MASKTAB+$80,x           ; mask of the mirrored byte (MASKTAB[SWAPTAB[x]])
+  .else
         lda MASKTAB,x
+  .endif
+  .if k = 0
+        and (sp)
+  .else
         and (sp),y
+  .endif
+  .if mirror
+        ora IDENT+$80,x             ; the mirrored byte's OR value (IDENT[SWAPTAB[x]])
+  .else
         ora IDENT,x
+  .endif
         bra skip
 opaque:
-.if mirror
+  .if mirror
         tax
         lda SWAPTAB,x
-.endif
-skip:   sta (sp),y
+  .endif
+skip:
+  .if k = 0
+        sta (sp)
+  .else
+        sta (sp),y
+  .endif
 done:
 .endif
 .endmacro
@@ -1443,7 +1480,11 @@ done:
 .endif
         tax
         lda SWAPTAB,x
+.if k = 0
+        sta (sp)
+.else
         sta (sp),y
+.endif
 .endmacro
 
 .macro SPRFULL name, mirror, copy
@@ -1461,7 +1502,7 @@ solid:  ; byte 0 carried the RUN flag: the whole cell is opaque, straight copy
         SOLIDM 7
         jmp sprretM
 .else
-        sta (sp),y                  ; y = 0, A = byte 0
+        sta (sp)                    ; A = byte 0
         SOLID1 1
         SOLID1 2
         SOLID1 3
@@ -1506,12 +1547,14 @@ pl:     lda (ptr),y
         bmi po                      ; both pixels opaque
         tax
 .if mirror
-        lda SWAPTAB,x
-        tax
-.endif
+        lda MASKTAB+$80,x
+        and (sp),y
+        ora IDENT+$80,x
+.else
         lda MASKTAB,x
         and (sp),y
         ora IDENT,x
+.endif
         sta (sp),y
         bra ps
 po:
@@ -1540,25 +1583,42 @@ pd:
 ; half res: one source byte -> two screen lines (2k, 2k+1)
 .macro SPRLINE2 k, mirror
         .local skip, opaque, both, store
+.if k = 0
+        lda (ptr)
+.else
         ldy #k
         lda (ptr),y
+.endif
         beq skip
         bmi both                    ; bit 7: both pixels opaque
         tax
 .if mirror
-        lda SWAPTAB,x
-        tax
-.endif
+        lda MASKTAB+$80,x
+.else
         lda MASKTAB,x
+.endif
         beq opaque
         sta tmp4
+.if mirror
+        lda IDENT+$80,x
+        sta tmp3
+.else
         stx tmp3
+.endif
+.if k = 0
+        lda (sp)
+        and tmp4
+        ora tmp3
+        sta (sp)
+        ldy #1
+.else
         ldy #2*k
         lda (sp),y
         and tmp4
         ora tmp3
         sta (sp),y
         iny
+.endif
         lda (sp),y
         and tmp4
         ora tmp3
@@ -1570,10 +1630,21 @@ both:
         lda SWAPTAB,x
 .endif
         bra store
-opaque: txa
-store:  ldy #2*k
+opaque:
+.if mirror
+        lda SWAPTAB,x
+.else
+        txa
+.endif
+store:
+.if k = 0
+        sta (sp)
+        ldy #1
+.else
+        ldy #2*k
         sta (sp),y
         iny
+.endif
         sta (sp),y
 skip:
 .endmacro
@@ -1609,13 +1680,18 @@ pl:     lda sp_lim
         bmi pb                      ; bit 7: both pixels opaque
         tax
 .if mirror
-        lda SWAPTAB,x
-        tax
-.endif
+        lda MASKTAB+$80,x
+.else
         lda MASKTAB,x
+.endif
         beq po
         sta tmp4
+.if mirror
+        lda IDENT+$80,x
+        sta tmp3
+.else
         stx tmp3
+.endif
         ldy sp_lim
         lda (sp),y
         and tmp4
@@ -1633,7 +1709,12 @@ pb:
         lda SWAPTAB,x
 .endif
         bra pq
-po:     txa
+po:
+.if mirror
+        lda SWAPTAB,x
+.else
+        txa
+.endif
 pq:     ldy sp_lim
         sta (sp),y
         iny
@@ -2557,13 +2638,8 @@ init_tables:
         sta SWAPTAB,x
         inx
         bne @t
-        ; sprite encoding (convert.py encode_sprite): bit 7 = both pixels opaque, so
-        ; $80..$FF never mask; left-black-only is code $44 (its $80 slot is taken)
-        ldx #$80
-        lda #0
-:       sta MASKTAB,x
-        inx
-        bne :-
+        ; sprite encoding (convert.py encode_sprite): bit 7 = both pixels opaque and never
+        ; reaches the tables; left-black-only is code $44 (its $80 slot is taken)
         lda #$55
         sta MASKTAB+$44             ; keep the right screen pixel
         stz IDENT+$44               ; left pixel black
@@ -2571,6 +2647,16 @@ init_tables:
         sta SWAPTAB+$40             ; right-black-only <-> left-black-only
         lda #$40
         sta SWAPTAB+$44
+        ; MASKTAB+$80..: the mask of the mirrored byte, so the mirrored blitters do one
+        ; lookup instead of SWAPTAB then MASKTAB (only codes < $80 are ever looked up)
+        ldx #0
+:       ldy SWAPTAB,x
+        lda MASKTAB,y
+        sta MASKTAB+$80,x
+        lda IDENT,y
+        sta IDENT+$80,x             ; and its OR value (differs from SWAPTAB only at \$40)
+        inx
+        bpl :-
         ; ring rows
         lda #<SCREEN
         sta w16
