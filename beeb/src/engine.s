@@ -351,14 +351,11 @@ drawrect:
         lda sp+1
         sta rc_sp+1
 @row:
-        ; ---- tile row ty = rc_y >> 1 ; map row pointer ptr = LV_MAP + (ty << maplw),
-        ; computed as (ty*256) >> (8-maplw): at most a couple of shifts (maplw <= 8)
+        ; ---- tile row ty = rc_y >> 1 ; map row pointer from the level's row tables
+        setbank BANK_LVL
         lda rc_y
         lsr
         tax
-        sta ptr+1
-        stz ptr
-        setbank BANK_LVL
         lda LV_ROWPAGE,x
         beq :+
         lda #2
@@ -367,19 +364,9 @@ drawrect:
         sta @pglo+2
         inc
         sta @pgbk+2
-        lda #8
-        sec
-        sbc maplw
-        beq @shdone
-        tax
-@shr:   lsr ptr+1
-        ror ptr
-        dex
-        bne @shr
-@shdone:
-        lda ptr+1
-        clc
-        adc #>LV_MAP
+        lda LV_MAPROWLO,x
+        sta ptr
+        lda LV_MAPROWHI,x
         sta ptr+1
         lda rc_tx0
         clc
@@ -906,73 +893,6 @@ erase_old:
 :       inc lidx
         dec lcnt
         bne @l
-@done:  rts
-
-; ============================================================================
-; dirty tiles: redraw changed map tiles (both buffers keep their own list)
-; ============================================================================
-mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lists)
-        sta tmp
-        stx tmp2
-        ldx #0
-@b:     lda DIRTYCNT,x
-        cmp #16
-        bcs @next
-        asl
-        sta tmp3
-        txa
-        asl
-        asl
-        asl
-        asl
-        asl                         ; x*32
-        clc
-        adc tmp3
-        tay
-        lda tmp
-        sta DIRTYLIST,y
-        lda tmp2
-        sta DIRTYLIST+1,y
-        inc DIRTYCNT,x
-@next:  inx
-        cpx #2
-        bne @b
-        rts
-
-draw_dirty:
-        ldx curbuf
-        lda DIRTYCNT,x
-        beq @done
-        sta lcnt
-        txa
-        asl
-        asl
-        asl
-        asl
-        asl
-        sta lidx
-@l:     ldy lidx
-        lda DIRTYLIST,y
-        stz rc_x+1
-        asl
-        rol rc_x+1
-        asl
-        rol rc_x+1
-        sta rc_x
-        lda DIRTYLIST+1,y
-        asl
-        sta rc_y
-        lda #4
-        sta rc_w
-        lda #2
-        sta rc_h
-        jsr drawrect_clip
-        inc lidx
-        inc lidx
-        dec lcnt
-        bne @l
-        ldx curbuf
-        stz DIRTYCNT,x
 @done:  rts
 
 ; ============================================================================
@@ -2584,6 +2504,205 @@ calc_ring:
         bra @div
 @dd:    stx barq
         rts
+
+        .segment "LOW2"            ; MOS vector/VDU pages ($0206..$03FF), copied there after MODE 2:
+                                   ; init-only table builders and the dirty-tile routines
+
+; ============================================================================
+; table init
+; ============================================================================
+init_tables:
+        jsr init_ident
+        ldx #0
+@t:     txa
+        and #$AA
+        beq :+
+        lda #0
+        bra :++
+:       lda #$AA
+:       sta tmp
+        txa
+        and #$55
+        beq :+
+        lda #0
+        bra :++
+:       lda #$55
+:       ora tmp
+        sta MASKTAB,x
+        txa
+        and #$AA
+        lsr
+        sta tmp
+        txa
+        and #$55
+        asl
+        ora tmp
+        sta SWAPTAB,x
+        inx
+        bne @t
+        ; sprite encoding (convert.py encode_sprite): bit 7 = both pixels opaque, so
+        ; $80..$FF never mask; left-black-only is code $44 (its $80 slot is taken)
+        ldx #$80
+        lda #0
+:       sta MASKTAB,x
+        inx
+        bne :-
+        lda #$55
+        sta MASKTAB+$44             ; keep the right screen pixel
+        stz IDENT+$44               ; left pixel black
+        lda #$44
+        sta SWAPTAB+$40             ; right-black-only <-> left-black-only
+        lda #$40
+        sta SWAPTAB+$44
+        ; ring rows
+        lda #<SCREEN
+        sta w16
+        lda #>SCREEN
+        sta w16+1
+        ldx #0
+@r:     lda w16
+        sta RINGLO,x
+        lda w16+1
+        sta RINGHI,x
+        lda w16
+        clc
+        adc #<640
+        sta w16
+        lda w16+1
+        adc #>640
+        sta w16+1
+        inx
+        cpx #32
+        bne @r
+        ; mul80 tables (row slot -> chars)
+        stz w16
+        stz w16+1
+        ldx #0
+@m80:   lda w16
+        sta mul80lo,x
+        lda w16+1
+        sta mul80hi,x
+        lda w16
+        clc
+        adc #80
+        sta w16
+        bcc :+
+        inc w16+1
+:       inx
+        cpx #32
+        bne @m80
+        ldx #0
+        lda #0
+@m:     sta sprmul5,x
+        clc
+        adc #5
+        inx
+        cpx #MAXSPR
+        bne @m
+        stz RECCNT
+        stz RECCNT+1
+        stz DIRTYSEEN
+        stz DIRTYCNT
+        stz DIRTYCNT+1
+        stz BUF_VALID
+        stz BUF_VALID+1
+        stz NSPR
+        stz SFXREQ
+        stz SFXPTR+1
+        stz MUSON
+        stz DISPSECT
+        stz curbuf
+        lda #BANK_SPR
+        sta spbank
+        lda #$FF
+        sta BUF_BARQ
+        sta BUF_BARQ+1
+        stz BARDIRTY
+        stz BARDIRTY+1
+        lda #<VS2T_DEFAULT
+        sta VS2T
+        lda #>VS2T_DEFAULT
+        sta VS2T+1
+        rts
+
+
+; identity table for the sprite blitter (A | X without a temp store)
+init_ident:
+        ldx #0
+:       txa
+        sta IDENT,x
+        inx
+        bne :-
+        rts
+
+
+; ============================================================================
+; dirty tiles: redraw changed map tiles (both buffers keep their own list)
+; ============================================================================
+mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lists)
+        sta tmp
+        stx tmp2
+        ldx #0
+@b:     lda DIRTYCNT,x
+        cmp #16
+        bcs @next
+        asl
+        sta tmp3
+        txa
+        asl
+        asl
+        asl
+        asl
+        asl                         ; x*32
+        clc
+        adc tmp3
+        tay
+        lda tmp
+        sta DIRTYLIST,y
+        lda tmp2
+        sta DIRTYLIST+1,y
+        inc DIRTYCNT,x
+@next:  inx
+        cpx #2
+        bne @b
+        rts
+
+draw_dirty:
+        ldx curbuf
+        lda DIRTYCNT,x
+        beq @done
+        sta lcnt
+        txa
+        asl
+        asl
+        asl
+        asl
+        asl
+        sta lidx
+@l:     ldy lidx
+        lda DIRTYLIST,y
+        stz rc_x+1
+        asl
+        rol rc_x+1
+        asl
+        rol rc_x+1
+        sta rc_x
+        lda DIRTYLIST+1,y
+        asl
+        sta rc_y
+        lda #4
+        sta rc_w
+        lda #2
+        sta rc_h
+        jsr drawrect_clip
+        inc lidx
+        inc lidx
+        dec lcnt
+        bne @l
+        ldx curbuf
+        stz DIRTYCNT,x
+@done:  rts
+
         .segment "CODE"
 
 ; ============================================================================
@@ -3049,124 +3168,6 @@ blank_palette:
         dex
         bpl :-
         rts
-
-; ============================================================================
-; table init
-; ============================================================================
-init_tables:
-        jsr init_ident
-        ldx #0
-@t:     txa
-        and #$AA
-        beq :+
-        lda #0
-        bra :++
-:       lda #$AA
-:       sta tmp
-        txa
-        and #$55
-        beq :+
-        lda #0
-        bra :++
-:       lda #$55
-:       ora tmp
-        sta MASKTAB,x
-        txa
-        and #$AA
-        lsr
-        sta tmp
-        txa
-        and #$55
-        asl
-        ora tmp
-        sta SWAPTAB,x
-        inx
-        bne @t
-        ; sprite encoding (convert.py encode_sprite): bit 7 = both pixels opaque, so
-        ; $80..$FF never mask; left-black-only is code $44 (its $80 slot is taken)
-        ldx #$80
-        lda #0
-:       sta MASKTAB,x
-        inx
-        bne :-
-        lda #$55
-        sta MASKTAB+$44             ; keep the right screen pixel
-        stz IDENT+$44               ; left pixel black
-        lda #$44
-        sta SWAPTAB+$40             ; right-black-only <-> left-black-only
-        lda #$40
-        sta SWAPTAB+$44
-        ; ring rows
-        lda #<SCREEN
-        sta w16
-        lda #>SCREEN
-        sta w16+1
-        ldx #0
-@r:     lda w16
-        sta RINGLO,x
-        lda w16+1
-        sta RINGHI,x
-        lda w16
-        clc
-        adc #<640
-        sta w16
-        lda w16+1
-        adc #>640
-        sta w16+1
-        inx
-        cpx #32
-        bne @r
-        ; mul80 tables (row slot -> chars)
-        stz w16
-        stz w16+1
-        ldx #0
-@m80:   lda w16
-        sta mul80lo,x
-        lda w16+1
-        sta mul80hi,x
-        lda w16
-        clc
-        adc #80
-        sta w16
-        bcc :+
-        inc w16+1
-:       inx
-        cpx #32
-        bne @m80
-        ldx #0
-        lda #0
-@m:     sta sprmul5,x
-        clc
-        adc #5
-        inx
-        cpx #MAXSPR
-        bne @m
-        stz RECCNT
-        stz RECCNT+1
-        stz DIRTYSEEN
-        stz DIRTYCNT
-        stz DIRTYCNT+1
-        stz BUF_VALID
-        stz BUF_VALID+1
-        stz NSPR
-        stz SFXREQ
-        stz SFXPTR+1
-        stz MUSON
-        stz DISPSECT
-        stz curbuf
-        lda #BANK_SPR
-        sta spbank
-        lda #$FF
-        sta BUF_BARQ
-        sta BUF_BARQ+1
-        stz BARDIRTY
-        stz BARDIRTY+1
-        lda #<VS2T_DEFAULT
-        sta VS2T
-        lda #>VS2T_DEFAULT
-        sta VS2T+1
-        rts
-
         .segment "TABLES"
 sprmul5: .res MAXSPR
 mul80lo: .res 32
@@ -3355,13 +3356,4 @@ rnd:    lsr seed+1
         eor #$B4
         sta seed+1
 :       lda seed
-        rts
-
-; identity table for the sprite blitter (A | X without a temp store)
-init_ident:
-        ldx #0
-:       txa
-        sta IDENT,x
-        inx
-        bne :-
         rts

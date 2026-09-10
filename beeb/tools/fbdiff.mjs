@@ -44,7 +44,7 @@ cpu.debugInstruction.add((pc) => {
         for (let r = 0; r < 27; r++) for (let i = 0; i < 640; i++) out.push(rd(ring(S + r * 640 + i)));
         for (let c = 0; c < 80; c++) for (let y = 0; y < 8; y++) out.push(wf && y >= wf ? rd(ring(S - 640 + c * 8 + y - wf)) : 0);
         for (let c = 0; c < 80; c++) for (let y = 0; y < 8; y++) out.push(y < wf ? rd(ring(S + 27 * 640 + c * 8 + y)) : 0);
-        windows.push({ f: w16(A.frame), buf: rd(A.curbuf), wf, win: Buffer.from(out).toString("base64") });
+        windows.push({ f: w16(A.frame), buf: rd(A.curbuf), wf, wcx: rd(A.wcx) | (rd(A.wcx + 1) << 8), wcy: rd(A.wcy), win: Buffer.from(out).toString("base64") });
     } else if (pc === A.draw_sprites) {
         const n = rd(A.NSPR), spr = [];
         for (let i = 0; i < n; i++) { const o = A.SPRLIST + i * 5; spr.push(`${rd(o)}@${rd(o + 1) | (rd(o + 2) << 8)},${rd(o + 3) | (rd(o + 4) << 8)}`); }

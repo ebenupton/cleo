@@ -4,7 +4,7 @@
         .setcpu "65C02"
         .code
         jmp start
-        .import __MAIN_LAST__, __HAZEL_START__, __HAZEL_LAST__, __LOW_START__, __LOW_LAST__
+        .import __MAIN_LAST__, __HAZEL_START__, __HAZEL_LAST__, __LOW_START__, __LOW_LAST__, __LOW2_START__, __LOW2_LAST__
         .include "engine.s"
         .include "logic.s"
         .include "menu.s"
@@ -56,12 +56,35 @@ start:
         iny
         cpy #<(__LOW_LAST__ - __LOW_START__)
         bne :-
+        ; LOW2 follows LOW in the file; its home ($0300) is VDU workspace until MODE 2 has
+        ; been selected and the screen clear wipes the file image, so stage it in SPRREC
+        lda #<(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__ + __LOW_LAST__ - __LOW_START__)
+        sta ptr
+        lda #>(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__ + __LOW_LAST__ - __LOW_START__)
+        sta ptr+1
+        ldy #0                      ; two whole pages (SPRREC is 640 bytes; the overrun
+:       lda (ptr),y                 ; past LOW2's end lands in MASKTAB, rebuilt below)
+        sta SPRREC,y
+        iny
+        bne :-
+        inc ptr+1
+:       lda (ptr),y
+        sta SPRREC+256,y
+        iny
+        bne :-
         cli
         lda #22
         jsr OSWRCH
         lda #2
         jsr OSWRCH
         sei
+        ldy #0
+:       lda SPRREC,y
+        sta __LOW2_START__,y
+        lda SPRREC+256,y
+        sta __LOW2_START__+256,y
+        iny
+        bne :-
         lda ACCCON
         ora #$08
         sta ACCCON

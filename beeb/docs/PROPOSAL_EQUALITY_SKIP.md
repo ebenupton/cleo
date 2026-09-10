@@ -121,3 +121,36 @@ column the 80-char hardware row does not give us — and is a separate proposal.
 Measurement script: `python3 - <<EOF` over `tools/convert.py`'s `levels`,
 `tile_preview`, `orig2compact`, comparing cells as in §3 (kept in the session log; easy
 to re-create in ten lines).
+
+## 7. Outcome (implemented, measured, backed out)
+
+Implemented as §4a with the record guard. The pixel-exact comparison found a ghost at the
+right edge on level 0: a sprite scrolling off the left edge is erased clipped to the *new*
+window, so one column of it survives in exactly the recycled slot, and the guard only
+blocked *kept* records. The fix is to block on every record of the buffer; it was not
+rebuilt and re-verified because the timing result below made the feature moot:
+
+| | before | with skip |
+|---|---|---|
+| level 0 running, fps | 18.7 | 16.2 |
+| level 2 running, fps | 23.7 | 23.0 |
+| level 0 standing, fps | 20.6 | 19.6 |
+
+A net loss. The reason is amortisation: at running speed a strip is ~3 chars wide, and
+each tile row pays for gathering the recycled tiles (two rows, ~170 cycles) plus the
+guard and per-run tests, against a 35% chance of saving ~80 cycles on each of six chars.
+The slower frame then widens the strips, which is the feedback loop again. The leanest
+variant (comparing map bytes inside the existing gather, no second pass) nets out at
+about zero at this strip width; the skip only starts to pay when strips are several
+tiles wide, i.e. when the frame rate is already bad.
+
+"Why solid, not same id?" Because the recycled cell is the *other half* of a tile (the
+slot comes from one char row down or up), so equal ids give the top half against the
+bottom half. A per-tile "halves identical" bit would extend the test from flat tiles to
+vertically repeating ones (28% of cells instead of 17%), but does not change the
+amortisation arithmetic above.
+
+Kept from the exercise: the `LOW2` code area ($0206–$03FF, 506 bytes, staged through
+`SPRREC` around the MODE 2 call), the init-only and dirty-tile routines living there, and
+`drawrect` taking its map-row pointer from the level's row tables instead of a shift
+loop. CODE has 384 bytes free again.
