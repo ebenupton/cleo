@@ -4,7 +4,7 @@
         .setcpu "65C02"
         .code
         jmp start
-        .import __MAIN_LAST__
+        .import __MAIN_LAST__, __HAZEL_START__, __HAZEL_LAST__, __LOW_START__, __LOW_LAST__
         .include "engine.s"
         .include "logic.s"
         .include "menu.s"
@@ -44,6 +44,18 @@ start:
         lda ACCCON
         and #$F7
         sta ACCCON
+        ; the LOW overlay (render helpers) follows HAZEL in the file: copy it into the
+        ; NMI page after our JMP at $0D00
+        lda #<(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__)
+        sta ptr
+        lda #>(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__)
+        sta ptr+1
+        ldy #0
+:       lda (ptr),y
+        sta __LOW_START__,y
+        iny
+        cpy #<(__LOW_LAST__ - __LOW_START__)
+        bne :-
         cli
         lda #22
         jsr OSWRCH

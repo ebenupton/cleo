@@ -644,87 +644,6 @@ drawrect:
         jmp @runend
 
 ; ============================================================================
-; drawrect_clip: like drawrect but clips the rect to the current window
-; (rows wcy..wcy+30, cols wcx..wcx+79).
-; ============================================================================
-drawrect_clip:
-        ; rows
-        lda rc_y
-        sec
-        sbc wcy
-        sta tmp                     ; rel row start (may be negative)
-        bpl :+
-        ; start above window: shrink
-        clc
-        adc rc_h
-        beq @none
-        bmi @none
-        sta rc_h
-        lda wcy
-        sta rc_y
-        stz tmp
-:       lda tmp
-        clc
-        adc rc_h                    ; rel end+1
-        cmp #BUFROWS+1
-        bcc :+
-        lda #BUFROWS
-        sec
-        sbc tmp
-        beq @none
-        bmi @none
-        sta rc_h
-:       ; cols: rel = rc_x - wcx (16 bit signed)
-        lda rc_x
-        sec
-        sbc wcx
-        sta w16
-        lda rc_x+1
-        sbc wcx+1
-        sta w16+1
-        bpl @right
-        ; rel < 0: visible only if -rel < w
-        lda w16
-        eor #$FF
-        sta tmp
-        lda w16+1
-        eor #$FF
-        sta tmp2
-        inc tmp
-        bne :+
-        inc tmp2
-:       lda tmp2
-        bne @none                   ; -rel >= 256 > any width
-        lda tmp
-        cmp rc_w
-        bcs @none
-        lda rc_w
-        sec
-        sbc tmp
-        sta rc_w
-        lda wcx
-        sta rc_x
-        lda wcx+1
-        sta rc_x+1
-        stz w16
-        stz w16+1
-@right: lda w16+1
-        bne @none                   ; rel >= 256 -> off right
-        lda w16
-        cmp #80
-        bcs @none
-        clc
-        adc rc_w
-        cmp #81
-        bcc :+
-        lda #80
-        sec
-        sbc w16
-        sta rc_w
-:       jmp drawrect
-@none:  rts
-
-; ============================================================================
 ; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
 scroll_validate:
         stz SV_COLW
@@ -988,67 +907,6 @@ erase_old:
         dec lcnt
         bne @l
 @done:  rts
-
-; rec_overlap: carry set if the record's rect (rp) overlaps this frame's refreshed regions
-rec_overlap:
-        lda DIRTYSEEN
-        bne @yes
-        lda SV_COLW
-        beq @row
-        ; cx < colx + colw  &&  cx + w > colx
-        ldy #5
-        lda (rp),y
-        sta w16
-        iny
-        lda (rp),y
-        sta w16+1                   ; cx
-        lda SV_COLX
-        clc
-        adc SV_COLW
-        sta w16b
-        lda SV_COLX+1
-        adc #0
-        sta w16b+1                  ; colx+colw
-        lda w16
-        cmp w16b
-        lda w16+1
-        sbc w16b+1
-        bcs @row                    ; cx >= colx+colw -> no x overlap
-        ldy #8
-        lda (rp),y
-        clc
-        adc w16
-        sta w16
-        bcc :+
-        inc w16+1
-:       lda SV_COLX
-        cmp w16
-        lda SV_COLX+1
-        sbc w16+1
-        bcc @yes                    ; colx < cx+w
-@row:   lda SV_ROWH
-        beq @no
-        ldy #7
-        lda (rp),y                  ; cy
-        cmp SV_ROWY
-        bcs :+
-        ; cy < rowy : overlap if cy + h > rowy
-        ldy #9
-        clc
-        adc (rp),y
-        cmp SV_ROWY
-        bcc @no
-        beq @no
-        bra @yes
-:       ; cy >= rowy : overlap if cy < rowy + rowh
-        sec
-        sbc SV_ROWY
-        cmp SV_ROWH
-        bcs @no
-@yes:   sec
-        rts
-@no:    clc
-        rts
 
 ; ============================================================================
 ; dirty tiles: redraw changed map tiles (both buffers keep their own list)
@@ -1600,16 +1458,23 @@ ds_done: rts
 
 ; ---- inner blocks.  ptr = source column (already offset), sp = screen char,
 ;      tmp = ra0', tmp2 = ra1'.  Full-res: source byte per line.
-.macro SPRLINE k, mirror, copy
-        .local done, skip, opaque
+.macro SPRLINE k, mirror, copy, solid
+        .local done, skip, opaque, masked
         ldy #k
         lda (ptr),y
 .if copy
         sta (sp),y                  ; box sprite: every byte opaque, plain copy
 .else
         beq done                    ; 0: both pixels transparent, no store
+.if k = 0
+        bpl masked                  ; (N from the load: cmp would set it from the subtraction)
         cmp #$C0
-        bcs opaque                  ; >= $C0: both pixels opaque (tagged by the converter)
+        bcs solid                   ; bit 7+6: this and the next 7 bytes all opaque
+        bra opaque
+masked:
+.else
+        bmi opaque                  ; bit 7: both pixels opaque (see encode_sprite)
+.endif
         tax
 .if mirror
         lda SWAPTAB,x
@@ -1629,8 +1494,47 @@ done:
 .endif
 .endmacro
 
+.macro SOLID1 k
+        ldy #k
+        lda (ptr),y
+        sta (sp),y
+.endmacro
+.macro SOLIDM k                     ; mirrored: nibble swap through the table
+.if k > 0
+        ldy #k
+        lda (ptr),y
+.endif
+        tax
+        lda SWAPTAB,x
+        sta (sp),y
+.endmacro
+
 .macro SPRFULL name, mirror, copy
-        .local partial, et, l0, l1, l2, l3, l4, l5, l6, l7, pl, ps, po, pd
+        .local partial, et, l0, l1, l2, l3, l4, l5, l6, l7, pl, ps, po, pd, solid
+.if .not copy
+solid:  ; byte 0 carried the RUN flag: the whole cell is opaque, straight copy
+.if mirror
+        SOLIDM 0
+        SOLIDM 1
+        SOLIDM 2
+        SOLIDM 3
+        SOLIDM 4
+        SOLIDM 5
+        SOLIDM 6
+        SOLIDM 7
+        jmp sprretM
+.else
+        sta (sp),y                  ; y = 0, A = byte 0
+        SOLID1 1
+        SOLID1 2
+        SOLID1 3
+        SOLID1 4
+        SOLID1 5
+        SOLID1 6
+        SOLID1 7
+        jmp sprretP
+.endif
+.endif
 name:
         lda tmp2
         cmp #7
@@ -1641,14 +1545,14 @@ name:
         tax
         jmp (et,x)
 et:     .word l0,l1,l2,l3,l4,l5,l6,l7
-l0:     SPRLINE 0, mirror, copy
-l1:     SPRLINE 1, mirror, copy
-l2:     SPRLINE 2, mirror, copy
-l3:     SPRLINE 3, mirror, copy
-l4:     SPRLINE 4, mirror, copy
-l5:     SPRLINE 5, mirror, copy
-l6:     SPRLINE 6, mirror, copy
-l7:     SPRLINE 7, mirror, copy
+l0:     SPRLINE 0, mirror, copy, solid
+l1:     SPRLINE 1, mirror, copy, solid
+l2:     SPRLINE 2, mirror, copy, solid
+l3:     SPRLINE 3, mirror, copy, solid
+l4:     SPRLINE 4, mirror, copy, solid
+l5:     SPRLINE 5, mirror, copy, solid
+l6:     SPRLINE 6, mirror, copy, solid
+l7:     SPRLINE 7, mirror, copy, solid
         .if mirror
         jmp sprretM
         .else
@@ -1662,8 +1566,7 @@ pl:     lda (ptr),y
 .else
 pl:     lda (ptr),y
         beq ps
-        cmp #$C0
-        bcs po                      ; both pixels opaque
+        bmi po                      ; both pixels opaque
         tax
 .if mirror
         lda SWAPTAB,x
@@ -1699,10 +1602,11 @@ pd:
 
 ; half res: one source byte -> two screen lines (2k, 2k+1)
 .macro SPRLINE2 k, mirror
-        .local skip, opaque
+        .local skip, opaque, both, store
         ldy #k
         lda (ptr),y
         beq skip
+        bmi both                    ; bit 7: both pixels opaque
         tax
 .if mirror
         lda SWAPTAB,x
@@ -1723,8 +1627,14 @@ pd:
         ora tmp3
         sta (sp),y
         bra skip
+both:
+.if mirror
+        tax
+        lda SWAPTAB,x
+.endif
+        bra store
 opaque: txa
-        ldy #2*k
+store:  ldy #2*k
         sta (sp),y
         iny
         sta (sp),y
@@ -1732,7 +1642,7 @@ skip:
 .endmacro
 
 .macro SPRHALF name, mirror
-        .local partial, et, l0, l1, l2, l3, pl, ps, po, pd
+        .local partial, et, l0, l1, l2, l3, pl, ps, po, pb, pq, pd
 name:
         lda tmp2
         cmp #7
@@ -1759,6 +1669,7 @@ pl:     lda sp_lim
         tay
         lda (ptr),y
         beq ps
+        bmi pb                      ; bit 7: both pixels opaque
         tax
 .if mirror
         lda SWAPTAB,x
@@ -1779,8 +1690,14 @@ pl:     lda sp_lim
         ora tmp3
         sta (sp),y
         bra ps
+pb:
+.if mirror
+        tax
+        lda SWAPTAB,x
+.endif
+        bra pq
 po:     txa
-        ldy sp_lim
+pq:     ldy sp_lim
         sta (sp),y
         iny
         sta (sp),y
@@ -2480,6 +2397,150 @@ wait_flip:
 
 
         .segment "HAZEL"           ; render-time helpers moved out of the crowded CODE segment
+
+; rec_overlap: carry set if the record's rect (rp) overlaps this frame's refreshed regions
+rec_overlap:
+        lda DIRTYSEEN
+        bne @yes
+        lda SV_COLW
+        beq @row
+        ; cx < colx + colw  &&  cx + w > colx
+        ldy #5
+        lda (rp),y
+        sta w16
+        iny
+        lda (rp),y
+        sta w16+1                   ; cx
+        lda SV_COLX
+        clc
+        adc SV_COLW
+        sta w16b
+        lda SV_COLX+1
+        adc #0
+        sta w16b+1                  ; colx+colw
+        lda w16
+        cmp w16b
+        lda w16+1
+        sbc w16b+1
+        bcs @row                    ; cx >= colx+colw -> no x overlap
+        ldy #8
+        lda (rp),y
+        clc
+        adc w16
+        sta w16
+        bcc :+
+        inc w16+1
+:       lda SV_COLX
+        cmp w16
+        lda SV_COLX+1
+        sbc w16+1
+        bcc @yes                    ; colx < cx+w
+@row:   lda SV_ROWH
+        beq @no
+        ldy #7
+        lda (rp),y                  ; cy
+        cmp SV_ROWY
+        bcs :+
+        ; cy < rowy : overlap if cy + h > rowy
+        ldy #9
+        clc
+        adc (rp),y
+        cmp SV_ROWY
+        bcc @no
+        beq @no
+        bra @yes
+:       ; cy >= rowy : overlap if cy < rowy + rowh
+        sec
+        sbc SV_ROWY
+        cmp SV_ROWH
+        bcs @no
+@yes:   sec
+        rts
+@no:    clc
+        rts
+
+        .segment "LOW"             ; more of them, in the NMI page ($0D03..), copied there at init
+
+; ============================================================================
+drawrect_clip:
+        ; rows
+        lda rc_y
+        sec
+        sbc wcy
+        sta tmp                     ; rel row start (may be negative)
+        bpl :+
+        ; start above window: shrink
+        clc
+        adc rc_h
+        beq @none
+        bmi @none
+        sta rc_h
+        lda wcy
+        sta rc_y
+        stz tmp
+:       lda tmp
+        clc
+        adc rc_h                    ; rel end+1
+        cmp #BUFROWS+1
+        bcc :+
+        lda #BUFROWS
+        sec
+        sbc tmp
+        beq @none
+        bmi @none
+        sta rc_h
+:       ; cols: rel = rc_x - wcx (16 bit signed)
+        lda rc_x
+        sec
+        sbc wcx
+        sta w16
+        lda rc_x+1
+        sbc wcx+1
+        sta w16+1
+        bpl @right
+        ; rel < 0: visible only if -rel < w
+        lda w16
+        eor #$FF
+        sta tmp
+        lda w16+1
+        eor #$FF
+        sta tmp2
+        inc tmp
+        bne :+
+        inc tmp2
+:       lda tmp2
+        bne @none                   ; -rel >= 256 > any width
+        lda tmp
+        cmp rc_w
+        bcs @none
+        lda rc_w
+        sec
+        sbc tmp
+        sta rc_w
+        lda wcx
+        sta rc_x
+        lda wcx+1
+        sta rc_x+1
+        stz w16
+        stz w16+1
+@right: lda w16+1
+        bne @none                   ; rel >= 256 -> off right
+        lda w16
+        cmp #80
+        bcs @none
+        clc
+        adc rc_w
+        cmp #81
+        bcc :+
+        lda #80
+        sec
+        sbc w16
+        sta rc_w
+:       jmp drawrect
+@none:  rts
+; ============================================================================
+; drawrect_clip: like drawrect but clips the rect to the current window
+; (rows wcy..wcy+30, cols wcx..wcx+79).
 calc_ring:
         lda wcy
         and #31
@@ -2523,7 +2584,6 @@ calc_ring:
         bra @div
 @dd:    stx barq
         rts
-
         .segment "CODE"
 
 ; ============================================================================
@@ -3022,6 +3082,20 @@ init_tables:
         sta SWAPTAB,x
         inx
         bne @t
+        ; sprite encoding (convert.py encode_sprite): bit 7 = both pixels opaque, so
+        ; $80..$FF never mask; left-black-only is code $44 (its $80 slot is taken)
+        ldx #$80
+        lda #0
+:       sta MASKTAB,x
+        inx
+        bne :-
+        lda #$55
+        sta MASKTAB+$44             ; keep the right screen pixel
+        stz IDENT+$44               ; left pixel black
+        lda #$44
+        sta SWAPTAB+$40             ; right-black-only <-> left-black-only
+        lda #$40
+        sta SWAPTAB+$44
         ; ring rows
         lda #<SCREEN
         sta w16

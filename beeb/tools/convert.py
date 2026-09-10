@@ -81,6 +81,33 @@ def pack_mode2(col):
     return (spread(l, 1) | spread(r, 0)).astype(np.uint8)
 
 
+def encode_sprite(col, packed):
+    """Sprite byte encoding for the blitters (col: (lines, 2W) indices, 0 = transparent,
+    8 = opaque black; packed = pack_mode2(col)).
+      bit 7 set        : both pixels opaque. Left colour in bits 5,3,1, right in 4,2,0,
+                         black as 0 (the palette shows nibbles 8-15 as 0-7, so the tag
+                         and the RUN bit are invisible on screen).
+      bit 6 (RUN)      : with bit 7: this byte and the next 7 of the column are all
+                         both-opaque -> the blitter copies the whole char cell.
+      < $80            : one pixel opaque, decoded through MASKTAB/ORTAB: the old nibble
+                         codes, except left-black-only ($80 would clash) -> $44.
+    """
+    l = col[:, 0::2].astype(np.uint16)
+    r = col[:, 1::2].astype(np.uint16)
+    both = (l != 0) & (r != 0)
+    lc, rc = l & 7, r & 7
+    bits = ((lc & 1) << 1) | (((lc >> 1) & 1) << 3) | (((lc >> 2) & 1) << 5) | \
+           (rc & 1) | (((rc >> 1) & 1) << 2) | (((rc >> 2) & 1) << 4)
+    run = np.zeros(both.shape, bool)
+    lines = both.shape[0]
+    for i in range(lines - 7):
+        run[i] = both[i:i + 8].all(axis=0)
+    out = np.where(both, 0x80 | bits | (run.astype(np.uint16) << 6), packed.astype(np.uint16))
+    single_left_black = (~both) & (l == 8)
+    out = np.where(single_left_black, 0x44, out)
+    return out.astype(np.uint8)
+
+
 def col_to_rgb(col):
     rgb = BEEB_RGB[np.clip(col & 7, 0, 7)]
     rgb[col == 0] = [40, 40, 40]
@@ -443,12 +470,7 @@ for (im, full, src) in images:
     rgb = spr_rgb[padded]
     col = dither(rgb, alpha, full=full)
     preview.append(col)
-    packed = pack_mode2(col)            # (lines, W)
-    # tag bytes whose two pixels are both opaque: set bit 3 of both nibbles ($C0) so the
-    # blitter can test 'byte >= $C0' instead of a mask lookup (the palette maps logical
-    # colours 8-15 onto the same steady colours as 0-7, so the tag is invisible)
-    both = (col[:, 0::2] != 0) & (col[:, 1::2] != 0)
-    packed = packed | (both.astype(np.uint8) * 0xC0)
+    packed = encode_sprite(col, pack_mode2(col))    # (lines, W): see encode_sprite
     b = bytearray()
     for c in range(W):
         b += packed[:, c].tobytes()
@@ -640,7 +662,7 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     if opaque:
         src[im == tr] = 0          # transparent key -> black
     col = dither(src, alpha, full=full)
-    pk = pack_mode2(col)
+    pk = encode_sprite(col, pack_mode2(col))        # same encoding as the game sprites
     data = bytearray()
     for c in range(W):
         data += pk[:, c].tobytes()
