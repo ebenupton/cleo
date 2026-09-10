@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Preview only (no game data touched): render every level with the 'dark dithery' tiles
+"""SUPERSEDED as the rule set: convert.py now blackens the backdrops in the game
+itself (see `blackened` there), and build/preview_level*.png shows the shipped
+look.  Kept for before/after comparisons.
+
+Preview only (no game data touched): render every level with the 'dark dithery' tiles
 forced to solid black.  A tile counts as dark when, after dithering, at least DARK of its
 pixels are black and it is not already solid.  Output: build/preview_dark/L<n><A|B>.png
 (after) and build/preview_dark/orig/...png (before).   python3 tools/preview_dark.py [DARK]

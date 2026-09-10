@@ -189,7 +189,6 @@ for _i, _c in enumerate(til_rgb0):
     if _t in TIL_NOBLACK:
         noblack_idx[_i] = TIL_NOBLACK[_t]
 
-tiles_mode2 = []
 tile_preview = []
 for cid, orig in enumerate(compact):
     sidx = til_idx[orig * 8:orig * 8 + 8, :]
@@ -204,7 +203,103 @@ for cid, orig in enumerate(compact):
     if orig in TILE_EDITS:
         col = TILE_EDITS[orig]                     # hand-painted override
     tile_preview.append(col)
-    col = col & 7            # black = 0 not 8: bits 7/6 of every tile byte stay free (bit 6
+
+# ----------------------------------------------------------------------------
+# Background blackening.  The dark dithery backdrops of the tombs (and a few
+# outdoor walls) become solid black: it looks better than the noise, it makes
+# most of those tiles constant-fill for drawrow, and it lets the star boxes be
+# composited on black.
+#
+# What counts as background comes from the collision data, not from taste:
+# alt[tile*8+col] >> 4 is the surface row of that pixel column (8 = no ground),
+# so everything above the surface is backdrop.  A tile's backdrop is blackened
+# when at least DARK_BG of its backdrop pixels come from 'wall-ish' source
+# colours (near-black, or dark and desaturated); palm trunks, foliage and the
+# like are saturated and survive.  PIXEL_TILES are art on a wall backdrop (the
+# EXIT letters, the flower) and are cleaned pixel by pixel instead.
+# ----------------------------------------------------------------------------
+DARK_BG = 0.8
+alt = open(os.path.join(SRC, 'alt'), 'rb').read()
+
+def bg_mask(orig):
+    m = np.zeros((16, 8), bool)
+    for c in range(8):
+        hi = alt[orig * 8 + c] >> 4
+        m[:min(hi, 8) * 2, c] = True
+    return m
+
+def _wallish(rgb):
+    r, g, b = (int(v) for v in rgb)
+    mx, mn = max(r, g, b), min(r, g, b)
+    sat = 0 if mx == 0 else (mx - mn) / mx
+    return mx <= 40 or (sat <= 0.4 and mx <= 140)
+
+wall_pal = np.array([_wallish(c) for c in til_rgb0])
+for _o in (70, 71, 102):        # speckle families with bright highlight dots
+    for _v in np.unique(til_idx[_o * 8:_o * 8 + 8, :]):
+        wall_pal[int(_v)] = True
+PIXEL_TILES = {32, 33, 402, 403, 434, 435}   # EXIT letters; flower head and stem
+WALL_TILES = {297}                           # lone floating block the colour rule misses
+
+blackened = {}                  # compact id -> tile image with its backdrop black
+for cid, orig in enumerate(compact):
+    col = tile_preview[cid]
+    bg = bg_mask(orig)
+    if not bg.any() or np.all((col & 7) == 0):
+        continue
+    src = til_idx[orig * 8:orig * 8 + 8, :]
+    frac = float(np.mean(wall_pal[src][bg[::2]]))
+    rep = col.copy()
+    if orig in PIXEL_TILES:
+        rep[bg & np.repeat(wall_pal[src], 2, axis=0)] = 8
+    elif frac >= DARK_BG or orig in WALL_TILES:
+        rep[bg] = 8
+    else:
+        continue
+    blackened[cid] = rep
+
+# Wall texture is occasionally used as foreground filler (the feet of ramps):
+# blackening those cells would punch a hole in the level.  They are found by
+# their neighbourhood (a non-solid backdrop tile boxed in by solid ones) and
+# given a twin compact tile that keeps its texture -- same image as before,
+# same collision, so nothing about the level changes but the look.
+def _solid(orig):
+    return any((alt[orig * 8 + c] >> 4) < 8 for c in range(8))
+
+hole_cells = {}                 # (lv, sub) -> {(y, x): orig}
+twin_of = {}                    # orig -> compact id of the texture-keeping twin
+for (lv, sub), L in levels.items():
+    m = L['map']
+    h, w = m.shape
+    cells = {}
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            o = int(m[y, x])
+            if o < 0 or orig2compact[o] not in blackened or _solid(o) \
+                    or o in PIXEL_TILES:
+                continue
+            nb = [int(m[y + 1, x]), int(m[y, x - 1]), int(m[y, x + 1])]
+            if sum(_solid(n) for n in nb if n >= 0) >= 3 - 0 and \
+                    sum(_solid(n) for n in nb if n >= 0) >= 3:
+                cells[(y, x)] = o
+    if cells:
+        hole_cells[(lv, sub)] = cells
+        for o in set(cells.values()):
+            twin_of.setdefault(o, None)
+for o in sorted(twin_of):
+    twin_of[o] = len(compact)
+    compact.append(o)                       # same original id: same alt class
+    tile_preview.append(tile_preview[orig2compact[o]].copy())   # unblackened
+for cid, rep in blackened.items():
+    tile_preview[cid] = rep
+print('blackened %d tiles; %d texture-keeping twins for %d filler cells'
+      % (len(blackened), len(twin_of),
+         sum(len(c) for c in hole_cells.values())))
+
+tiles_mode2 = []
+for cid in range(len(compact)):
+    col = tile_preview[cid] & 7
+                             # black = 0 not 8: bits 7/6 of every tile byte stay free (bit 6
                              # hides the music, tools/embed_music.py; bit 7 flags periodic cells)
     b = pack_mode2(col)   # (16, 4)
     # Beeb layout: char row 0 (lines 0-7): chars 0..3 each 8 bytes ; then char row 1
@@ -224,7 +319,6 @@ for cid, orig in enumerate(compact):
 # star backgrounds: a star whose 2x2 tile neighbourhood is all sky (solid cyan) or all
 # 'dark' (mostly black: noisy low-intensity indoor backgrounds count) is drawn as a
 # pre-composited box sprite that needs neither masking nor erasing (see the sprite section)
-DARK_FRAC = 0.6
 tile_class = []
 # solid tiles (the sky, and pure black) are filled by drawrow with a constant instead of
 # being copied: flagged in the page-table entry (hi bit 6 = solid, lo bit 4 = cyan)
@@ -234,14 +328,12 @@ for cid, col in enumerate(tile_preview):
         tile_solid[cid] = 1
     elif np.all((col & 7) == 0):
         tile_solid[cid] = 2
-for col in tile_preview:
-    if np.all(col == 6):
-        tile_class.append(1)
-    elif np.mean((col & 7) == 0) >= DARK_FRAC:
-        tile_class.append(2)
-    else:
-        tile_class.append(0)
-BOX_BLACK = False                  # star-on-black boxes disabled for now (cyan only)
+# a star is drawn as a pre-composited box only where its whole 2x2 tile
+# neighbourhood is exactly one colour, so the box's background matches the map
+# byte for byte: solid cyan (sky) or solid black (a blackened tomb backdrop)
+for cid in range(len(tile_preview)):
+    tile_class.append(tile_solid.get(cid, 0))
+BOX_BLACK = True                   # blackened backdrops make star-on-black exact
 def star_class(cm, x, y):
     h, w = cm.shape
     cls = set()
@@ -275,8 +367,7 @@ for t, v in [(412, -1), (413, -1), (414, 1), (415, 1), (423, -2), (424, 2), (439
         push_tiles[orig2compact[t]] = v
 kill_tiles = [orig2compact[t] for t in (101, 336) if t in orig2compact]
 
-# alt
-alt = open(os.path.join(SRC, 'alt'), 'rb').read()
+# alt (read above, for the background masks)
 classes = {}
 alt_class = []
 for orig in compact:
@@ -323,6 +414,8 @@ for (lv, sub), L in levels.items():
     if any(o[0] == 11 for o in L['objs']):
         m[0, :8] = [366 + i for i in range(8)] if False else m[0, :8]
     cm = np.vectorize(lambda t: orig2compact[t])(m)
+    for (hy, hx), ho in hole_cells.get((lv, sub), {}).items():
+        cm[hy, hx] = twin_of[ho]        # keep the wall texture at ramp feet
     extra = set(special['VANISH0'] + i for i in range(8)) if any(o[0] == 11 for o in L['objs']) else set()
     res = partition_rows(cm, extra=extra)
     if res is None:
