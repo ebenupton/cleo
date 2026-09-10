@@ -42,9 +42,9 @@ wall_pal = np.array([wallish(c) for c in til_rgb0])
 for orig in (70, 71, 102):
     for v in np.unique(til_idx[orig * 8:orig * 8 + 8, :]):
         wall_pal[int(v)] = True
-# tiles whose background is cleaned pixel by pixel (art on a wall backdrop): EXIT letters
-# and the flowers
-PIXEL_TILES = {32, 33, 426, 427, 428, 429}
+# tiles whose background is cleaned pixel by pixel (art on a wall backdrop): the EXIT
+# letters only (426..429 are not flowers; they are left alone)
+PIXEL_TILES = {32, 33}
 # the one speckle variant the colour rule misses (a lone floating block in the tombs):
 # forced black outright.  Its relatives (223/255/191 = wooden trusses, 183/212/179/180/211
 # = the lattice beside the pillars) are foreground art and must NOT be listed here.
