@@ -162,7 +162,7 @@ clear_ring:
         bne @l
         rts
 
-; load the title pack into bank 7 unless it is still there (a level load replaces it);
+; load the title pack into bank 6 unless it is still there (a level load replaces it);
 ; the palette goes black first so neither the disc load nor the screen build-up shows
 load_title:
         jsr blank_palette
@@ -228,7 +228,7 @@ menu_keys:
 ; draw a title piece: A = piece index, spx/spy = position (top-left)
 draw_piece:
         pha
-        lda #BANK_LVL
+        lda #BANK_MAP               ; the title pack sits where the map goes
         sta spbank
         pla
         jsr drawsprite
@@ -683,6 +683,6 @@ mstep:     .res 1
 msel:      .res 1
 mclear:    .res 1
 mlast:     .res 1                  ; item index the cursor was last drawn at
-title_res: .res 1                  ; title pack resident in bank 7
+title_res: .res 1                  ; title pack resident in bank 6
 tx:        .res 1
 ty:        .res 1

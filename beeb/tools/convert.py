@@ -7,7 +7,7 @@ Outputs (in build/):
   TIL1     bank 6 image: compact tiles 256..
   ALT      altitude classes + table (bank 7 @ &A900)
   L<n>A/B  level packs (bank 7 @ &8000): map, page tables, rowpage, header, objects
-  TITLE    title pack (bank 7 @ &8000): logo, you/win/lose, big cleo frames
+  TITLE    title pack (bank 6 @ &8900, over the map): logo, you/win/lose, big cleo
   preview PNGs for eyeballing the dither
 """
 import struct, sys, os, json
@@ -434,6 +434,7 @@ def partition_rows(m, maxpages=2, extra=set()):
 
 rng = np.random.RandomState(1234)
 level_tiles = []
+level_split = {}                     # level -> sectors in the bank-6 half of its pack
 def name_of(lv, sub):
     return 'L%d%s' % (lv, 'B' if sub == 0 else 'A')
 for (lv, sub), L in levels.items():
@@ -481,17 +482,20 @@ for (lv, sub), L in levels.items():
         code = tables[rowpage[r]][1]
         for c in range(cm.shape[1]):
             mapbytes[r, c] = code[int(cm[r, c])]
-    # game needs to know: byte codes for VANISH0..7 and FLOWER0..3 in each page (255 = absent)
-    # pack layout (bank 7): $8000 page tables (2 x 512), $8400 rowpage, $8480 header,
-    # $8500 objects, $8900 attr page0, $8A00 attr page1, $8B00 map (row-major)
-    pack = bytearray()
-    for p in range(2):
+    # A level is loaded in two pieces, because the game logic has to live in bank 7 on
+    # a Model B and the map is the only thing big enough to make room for it.
+    #   bank 6, from $8400:  rowpage (256), page tables (512 each; the second only
+    #                        when the level needs two), map (row-major) at $8900
+    #   bank 7, from $8000:  header (256), objects (1024), attr page0, attr page1,
+    #                        alt class per tile id (512)
+    pack = bytearray(bytes(rowpage).ljust(256, b'\0'))
+    for p in range(npages):
         # entry = (lo, hi) of the tile's data address in its bank, pre-shifted so the
         # renderer needs no arithmetic: tile data at $8000 + (cid & 255) * 64, so
         #   lo = (cid & 3) << 6 | bank (ROMSEL value 5/6 in the free low bits)
         #   hi = $80 | (cid & 255) >> 2
         lo = bytearray(256); hi = bytearray(256)
-        if p < npages:
+        if True:
             for i, cid in enumerate(tables[p][0]):
                 lid = local[cid]
                 lo[i] = ((lid & 3) << 6) | (5 + (lid >> 8))
@@ -500,14 +504,18 @@ for (lv, sub), L in levels.items():
                     hi[i] |= 0x40
                     lo[i] |= 0x10 if tile_solid[cid] == 1 else 0
         pack += lo + hi
-    pack += bytes(rowpage).ljust(128, b'\0')      # $8400
+    name = name_of(lv, sub)
+    packp = bytes(pack)                            # DFS holds only 31 files, so the
+    packm = mapbytes.tobytes()                     # three pieces travel as one
+    pack = bytearray()
     hdr = bytearray()
     hdr += bytes([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1], len(L['objs']), npages])
     for p in range(2):
         for cid in [special['VANISH0'] + i for i in range(8)] + [special['FLOWER0'] + i for i in range(4)]:
             hdr.append(tables[p][1].get(cid, 255) if p < npages else 255)
+    assert len(packp) == 256 + 512 * npages
     hdr = hdr.ljust(0x20, b'\0') + tilebits        # which global tiles this level wants
-    pack += hdr.ljust(0x80, b'\0')                 # $8480
+    pack += hdr.ljust(0x100, b'\0')                # bank 7 $8000
     objs = bytearray()
     for (t, x, y, extra) in L['objs']:
         e = (extra + [0, 0, 0])[:3]
@@ -515,7 +523,7 @@ for (lv, sub), L in levels.items():
             e[0] = star_class(cm, x, y)
             star_stats.setdefault((lv, sub), [0, 0, 0])[e[0]] += 1
         objs += bytes([t, x, y] + e)
-    pack += objs.ljust(0x400, b'\0')              # $8500..$88FF
+    pack += objs.ljust(0x400, b'\0')              # bank 7 $8100
     for p in range(2):
         attr = bytearray(256)
         if p < npages:
@@ -526,16 +534,16 @@ for (lv, sub), L in levels.items():
                 if cid in kill_tiles:
                     a |= 0x80
                 attr[i] = a
-        pack += attr                               # $8900 page0 attr, $8A00 page1 attr
-    assert len(pack) == 0xB00
-    acls = bytearray(512)                          # $8B00: alt class per local tile id
+        pack += attr                               # bank 7 $8500 page0, $8600 page1
+    acls = bytearray(512)                          # bank 7 $8700
     for c in used_l:
         acls[local[c]] = alt_class[c]
     pack += acls
-    pack += mapbytes.tobytes()                     # $8D00
-    name = name_of(lv, sub)
-    open(os.path.join(OUT, name), 'wb').write(pack)
-    print(name, 'pages', npages, [len(t[0]) for t in tables], 'objs', len(L['objs']), 'size', len(pack))
+    assert len(pack) == 0x900
+    open(os.path.join(OUT, name), 'wb').write(packp + packm + pack)
+    level_split[name] = (len(packp) // 256, len(packm) // 256)
+    print(name, 'pages', npages, [len(t[0]) for t in tables], 'objs', len(L['objs']),
+          'pages', len(packp), 'map', len(packm), 'tables', len(pack))
 
 print('level tile sets: worst %d tiles (%d bytes) in %s' %
       max((d, d * 64, n) for n, d, s in level_tiles))
@@ -862,6 +870,7 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
         data += pk[:, c].tobytes()
     return W, (2 * h if full else h), h, data, col
 
+TITLE_ADDR = 0x8900               # bank 6, where the map goes during a level
 title = bytearray()
 tdir = []
 pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38, 58, 39, 13, True), ('lose', 0, 71, 45, 13, True)]
@@ -870,7 +879,7 @@ for f in range(9):
 tpreview = []
 for (name, x, y, w, h, full) in pieces:
     W, lines, hpx, data, col = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=name.startswith('cleo'))
-    tdir.append((name, 0x8000 + 0x80 + len(title), W, hpx, lines, full))
+    tdir.append((name, TITLE_ADDR + 0x80 + len(title), W, hpx, lines, full))
     title += data
     tpreview.append(col)
 # directory at &8000: 8 bytes per piece: ptr lo, hi, W, h, flags(2=full), lines, 0, 0
@@ -889,6 +898,9 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('NTILES = %d\n' % len(compact))
     f.write('NTILES_DATA = %d\n' % NDATA)
     f.write('BOX_BASE = $%04X\n' % BOX_BASE)
+    f.write('TITLE_ADDR = $%04X\n' % TITLE_ADDR)
+    for _n, (_p, _m) in sorted(level_split.items()):
+        f.write('LP_%s = %d\nLM_%s = %d\n' % (_n, _p, _n, _m))
     f.write('SPR_FONT = $%04X\nSPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_ANDY = $%04X\n' %
             (SPR_FONT, SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_ANDY))
     for i, (name, ptr, W, hpx, lines, full) in enumerate(tdir):

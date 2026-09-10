@@ -44,23 +44,33 @@ BANK_SPR  = 4
 BANK_TIL0 = 5
 BANK_TIL1 = 6
 BANK_LVL  = 7
+BANK_MAP  = 6                     ; the map and the tables read alongside it
 
-; bank 7 layout
-LV_PAGE0  = $8000                 ; 256 lo ((idx&3)<<6 | bank), 256 hi ($80 | idx>>2)
-LV_PAGE1  = $8200
+; bank 6: this level's overflow tiles, then the map and everything the renderer or
+; the logic reads in the same breath as the map.  It is here rather than in bank 7
+; because a Model B has to put the game logic in a bank, and the map is the only
+; thing big enough to make the room.
+;         $8000  tiles 256.. of this level (16 tiles: no level needs more)
 LV_ROWPAGE= $8400
-LV_HDR    = $8480
-LV_OBJS   = $8500
-LV_ATTR0  = $8900                 ; per page attribute (kill/push)
-LV_ATTR1  = $8A00
-LV_ALTCLS = $8B00                 ; 512 : this level's tile id -> alt class
-LV_MAP    = $8D00                 ; up to 8K, row major
-LV_ALTTAB = $AD00                 ; classes x 8 (global: loaded once)
+LV_PAGE0  = $8500                 ; 256 lo ((idx&3)<<6 | bank), 256 hi ($80 | idx>>2)
+LV_PAGE1  = $8700                 ; only loaded for the levels that need two pages
+LV_MAP    = $8900                 ; up to 8K, row major
+;         $A900  LV_MAPROWLO, LV_MAPROWHI (built by level_init, see logic.s)
+;         $B000  box stars, $B800 music
+
+; bank 7
+LV_HDR    = $8000
+LV_OBJS   = $8100
+LV_ATTR0  = $8500                 ; per page attribute (kill/push)
+LV_ATTR1  = $8600
+LV_ALTCLS = $8700                 ; 512 : this level's tile id -> alt class
+;         $8900..$AFFF free: the game logic lives here on a Model B
 LV_OBJST  = $B000                 ; object state arrays (16 x 149)
 LV_GRID   = $B950                 ; 128 grid heads
 LV_BOBJ   = $B9D0                 ; 255
 LV_BNEXT  = $BAD0                 ; 255
-LV_MUSIC  = $BC00
+;         $BC00  LV_ALTPAGE (512, see logic.s)
+LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 
 VISROWS   = 27                    ; visible char rows (216 lines = 108 game px)
 BUFROWS   = 28                    ; rows held (visible + partial top row source)
@@ -350,7 +360,7 @@ drawrect:
         sta rc_sp+1
 @row:
         ; ---- tile row ty = rc_y >> 1 ; map row pointer from the level's row tables
-        setbank BANK_LVL
+        setbank BANK_MAP
         lda rc_y
         lsr
         tax
@@ -997,7 +1007,7 @@ draw_sprites:
 ; A = sprite id. Game sprites (spbank = BANK_SPR): directory is in main RAM at
 ; SPR_TABLE; sprite data is in bank 4, or in ANDY ($8000, ROMSEL bit7) when the
 ; entry's flag bit2 is set. Title pieces (spbank != BANK_SPR): directory and data
-; both live at $8000 of that bank, as before.
+; both live at TITLE_ADDR of that bank.
 drawsprite:
         stz ptr+1
         asl                         ; id*8 -> offset
@@ -1034,9 +1044,10 @@ drawsprite:
         stx ROMSEL
         bra @entry2
 @titledir:
-        ; ---- title piece: directory + data at $8000 of bank(spbank)
+        ; ---- title piece: directory + data at TITLE_ADDR of bank(spbank)
         lda ptr+1
-        ora #$80
+        clc
+        adc #>TITLE_ADDR
         sta ptr+1
         lda spbank
         sta curbank
@@ -3242,23 +3253,19 @@ loadfile:
         pha
         jsr music_stop
         pla
-        sta tmp
-        asl
-        asl
-        adc tmp                     ; *5
         tax
-        lda filetab,x
+        lda ft_seclo,x
         sta ld_sec
-        lda filetab+1,x
+        lda ft_sechi,x
         sta ld_sec+1
-        lda filetab+2,x
+        lda ft_n,x
         sta ld_n
-        lda filetab+3,x
+        lda ft_bank,x
         beq :+
         sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
-:       lda filetab+4,x
+:       lda ft_dest,x
         sta ptr+1
         stz ptr
         ; read ld_n sectors from linear sector ld_sec to ptr

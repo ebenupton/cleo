@@ -129,14 +129,23 @@ start:
 ; ---------------------------------------------------------------- level loading
 ; X = level index 0..15 (even = main, odd = bonus)
 load_level:
-        txa
-        clc
-        adc #FI_L0B                 ; file order: L0A, L0B, L1A, ... but index 0 = main = 'B'
-        ; level index i: file = FI_L0A + (i>>1)*2 + (1 - (i&1))
+        ; file order is L0A, L0B, L1A, ..., two files each, and level index 0 is the
+        ; main level, which is the 'B' one: file = FI_L0A + (i eor 1) * 2
         txa
         eor #1
+        sta tmp2                    ; three pieces: page tables, map, bank-7 tables
+        asl
         clc
+        adc tmp2
         adc #FI_L0A
+        sta tmp2
+        jsr loadfile
+        lda tmp2
+        inc
+        sta tmp2
+        jsr loadfile
+        lda tmp2
+        inc
         jsr loadfile
         jsr load_tiles              ; only the tiles this level's page tables name
         ; geometry
@@ -185,42 +194,97 @@ load_level:
         stz NSPR
         rts
 
-; file table: sector lo, hi, nsectors, bank, dest hi
+; File table.  Five parallel arrays rather than five-byte records: there are more
+; than fifty files now and index * 5 does not fit in a byte.
         .include "files.inc"
+FTMODE .set 0
 .macro FILE sec, n, bank, dest
-        .byte <(sec), >(sec), n, bank, >(dest)
+.if FTMODE = 0
+        .byte <(sec)
+.elseif FTMODE = 1
+        .byte >(sec)
+.elseif FTMODE = 2
+        .byte n
+.elseif FTMODE = 3
+        .byte bank
+.else
+        .byte >(dest)
+.endif
 .endmacro
-filetab:
+.macro FILE_LIST
         FILE F_SPR_SEC,   F_SPR_N,   BANK_SPR,  $8000
         FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
         FILE F_MUSIC_SEC, F_MUSIC_N, BANK_TIL1, MUSIC_ADDR
         FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTTAB
-        FILE F_TITLE_SEC, F_TITLE_N, BANK_LVL,  $8000
-        FILE F_L0A_SEC, F_L0A_N, BANK_LVL, $8000
-        FILE F_L0B_SEC, F_L0B_N, BANK_LVL, $8000
-        FILE F_L1A_SEC, F_L1A_N, BANK_LVL, $8000
-        FILE F_L1B_SEC, F_L1B_N, BANK_LVL, $8000
-        FILE F_L2A_SEC, F_L2A_N, BANK_LVL, $8000
-        FILE F_L2B_SEC, F_L2B_N, BANK_LVL, $8000
-        FILE F_L3A_SEC, F_L3A_N, BANK_LVL, $8000
-        FILE F_L3B_SEC, F_L3B_N, BANK_LVL, $8000
-        FILE F_L4A_SEC, F_L4A_N, BANK_LVL, $8000
-        FILE F_L4B_SEC, F_L4B_N, BANK_LVL, $8000
-        FILE F_L5A_SEC, F_L5A_N, BANK_LVL, $8000
-        FILE F_L5B_SEC, F_L5B_N, BANK_LVL, $8000
-        FILE F_L6A_SEC, F_L6A_N, BANK_LVL, $8000
-        FILE F_L6B_SEC, F_L6B_N, BANK_LVL, $8000
-        FILE F_L7A_SEC, F_L7A_N, BANK_LVL, $8000
-        FILE F_L7B_SEC, F_L7B_N, BANK_LVL, $8000
+        FILE F_TITLE_SEC, F_TITLE_N, BANK_MAP,  TITLE_ADDR
+        FILE F_L0A_SEC, LP_L0A, BANK_MAP, LV_ROWPAGE
+        FILE F_L0A_SEC + LP_L0A, LM_L0A, BANK_MAP, LV_MAP
+        FILE F_L0A_SEC + LP_L0A + LM_L0A, F_L0A_N - LP_L0A - LM_L0A, BANK_LVL, LV_HDR
+        FILE F_L0B_SEC, LP_L0B, BANK_MAP, LV_ROWPAGE
+        FILE F_L0B_SEC + LP_L0B, LM_L0B, BANK_MAP, LV_MAP
+        FILE F_L0B_SEC + LP_L0B + LM_L0B, F_L0B_N - LP_L0B - LM_L0B, BANK_LVL, LV_HDR
+        FILE F_L1A_SEC, LP_L1A, BANK_MAP, LV_ROWPAGE
+        FILE F_L1A_SEC + LP_L1A, LM_L1A, BANK_MAP, LV_MAP
+        FILE F_L1A_SEC + LP_L1A + LM_L1A, F_L1A_N - LP_L1A - LM_L1A, BANK_LVL, LV_HDR
+        FILE F_L1B_SEC, LP_L1B, BANK_MAP, LV_ROWPAGE
+        FILE F_L1B_SEC + LP_L1B, LM_L1B, BANK_MAP, LV_MAP
+        FILE F_L1B_SEC + LP_L1B + LM_L1B, F_L1B_N - LP_L1B - LM_L1B, BANK_LVL, LV_HDR
+        FILE F_L2A_SEC, LP_L2A, BANK_MAP, LV_ROWPAGE
+        FILE F_L2A_SEC + LP_L2A, LM_L2A, BANK_MAP, LV_MAP
+        FILE F_L2A_SEC + LP_L2A + LM_L2A, F_L2A_N - LP_L2A - LM_L2A, BANK_LVL, LV_HDR
+        FILE F_L2B_SEC, LP_L2B, BANK_MAP, LV_ROWPAGE
+        FILE F_L2B_SEC + LP_L2B, LM_L2B, BANK_MAP, LV_MAP
+        FILE F_L2B_SEC + LP_L2B + LM_L2B, F_L2B_N - LP_L2B - LM_L2B, BANK_LVL, LV_HDR
+        FILE F_L3A_SEC, LP_L3A, BANK_MAP, LV_ROWPAGE
+        FILE F_L3A_SEC + LP_L3A, LM_L3A, BANK_MAP, LV_MAP
+        FILE F_L3A_SEC + LP_L3A + LM_L3A, F_L3A_N - LP_L3A - LM_L3A, BANK_LVL, LV_HDR
+        FILE F_L3B_SEC, LP_L3B, BANK_MAP, LV_ROWPAGE
+        FILE F_L3B_SEC + LP_L3B, LM_L3B, BANK_MAP, LV_MAP
+        FILE F_L3B_SEC + LP_L3B + LM_L3B, F_L3B_N - LP_L3B - LM_L3B, BANK_LVL, LV_HDR
+        FILE F_L4A_SEC, LP_L4A, BANK_MAP, LV_ROWPAGE
+        FILE F_L4A_SEC + LP_L4A, LM_L4A, BANK_MAP, LV_MAP
+        FILE F_L4A_SEC + LP_L4A + LM_L4A, F_L4A_N - LP_L4A - LM_L4A, BANK_LVL, LV_HDR
+        FILE F_L4B_SEC, LP_L4B, BANK_MAP, LV_ROWPAGE
+        FILE F_L4B_SEC + LP_L4B, LM_L4B, BANK_MAP, LV_MAP
+        FILE F_L4B_SEC + LP_L4B + LM_L4B, F_L4B_N - LP_L4B - LM_L4B, BANK_LVL, LV_HDR
+        FILE F_L5A_SEC, LP_L5A, BANK_MAP, LV_ROWPAGE
+        FILE F_L5A_SEC + LP_L5A, LM_L5A, BANK_MAP, LV_MAP
+        FILE F_L5A_SEC + LP_L5A + LM_L5A, F_L5A_N - LP_L5A - LM_L5A, BANK_LVL, LV_HDR
+        FILE F_L5B_SEC, LP_L5B, BANK_MAP, LV_ROWPAGE
+        FILE F_L5B_SEC + LP_L5B, LM_L5B, BANK_MAP, LV_MAP
+        FILE F_L5B_SEC + LP_L5B + LM_L5B, F_L5B_N - LP_L5B - LM_L5B, BANK_LVL, LV_HDR
+        FILE F_L6A_SEC, LP_L6A, BANK_MAP, LV_ROWPAGE
+        FILE F_L6A_SEC + LP_L6A, LM_L6A, BANK_MAP, LV_MAP
+        FILE F_L6A_SEC + LP_L6A + LM_L6A, F_L6A_N - LP_L6A - LM_L6A, BANK_LVL, LV_HDR
+        FILE F_L6B_SEC, LP_L6B, BANK_MAP, LV_ROWPAGE
+        FILE F_L6B_SEC + LP_L6B, LM_L6B, BANK_MAP, LV_MAP
+        FILE F_L6B_SEC + LP_L6B + LM_L6B, F_L6B_N - LP_L6B - LM_L6B, BANK_LVL, LV_HDR
+        FILE F_L7A_SEC, LP_L7A, BANK_MAP, LV_ROWPAGE
+        FILE F_L7A_SEC + LP_L7A, LM_L7A, BANK_MAP, LV_MAP
+        FILE F_L7A_SEC + LP_L7A + LM_L7A, F_L7A_N - LP_L7A - LM_L7A, BANK_LVL, LV_HDR
+        FILE F_L7B_SEC, LP_L7B, BANK_MAP, LV_ROWPAGE
+        FILE F_L7B_SEC + LP_L7B, LM_L7B, BANK_MAP, LV_MAP
+        FILE F_L7B_SEC + LP_L7B + LM_L7B, F_L7B_N - LP_L7B - LM_L7B, BANK_LVL, LV_HDR
         FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
+.endmacro
+FTMODE .set 0
+ft_seclo: FILE_LIST
+FTMODE .set 1
+ft_sechi: FILE_LIST
+FTMODE .set 2
+ft_n:     FILE_LIST
+FTMODE .set 3
+ft_bank:  FILE_LIST
+FTMODE .set 4
+ft_dest:  FILE_LIST
+
 FI_SPR = 0
 FI_BOX = 1
 FI_MUSIC = 2
 FI_ALT = 3
 FI_TITLE = 4
-FI_L0A = 5
-FI_L0B = 6
-FI_SPRAND = 21
+FI_L0A = 5                        ; two files per level: map part then table part
+FI_SPRAND = 53
 
 ; ---------------------------------------------------------------- camera clamp
 ; clamp wx to [0, maxwx] (and even), wy to [0, maxwy]
@@ -286,7 +350,7 @@ new_game:
         sta level
 level_loop:
         jsr blank_palette           ; hide the loading and the first-frame build-up
-        stz title_res               ; the level pack replaces the title pack in bank 7
+        stz title_res               ; the level's map replaces the title pack
         ldx level
         jsr load_level
         jsr level_init

@@ -202,9 +202,10 @@ O_DL    = O_CH + OBJN
 O_DH    = O_DL + OBJN
 O_EL    = O_DH + OBJN
 O_EH    = O_EL + OBJN
-LV_ALTPAGE = $BC00                ; 2 x 256 : map byte -> alt class
-LV_MAPROWLO = $BE00               ; 256 : tile row -> map row address
-LV_MAPROWHI = $BF00
+LV_ALTPAGE = $BC00                ; bank 7: 2 x 256 : map byte -> alt class
+LV_MAPROWLO = $A900               ; bank 6: 256 : tile row -> map row address
+LV_MAPROWHI = $AA00
+PGCOPY  = SCREEN                  ; level_init's scratch copy of the page tables
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)
         .zeropage
@@ -288,14 +289,27 @@ rise    = $DC                     ; 2 bytes
         .segment "HAZEL"
 
 ; ============================================================================
-; Map queries (bank 7 must be selected by caller: we select it here)
+; Map queries.  The map is in bank 6 with the row tables and the row-page table,
+; so these select it and put bank 7 back; maptilew leaves bank 6 selected for a
+; caller that is about to write through mapptr.
 ; ============================================================================
 ; get map byte at tile (X = tx, A = ty) -> A = byte, q1 = page (0/1).  The per-page
 ; alt-class and attribute tables are 256 bytes apart (q1 used to be page*2, which sent
 ; every page-1 row's altitude lookup into LV_MAPROWLO: no ground, Cleo fell through
 ; the floor at the Vineyards spawn and wherever else those levels use page 1)
 maptile:
+        jsr maptilew
+        pha
+        lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        pla
+        rts
+maptilew:
         tay
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
         lda LV_ROWPAGE,y
         sta q1
         lda LV_MAPROWLO,y
@@ -439,7 +453,7 @@ gettileattr:
 ; Level initialisation (level pack already loaded in bank 7)
 ; ============================================================================
 level_init:
-        setbank BANK_LVL
+        setbank BANK_MAP
         ; map row address table
         stz t16
         lda #>LV_MAP
@@ -469,14 +483,28 @@ level_init:
         inx
         bne @rl
         ; alt class per page: ALTPAGE[p][b] = ALTCLS[id(b)].  Page entries are pre-shifted
-        ; tile addresses: lo = (id&3)<<6 | bank, hi = $80 | id>>2 (see convert.py)
+        ; tile addresses: lo = (id&3)<<6 | bank, hi = $80 | id>>2 (see convert.py).
+        ; The pages are in bank 6 and the alt classes in bank 7, so take a copy of the
+        ; pages into the screen, which is blanked for the whole of a level load.
         ldx #0
-@ap:    lda LV_PAGE0+256,x
-        ldy LV_PAGE0,x
+@pc:    lda LV_PAGE0,x
+        sta PGCOPY,x
+        lda LV_PAGE0+256,x
+        sta PGCOPY+256,x
+        lda LV_PAGE1,x
+        sta PGCOPY+512,x
+        lda LV_PAGE1+256,x
+        sta PGCOPY+768,x
+        inx
+        bne @pc
+        setbank BANK_LVL
+        ldx #0
+@ap:    lda PGCOPY+256,x
+        ldy PGCOPY,x
         jsr @altof
         sta LV_ALTPAGE,x
-        lda LV_PAGE1+256,x
-        ldy LV_PAGE1,x
+        lda PGCOPY+768,x
+        ldy PGCOPY+512,x
         jsr @altof
         sta LV_ALTPAGE+256,x
         inx
@@ -2648,12 +2676,13 @@ ob_vanish:
         sta q3
         ldx q4
         lda q5
-        jsr maptile                 ; sets mapptr, Y = tx
+        jsr maptilew                ; sets mapptr, Y = tx; bank 6 for the writes
         lda q2
         sta (mapptr),y
         iny
         lda q3
         sta (mapptr),y
+        setbank BANK_LVL
         lda q4
         ldx q5
         jsr mark_dirty
@@ -2686,7 +2715,7 @@ ob_switch:
         sta q5                      ; row counter (q5: the grid-walk cursor must stay intact)
 @rl:    ldx fa
         lda q5
-        jsr maptile                 ; mapptr = row, Y = A
+        jsr maptilew                ; mapptr = row, Y = A; bank 6 for the writes
         dey
         dey
         lda (mapptr),y
@@ -2700,6 +2729,7 @@ ob_switch:
         iny
         lda q3
         sta (mapptr),y
+        setbank BANK_LVL
         lda fa
         ldx q5
         jsr mark_dirty
