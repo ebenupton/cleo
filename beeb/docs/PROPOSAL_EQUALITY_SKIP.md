@@ -177,3 +177,36 @@ level select, which since the title-resident change is the middle of a 3-byte
 `stz title_res`; the patch produced a `tsb $94A6` that set two bits in whichever bank
 was paged (the tiles, in the newest build). The harnesses now locate `ldx level` by
 opcode.
+
+## 9. Follow-up: dedicated blitters for the flat dither tiles (implemented, backed out)
+
+A tile that is a flat dither -- one 8-byte char cell repeated over all four columns
+and both rows, that cell repeating every four lines -- needs no source data either,
+just four bytes. There are 9 of them over 8 distinct patterns, against 49 tiles that
+are a single constant.
+
+Implemented as a third fill path: the page-table entry sets the existing "no source"
+flag (hi bit 6) plus lo bit 5, and drawrow caches the four bytes in zero page, keyed
+on the entry, so a run only reloads them when the tile changes. The bytes come from
+the tile itself rather than a table, because the low byte's other bits are the tile's
+address and bank, which level init decodes to build the collision table -- overwriting
+them with a pattern index broke the tombs' collision, visibly, on the first build.
+Rendering is byte-identical for the pixels (bit 6 carries the music and bit 7 the
+periodic-cell flag; the fill writes cell 0's copies of those, and neither is visible).
+
+Measured over a scripted run, drawrect cycles per render:
+
+  level 0 running   28.9K -> 29.5K       level 4 running   16.1K -> 15.8K
+  level 6 running   39.6K -> 39.5K
+
+A wash. Flat dither tiles are 24% of the characters drawn outdoors and 2-3% in the
+tombs, the periodic copy path already draws them at about 10.5 cycles a byte against
+the fill's 9.5, and the cache misses whenever consecutive runs use different tiles.
+Backed out.
+
+The same experiment answers whether the constant fill is still worth its own path:
+routing the constant tiles through the pattern path (their four bytes are equal, so it
+is correct) costs 1.6K cycles a render on level 0 running and 9.7K on level 6, where
+71% of the characters drawn are constant black -- the frame goes from 115.4K to
+130.4K. It is the single biggest thing in drawrect and stays exactly as it is.
+
