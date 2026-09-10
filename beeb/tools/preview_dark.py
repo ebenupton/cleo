@@ -45,14 +45,16 @@ for orig in (70, 71, 102):
 # tiles whose background is cleaned pixel by pixel (art on a wall backdrop): EXIT letters
 # and the flowers
 PIXEL_TILES = {32, 33, 426, 427, 428, 429}
-# bright-dot speckle variants the colour rule misses (used as lone floating blocks in the
-# tombs): forced black outright
-WALL_TILES = {223, 255, 191, 224, 183, 212, 179, 180, 211, 297}
+# the one speckle variant the colour rule misses (a lone floating block in the tombs):
+# forced black outright.  Its relatives (223/255/191 = wooden trusses, 183/212/179/180/211
+# = the lattice beside the pillars) are foreground art and must NOT be listed here.
+WALL_TILES = {297}
 # the potted plant's box: its background tiles are cleaned with the box's own speckle
 # colours (taken from the plant-free tiles) so only the plant is left; the solid top row
 # (245..251) is a platform and stays visible
 PLANT_BG = {277, 279, 309, 311, 344, 345}
-PLANT_TILES = PLANT_BG | {346, 347, 376, 377, 378, 379}
+PLANT_ART = {346, 347, 376, 377, 378, 379}
+PLANT_TILES = PLANT_BG | PLANT_ART
 plant_pal = np.zeros(len(til_rgb0), bool)
 for orig in PLANT_BG:
     for v in np.unique(til_idx[orig * 8:orig * 8 + 8, :]):
@@ -95,6 +97,12 @@ def fill_holes(m):
                     if solid(n) and orig2compact[n] not in dark:
                         m[y, x] = n; subs.append((x, y, t, n)); break
     return m, subs
+def near_plant(m, tx, ty):
+    # the plant box tiles double as the plain stone-block bases outdoors: only clean them
+    # when the plant itself is within two cells
+    h, w = m.shape
+    win = m[max(ty - 2, 0):ty + 3, max(tx - 2, 0):tx + 3]
+    return bool(np.isin(win, list(PLANT_ART)).any())
 def render(m, force):
     h, w = m.shape
     img = np.zeros((h * 16, w * 8, 3), np.uint8)
@@ -104,9 +112,10 @@ def render(m, force):
         if subs: print('   holes filled:', subs)
     for ty in range(h):
         for tx in range(w):
-            cid = orig2compact[int(m[ty, tx])]
+            orig = int(m[ty, tx])
+            cid = orig2compact[orig]
             col = tile_preview[cid]
-            if force and cid in dark:
+            if force and cid in dark and (orig not in PLANT_TILES or near_plant(m, tx, ty)):
                 col = dark[cid][1]; n += 1
             img[ty * 16:ty * 16 + 16, tx * 8:tx * 8 + 8] = col_to_rgb(col)
     return img, n
