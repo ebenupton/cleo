@@ -135,7 +135,6 @@ sp_r1:    .res 1
 sp_ra0:   .res 1
 sp_ra1:   .res 1
 sp_col:   .res 2                  ; current column base pointer
-sp_step:  .res 2
 sp_rb:    .res 2                  ; screen address of the current row's first char
 sp_rp:    .res 2                  ; source pointer for the current row (col base + row offset)
 sp_rinc:  .res 1                  ; source bytes per row: 8 (full res) or 4 (half res)
@@ -191,6 +190,10 @@ NSPR:      .res 1
 BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
 BUF_CY:    .res 2
 BUF_VALID: .res 2
+PART_CY:   .res 2                 ; per buffer: row/fine the partial (A) row was last copied for
+PART_F:    .res 2
+PART_LO:   .res 2                 ; per buffer: window columns of row wcy drawn since that copy
+PART_HI:   .res 2                 ;   (LO > HI = none)
 BUF_BARQ:  .res 2
 BUF_BARADDR: .res 4          ; per buffer: bar CRTC start (hi,lo) x2 (fixes cross-buffer carryover)
 BARDIRTY:  .res 2
@@ -285,6 +288,22 @@ drawrect:
         lda rc_h
         bne :+
         rts
+:       lda rc_y
+        cmp wcy
+        bne :+
+        ldx curbuf                  ; touches the window's top row: widen the partial-row
+        lda rc_x                    ; dirty column range (rects are window-clipped, so
+        sec                         ; the low byte of rc_x - wcx is the column)
+        sbc wcx
+        cmp PART_LO,x
+        bcs @plo
+        sta PART_LO,x
+@plo:   clc
+        adc rc_w
+        dec
+        cmp PART_HI,x
+        bcc :+
+        sta PART_HI,x
 :       ; ---- per-rect invariants: tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
         lda rc_x
         clc
@@ -1379,6 +1398,18 @@ drawsprite:
         lsr
         lsr
         sta sp_r1
+        lda sp_r0
+        bne @nopart
+        ldx curbuf                  ; touches the window's top row (see drawrect)
+        lda sp_c0
+        cmp PART_LO,x
+        bcs :+
+        sta PART_LO,x
+:       lda sp_c1
+        cmp PART_HI,x
+        bcc @nopart
+        sta PART_HI,x
+@nopart:
         ; ---- record rect in current sprite record
         ldy #5
         lda wcx
@@ -1410,24 +1441,13 @@ drawsprite:
         lda sp_flags
         and #1
         beq @nomirror
-        ; mirror: image column = W-1-c ; step = -lines
+        ; mirror: image column = W-1-c (the column loop then steps backwards)
         lda sp_w
         dec
         sec
         sbc sp_c
         sta sp_c
-        lda sp_lines
-        eor #$FF
-        inc
-        sta sp_step
-        lda #$FF
-        sta sp_step+1
-        bra @colbase
 @nomirror:
-        lda sp_lines
-        sta sp_step
-        stz sp_step+1
-@colbase:
         ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
         lda sp_flags
         and #8
@@ -1535,15 +1555,22 @@ ds_colloop:
 ds_dispatch:
         jmp sprFN                   ; operand patched per sprite
 sprdisp_tab: .word sprHN, sprHM, sprFN, sprFM, sprFC
-sprret:
-        ; next column
+sprretM:                            ; next column, mirrored: source pointer - lines
+        lda ptr
+        sec
+        sbc sp_lines
+        sta ptr
+        bcs sprnext
+        dec ptr+1
+        bra sprnext
+sprretP:                            ; next column: source pointer + lines
         lda ptr
         clc
-        adc sp_step
+        adc sp_lines
         sta ptr
-        lda ptr+1
-        adc sp_step+1
-        sta ptr+1
+        bcc sprnext
+        inc ptr+1
+sprnext:
         spnext
         dec sp_cnt
         bpl ds_colloop
@@ -1622,7 +1649,11 @@ l4:     SPRLINE 4, mirror, copy
 l5:     SPRLINE 5, mirror, copy
 l6:     SPRLINE 6, mirror, copy
 l7:     SPRLINE 7, mirror, copy
-        jmp sprret
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
 partial:
         ldy tmp
 .if copy
@@ -1654,7 +1685,12 @@ ps:     cpy tmp2
         beq pd
         iny
         bra pl
-pd:     jmp sprret
+pd:
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
 .endmacro
 
         SPRFULL sprFN, 0, 0
@@ -1710,7 +1746,11 @@ l0:     SPRLINE2 0, mirror
 l1:     SPRLINE2 1, mirror
 l2:     SPRLINE2 2, mirror
 l3:     SPRLINE2 3, mirror
-        jmp sprret
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
 partial:
         lda tmp
         sta sp_lim                  ; current screen line (even)
@@ -1751,7 +1791,12 @@ ps:     lda sp_lim
         inc sp_lim
         inc sp_lim
         bra pl
-pd:     jmp sprret
+pd:
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
 .endmacro
 
         SPRHALF sprHN, 0
@@ -1765,12 +1810,46 @@ copy_partial:
         lda wfine
         bne :+
         rts
-:       lda wcx
+:       ldx curbuf
+        cmp PART_F,x
+        bne @all
+        lda wcy
+        cmp PART_CY,x
+        bne @all
+        ; same source row and lines as last time: only the columns drawn since
+        lda PART_HI,x
+        cmp #80
+        bcc :+
+        lda #79
+:       sec
+        sbc PART_LO,x
+        bcs :+
+        rts                         ; nothing drawn in the top row
+:       inc
+        sta cnt
+        lda PART_LO,x
+        bra @go
+@all:   lda wfine
+        sta PART_F,x
+        lda wcy
+        sta PART_CY,x
+        lda #80
+        sta cnt
+        lda #0
+@go:    tay                         ; range is clean once copied
+        lda #$FF
+        sta PART_LO,x
+        lda #0
+        sta PART_HI,x
+        tya
+        clc
+        adc wcx
         sta w16
         lda wcx+1
+        adc #0
         sta w16+1
         lda wcy
-        jsr ringaddr                ; sp = source row start
+        jsr ringaddr                ; sp = source start (row wcy, first dirty column)
         ; dest = sp - 640 (ring)
         lda sp
         sec
@@ -1789,16 +1868,7 @@ copy_partial:
         sta ptr
         bcs :+
         dec ptr+1
-:       lda #80
-        sta cnt
-        ; fast path: neither the source row (sp) nor the dest row (ptr, real = ptr+wfine)
-        ; can cross $8000 within 640(+6) bytes if both high bytes are below $7D
-        lda sp+1
-        cmp #$7D
-        bcs @slowpath
-        lda ptr+1
-        cmp #$7D
-        bcs @slowpath
+:       ; start at line wfine: patched jmp into the unrolled 6-line copy
         lda wfine
         lsr
         dec                         ; 2,4,6 -> 0,1,2
@@ -1830,47 +1900,8 @@ copy_partial:
         iny
         lda (sp),y
         sta (ptr),y
-        lda sp
-        clc
-        adc #8
-        sta sp
-        bcc :+
-        inc sp+1
-:       lda ptr
-        clc
-        adc #8
-        sta ptr
-        bcc :+
-        inc ptr+1
-:       dec cnt
-        beq @done
-        jmp @fjmp
-@slowpath:
-        lda wfine
-        cmp #4
-        beq @f4
-        bcs @f6
-@f2:    ldy #2
-        lda (sp),y
-        sta (ptr),y
-        iny
-        lda (sp),y
-        sta (ptr),y
-        iny
-@f4:    ldy #4
-        lda (sp),y
-        sta (ptr),y
-        iny
-        lda (sp),y
-        sta (ptr),y
-        iny
-@f6:    ldy #6
-        lda (sp),y
-        sta (ptr),y
-        iny
-        lda (sp),y
-        sta (ptr),y
-        ; advance both pointers by 8 with ring wrap
+        ; next char: source with ring wrap; dest wraps on its REAL address (ptr + wfine),
+        ; which only needs the full check in the last page before $8000
         spnext
         lda ptr
         clc
@@ -1878,8 +1909,9 @@ copy_partial:
         sta ptr
         bcc :+
         inc ptr+1
-:       ; wrap check on the REAL dest address (ptr + wfine): the adjusted pointer
-        ; can still be $7FFx when the real address has crossed $8000
+:       lda ptr+1
+        cmp #$7F
+        bcc :+
         lda ptr
         clc
         adc wfine
@@ -1892,11 +1924,7 @@ copy_partial:
         sta ptr+1
 :       dec cnt
         beq @done
-        lda wfine
-        cmp #4
-        beq @f4
-        bcs @f6
-        bra @f2
+        jmp @fjmp
 @done:  rts
 
 ; ============================================================================

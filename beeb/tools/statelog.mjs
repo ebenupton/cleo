@@ -18,7 +18,8 @@ await s.runFor(9_000_000);
 // deterministic input: scan_keys -> rts, and the key mask is poked per logic frame
 wr(A.scan_keys, 0x60);
 const K = { LEFT: 1, RIGHT: 2, UP: 4, FIRE: 16 };
-const script = (n) => (n < 60 ? 0 : n < 190 ? K.RIGHT : n < 200 ? K.RIGHT | K.UP : n < 260 ? K.RIGHT : n < 270 ? K.FIRE : n < 340 ? K.LEFT : n < 350 ? K.LEFT | K.UP : 0);
+// keyed on the absolute frame counter so two builds get identical input regardless of where the run-in stops
+const script = (n) => (n < 100 ? 0 : n < 230 ? K.RIGHT : n < 240 ? K.RIGHT | K.UP : n < 300 ? K.RIGHT : n < 310 ? K.FIRE : n < 380 ? K.LEFT : n < 390 ? K.LEFT | K.UP : 0);
 let nstep = 0, lastf = -1, f0 = -1;
 const OBJN = 149, OB = 0xb000;   // LV_OBJST: stamp,type,xl,xh,yl,yh,al,ah,bl,bh,cl,ch,dl,dh,el,eh (149 each)
 const OBJ = { xl: OB + 2 * OBJN, xh: OB + 3 * OBJN, yl: OB + 4 * OBJN, yh: OB + 5 * OBJN, al: OB + 6 * OBJN, ah: OB + 7 * OBJN, bl: OB + 8 * OBJN, cl: OB + 10 * OBJN, dl: OB + 12 * OBJN, el: OB + 14 * OBJN };
@@ -29,7 +30,7 @@ const w16 = (a) => rd(a) | (rd(a + 1) << 8);
 cpu.debugInstruction.add((pc) => {
     if (pc === A.game_frame) {
         // the hook can fire twice for one entry (IRQ taken at this PC), so key off the frame counter
-        const f = w16(A.frame); if (f === lastf) return false; if (f0 < 0) f0 = f; lastf = f; nstep = f - f0;
+        const f = w16(A.frame); if (f === lastf) return false; if (f0 < 0) f0 = f; lastf = f; nstep = f;
         wr(A.keys, script(nstep));
         const restore = bank(7); const nobj = rd(A.nobj); const objs = [];
         for (let i = 0; i < nobj; i++) objs.push([OBJ.xl, OBJ.xh, OBJ.yl, OBJ.yh, OBJ.al, OBJ.ah, OBJ.bl, OBJ.cl, OBJ.dl, OBJ.el].map((b) => romRead(7, b + i)).join(","));
@@ -42,6 +43,6 @@ cpu.debugInstruction.add((pc) => {
     }
     return false;
 });
-while (nstep < 400) await s.runFor(500_000);
+while (nstep < 470) await s.runFor(500_000);
 writeFileSync(out, JSON.stringify({ frames, renders }));
 console.log(`${frames.length} logic frames, ${renders.length} renders`);
