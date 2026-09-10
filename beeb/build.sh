@@ -4,8 +4,7 @@ cd "$(dirname "$0")"
 mkdir -p build
 printf '*RUN CLEO\r' > build/BOOT
 python3 tools/midi2snd.py
-python3 tools/embed_music.py
-DATA="SPR:build/SPR:8000 SPRAND:build/SPRAND:8000 TIL0:build/TIL0:8000 TIL1:build/TIL1:8000 ALT:build/ALT:AB00 TITLE:build/TITLE:8000"
+DATA="SPR:build/SPR:8000 SPRAND:build/SPRAND:8000 TILES:build/TILES:8000 BOX:build/BOX:B000 MUSIC:build/MUSIC:B800 ALT:build/ALT:AD00 TITLE:build/TITLE:8000"
 for l in 0 1 2 3 4 5 6 7; do for s in A B; do DATA="$DATA L$l$s:build/L$l$s:8000"; done; done
 python3 tools/mkdfs.py table build/files.inc '!BOOT:build/BOOT' $DATA
 ca65 -g --cpu 65C02 -I src -I build -o build/main.o src/main.s -l build/main.lst

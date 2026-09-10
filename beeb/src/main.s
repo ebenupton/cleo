@@ -95,9 +95,9 @@ start:
         jsr loadfile
         lda #FI_SPRAND
         jsr loadfile
-        lda #FI_TIL0
+        lda #FI_BOX
         jsr loadfile
-        lda #FI_TIL1
+        lda #FI_MUSIC
         jsr loadfile
         lda #FI_ALT
         jsr loadfile
@@ -138,6 +138,7 @@ load_level:
         clc
         adc #FI_L0A
         jsr loadfile
+        jsr load_tiles              ; only the tiles this level's page tables name
         ; geometry
         setbank BANK_LVL
         lda LV_HDR
@@ -191,9 +192,9 @@ load_level:
 .endmacro
 filetab:
         FILE F_SPR_SEC,   F_SPR_N,   BANK_SPR,  $8000
-        FILE F_TIL0_SEC,  F_TIL0_N,  BANK_TIL0, $8000
-        FILE F_TIL1_SEC,  F_TIL1_N,  BANK_TIL1, $8000
-        FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTCLS
+        FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
+        FILE F_MUSIC_SEC, F_MUSIC_N, BANK_TIL1, MUSIC_ADDR
+        FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTTAB
         FILE F_TITLE_SEC, F_TITLE_N, BANK_LVL,  $8000
         FILE F_L0A_SEC, F_L0A_N, BANK_LVL, $8000
         FILE F_L0B_SEC, F_L0B_N, BANK_LVL, $8000
@@ -213,8 +214,8 @@ filetab:
         FILE F_L7B_SEC, F_L7B_N, BANK_LVL, $8000
         FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
 FI_SPR = 0
-FI_TIL0 = 1
-FI_TIL1 = 2
+FI_BOX = 1
+FI_MUSIC = 2
 FI_ALT = 3
 FI_TITLE = 4
 FI_L0A = 5

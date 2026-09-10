@@ -84,11 +84,18 @@ from 15712 to 12704.
 | 7 | 77 | 139 |
 
 The whole set is 423 tiles and 27072 bytes; the worst single level is 267 tiles and
-17088 bytes.  So the tile banks hold about 10K more than any one level needs.  The
-level packs already number tiles per level, so the numbering can be made local to the
-level: the disc keeps one copy of the tile set, and level loading reads it a track at
-a time and scatters just the tiles that level references into the banks.  That costs
-about a second of extra loading and returns nearly 10K of bank space.
+17088 bytes.  So the tile banks hold about 10K more than any one level needs.  Tiles
+are now numbered locally to a level: the disc keeps one copy of the tile set, and
+level loading reads it a track at a time into the screen and copies out just the
+tiles that level's bitmap asks for, in order, which is exactly the numbering its page
+tables use.  That returns nearly 10K of bank space and costs about three seconds of
+level loading, because each of the eleven tracks waits most of a revolution for its
+first sector.  Reading each track from wherever the head happens to be and unwrapping
+it in the buffer would get most of that back.
+
+It also displaced the music, which was hidden in bit 6 of the tile bytes and so only
+worked while the whole tile set was resident.  It is 2028 bytes of its own file in
+bank 6 now.
 
 **The menus need not be resident.**  The title logo, the big Cleo frames and the
 win and lose art are already a separate pack that overlays the level in bank 7, and

@@ -372,19 +372,6 @@ tile_solid = {_newid[c]: v for c, v in tile_solid.items()}
 orig2compact = {t: _newid[c] for t, c in orig2compact.items()}
 twin_of = {t: _newid[c] for t, c in twin_of.items()}
 print('tiles: %d with data (%d bytes), %d solid' % (NDATA, NDATA * 64, len(compact) - NDATA))
-# how compressible the rest are: a tile whose eight char cells are identical needs
-# 8 bytes, and 4 if that cell repeats every four lines
-_c1 = _c4 = 0
-for _c in range(NDATA):
-    _d = tiles_mode2[_c]
-    _cells = [_d[_i * 8:_i * 8 + 8] for _i in range(8)]
-    if len(set(_cells)) == 1:
-        _c1 += 1
-        if _cells[0][0:4] == _cells[0][4:8]:
-            _c4 += 1
-print('  of those, %d are one repeated cell (%d of them period 4): %d bytes if packed'
-      % (_c1, _c4, (NDATA - _c1) * 64 + (_c1 - _c4) * 8 + _c4 * 4))
-
 # tiles are ordered by original id; but put the 'special' animation tiles in known places:
 # we just record their compact ids for the game code
 special = {name: orig2compact[t] for name, t in [('VANISH0', 366), ('FLOWER0', 426)]}
@@ -394,12 +381,10 @@ assert all(orig2compact[426 + i] == special['FLOWER0'] + i for i in range(4))
 
 # only the tiles with data are emitted: the solid ones sort above them and their
 # page-table entries address bytes that are never read
-bank5 = b''.join(tiles_mode2[:256])
-bank6 = b''.join(tiles_mode2[256:NDATA])
-open(os.path.join(OUT, 'TIL0'), 'wb').write(bank5.ljust(16384, b'\0'))
-open(os.path.join(OUT, 'TIL1'), 'wb').write(bank6)
-print('tile banks: %d bytes in bank 5, %d in bank 6 (%d solid tiles need none)'
-      % (len(bank5), len(bank6), len(compact) - NDATA))
+tilefile = b''.join(tiles_mode2[:NDATA])
+open(os.path.join(OUT, 'TILES'), 'wb').write(tilefile)
+print('tile file: %d bytes for %d tiles (%d solid tiles need none)'
+      % (len(tilefile), NDATA, len(compact) - NDATA))
 
 # push-tiles (conveyor) and kill tiles: getPush / lava
 push_tiles = {}
@@ -417,7 +402,9 @@ for orig in compact:
         classes[row] = len(classes)
     alt_class.append(classes[row])
 print('alt classes:', len(classes))
-altfile = bytes(alt_class).ljust(512, b'\0') + b''.join(sorted(classes, key=lambda r: classes[r]))
+# the class table is global; alt_class itself is indexed by tile id, which is now
+# local to a level, so each level pack carries its own copy
+altfile = b''.join(sorted(classes, key=lambda r: classes[r]))
 open(os.path.join(OUT, 'ALT'), 'wb').write(altfile)
 
 # ----------------------------------------------------------------------------
@@ -446,6 +433,9 @@ def partition_rows(m, maxpages=2, extra=set()):
 
 
 rng = np.random.RandomState(1234)
+level_tiles = []
+def name_of(lv, sub):
+    return 'L%d%s' % (lv, 'B' if sub == 0 else 'A')
 for (lv, sub), L in levels.items():
     m = L['map'].copy()
     # flower variants: the original randomises tile 427 at level start; do it here
@@ -467,6 +457,20 @@ for (lv, sub), L in levels.items():
     # per page: byte -> compact id
     tables = []
     mapbytes = np.zeros_like(cm, dtype=np.uint8)
+    # ---- tile numbering local to this level -------------------------------
+    # The tile banks hold only what this level uses, so the ids in its page tables
+    # count from zero here.  Tiles with data come first, in global order, which is
+    # what lets the loader walk the global tile file once and copy the ones whose
+    # bit is set: the local id is simply how many set bits came before.
+    used_l = sorted(set().union(*pages[:npages]))
+    data_l = [c for c in used_l if c not in tile_solid]
+    solid_l = [c for c in used_l if c in tile_solid]
+    local = {c: i for i, c in enumerate(data_l + solid_l)}
+    assert len(used_l) <= 512, 'level uses %d tiles' % len(used_l)
+    tilebits = bytearray((NDATA + 7) // 8)
+    for c in data_l:
+        tilebits[c >> 3] |= 0x80 >> (c & 7)
+    level_tiles.append((name_of(lv, sub), len(data_l), len(solid_l)))
     for p in range(npages):
         ids = sorted(pages[p])
         # put the vanish/flower animation tiles at fixed byte codes if present so the game
@@ -489,8 +493,9 @@ for (lv, sub), L in levels.items():
         lo = bytearray(256); hi = bytearray(256)
         if p < npages:
             for i, cid in enumerate(tables[p][0]):
-                lo[i] = ((cid & 3) << 6) | (5 + (cid >> 8))
-                hi[i] = 0x80 | ((cid & 255) >> 2)
+                lid = local[cid]
+                lo[i] = ((lid & 3) << 6) | (5 + (lid >> 8))
+                hi[i] = 0x80 | ((lid & 255) >> 2)
                 if cid in tile_solid:
                     hi[i] |= 0x40
                     lo[i] |= 0x10 if tile_solid[cid] == 1 else 0
@@ -501,6 +506,7 @@ for (lv, sub), L in levels.items():
     for p in range(2):
         for cid in [special['VANISH0'] + i for i in range(8)] + [special['FLOWER0'] + i for i in range(4)]:
             hdr.append(tables[p][1].get(cid, 255) if p < npages else 255)
+    hdr = hdr.ljust(0x20, b'\0') + tilebits        # which global tiles this level wants
     pack += hdr.ljust(0x80, b'\0')                 # $8480
     objs = bytearray()
     for (t, x, y, extra) in L['objs']:
@@ -522,10 +528,17 @@ for (lv, sub), L in levels.items():
                 attr[i] = a
         pack += attr                               # $8900 page0 attr, $8A00 page1 attr
     assert len(pack) == 0xB00
-    pack += mapbytes.tobytes()                     # $8B00
-    name = 'L%d%s' % (lv, 'B' if sub == 0 else 'A')
+    acls = bytearray(512)                          # $8B00: alt class per local tile id
+    for c in used_l:
+        acls[local[c]] = alt_class[c]
+    pack += acls
+    pack += mapbytes.tobytes()                     # $8D00
+    name = name_of(lv, sub)
     open(os.path.join(OUT, name), 'wb').write(pack)
     print(name, 'pages', npages, [len(t[0]) for t in tables], 'objs', len(L['objs']), 'size', len(pack))
+
+print('level tile sets: worst %d tiles (%d bytes) in %s' %
+      max((d, d * 64, n) for n, d, s in level_tiles))
 
 # ----------------------------------------------------------------------------
 # Sprites
@@ -688,9 +701,9 @@ for bg in (6, 0):
         box_bytes.append(bytes(b))
 print('box stars: widths (chars) per frame', [w for _l, w in box_geom],
       '= %d bytes for 12 boxes (was %d)' % (sum(len(b) for b in box_bytes), 12 * 7 * 24))
-BOX_BASE = 0x8000 + len(bank6)
+BOX_BASE = 0xB000                  # bank 6, above anything a level's tiles can reach
 assert BOX_BASE + sum(len(b) for b in box_bytes) <= 0xC000
-open(os.path.join(OUT, 'TIL1'), 'ab').write(b''.join(box_bytes))
+open(os.path.join(OUT, 'BOX'), 'wb').write(b''.join(box_bytes))
 print('box stars at $%04X in bank 6; classes per level:' % BOX_BASE,
       ' '.join('L%d%s=%s' % (lv, 'B' if sub == 0 else 'A', '/'.join(map(str, v))) for (lv, sub), v in sorted(star_stats.items())),
       '(regular/cyan/black)')
@@ -874,6 +887,8 @@ print('title pack', len(titlefile))
 with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by convert.py\n')
     f.write('NTILES = %d\n' % len(compact))
+    f.write('NTILES_DATA = %d\n' % NDATA)
+    f.write('BOX_BASE = $%04X\n' % BOX_BASE)
     f.write('SPR_FONT = $%04X\nSPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_ANDY = $%04X\n' %
             (SPR_FONT, SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_ANDY))
     for i, (name, ptr, W, hpx, lines, full) in enumerate(tdir):

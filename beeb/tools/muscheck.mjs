@@ -1,5 +1,5 @@
-// Verifies the music hidden in the tile data: music_tab (decoded at start-up by musbyte) must
-// equal the first 144 bytes of build/MUSIC, and bit 6 of bank 5 must reassemble the sequence.
+// Verifies the music: music_tab (copied at start-up) must equal the first 144 bytes of
+// build/MUSIC, and the sequence must be in bank 6 at MUSIC_ADDR.
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { homedir } from "node:os";
@@ -15,5 +15,5 @@ const mus = readFileSync("build/MUSIC");
 let bad = 0; for (let i = 0; i < 144; i++) if (rd(A.music_tab + i) !== mus[i]) bad++;
 console.log(`music_tab: ${bad} of 144 bytes differ from build/MUSIC`);
 const romRead = (n, a) => { const r = cpu.romsel; cpu.writemem(0xfe30, n); const v = cpu.readmem(a); cpu.writemem(0xfe30, r); return v; };
-let sbad = 0; for (let i = 144; i < mus.length; i++) { let v = 0; for (let k = 0; k < 8; k++) v = (v << 1) | ((romRead(5, 0x8000 + 8 * i + k) >> 6) & 1); if (v !== mus[i]) sbad++; }
-console.log(`sequence: ${sbad} of ${mus.length - 144} bytes differ when decoded from bank 5`);
+let sbad = 0; for (let i = 144; i < mus.length; i++) if (romRead(6, 0xb800 + i) !== mus[i]) sbad++;
+console.log(`sequence: ${sbad} of ${mus.length - 144} bytes differ from bank 6 at $B800`);

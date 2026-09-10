@@ -11,7 +11,13 @@ s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 const cpu = s._machine.processor, rd = (a) => cpu.readmem(a), wr = (a, v) => cpu.writemem(a, v);
 let hit = false; const h = cpu.debugInstruction.add((pc) => (pc === A.title_loop ? (hit = true) : false)); await s.runFor(80_000_000); h.remove();
 wr(A.title_loop, 0xa9); wr(A.title_loop + 1, 0x00); wr(A.title_loop + 2, 0xea); { let ok = false; for (let a = A.level_loop; a < A.level_loop + 16; a++) if (rd(a) === 0xa6 && rd(a + 1) === (A.level & 255)) { wr(a, 0xa2); wr(a + 1, lvl); ok = true; break; } if (!ok) throw new Error("ldx level not found"); }
-await s.runFor(9_000_000);
+{   // the level load reads the tile file, so wait for the game to be drawing before
+    // timing anything: otherwise the first window measures the disc, not the renderer
+    let seen = 0;
+    const h = cpu.debugInstruction.add((pc) => (pc === A.render_frame ? ++seen >= 8 : false));
+    for (let i = 0; i < 12 && seen < 8; i++) await s.runFor(5_000_000);
+    h.remove();
+}
 let last = -1; const periods = [];
 const hook = cpu.debugInstruction.add((pc) => { if (pc === A.render_frame) { const v = rd(A.vsyncs); if (last >= 0) periods.push((v - last) & 255); last = v; } return false; });
 const report = (name) => { const n = periods.length; const hist = {}; for (const p of periods) hist[p] = (hist[p] || 0) + 1; const mean = periods.reduce((a, b) => a + b, 0) / n; console.log(`${name}: ${n} renders, mean period ${mean.toFixed(2)} vsyncs = ${(50 / mean).toFixed(1)} fps; histogram ` + Object.entries(hist).sort((a, b) => a[0] - b[0]).map(([p, c]) => `${p}v:${c}`).join(" ")); periods.length = 0; last = -1; };

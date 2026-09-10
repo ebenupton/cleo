@@ -53,9 +53,9 @@ LV_HDR    = $8480
 LV_OBJS   = $8500
 LV_ATTR0  = $8900                 ; per page attribute (kill/push)
 LV_ATTR1  = $8A00
-LV_MAP    = $8B00                 ; up to 8K, row major
-LV_ALTCLS = $AB00                 ; 512 : compact tile -> alt class
-LV_ALTTAB = $AD00                 ; classes x 8
+LV_ALTCLS = $8B00                 ; 512 : this level's tile id -> alt class
+LV_MAP    = $8D00                 ; up to 8K, row major
+LV_ALTTAB = $AD00                 ; classes x 8 (global: loaded once)
 LV_OBJST  = $B000                 ; object state arrays (16 x 149)
 LV_GRID   = $B950                 ; 128 grid heads
 LV_BOBJ   = $B9D0                 ; 255
@@ -2948,23 +2948,22 @@ sndwrite:
         sta VIA_DDRA
         rts
 
-; ---------------------------------------------------------------- music (sequence hidden in bank-5 tile bytes)
-; The sequence (4-byte records: frames, note0..2; frames = 0 -> loop) is hidden in the
-; bit 6 of the bank-5 tile bytes, one music byte per eight tile bytes, MSB first
-; (tools/embed_music.py).  MUSPTR walks the tile data.
-MUSIC_SEQ  = $8000 + 144*8          ; bank 5, after the hidden period table
+; ---------------------------------------------------------------- music
+; 144-byte period table then the sequence (4-byte records: frames, note0..2;
+; frames = 0 -> loop).  It used to be hidden in bit 6 of the tile bytes, which only
+; worked while the whole tile set was resident; a level now loads just the tiles it
+; uses, so the music is its own file in bank 6.
+MUSIC_ADDR = $B800                  ; bank 6, above the box stars
+MUSIC_SEQ  = MUSIC_ADDR + 144
 MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), decoded into RAM
 ; decode the period table (the first 144 hidden bytes) into music_tab; bank 5 loaded
 music_init:
-        lda #BANK_TIL0
+        lda #BANK_TIL1
         sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
-        stz MUSPTR
-        lda #$80
-        sta MUSPTR+1
         ldx #0
-:       jsr musbyte
+:       lda MUSIC_ADDR,x
         sta music_tab,x
         inx
         cpx #144
@@ -2977,7 +2976,7 @@ music_tick:
         bne @done
         lda ROMSEL_CPY
         pha
-        lda #BANK_TIL0
+        lda #BANK_TIL1
         sta ROMSEL_CPY
         sta ROMSEL
         jsr musbyte
@@ -3002,24 +3001,13 @@ music_tick:
         sta ROMSEL
 @done:  rts
 
-; A = next music byte assembled from bit 6 of the 8 tile bytes at MUSPTR (MSB first);
-; MUSPTR += 8.  Preserves X.  Z reflects A.
+; A = next music byte; MUSPTR += 1.  Preserves X.  Z reflects A.  Bank 6 selected.
 musbyte:
-        ldy #0
-:       lda (MUSPTR),y
-        asl
-        asl                         ; bit 6 -> carry
-        rol MUSTMP
-        iny
-        cpy #8
-        bne :-
-        lda MUSPTR
-        clc
-        adc #8
-        sta MUSPTR
-        bcc :+
+        lda (MUSPTR)
+        inc MUSPTR
+        bne :+
         inc MUSPTR+1
-:       lda MUSTMP
+:       cmp #0
         rts
 
 
@@ -3273,6 +3261,8 @@ loadfile:
 :       lda filetab+4,x
         sta ptr+1
         stz ptr
+        ; read ld_n sectors from linear sector ld_sec to ptr
+ldread:
         ; track/sector from linear sector
         stz ld_trk
         lda ld_sec
@@ -3343,6 +3333,119 @@ loadfile:
         inc ld_trk
         bra @track
 @done:  rts
+
+; ---------------------------------------------------------------- level tiles
+; A level uses only part of the tile set, so the banks hold only what it asks for.
+; LV_HDR+32 carries one bit per tile of the global set, MSB first, and the tiles a
+; level wants keep their relative order, so copying them out in order gives exactly
+; the numbering its page tables use.  TILES is read a track at a time into the
+; screen, which is blanked for the whole of a level load.
+TBUF     = SCREEN                   ; 2560 bytes: one track
+TILEBITS = (NTILES_DATA + 7) / 8
+load_tiles:
+        jsr music_stop
+        setbank BANK_LVL            ; the bitmap must come out of bank 7 first: a tile
+        ldx #0                      ; bank is selected throughout the copy below
+:       lda LV_HDR+32,x
+        sta SPRREC,x
+        inx
+        cpx #TILEBITS
+        bne :-
+        lda #BANK_TIL0              ; destination: bank 5, then bank 6
+        sta curbank
+        sta ROMSEL_CPY
+        sta ROMSEL
+        stz tp
+        lda #$80
+        sta tp+1
+        stz tmp3                    ; bitmap byte index
+        lda #$80
+        sta w16b                    ; bit mask
+        lda #<F_TILES_SEC
+        sta w16
+        lda #>F_TILES_SEC
+        sta w16+1
+        lda #F_TILES_N
+        sta tmp4                    ; sectors still to read
+        lda #(10 - (F_TILES_SEC .mod 10))
+        bne @first                  ; chunks stop at the track boundary, or a read
+@chunk: lda #10                     ; that straddles one costs a whole extra revolution
+@first: sta cnt
+        lda tmp4
+        bne :+
+        rts
+:       cmp cnt
+        bcs :+
+        sta cnt
+:       lda w16
+        sta ld_sec
+        lda w16+1
+        sta ld_sec+1
+        lda cnt
+        sta ld_n
+        stz ptr
+        lda #>TBUF
+        sta ptr+1
+        jsr ldread
+        lda w16                     ; on to the next chunk
+        clc
+        adc cnt
+        sta w16
+        bcc :+
+        inc w16+1
+:       lda tmp4
+        sec
+        sbc cnt
+        sta tmp4
+        lda cnt                     ; four tiles to a sector
+        asl
+        asl
+        sta tmp2
+        stz ptr
+        lda #>TBUF
+        sta ptr+1
+        lda curbank
+        sta ROMSEL_CPY
+        sta ROMSEL
+@tile:  ldx tmp3
+        lda SPRREC,x
+        and w16b
+        beq @skip
+        ldy #63
+:       lda (ptr),y
+        sta (tp),y
+        dey
+        bpl :-
+        lda tp                      ; 64 on, and into bank 6 past the end of bank 5
+        clc
+        adc #64
+        sta tp
+        bcc @skip
+        inc tp+1
+        lda tp+1
+        cmp #$C0
+        bne @skip
+        lda #BANK_TIL1
+        sta curbank
+        sta ROMSEL_CPY
+        sta ROMSEL
+        lda #$80
+        sta tp+1
+@skip:  lda ptr
+        clc
+        adc #64
+        sta ptr
+        bcc :+
+        inc ptr+1
+:       lsr w16b                    ; next bit, and next byte every eighth tile
+        bne :+
+        lda #$80
+        sta w16b
+        inc tmp3
+:       dec tmp2
+        beq :+
+        jmp @tile
+:       jmp @chunk
 
 ; sign extend A -> tmp3 (0 or $FF)
 sext:   and #$80
