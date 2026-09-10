@@ -154,3 +154,26 @@ Kept from the exercise: the `LOW2` code area ($0206–$03FF, 506 bytes, staged t
 `SPRREC` around the MODE 2 call), the init-only and dirty-tile routines living there, and
 `drawrect` taking its map-row pointer from the level's row tables instead of a shift
 loop. CODE has 384 bytes free again.
+
+## 8. Follow-up: the narrow-strip fast path (implemented, measured, backed out)
+
+A dedicated path for rects of at most two tile columns (scroll strips, dirty tiles,
+narrow erase boxes): run lengths and copy-chain entry points fixed once per rect, tile
+addresses once per tile row, `sp` and the row parity kept in place across rows, chain
+tails patched to return to the row code instead of `@advsp`. Pixel-exact against the
+previous build. Cost: `drawrect` 30.6K → 30.7K cycles per render on the profiling
+session; no change in fps.
+
+Why: per render `drawrect` spends 35.6K in the copy and fill bodies, which are at the
+13-cycles-a-byte floor, and 12.9K in everything else. The general path's overhead on a
+narrow row is ~250 cycles; the fast path measured ~137 for the row itself plus ~81 of
+per-tile-row setup and ~26 of loop control, i.e. the same. The per-run decode (bank,
+source address, solid test, dispatch and return) is ~50 cycles whichever way it is
+written, and there are 1.7 runs a row. The ceiling for this idea is therefore about
+1.5% of the frame, and the code did not reach it. Not kept.
+
+Also found and fixed on the way: every headless harness patched `level_loop+3` for the
+level select, which since the title-resident change is the middle of a 3-byte
+`stz title_res`; the patch produced a `tsb $94A6` that set two bits in whichever bank
+was paged (the tiles, in the newest build). The harnesses now locate `ldx level` by
+opcode.

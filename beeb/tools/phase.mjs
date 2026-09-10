@@ -12,7 +12,7 @@ const s = new MachineSession("Master"); await s.initialise(); await s.boot(30); 
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 const cpu = s._machine.processor, rd = (a) => cpu.readmem(a), wr = (a, v) => cpu.writemem(a, v);
 let hit = false; const h = cpu.debugInstruction.add((pc) => (pc === A.title_loop ? (hit = true) : false)); await s.runFor(80_000_000); h.remove();
-wr(A.title_loop, 0xa9); wr(A.title_loop + 1, 0x00); wr(A.title_loop + 2, 0xea); wr(A.level_loop + 3, 0xa2); wr(A.level_loop + 4, lvl);
+wr(A.title_loop, 0xa9); wr(A.title_loop + 1, 0x00); wr(A.title_loop + 2, 0xea); { let ok = false; for (let a = A.level_loop; a < A.level_loop + 16; a++) if (rd(a) === 0xa6 && rd(a + 1) === (A.level & 255)) { wr(a, 0xa2); wr(a + 1, lvl); ok = true; break; } if (!ok) throw new Error("ldx level not found"); }
 await s.runFor(9_000_000);
 let lastC = cpu.currentCycles, now = 0;
 const clock = () => { const c = cpu.currentCycles; let d = c - lastC; if (d < 0) d += 2_000_000; lastC = c; now += d; return now; };

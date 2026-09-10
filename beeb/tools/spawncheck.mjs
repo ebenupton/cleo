@@ -30,7 +30,7 @@ for (let lvl = 0; lvl < 16; lvl++) {
     h.remove();
     if (!hit) throw new Error("title_loop not reached");
     wr(A.title_loop, 0xa9); wr(A.title_loop + 1, 0x00); wr(A.title_loop + 2, 0xea);
-    wr(A.level_loop + 3, 0xa2); wr(A.level_loop + 4, lvl);  // ldx level (after jsr blank_palette) -> ldx #lvl
+    { let ok = false; for (let a = A.level_loop; a < A.level_loop + 16; a++) if (rd(a) === 0xa6 && rd(a + 1) === (A.level & 255)) { wr(a, 0xa2); wr(a + 1, lvl); ok = true; break; } if (!ok) throw new Error("ldx level not found"); }  // ldx level (after jsr blank_palette) -> ldx #lvl
     await s.runFor(6_000_000);
     const px = () => rd(A.px) | (rd(A.px + 1) << 8), py = () => rd(A.py) | (rd(A.py + 1) << 8);
     const sx = rd(A.startx) | (rd(A.startx + 1) << 8), sy = rd(A.starty) | (rd(A.starty + 1) << 8);
