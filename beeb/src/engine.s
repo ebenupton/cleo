@@ -822,10 +822,11 @@ match_sprites:
         bcs @next
         lda #1
         sta tmp3                    ; KEEP value if the rest matches
-        ldy sprmul5,x
-        lda SPRLIST,y
-        ldx #0
-        cmp (rp,x)
+        lda sprmul5,x
+        tax                         ; X = list offset, Y = offset into the record:
+        lda SPRLIST,x               ; (rp),y -- NOT (rp,x), which indexes the pointer
+        ldy #0                      ; itself and made every compare below read garbage
+        cmp (rp),y
         beq @pos
         ; ids differ: two box-star frames of the same colour at the same place overwrite
         ; each other exactly, so they are redrawn without an erase (KEEP = 2)
@@ -838,25 +839,30 @@ match_sprites:
         bne @next
         lda #2
         sta tmp3
-@pos:   ldx #1
-        lda SPRLIST+1,y
-        cmp (rp,x)
+@pos:   ldy #1
+        lda SPRLIST+1,x
+        cmp (rp),y
         bne @next
-        inx
-        lda SPRLIST+2,y
-        cmp (rp,x)
+        iny
+        lda SPRLIST+2,x
+        cmp (rp),y
         bne @next
-        inx
-        lda SPRLIST+3,y
-        cmp (rp,x)
+        iny
+        lda SPRLIST+3,x
+        cmp (rp),y
         bne @next
-        inx
-        lda SPRLIST+4,y
-        cmp (rp,x)
+        iny
+        lda SPRLIST+4,x
+        cmp (rp),y
         bne @next
         ldx tmp4
         lda tmp3
-        sta KEEP,x
+        cmp #1
+        bne :+                      ; KEEP = 2 is redrawn anyway
+        jsr edge_clipped            ; a rect touching the window edge was clipped:
+        bcs @next                   ; more of it may be visible now
+        lda #1
+:       sta KEEP,x
 @next:  lda rp
         clc
         adc #10
@@ -866,6 +872,62 @@ match_sprites:
 :       inc tmp4
         bra @l
 @done:  rts
+; carry set if the record at (rp) touches a window edge, so the sprite was drawn
+; clipped and a camera move could expose more of it
+edge_clipped:
+        ldy #5
+        lda (rp),y
+        sta w16
+        iny
+        lda (rp),y
+        sta w16+1                   ; cx
+        lda w16
+        cmp wcx
+        lda w16+1
+        sbc wcx+1
+        bcc @yes                    ; cx < wcx
+        beq @yes                    ; cx == wcx (left edge)
+        ldy #8
+        lda (rp),y
+        clc
+        adc w16
+        sta w16
+        lda w16+1
+        adc #0
+        sta w16+1                   ; cx + w
+        lda wcx
+        clc
+        adc #80
+        sta w16b
+        lda wcx+1
+        adc #0
+        sta w16b+1
+        lda w16b
+        cmp w16
+        lda w16b+1
+        sbc w16+1
+        bcc @yes                    ; cx + w > wcx + 80
+        beq @yes
+        ldy #7
+        lda (rp),y
+        cmp wcy
+        beq @yes
+        bcc @yes                    ; cy <= wcy (top edge)
+        sta w16
+        ldy #9
+        lda (rp),y
+        clc
+        adc w16
+        bcs @yes
+        sec
+        sbc wcy
+        cmp #BUFROWS
+        bcs @yes                    ; cy + h >= wcy + BUFROWS
+        clc
+        rts
+@yes:   sec
+        rts
+
 ; A = sprite id -> A = box-star group: 1 cyan (103..108), 2 black (109..114), else 0
 boxgrp: sec
         sbc #103
@@ -911,6 +973,8 @@ erase_old:
         iny
         lda (rp),y
         sta rc_y
+        lda #0
+        jsr unkeep                  ; the erase would punch holes in kept sprites
         jsr drawrect_clip
 @next:  lda rp
         clc
@@ -922,6 +986,99 @@ erase_old:
         dec lcnt
         bne @l
 @done:  rts
+
+; A sprite kept whole (KEEP = 1) is not redrawn at all, so it must not sit under
+; a rect about to be repainted with background: this drops the keep of any that
+; the erase rect (rc_x, rc_y, rc_w, rc_h) touches.  KEEP = 2 needs no guard --
+; those are redrawn after every erase.
+unkeep:                             ; A = first record to consider
+        sta tmp4
+        cmp NSPR
+        bcc :+
+        rts
+:       lda recp
+        sta tp
+        lda recp+1
+        sta tp+1
+        ldx tmp4
+        beq @i
+:       lda tp                      ; tp = recp + 10*start
+        clc
+        adc #10
+        sta tp
+        bcc :+
+        inc tp+1
+:       dex
+        bne :--
+@i:     ldx tmp4
+        cpx NSPR
+        bcc :+
+        rts
+:       lda KEEP,x
+        cmp #1
+        bne @next
+        ldy #8
+        lda (tp),y
+        sta tmp2                    ; w
+        beq @next                   ; empty rect: nothing to protect
+        lda rc_x                    ; cx < rc_x + rc_w ?
+        clc
+        adc rc_w
+        sta w16
+        lda rc_x+1
+        adc #0
+        sta w16+1
+        ldy #5
+        lda (tp),y
+        sta w16b
+        iny
+        lda (tp),y
+        sta w16b+1                  ; cx
+        lda w16b
+        cmp w16
+        lda w16b+1
+        sbc w16+1
+        bcs @next
+        lda w16b                    ; rc_x < cx + w ?
+        clc
+        adc tmp2
+        sta w16
+        lda w16b+1
+        adc #0
+        sta w16+1
+        lda rc_x
+        cmp w16
+        lda rc_x+1
+        sbc w16+1
+        bcs @next
+        ldy #7
+        lda (tp),y
+        sta tmp                     ; cy
+        lda rc_y                    ; cy < rc_y + rc_h ?
+        clc
+        adc rc_h
+        bcs :+                      ; past 255: below every row
+        cmp tmp
+        bcc @next
+        beq @next
+:       ldy #9                      ; rc_y < cy + h ?
+        lda (tp),y
+        clc
+        adc tmp
+        bcs @hit
+        cmp rc_y
+        bcc @next
+        beq @next
+@hit:   ldx tmp4
+        stz KEEP,x
+@next:  lda tp
+        clc
+        adc #10
+        sta tp
+        bcc :+
+        inc tp+1
+:       inc tmp4
+        jmp @i
 
 ; ============================================================================
 ; Sprites
@@ -988,6 +1145,25 @@ draw_sprites:
         sta (rp),y
         lda SPRLIST,x
         jsr drawsprite
+        ldy #8                      ; anything kept under what was just drawn loses
+        lda (rp),y                  ; its keep: the reference order draws it on top
+        beq @next
+        sta rc_w
+        iny
+        lda (rp),y
+        sta rc_h
+        ldy #5
+        lda (rp),y
+        sta rc_x
+        iny
+        lda (rp),y
+        sta rc_x+1
+        iny
+        lda (rp),y
+        sta rc_y
+        lda spi
+        inc
+        jsr unkeep
 @next:  lda rp
         clc
         adc #10
@@ -995,7 +1171,7 @@ draw_sprites:
         bcc :+
         inc rp+1
 :       inc spi
-        bra @l
+        jmp @l
 @done:  ldx curbuf
         lda NSPR
         sta RECCNT,x
