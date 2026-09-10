@@ -347,6 +347,44 @@ def star_class(cm, x, y):
     return 0 if (c == 2 and not BOX_BLACK) else c
 star_stats = {}
 
+# ---------------------------------------------------------------------------
+# Renumber so that every tile carrying pixel data comes first.  A solid tile is
+# filled by drawrow from a constant and its 64 bytes are never read, so it needs
+# no room in a tile bank: giving those tiles ids above 255 puts the whole game's
+# tile data in bank 5 alone, and bank 6 keeps only the box stars.  Sorting is
+# stable within each group, so runs like the vanish animation stay contiguous.
+# ---------------------------------------------------------------------------
+# the vanish and flower animations must stay contiguous, so a solid frame inside
+# one of those runs keeps its place in the data group and wastes its 64 bytes
+_keep = {orig2compact[o] for o in list(range(366, 374)) + list(range(426, 430))
+         if o in orig2compact}
+_order = sorted(range(len(compact)), key=lambda c: (c in tile_solid and c not in _keep, c))
+_newid = [0] * len(compact)
+for _new, _old in enumerate(_order):
+    _newid[_old] = _new
+NDATA = sum(1 for c in range(len(compact)) if c not in tile_solid or c in _keep)
+assert NDATA <= 512, 'tiles with data (%d) no longer fit two banks' % NDATA
+compact = [compact[o] for o in _order]
+tile_preview = [tile_preview[o] for o in _order]
+tiles_mode2 = [tiles_mode2[o] for o in _order]
+tile_class = [tile_class[o] for o in _order]
+tile_solid = {_newid[c]: v for c, v in tile_solid.items()}
+orig2compact = {t: _newid[c] for t, c in orig2compact.items()}
+twin_of = {t: _newid[c] for t, c in twin_of.items()}
+print('tiles: %d with data (%d bytes), %d solid' % (NDATA, NDATA * 64, len(compact) - NDATA))
+# how compressible the rest are: a tile whose eight char cells are identical needs
+# 8 bytes, and 4 if that cell repeats every four lines
+_c1 = _c4 = 0
+for _c in range(NDATA):
+    _d = tiles_mode2[_c]
+    _cells = [_d[_i * 8:_i * 8 + 8] for _i in range(8)]
+    if len(set(_cells)) == 1:
+        _c1 += 1
+        if _cells[0][0:4] == _cells[0][4:8]:
+            _c4 += 1
+print('  of those, %d are one repeated cell (%d of them period 4): %d bytes if packed'
+      % (_c1, _c4, (NDATA - _c1) * 64 + (_c1 - _c4) * 8 + _c4 * 4))
+
 # tiles are ordered by original id; but put the 'special' animation tiles in known places:
 # we just record their compact ids for the game code
 special = {name: orig2compact[t] for name, t in [('VANISH0', 366), ('FLOWER0', 426)]}
@@ -354,11 +392,14 @@ special = {name: orig2compact[t] for name, t in [('VANISH0', 366), ('FLOWER0', 4
 assert all(orig2compact[366 + i] == special['VANISH0'] + i for i in range(8))
 assert all(orig2compact[426 + i] == special['FLOWER0'] + i for i in range(4))
 
+# only the tiles with data are emitted: the solid ones sort above them and their
+# page-table entries address bytes that are never read
 bank5 = b''.join(tiles_mode2[:256])
-bank6 = b''.join(tiles_mode2[256:])
+bank6 = b''.join(tiles_mode2[256:NDATA])
 open(os.path.join(OUT, 'TIL0'), 'wb').write(bank5.ljust(16384, b'\0'))
 open(os.path.join(OUT, 'TIL1'), 'wb').write(bank6)
-print('bank5 %d bank6 %d' % (len(bank5), len(bank6)))
+print('tile banks: %d bytes in bank 5, %d in bank 6 (%d solid tiles need none)'
+      % (len(bank5), len(bank6), len(compact) - NDATA))
 
 # push-tiles (conveyor) and kill tiles: getPush / lava
 push_tiles = {}

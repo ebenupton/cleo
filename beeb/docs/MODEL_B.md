@@ -60,42 +60,68 @@ Data, as built today:
 | level pack (L*A + L*B) | 14848 per level |
 | TITLE | 7447 |
 
-That is about 67K of resident data against 64K of banks, before any code.  The tile
-set is what gives: it holds 470 tiles, but only 226 distinct tiles across all eight
-levels ever need pixel data, because the blackened backdrops and the flat cyan sky
-are drawn by fill and carry no source bytes at all.  A tile set reduced to what the
-levels actually reference is 226 x 64 = 14464 bytes, one bank instead of two.
+That is about 67K of resident data against 64K of banks, before any code at all.
 
-Distinct tiles needing data, per level:
+Two savings make it fit.
 
-| Level | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | union |
-|---|---|---|---|---|---|---|---|---|---|
-| tiles | 130 | 70 | 144 | 92 | 134 | 81 | 113 | 71 | 226 |
-| bytes | 8320 | 4480 | 9216 | 5888 | 8576 | 5184 | 7232 | 4544 | 14464 |
+**Solid tiles carry no data.**  470 tiles are built, but 47 of them are a single
+colour throughout, either the cyan sky or a blackened backdrop, and drawrow fills
+those from a constant without ever reading their 64 bytes.  Numbering them above all
+the others means their bytes need not be emitted: 3008 bytes back, and bank 6 drops
+from 15712 to 12704.
+
+**A level uses a fraction of the tile set.**  Tiles with data, per level:
+
+| | A (bonus) | B (main) |
+|---|---|---|
+| 0 | 153 | 207 |
+| 1 | 75 | 167 |
+| 2 | 160 | 267 |
+| 3 | 102 | 127 |
+| 4 | 149 | 267 |
+| 5 | 95 | 110 |
+| 6 | 128 | 245 |
+| 7 | 77 | 139 |
+
+The whole set is 423 tiles and 27072 bytes; the worst single level is 267 tiles and
+17088 bytes.  So the tile banks hold about 10K more than any one level needs.  The
+level packs already number tiles per level, so the numbering can be made local to the
+level: the disc keeps one copy of the tile set, and level loading reads it a track at
+a time and scatters just the tiles that level references into the banks.  That costs
+about a second of extra loading and returns nearly 10K of bank space.
+
+**The menus need not be resident.**  The title logo, the big Cleo frames and the
+win and lose art are already a separate pack that overlays the level in bank 7, and
+the same is true of everything else the menus use.  The font and the digits sit at
+the front of SPR, and the status bar image with them; the Model B has no status bar
+at all, so during play those 2240 bytes of bank 4 are dead weight.  Menu code is
+another 1410 bytes of the logic that never runs during a level.  Paging the lot in
+only while a menu is up returns about 3.6K, and the freed space at the front of
+bank 4 is where the menu overlay itself lands.
 
 ## Bank layout
 
 | Bank | Contents | Bytes |
 |---|---|---|
-| 4 | SPR | 16384 |
-| 5 | reduced tile set | 14464 |
-| 6 | logic and menu code, plus the level's small tables | about 14700 |
-| 7 | map (8K), SPRAND (4K), music; TITLE overlays the map before a level starts | about 14300 |
+| 4 | SPR data; the menu overlay replaces its first 2240 bytes | 16384 |
+| 5 | this level's tiles, ids 0-255 | 16384 |
+| 6 | this level's remaining tiles, box stars, SPRAND, the map | about 15000 |
+| 7 | logic code and the level's small tables | about 14800 |
 
 The split of the level pack between banks 6 and 7 is the point of the design.  The
 logic reads the page tables, object list, object state, attributes and grid on nearly
 every call, so those sit in the same bank as the logic code and cost nothing.  The
-map is the one big item, 8K, and it moves to bank 7.
+map is the one big item, 8K, and it moves to bank 6 with the tile overflow.
 
 ## Cross-bank calls
 
 Main RAM is always visible, so code in a bank may call main RAM freely.  Two things
 need help:
 
-- Main RAM calling the logic: a trampoline pages in bank 6, calls, restores the
+- Main RAM calling the logic: a trampoline pages in bank 7, calls, restores the
   caller's bank.  This happens a handful of times per frame, at frame granularity.
-- The logic reading or writing the map: a main-RAM helper pages bank 7, does the
-  access, and restores bank 6.  A trace of level 2 shows 6.6 map queries per frame
+- The logic reading or writing the map: a main-RAM helper pages bank 6, does the
+  access, and restores bank 7.  A trace of level 2 shows 6.6 map queries per frame
   standing still; even a busy frame is under a hundred, so the roughly 25 cycles per
   call is noise against a 320000 cycle frame.
 
@@ -142,8 +168,10 @@ the least room.  `stz` is the one to audit: the backward liveness pass in
 1. Disc driver for both boards.  Done and verified.
 2. Machine detection and a loader that reads the right binaries into banks.
 3. Screen setup: 64 x 20 window, two carousels, vsync flip, no rupture.
-4. Reduced tile set in `tools/convert.py`, with the music no longer hidden in tile
-   bytes but carried as its own file.
-5. Split of the level pack across banks 6 and 7, and the map trampoline.
-6. Logic and menus relocated into bank 6.
-7. 6502 expansions and the code-size audit.
+4. Solid tiles numbered out of the tile data.  Done.
+5. Per-level tile numbering and the scatter loader.
+6. Split of the level pack across banks 6 and 7, and the map trampoline.
+7. Logic relocated into bank 7, with the eleven entry points and fifteen call-backs
+   routed through main-RAM stubs.
+8. Menus and their art paged in as an overlay over the front of bank 4.
+9. 6502 expansions and the code-size audit.
