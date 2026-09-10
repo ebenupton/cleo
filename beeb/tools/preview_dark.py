@@ -52,9 +52,12 @@ WALL_TILES = {297}
 # the potted plant's box: its background tiles are cleaned with the box's own speckle
 # colours (taken from the plant-free tiles) so only the plant is left; the solid top row
 # (245..251) is a platform and stays visible
-PLANT_BG = {277, 279, 309, 311, 344, 345}
-PLANT_ART = {346, 347, 376, 377, 378, 379}
-PLANT_TILES = PLANT_BG | PLANT_ART
+# the bush in the stone box (277..379) is NOT the flower and is left alone (its cleaning
+# is backed out: PLANT_TILES empty; the machinery below stays for when the right tiles
+# are identified)
+PLANT_BG = set()
+PLANT_ART = set()
+PLANT_TILES = set()
 plant_pal = np.zeros(len(til_rgb0), bool)
 for orig in PLANT_BG:
     for v in np.unique(til_idx[orig * 8:orig * 8 + 8, :]):
