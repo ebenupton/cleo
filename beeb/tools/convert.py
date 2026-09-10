@@ -594,37 +594,63 @@ print('sprite images', len(images),
       'ANDY %d/%d bytes' % (an - SPR_ANDY, ANDY_END - SPR_ANDY),
       '(%d imgs in ANDY)' % n_andy)
 
-# box stars: the six spin frames (34..39) composited over cyan and over black in a fixed
-# 7-char x 24-line box (hotspot 6,8) so any frame overwrites any other exactly.  Stored
-# after the tiles in bank 6 (flag bit4), drawn with the copy blitter (flag bit3).
-BOX_W, BOX_H = 7, 12
+# box stars: each spin frame (34..39) composited over cyan and over black in a box just
+# wide enough to cover its own art AND the previous frame's, so drawing frame N erases
+# frame N-1 with no mask and no erase pass.  The frames are all 24 lines tall but the
+# spin narrows to a sliver, so the narrow ones carry a narrower box.  Stored after the
+# tiles in bank 6 (flag bit4), drawn with the copy blitter (flag bit3).
+BOX_H = 12                      # game px (24 lines)
+FIELD = 14                      # px: the widest frame, hotspot at px 6
+box_art = []
+for f in range(6):
+    j, mirror, rx, ry = entry[34 + f]
+    im = images[j][0]
+    h, w = im.shape
+    W = (w + 1) // 2
+    padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
+    padded[:, :w] = im
+    if mirror:
+        padded = padded[:, ::-1]
+        rx = (2 * W - 1) - rx
+    col = dither(spr_rgb[padded], padded != spr_tr, full=True) & 7
+    assert h == BOX_H and ry == 8, (f, ry, h)
+    x0 = 6 - rx
+    assert 0 <= x0 and x0 + 2 * W <= FIELD, (f, x0, W)
+    box_art.append((col, x0))
+
+def _span(f):                   # opaque pixel range of one frame, in field px
+    col, x0 = box_art[f]
+    xs = np.where((col != 0).any(axis=0))[0]
+    return x0 + int(xs.min()), x0 + int(xs.max())
+
+# Every box has to be able to erase whatever the record holds, and the record is two
+# renders old: when the frame rate dips to three logic steps per render the animation
+# advances by two, so a box can face any other frame, not just its predecessor.  The
+# size is therefore the union of all six -- which is exactly the 7 x 24 the frames fill
+# (sizing each box to its predecessor alone gives 5 chars for the narrow spin frames and
+# fails visibly on level 6 when a frame is skipped).
+_lo = min(_span(f)[0] for f in range(6)) // 2
+_hi = max(_span(f)[1] for f in range(6)) // 2
+box_geom = [(_lo, _hi - _lo + 1)] * 6
 box_bytes = []
 for bg in (6, 0):
     for f in range(6):
-        j, mirror, rx, ry = entry[34 + f]
-        im = images[j][0]
-        h, w = im.shape
-        W = (w + 1) // 2
-        padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
-        padded[:, :w] = im
-        if mirror:
-            padded = padded[:, ::-1]
-            rx = (2 * W - 1) - rx
-        col = dither(spr_rgb[padded], padded != spr_tr, full=True) & 7
-        canvas = np.full((BOX_H * 2, BOX_W * 2), bg, np.uint8)
-        x0 = 6 - rx
-        assert 0 <= x0 and x0 + 2 * W <= BOX_W * 2 and h == BOX_H and ry == 8, (f, rx, ry, h)
-        sub = canvas[:, x0:x0 + 2 * W]
-        canvas[:, x0:x0 + 2 * W] = np.where(col != 0, col, sub)
-        packed = pack_mode2(canvas)
+        col, x0 = box_art[f]
+        lo, Wc = box_geom[f]
+        field = np.full((BOX_H * 2, FIELD), bg, np.uint8)
+        sub = field[:, x0:x0 + col.shape[1]]
+        field[:, x0:x0 + col.shape[1]] = np.where(col != 0, col, sub)
+        packed = pack_mode2(field[:, 2 * lo:2 * (lo + Wc)])
         b = bytearray()
-        for c in range(BOX_W):
+        for c in range(Wc):
             b += packed[:, c].tobytes()
         box_bytes.append(bytes(b))
+print('box stars: widths (chars) per frame', [w for _l, w in box_geom],
+      '= %d bytes for 12 boxes (was %d)' % (sum(len(b) for b in box_bytes), 12 * 7 * 24))
 BOX_BASE = 0x8000 + len(bank6)
-assert BOX_BASE + 12 * len(box_bytes[0]) <= 0xC000
+assert BOX_BASE + sum(len(b) for b in box_bytes) <= 0xC000
 open(os.path.join(OUT, 'TIL1'), 'ab').write(b''.join(box_bytes))
-print('box stars: 12 x %d bytes at $%04X in bank 6; classes per level:' % (len(box_bytes[0]), BOX_BASE),
+print('box stars at $%04X in bank 6; classes per level:' % BOX_BASE,
       ' '.join('L%d%s=%s' % (lv, 'B' if sub == 0 else 'A', '/'.join(map(str, v))) for (lv, sub), v in sorted(star_stats.items())),
       '(regular/cyan/black)')
 
@@ -646,9 +672,14 @@ for i in range(103):
     flags = (1 if mirror else 0) | 2 | (4 if in_andy else 0)
     lines = 2 * h
     table += bytes([ptr & 255, ptr >> 8, W, h, rx & 255, ry & 255, flags, lines])
+_off = 0
 for k in range(12):                                # 103..108 cyan, 109..114 black
-    ptr = BOX_BASE + k * len(box_bytes[0])
-    table += bytes([ptr & 255, ptr >> 8, BOX_W, BOX_H, 6, 8, 2 | 8 | 16, BOX_H * 2])
+    _lo, _wc = box_geom[k % 6]
+    ptr = BOX_BASE + _off
+    _off += len(box_bytes[k])
+    # refx: the hotspot sits at field px 6, the box starts at field px 2*lo
+    table += bytes([ptr & 255, ptr >> 8, _wc, BOX_H, (6 - 2 * _lo) & 255, 8,
+                    2 | 8 | 16, BOX_H * 2])
 
 # font: 40 glyphs 8x8 at tit.png y=26.., 10 per row -> 1 bit per pixel
 tit_idx, tit_rgb, tit_tr = load_indexed('tit.png')
