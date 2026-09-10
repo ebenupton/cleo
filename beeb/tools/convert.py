@@ -204,8 +204,8 @@ for cid, orig in enumerate(compact):
     if orig in TILE_EDITS:
         col = TILE_EDITS[orig]                     # hand-painted override
     tile_preview.append(col)
-    col = col & 7            # black = 0 not 8: bits 7/6 of every tile byte stay free (the
-                             # music sequence is hidden there by tools/embed_music.py)
+    col = col & 7            # black = 0 not 8: bits 7/6 of every tile byte stay free (bit 6
+                             # hides the music, tools/embed_music.py; bit 7 flags periodic cells)
     b = pack_mode2(col)   # (16, 4)
     # Beeb layout: char row 0 (lines 0-7): chars 0..3 each 8 bytes ; then char row 1
     data = bytearray()
@@ -214,6 +214,11 @@ for cid, orig in enumerate(compact):
             for ra in range(8):
                 data.append(int(b[crow * 8 + ra, cx]))
     assert len(data) == 64
+    # bit 7 of a char cell's first byte: lines 4..7 repeat lines 0..3 (the 2x4 dither makes
+    # this true of most flat-ish cells), so drawrow copies the cell with 4 loads and 8 stores
+    for c in range(0, 64, 8):
+        if data[c + 4:c + 8] == data[c:c + 4]:
+            data[c] |= 0x80
     tiles_mode2.append(bytes(data))
 
 # star backgrounds: a star whose 2x2 tile neighbourhood is all sky (solid cyan) or all

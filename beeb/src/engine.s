@@ -462,44 +462,61 @@ drawrect:
         jmp @slow
 :       jmp (@jt-2,x)
 @jt:    .word @b7, @b15, @b23, @b31
-        ; unrolled copy, descending Y so that entry at 8n-1 copies bytes 8n-1..0
+        ; unrolled copy, one block per char in descending char order so that entry at
+        ; char n-1 copies chars n-1..0.  A cell whose first byte has bit 7 set repeats
+        ; lines 0..3 as 4..7 (flagged by convert.py): 4 loads, 8 stores.
 .macro CPY1 k
         ldy #k
         lda (tp),y
         sta (sp),y
 .endmacro
-@b31:   CPY1 31
-        CPY1 30
-        CPY1 29
-        CPY1 28
-        CPY1 27
-        CPY1 26
-        CPY1 25
-        CPY1 24
-@b23:   CPY1 23
-        CPY1 22
-        CPY1 21
-        CPY1 20
-        CPY1 19
-        CPY1 18
-        CPY1 17
-        CPY1 16
-@b15:   CPY1 15
-        CPY1 14
-        CPY1 13
-        CPY1 12
-        CPY1 11
-        CPY1 10
-        CPY1 9
-        CPY1 8
-@b7:    CPY1 7
-        CPY1 6
-        CPY1 5
-        CPY1 4
-        CPY1 3
-        CPY1 2
-        CPY1 1
-        CPY1 0
+.macro CHARCPY c, per
+        ldy #8*c
+        lda (tp),y
+        bmi per
+        sta (sp),y
+        CPY1 8*c+1
+        CPY1 8*c+2
+        CPY1 8*c+3
+        CPY1 8*c+4
+        CPY1 8*c+5
+        CPY1 8*c+6
+        CPY1 8*c+7
+.endmacro
+.macro CHARPER c, next              ; A = line 0, Y = 8c
+        sta (sp),y
+        ldy #8*c+4
+        sta (sp),y
+        ldy #8*c+1
+        lda (tp),y
+        sta (sp),y
+        ldy #8*c+5
+        sta (sp),y
+        ldy #8*c+2
+        lda (tp),y
+        sta (sp),y
+        ldy #8*c+6
+        sta (sp),y
+        ldy #8*c+3
+        lda (tp),y
+        sta (sp),y
+        ldy #8*c+7
+        sta (sp),y
+        jmp next
+.endmacro
+@t3:    jmp @p3                     ; the periodic blocks are out of branch range: trampolines
+@t2:    jmp @p2
+@b31:   CHARCPY 3, @t3
+@b23:   CHARCPY 2, @t2
+@b15:   CHARCPY 1, @t1
+@b7:    CHARCPY 0, @t0
+        jmp @advsp
+@t1:    jmp @p1
+@t0:    jmp @p0
+@p3:    CHARPER 3, @b23
+@p2:    CHARPER 2, @b15
+@p1:    CHARPER 1, @b7
+@p0:    CHARPER 0, @advsp
 @advsp: lda sp
         clc
         adc tmp
@@ -2926,9 +2943,9 @@ sndwrite:
 
 ; ---------------------------------------------------------------- music (sequence hidden in bank-5 tile bytes)
 ; The sequence (4-byte records: frames, note0..2; frames = 0 -> loop) is hidden in the
-; top two bits of the bank-5 tile bytes, one music byte per four tile bytes, MSB first
+; bit 6 of the bank-5 tile bytes, one music byte per eight tile bytes, MSB first
 ; (tools/embed_music.py).  MUSPTR walks the tile data.
-MUSIC_SEQ  = $8000 + 144*4          ; bank 5, after the hidden period table
+MUSIC_SEQ  = $8000 + 144*8          ; bank 5, after the hidden period table
 MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), decoded into RAM
 ; decode the period table (the first 144 hidden bytes) into music_tab; bank 5 loaded
 music_init:
@@ -2978,45 +2995,26 @@ music_tick:
         sta ROMSEL
 @done:  rts
 
-; A = next music byte assembled from the top two bits of the 4 tile bytes at MUSPTR;
-; MUSPTR += 4.  Preserves X.  Z reflects A.
+; A = next music byte assembled from bit 6 of the 8 tile bytes at MUSPTR (MSB first);
+; MUSPTR += 8.  Preserves X.  Z reflects A.
 musbyte:
-        ldy #3
-        lda (MUSPTR),y
-        rol
-        rol
-        rol
-        and #3                      ; bits 1..0
-        sta MUSTMP
-        dey
-        lda (MUSPTR),y
-        and #$C0
-        lsr
-        lsr
-        lsr
-        lsr
-        ora MUSTMP                     ; bits 3..2
-        sta MUSTMP
-        dey
-        lda (MUSPTR),y
-        and #$C0
-        lsr
-        lsr
-        ora MUSTMP                     ; bits 5..4
-        sta MUSTMP
-        dey
-        lda (MUSPTR),y
-        and #$C0
-        ora MUSTMP                     ; bits 7..6
-        sta MUSTMP
+        ldy #0
+:       lda (MUSPTR),y
+        asl
+        asl                         ; bit 6 -> carry
+        rol MUSTMP
+        iny
+        cpy #8
+        bne :-
         lda MUSPTR
         clc
-        adc #4
+        adc #8
         sta MUSPTR
         bcc :+
         inc MUSPTR+1
 :       lda MUSTMP
         rts
+
 
 ; X = voice (0..2), A = MIDI note (0 = rest)
 set_voice:
