@@ -2353,11 +2353,13 @@ render_frame:
         and #3
         asl
         sta wfine
-        lda wy+1
-        lsr
-        lda wy
+        lda wy+1                    ; wcy = wy >> 2, a full 16-bit shift: shifting the
+        lsr                         ; high byte once only was right below wy = 512 and
+        sta wcy                     ; lost 128 rows above it, which put the tall maps
+        lda wy                      ; 512 px out of place once the player got that deep
         ror
-        lsr
+        lsr wcy
+        ror
         sta wcy
         jsr calc_ring
         jsr match_sprites
