@@ -149,7 +149,7 @@ load_level:
         bne :-
         lda mapw
         sec
-        sbc #160
+        sbc #WINPX
         sta maxwx
         lda mapw+1
         sbc #0

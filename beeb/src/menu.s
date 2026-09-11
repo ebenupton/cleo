@@ -247,7 +247,7 @@ text_centred:
         asl
         asl                         ; len*8
         sta tmp
-        lda #160
+        lda #WINPX
         sec
         sbc tmp
         lsr

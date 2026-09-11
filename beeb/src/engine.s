@@ -74,26 +74,31 @@ LV_BNEXT  = $BAD0                 ; 255
 LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 
 ; ---------------------------------------------------------------- screen shape
-; The Master has a 20K shadow screen for each buffer: an 80-char, 32-row ring
-; with 27 rows visible and the status bar above them.  A Model B has one 20K
-; screen, so the two buffers are 10K halves of it: 64 chars, 20 rows each, 19
-; visible and no bar.  Both are a ring of ROWCHARS x RINGROWS chars whose
-; addresses wrap back to the buffer's base.
+; The Master gives each buffer its own 20K screen, main and shadow, so both are
+; an 80-char 32-row ring at $3000 with 27 rows visible and the status bar above.
+;
+; A Model B has one screen, so the two buffers share the 20K: 64-char rows make
+; it a ring of 40, and a buffer's rows start BUFOFF = 20 of them further on.
+; Each holds 18 rows and shows 17, which leaves two rows of gap at each end.
+; The gap is what lets the two be drawn a frame apart: the window moves up to
+; two rows a frame in ordinary play, and a bigger jump invalidates the other
+; buffer instead.  One shared ring also means the video hardware's own wrap at
+; $8000 still closes it, which matters because the CRTC can only be re-pointed
+; at a row boundary and the window rarely starts on one.
 .ifdef MODELB
 ROWCHARS  = 64                    ; chars across a screen row (2 pixels each)
-RINGROWS  = 20                    ; rows in one buffer's ring
-VISROWS   = 19                    ; visible char rows (152 lines = 76 game px)
-BUFROWS   = 20                    ; rows held (visible + partial top row source)
-BUF0      = $3000                 ; the two buffers, 10K apart
-BUF1      = $5800
+RINGROWS  = 40                    ; rows in the shared ring
+BUFOFF    = 20                    ; ring rows between the two buffers
+VISROWS   = 17                    ; visible char rows (136 lines = 68 game px)
+BUFROWS   = 18                    ; rows held (visible + partial top row source)
 .else
 ROWCHARS  = 80
 RINGROWS  = 32
+BUFOFF    = 0                     ; main and shadow are the same addresses
 VISROWS   = 27                    ; visible char rows (216 lines = 108 game px)
 BUFROWS   = 28                    ; rows held (visible + partial top row source)
-BUF0      = $3000                 ; main and shadow: the same address, ACCCON picks
-BUF1      = $3000
 .endif
+BUF0      = $3000
 ROWBYTES  = ROWCHARS*8
 RINGCHARS = ROWCHARS*RINGROWS
 RINGBYTES = RINGCHARS*8
@@ -113,8 +118,6 @@ K_MENU  = 32
 ; ---------------------------------------------------------------- zero page
         .zeropage
 jv:       .res 2                  ; jmp (abs,x) has no 6502 form: it goes through here
-bufbase:  .res 1                  ; high bytes of the buffer being drawn and of the
-bufend:   .res 1                  ;   byte after it: ringup and ringdn fold between them
 ptr:      .res 2                  ; general pointer
 tp:       .res 2                  ; tile/source pointer
 sp:       .res 2                  ; screen pointer
@@ -279,43 +282,31 @@ NEXTBUF:   .res 1
 ; ---------------------------------------------------------------- ring wrapping
 ; A screen address that runs off the end of the buffer folds back to its start.
 ; On the Master the buffer is the whole 20K and the test is the sign bit; on a
-; Model B it is one of two 10K halves, so bufbase and bufend say which.
-; Both spell their skip with an anonymous label, so a caller that wants to branch
-; over one of these has to count it: see spnext, which says :++ for that reason.
-; A named label here would end the enclosing routine's cheap-local scope.
+; Model B they are one ring shared by both buffers.
+; These spell their skip with an anonymous label, so a caller that wants to branch
+; over one has to count it: see spnext, which says :++ for that reason.  A named
+; label here would end the enclosing routine's cheap-local scope.
 .macro ringmod                      ; A = a map char row -> its ring slot
 .ifdef MODELB
-:       cmp #RINGROWS               ; 20 is not a power of two, and A can be any row
-        bcc :+
-        sbc #RINGROWS
+        sec                         ; 40 is not a power of two, and A can be any row
+:       sbc #RINGROWS
         bcs :-
-:
+        adc #RINGROWS
 .else
         and #(RINGROWS-1)
 .endif
 .endmacro
+; The ring is the whole 20K on both machines, so both fold on the sign bit.
 .macro ringup                       ; A = high byte after moving forward
-.ifdef MODELB
-        cmp bufend
-        bcc :+
-        sbc #>RINGBYTES
-.else
         bpl :+
         sec
-        sbc #$50
-.endif
+        sbc #>RINGBYTES
 :
 .endmacro
 .macro ringdn                       ; A = high byte after moving back
-.ifdef MODELB
-        cmp bufbase
+        cmp #>BUF0
         bcs :+
         adc #>RINGBYTES
-.else
-        cmp #$30
-        bcs :+
-        adc #$50
-.endif
 :
 .endmacro
 
@@ -336,6 +327,13 @@ NEXTBUF:   .res 1
 ; ringaddr: screen address of map char (w16 = cx 16 bit, A = cy) -> sp
 ; ============================================================================
 ringaddr:
+.if BUFOFF                          ; the back buffer's rows sit BUFOFF further on
+        ldx curbuf
+        beq :+
+        clc
+        adc #BUFOFF
+:
+.endif
         ringmod
         tax
         lda w16+1
@@ -1913,22 +1911,15 @@ copy_partial:
         bcc :+
         inc ptr+1
 :       lda ptr+1
-.ifndef MODELB
         cmp #$7F                    ; only the last page before $8000 can wrap
         bcc :+
-.endif
         lda ptr
         clc
         adc wfine
         lda ptr+1
         adc #0
-.ifdef MODELB                       ; the store is conditional here: fold back only
-        cmp bufend                  ; if this row's copy would run off the end
-        bcc :+
-.else
-        bpl :+
-.endif
-        lda ptr+1
+        bpl :+                      ; the store is conditional: fold back only if
+        lda ptr+1                   ; this row's copy would run off the end
         sec
         sbc #>RINGBYTES
         sta ptr+1
@@ -1940,6 +1931,7 @@ copy_partial:
 ; ============================================================================
 ; calc_ring: ringS = ((wcy & 31) * 80 + wcx) mod 2560 ; barq = ringS / 80
 ; ============================================================================
+.ifndef MODELB                      ; a Model B shows no status bar
 ; copy_bar: if this buffer's bar rows are stale, write bar image into ring slots q-3, q-2
 copy_bar:
         ldx curbuf
@@ -2161,6 +2153,7 @@ copy_bar:
         bne @cp
         rts
 
+.endif
 ; ============================================================================
 ; build_sections: fill SECTAB for current buffer from ringS/barq/wfine
 ; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi (T1 = duration of section i+1)
@@ -2407,17 +2400,8 @@ QVSYNC = 4                         ; vsync at Q row 4 -> T starts 48 lines after
 ; ============================================================================
 ; select CPU access to the current back buffer (ACCCON X bit)
 select_backbuf:
-.ifdef MODELB
-        ; the two buffers are the halves of one screen, so the ring addresses move
-        ldx curbuf
-        lda bufhi,x
-        sta bufbase
-        clc
-        adc #>RINGBYTES
-        sta bufend
-        jsr build_ring
-.else
-        lda ACCCON
+.ifndef MODELB                      ; a Model B has no shadow: its two buffers are
+        lda ACCCON                  ; the same memory, BUFOFF ring rows apart
         and #$FB
         ldx curbuf
         beq :+
@@ -2475,7 +2459,9 @@ render_frame:
         jsr draw_sprites
         stz DIRTYSEEN
         jsr copy_partial
+.ifndef MODELB
         jsr copy_bar
+.endif
         stz NSPR
         jsr build_sections
         ; hand over to ISR
@@ -2685,13 +2671,7 @@ init_tables:
         sta IDENT+$80,x             ; and its OR value (differs from SWAPTAB only at \$40)
         inx
         bpl :-
-        ; ring rows
-        lda #>BUF0
-        sta bufbase
-        clc
-        adc #>RINGBYTES
-        sta bufend
-        jsr build_ring
+        jsr build_ring              ; ring row -> screen address
         ; row slot -> chars
         stz w16
         stz w16+1
@@ -3534,7 +3514,7 @@ getglyph:
 ; the screen address of each ring row, from the base of the buffer being drawn
 build_ring:
         stz w16
-        lda bufbase
+        lda #>BUF0
         sta w16+1
         ldx #0
 @r:     lda w16
@@ -3552,7 +3532,6 @@ build_ring:
         cpx #RINGROWS
         bne @r
         rts
-bufhi:  .byte >BUF0, >BUF1
         .segment "CODE"
 
 ; ---------------------------------------------------------------- level tiles
@@ -3623,13 +3602,11 @@ pagelogic:                          ; A, X, Y and the carry all come through int
         TOMAIN "loadfile"
         TOMAIN "mark_dirty"
 
-        .segment "LOW"              ; and the tail of the NMI page, below the MOS's bytes
+        .segment "CODE"
         TOMAIN "music_start"
         TOMAIN "music_stop"
         TOMAIN "ringaddr"
         TOMAIN "rnd"
-
-        .segment "CODE"
         TOMAIN "select_backbuf"
         TOMAIN "set_palette"
         TOMAIN "wait_flip"
