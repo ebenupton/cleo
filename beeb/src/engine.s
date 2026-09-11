@@ -2076,30 +2076,64 @@ copy_partial:
 ; re-copying 1280 bytes for that cost 13,310 cycles of an 80,000 cycle frame.
 ; bar_bg: blit the static bar template (icons, labels, blank digit slots) from bank 4
 ; into the current back buffer's fixed bar rows.  Source art, not a maintained buffer.
-bar_bg:                             ; runs only when a buffer needs its bar template
-        lda #BANK_SPR               ; (twice per level), so a compact loop is fine
-        sta curbank
-        sta ROMSEL_CPY
+bar_bg:                             ; runs only when a buffer needs its bar (twice per
+        lda #BANK_SPR               ; level).  The bar is black with a few icon spans, so
+        sta curbank                 ; fill black and lay the spans (BARBUF is now the span
+        sta ROMSEL_CPY              ; list: offset16, len, bytes... ending $FFFF).
         sta ROMSEL
-        lda #<BARBUF
-        sta w16
-        lda #>BARBUF
-        sta w16+1
-        lda #<BARADDR
+        lda #<BARADDR               ; --- fill the bar rows with opaque black ($C0)
         sta w16b
         lda #>BARADDR
         sta w16b+1
+        lda #$C0
         ldx #>(BARROWS*640)         ; 1280 bytes = 5 pages
         ldy #0
-@bp:    lda (w16),y
-        sta (w16b),y
+@bf:    sta (w16b),y
         iny
-        bne @bp
-        inc w16+1
+        bne @bf
         inc w16b+1
         dex
-        bne @bp
-        rts
+        bne @bf
+        lda #<BARBUF                ; --- lay the icon spans
+        sta w16
+        lda #>BARBUF
+        sta w16+1
+@bs:    ldy #1
+        lda (w16),y                 ; offset high ($FF = end)
+        cmp #$FF
+        beq @bsdone
+        pha
+        dey
+        lda (w16),y                 ; offset low
+        clc
+        adc #<BARADDR
+        sta w16b
+        pla
+        adc #>BARADDR
+        sta w16b+1                  ; dest = BARADDR + offset
+        ldy #2
+        lda (w16),y
+        sta tmp2                    ; len
+        lda w16                     ; step past the 3-byte header
+        clc
+        adc #3
+        sta w16
+        bcc :+
+        inc w16+1
+:       ldy #0
+@bc:    lda (w16),y
+        sta (w16b),y
+        iny
+        cpy tmp2
+        bne @bc
+        tya                         ; step past the data
+        clc
+        adc w16
+        sta w16
+        bcc @bs
+        inc w16+1
+        bra @bs
+@bsdone: rts
 
 .endif
 ; ============================================================================

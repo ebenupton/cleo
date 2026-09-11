@@ -1014,11 +1014,29 @@ for n in range(10):
 
 bank4 = bytearray(16384)
 andy = bytearray(4096)
+# The bar is a black background (opaque black = $C0) with a few icon spans, so store it
+# as span records (offset16, len, bytes...) ended by $FFFF, not the full 1280 bytes --
+# bar_bg fills black and lays the spans, freeing the rest of the region for sprite code.
+barspans = bytearray()
+i = 0
+while i < len(barbytes):
+    if barbytes[i] != 0xC0:
+        j = i
+        while j < len(barbytes) and barbytes[j] != 0xC0:
+            j += 1
+        barspans += bytes([i & 0xFF, i >> 8, j - i]) + barbytes[i:j]
+        i = j
+    else:
+        i += 1
+barspans += bytes([0xFF, 0xFF])
+print('bar: %d span bytes vs %d raw (%d free in bank 4)'
+      % (len(barspans), len(barbytes), len(barbytes) - len(barspans)))
+
 bank4[SPR_FONT - 0x8000:SPR_FONT - 0x8000 + len(font)] = font
-bank4[SPR_BAR - 0x8000:SPR_BAR - 0x8000 + len(barbytes)] = barbytes
+bank4[SPR_BAR - 0x8000:SPR_BAR - 0x8000 + len(barspans)] = barspans
 bank4[SPR_DIGITS - 0x8000:SPR_DIGITS - 0x8000 + len(digits)] = digits
 assert len(font) <= SPR_DIGITS - SPR_FONT and len(digits) <= SPR_BAR - SPR_DIGITS
-assert len(barbytes) <= SPR_DATA - SPR_BAR
+assert len(barspans) <= SPR_DATA - SPR_BAR
 for j in range(len(images)):
     base, in_andy = img_addr[j]
     if in_andy:
