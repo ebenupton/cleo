@@ -122,8 +122,8 @@ SPRAND is still in the Master's ANDY and needs a home on a Model B: 2240 bytes o
 it can go where the menu art is paged out of bank 4, and the rest in bank 6, which
 has about 1.3K spare.
 
-Bank 7 is free from $8900 to $AFFF, 10496 bytes, against 8054 bytes of logic and
-menu code.
+The logic and menus occupy $8900 to $A92C in bank 7, 8237 bytes of the 10496 free
+there, leaving room for the 6502 expansions.
 
 ## Cross-bank calls
 
@@ -132,14 +132,17 @@ need help, and the traffic is small: eleven entry points into the logic, and fif
 routines the logic calls back into.
 
 - Main RAM calling the logic: page in bank 7, then tail-jump to the routine, so its
-  own return goes straight back to the original caller.  Six bytes per entry plus a
-  shared eight-byte paging routine.
-- The logic calling main RAM: `jsr` the routine, then jump to a shared routine that
-  puts bank 7 back and returns.  Six bytes per call plus eight shared.
+  own return goes straight back to the original caller.  Six bytes per entry.
+- The logic calling main RAM: `jsr` the routine, then jump to the shared routine that
+  puts bank 7 back and returns.  Six bytes per call.
 
-That is about 170 bytes of stubs, and main RAM has roughly 160 bytes spare in the
-old MOS vector and NMI pages plus the 60 the HAZEL copy loop gives back.  It fits,
-but only just, which is the same squeeze the 6502 expansions face.
+The shared routine pushes and pulls A around the bank switch.  Without that, every
+call-back hands the logic a 7 where its result should be, which is a quiet and
+thoroughly confusing way to fail.
+
+The stubs are about 170 bytes and live in the old MOS vector page and the tail of
+the NMI page, because main RAM under the screen is full to within twenty bytes.
+init_tables moved into the logic bank to pay for the map helpers.
 
 The renderer stays in main RAM because it alternates between the sprite bank and the
 tile bank inside a single frame, which is exactly what bank-resident code cannot do.
@@ -188,9 +191,8 @@ the least room.  `stz` is the one to audit: the backward liveness pass in
 3. Per-level tile numbering and the scatter loader.  **Done**.
 4. The level pack split across banks 6 and 7, freeing $8900-$AFFF in bank 7.
    **Done**, with the title pack moved to bank 6 and the map queries selecting it.
-5. Logic and menus relocated into bank 7, with the twenty-six stubs above.  This can
-   be tested on a Master, where it costs a little speed and gains nothing, so both
-   machines will run the same layout rather than two.
+5. Logic and menus relocated into bank 7, with the twenty-six stubs above.  **Done**,
+   and both machines run the same layout: the Master's frame rates are unchanged.
 6. Screen: 64 x 20 window, two 10K carousels in the one 20K ring, vsync flip, and
    the rupture sections rebuilt for a 64-char pitch with no status bar.
 7. Menu art paged in over the front of bank 4, and SPRAND into the space it leaves.
