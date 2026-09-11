@@ -95,17 +95,16 @@ draw_glyph_rows:
         jsr m_ringaddr                ; sp = first char (row 0)
         ldx #0                      ; glyph row 0..7
 @row:   cpx #4
-        bne :+
-        lda sp                      ; second char row: +640
+        bne :++                     ; past ringup's own anonymous label
+        lda sp                      ; second char row: one row on
         clc
-        adc #<640
+        adc #<ROWBYTES
         sta sp
         lda sp+1
-        adc #>640
-        bpl :+
-        sec
-        sbc #$50
-:       sta sp+1
+        adc #>ROWBYTES
+        ringup
+        sta sp+1
+:
         lda GLYPHBUF,x
         sta tmp                     ; row bits
         txa

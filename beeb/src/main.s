@@ -372,32 +372,22 @@ frame_loop:
         and #K_MENU
         bne :+
         stz pausing
-:       ; fixed 25Hz logic: run one step per 2 vsyncs elapsed (max 3), render once
+:       ; 25Hz logic: exactly one step per render, and any time lost to a long
+        ; frame is dropped rather than caught up.  Catching up ran two or three
+        ; steps in a row, which moved the window several char rows in one frame;
+        ; the two buffers share a ring on a Model B and have only two rows of
+        ; slack between them, so a frame is a frame.
         lda vsyncs
         sec
         sbc logicvs
-        lsr
-        beq @wait
-        cmp #3
-        bcc :+
-        ; more than 6 vsyncs behind: run 3 steps and drop the lost time, otherwise
-        ; the deficit is carried forward and the game runs fast for ever after
-        lda #3
-        sta lsteps
+        cmp #2
+        bcc @wait
         lda vsyncs
         sta logicvs
-        bra @steps
-:       sta lsteps
-        asl
-        clc
-        adc logicvs
-        sta logicvs
-@steps: stza NSPR
+        stza NSPR
         jsr t_game_frame
         lda exiting
         bne @over
-        dec lsteps
-        bne @steps
         jsr render_frame
         bra frame_loop
 @wait:  ; nothing to do yet: wait for the next vsync

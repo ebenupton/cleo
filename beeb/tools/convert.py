@@ -485,6 +485,7 @@ def _bits(a, b):
     return sum(bin(x ^ y).count('1') for x, y in zip(a, b))
 
 tileset = []                         # per set: (list of global ids in id order)
+folded = []                          # per set: global id -> the tile it folded into
 remap = [dict(), dict()]             # per set: global id -> byte id
 for g in (0, 1):
     ids = sorted(c for c in _want[g] if c not in tile_solid)
@@ -507,6 +508,7 @@ for g in (0, 1):
         thr += 4
         assert thr <= 64, 'tile set %s will not fold into a byte' % SETNAME[g]
     tileset.append(keep)
+    folded.append(rep_of)
     idx = {c: i for i, c in enumerate(keep)}
     for c in ids:
         remap[g][c] = idx[rep_of.get(c, c)]
@@ -1008,5 +1010,36 @@ L0 = levels[(0, 0)]
 save_preview([render_map(L0, 0, 0, 40, 30)], os.path.join(OUT, 'preview_level0.png'), 1, 2)
 L1 = levels[(1, 0)]
 save_preview([render_map(L1, 0, 0, 40, 30)], os.path.join(OUT, 'preview_level1.png'), 1, 2)
+# ----------------------------------------------------------------------------
+# FOLDVIEW=1: every level drawn with the folded tiles, with the pixels the
+# folding changed picked out in red and the rest dimmed so they stand out.
+# ----------------------------------------------------------------------------
+if os.environ.get('FOLDVIEW'):
+    fold_dir = os.path.join(OUT, 'fold')
+    os.makedirs(fold_dir, exist_ok=True)
+    for (lv, sub), cm in maps.items():
+        g = tileset_of(lv, sub)
+        h, w = cm.shape
+        img = np.zeros((h * 16, w * 16, 3), np.uint8)
+        changed = 0
+        cache = {}
+        for ty in range(h):
+            for tx in range(w):
+                cid = int(cm[ty, tx])
+                got = cache.get(cid)
+                if got is None:
+                    src = tile_preview[cid]
+                    dst = tile_preview[folded[g].get(cid, cid)]
+                    rgb = np.repeat(BEEB_RGB[dst & 7], 2, axis=1) // 5 * 2
+                    d = np.repeat(src != dst, 2, axis=1)
+                    rgb[d] = [255, 0, 0]
+                    got = cache[cid] = (rgb, int(d.sum()))
+                img[ty * 16:ty * 16 + 16, tx * 16:tx * 16 + 16] = got[0]
+                changed += got[1]
+        name = name_of(lv, sub)
+        Image.fromarray(img).save(os.path.join(fold_dir, name + '.png'))
+        print('  %s: %d of %d pixels changed (%.2f%%)'
+              % (name, changed, h * w * 256, 100.0 * changed / (h * w * 256)))
+
 json.dump({'special': special, 'compact': compact}, open(os.path.join(OUT, 'meta.json'), 'w'))
 print('done')

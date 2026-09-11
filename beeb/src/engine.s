@@ -738,6 +738,25 @@ drawrect:
 ; ============================================================================
 ; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
 scroll_validate:
+.ifdef MODELB
+        ; The other buffer's rows sit BUFOFF further round the shared ring, which
+        ; leaves (RINGROWS - 2*BUFROWS)/2 rows of gap at each end.  If the window
+        ; has moved further than that since the other buffer was drawn, what we
+        ; are about to draw lands on top of its rows, so it has to go.
+        lda curbuf
+        eor #1
+        tax
+        lda wcy
+        sec
+        sbc BUF_CY,x
+        bpl :+
+        eor #$FF
+        inca
+:       cmp #((RINGROWS - 2*BUFROWS) / 2) + 1
+        bcc :+
+        stza BUF_VALID,x
+:
+.endif
         stz SV_COLW
         stz SV_ROWH
         ldx curbuf
@@ -3206,7 +3225,11 @@ crtc_init:
         lda crtctab+7
         sta curR7
         rts
-crtctab: .byte 127,80,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
+.ifdef MODELB                       ; 64 chars wide, and the sync moved eight chars
+crtctab: .byte 127,ROWCHARS,90,$28, 38,0,32,34, 0,7, $20,8, $06,$00
+.else                               ; later to keep the narrower picture centred
+crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
+.endif
 
 set_palette:
         ldx #15
