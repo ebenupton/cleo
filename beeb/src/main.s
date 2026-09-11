@@ -9,10 +9,18 @@
         .include "engine.s"
         .include "logic.s"
         .include "menu.s"
+.ifdef MODELB
+        .include "reloc.s"          ; the file loads clear of the DFS and moves down
+.endif
 
         .code
 ; ---------------------------------------------------------------- entry
 start:
+        jsr disc_detect             ; first, while the MOS is still whole: it calls
+                                    ; OSBYTE, and the LOW2 overlay below lands on
+                                    ; BYTEV.  Nothing may touch the controller until
+                                    ; this has run -- on a Model B the Master's
+                                    ; control register is the video ULA.
         sei
         ; NMI handler: jump to ours (1770 DRQ/INTRQ driven sector transfer)
         lda #$4C
@@ -62,6 +70,22 @@ start:
         sta __LOW2_START__+256,y
         iny
         bne :-
+        ; The tables are bss and nothing has zeroed them.  A Master happens to hand
+        ; them over clear; a Model B leaves the filing system's function key buffer
+        ; and the rest of its workspace lying in $0400..$0CFF, and SECIDX picking up
+        ; a stray value walks the rupture chain off the end of SECTAB.
+        lda #<$0400
+        sta ptr
+        lda #>$0400
+        sta ptr+1
+        lda #0
+:       sta (ptr),y                 ; (Y is 0 from the loop above and stays there)
+        iny
+        bne :-
+        inc ptr+1
+        ldx ptr+1
+        cpx #$0D
+        bne :-
         jsr blank_palette
         jsr disc_init
         lda #FI_LOGIC               ; the game logic lives in bank 7 above the level
@@ -93,9 +117,9 @@ start:
         stza wfine
         stza curbuf
         jsr calc_ring
-        jsr build_sections
+        jsr t_build_sections
         inc curbuf
-        jsr build_sections
+        jsr t_build_sections
         stza curbuf
         stza DISPSECT
         jsr take_over
@@ -336,10 +360,11 @@ level_loop:
         ldx level
         jsr load_level
         jsr t_level_init
-        jsr t_draw_lives
-        jsr t_draw_health
-        jsr t_draw_stars
-        jsr t_draw_score
+        lda #1                      ; lay the bar template + digits into both buffers on
+        sta BARBG                   ; the first two renders (drawing now would hit the
+        sta BARBG+1                 ; wrong buffer -- this is before the flip)
+        sta BARDIRTY
+        sta BARDIRTY+1
         ; initial camera; render both buffers before the palette comes back
         jsr t_game_frame
         jsr render_frame

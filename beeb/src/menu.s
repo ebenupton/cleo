@@ -200,7 +200,7 @@ menu_begin:
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stza curbuf
-        jsr m_build_sections
+        jsr build_sections          ; both are in the bank now
         stz NEXTBUF
         stz NEXTSECT
         lda #1

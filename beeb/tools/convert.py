@@ -365,6 +365,75 @@ def star_class(cm, x, y):
 star_stats = {}
 
 # ---------------------------------------------------------------------------
+# A box star is drawn as an opaque rectangle with its background baked in, so
+# anything that passes through it gets painted over.  Stars an enemy can reach
+# therefore keep the ordinary masked sprite -- which is also what leaves the
+# rest of them safe to skip redrawing between frames.
+#
+# The margin is each type's own drawn rectangle, taken from the art, plus the
+# distance it can travel.  Motion, from level_init's per-type setup and the ob_*
+# handlers (all in pixels; the object's x,y are tiles):
+#   1 trampoline   static          2 snake    patrols x .. x+8*e0
+#   3 cobra        rises 4 tiles   5,6 walker patrols x .. x+8*e0
+#   4 bat          hovers in x .. x+8*e0, y .. y+8*e1.  It steers towards Cleo, but
+#                  its position is never stored back: process_object re-reads the home
+#                  position every frame and ob_bat draws at ox + fc/2, oy + fd/2 with
+#                  fc clamped to [0, e0*16] and fd to [0, e1*16].  So it stays in its
+#                  own rectangle however far the player runs.  Plus the batoff wobble.
+#   7,9,10,12      static;  11 vanish animates as tiles, not a sprite
+TYPE_IDS = {1: (43, 45), 2: (46, 53), 3: (54, 60), 4: (61, 66), 5: (67, 75),
+            6: (76, 84), 7: (85, 92), 9: (93, 96), 10: (97, 97), 12: (100, 102)}
+
+def _sprite_boxes():
+    """id -> (dx0, dx1, dy0, dy1): the drawn rectangle about the reference point."""
+    idx, _rgb, tr = load_indexed('spr.png')
+    dim = open(os.path.join(SRC, 'dim'), 'rb').read()
+    out = {}
+    for i in range(103):
+        x, y, w, h, rx, ry = struct.unpack('BBBBbb', dim[i * 6:i * 6 + 6])
+        im = idx[y:y + h, x:x + w]
+        ys, xs = np.where(im != tr)
+        if not len(xs):
+            continue
+        x0, y0 = int(xs.min()), int(ys.min())
+        cw, ch = int(xs.max()) - x0 + 1, int(ys.max()) - y0 + 1
+        out[i] = (-(rx - x0), -(rx - x0) + cw, -(ry - y0), -(ry - y0) + ch)
+    return out
+
+_SPRBOX = _sprite_boxes()
+TYPE_BOX = {}
+for _t, (_lo, _hi) in TYPE_IDS.items():
+    _b = [_SPRBOX[i] for i in range(_lo, _hi + 1) if i in _SPRBOX]
+    TYPE_BOX[_t] = (min(b[0] for b in _b), max(b[1] for b in _b),
+                    min(b[2] for b in _b), max(b[3] for b in _b)) if _b else (0, 0, 0, 0)
+STAR_BOX = (-6, 8, -8, 4)          # the box star's rectangle, from box_geom/BOX_H
+print('enemy margins about the reference point (px):',
+      ' '.join('t%d=%d..%d,%d..%d' % ((t,) + TYPE_BOX[t]) for t in sorted(TYPE_BOX)))
+
+def enemy_reach(objs):
+    boxes = []
+    for (t, x, y, extra) in objs:
+        if t not in TYPE_BOX:
+            continue
+        e = (list(extra) + [0, 0, 0])[:3]
+        dx0, dx1, dy0, dy1 = TYPE_BOX[t]
+        mx = 8 * e[0] if t in (2, 4, 5, 6) else 0
+        my = 8 * e[1] if t == 4 else 0
+        up = 32 if t == 3 else 0
+        wob = 2 if t == 4 else 0
+        boxes.append((8 * x + dx0 - wob, 8 * x + dx1 + mx + wob,
+                      8 * y + dy0 - up - wob, 8 * y + dy1 + my + wob))
+    return boxes
+
+def star_reachable(x, y, reach):
+    sx0, sx1, sy0, sy1 = (8 * x + STAR_BOX[0], 8 * x + STAR_BOX[1],
+                          8 * y + STAR_BOX[2], 8 * y + STAR_BOX[3])
+    for (x0, x1, y0, y1) in reach:
+        if x0 < sx1 and sx0 < x1 and y0 < sy1 and sy0 < y1:
+            return True
+    return False
+
+# ---------------------------------------------------------------------------
 # Renumber so that every tile carrying pixel data comes first.  A solid tile is
 # filled by drawrow from a constant and its 64 bytes are never read, so it needs
 # no room in a tile bank: giving those tiles ids above 255 puts the whole game's
@@ -594,11 +663,18 @@ for (lv, sub), L in levels.items():
     hdr.append(gset)                               # which tile set the level wants
     pack += hdr.ljust(0x100, b'\0')                # bank 7 $8000
     objs = bytearray()
+    reach = enemy_reach(L['objs'])
     for (t, x, y, extra) in L['objs']:
         e = (extra + [0, 0, 0])[:3]
         if t == 0:
             e[0] = star_class(cm, x, y)
-            star_stats.setdefault((lv, sub), [0, 0, 0])[e[0]] += 1
+            # e1 = "an enemy can reach me".  Draw order keeps the picture right either
+            # way (box stars go down first, so anything sharing their space lands on
+            # top), so this does not change the sprite -- it marks the stars whose
+            # pixels can be disturbed, and so may not be left alone between frames.
+            e[1] = 1 if star_reachable(x, y, reach) else 0
+            star_stats.setdefault((lv, sub), [0, 0, 0, 0])[3] += e[1] if e[0] else 0
+            star_stats.setdefault((lv, sub), [0, 0, 0, 0])[e[0]] += 1
         objs += bytes([t, x, y] + e)
     pack += objs.ljust(0x400, b'\0')              # bank 7 $8100
     for p in range(2):
@@ -695,24 +771,47 @@ BANK4_END  = 0xC000
 ANDY_END   = 0x9000
 
 # pack each unique image (column-major MODE2 bytes); assign to bank4 or ANDY
+#
+# An odd-width image leaves one transparent pixel of padding, and it can sit at either
+# end: both give the same ceil(w/2) columns, but they pair art columns into bytes
+# differently.  A byte with both pixels opaque is a straight store (and can join a RUN);
+# a byte with one opaque pixel goes through MASKTAB/ORTAB -- read, mask, or, store.  So
+# the phase that leaves fewer half-opaque bytes is strictly cheaper to blit, for nothing.
+# x0 cancels the shift in the dither so every art pixel keeps the phase it had.
 img_bytes = []
 img_wbytes = []
+img_shift = []
 preview = []
-for (im, full, src) in images:
+
+def _pack(im, full, shift):
     h, w = im.shape
     W = (w + 1) // 2
     padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
-    padded[:, :w] = im
-    alpha = padded != spr_tr
-    rgb = spr_rgb[padded]
-    col = dither(rgb, alpha, full=full)
+    padded[:, shift:shift + w] = im
+    col = dither(spr_rgb[padded], padded != spr_tr, x0=(-shift) & 1, full=full)
+    return col, encode_sprite(col, pack_mode2(col))  # (lines, W): see encode_sprite
+
+_masked = lambda e: int((((e & 0x80) == 0) & (e != 0x41)).sum())
+_saved = 0
+for (im, full, src) in images:
+    h, w = im.shape
+    W = (w + 1) // 2
+    col, packed = _pack(im, full, 0)
+    shift = 0
+    if w & 1:
+        col1, packed1 = _pack(im, full, 1)
+        if _masked(packed1) < _masked(packed):
+            _saved += _masked(packed) - _masked(packed1)
+            shift, col, packed = 1, col1, packed1
     preview.append(col)
-    packed = encode_sprite(col, pack_mode2(col))    # (lines, W): see encode_sprite
     b = bytearray()
     for c in range(W):
         b += packed[:, c].tobytes()
     img_bytes.append(bytes(b))
     img_wbytes.append(W)
+    img_shift.append(shift)
+print('sprite padding phase: %d of %d images pad on the left, %d fewer masked bytes'
+      % (sum(img_shift), len(images), _saved))
 
 # greedy assignment: fill bank4 data region first (largest sprites there), rest to ANDY
 order = sorted(range(len(images)), key=lambda j: -len(img_bytes[j]))
@@ -762,15 +861,19 @@ def _span(f):                   # opaque pixel range of one frame, in field px
     xs = np.where((col != 0).any(axis=0))[0]
     return x0 + int(xs.min()), x0 + int(xs.max())
 
-# Every box has to be able to erase whatever the record holds, and the record is two
-# renders old: when the frame rate dips to three logic steps per render the animation
-# advances by two, so a box can face any other frame, not just its predecessor.  The
-# size is therefore the union of all six -- which is exactly the 7 x 24 the frames fill
-# (sizing each box to its predecessor alone gives 5 chars for the narrow spin frames and
-# fails visibly on level 6 when a frame is skipped).
-_lo = min(_span(f)[0] for f in range(6)) // 2
-_hi = max(_span(f)[1] for f in range(6)) // 2
-box_geom = [(_lo, _hi - _lo + 1)] * 6
+# Every box has to be able to erase whatever the record holds, and the record is the
+# same buffer's previous draw, two renders back.  main.s runs exactly one logic step
+# per render, fa advances every second step and the spin frame is fa >> 1, so two
+# renders move the animation by at most one frame and a box need only cover its own
+# art and its predecessor's.  If logic catch-up ever comes back this has to go back to
+# the union of all six: catching up ran two or three steps per render, the animation
+# could skip a frame, and the narrow boxes then left the previous one on screen.
+def _boxgeom(f):
+    p = (f - 1) % 6
+    lo = min(_span(f)[0], _span(p)[0]) // 2
+    hi = max(_span(f)[1], _span(p)[1]) // 2
+    return lo, hi - lo + 1
+box_geom = [_boxgeom(f) for f in range(6)]
 box_bytes = []
 for bg in (6, 0):
     for f in range(6):
@@ -791,7 +894,7 @@ assert BOX_BASE + sum(len(b) for b in box_bytes) <= 0xC000
 open(os.path.join(OUT, 'BOX'), 'wb').write(b''.join(box_bytes))
 print('box stars at $%04X in bank 6; classes per level:' % BOX_BASE,
       ' '.join('L%d%s=%s' % (lv, 'B' if sub == 0 else 'A', '/'.join(map(str, v))) for (lv, sub), v in sorted(star_stats.items())),
-      '(regular/cyan/black)')
+      '(regular/cyan/black, and how many boxes an enemy can reach)')
 
 # sprite table: 8 bytes each: ptr lo, ptr hi, W, H(game px), refx, refy, flags, lines
 # flags: bit0 mirror, bit1 full (always set now), bit2 data in ANDY, bit3 copy blitter,
@@ -805,7 +908,8 @@ for i in range(103):
     im, full, src = images[j]
     h, w = im.shape
     W = img_wbytes[j]
-    if mirror:
+    rx += img_shift[j]              # refx is a field coordinate, and the art may be
+    if mirror:                      # one pixel in from the left edge of the field
         rx = (2 * W - 1) - rx
     if i < 27:
         # Cleo anchors the camera, which is computed before she moves and rounded down
@@ -977,6 +1081,11 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('NTILES = %d\n' % len(compact))
     f.write('TSET_O = %d\nTSET_I = %d\n' % (len(tileset[0]), len(tileset[1])))
     f.write('BOX_BASE = $%04X\n' % BOX_BASE)
+    # the box stars are the last sprite ids, so "is this an opaque pre-composited
+    # rectangle?" is a single compare rather than a range test on two ends
+    f.write('BOXID0 = %d\n' % 103)
+    f.write('BOXN = %d\n' % 12)        # and the aliases above them: same picture, but
+                                        # the logic has decided nothing can disturb it
     f.write('TITLE_ADDR = $%04X\n' % TITLE_ADDR)
     for _n, (_p, _m) in sorted(level_split.items()):
         f.write('LP_%s = %d\nLM_%s = %d\n' % (_n, _p, _n, _m))

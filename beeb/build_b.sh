@@ -9,5 +9,5 @@ for l in 0 1 2 3 4 5 6 7; do for s in A B; do DATA="$DATA L$l$s:build/L$l$s:8400
 DATA="$DATA LOGIC:build/LOGICB:8900"
 ca65 -g -DMODELB --cpu 6502 -I src -I build -o build/mainb.o src/main.s -l build/mainb.lst
 ld65 -C cleo_b.cfg -o build/CLEOB build/mainb.o -m build/mapb.txt -Ln build/labelsb.txt
-python3 tools/mkdfs.py build build/cleob.ssd CLEO '!BOOT:build/BOOT:0000:FFFF' $DATA 'CLEO:build/CLEOB:0E00:0E00'
+python3 tools/mkdfs.py build build/cleob.ssd CLEO '!BOOT:build/BOOT:0000:FFFF' $DATA 'CLEO:build/CLEOB:2000:2000'   # loads clear of the DFS workspace; reloc.s moves it to $0E00
 ls -l build/CLEOB build/LOGICB build/cleob.ssd

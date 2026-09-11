@@ -645,6 +645,8 @@ level_init:
         jmp @box                    ; 7, 10: defaults
 @t0:    lda q3
         sta O_EL,y                  ; e0 = box class from the converter (0 none/1 cyan/2 black)
+        lda q4
+        sta O_EH,y                  ; e1 = an enemy's range covers this one
         jsr m_rnd
         jsr mod12
         sta O_AL,y
@@ -1057,7 +1059,7 @@ shr6:   lda t16+1                   ; t16 < 16384: result = (hi<<2) | (lo>>6)
 player_hit:
         mov16 evframe, frame
         dec health
-        jsr draw_health
+        jsr bar_touch
         lda #1
         sta hurt
         stz control
@@ -1116,8 +1118,7 @@ player_dead:
         lda #1
         sta hurt
         sta control
-        jsr draw_lives
-        jsr draw_health
+        jsr bar_touch
 @draw:  mov16 spx, px
         mov16 spy, py
         lda #26
@@ -1144,7 +1145,28 @@ vy_step:
         beq :+
         lda #$FF
 :       sta dpx+1
+        ; clamp the per-frame step to what the ring can scroll (MAXDWY): terminal
+        ; velocity is ~9.7 px, more than the two rows of buffer gap allow
+        lda dpx+1
+        bmi @up
+        bne @cdn                    ; >= 256
+        lda dpx
+        cmp #MAXDWY+1
+        bcc @cdone
+@cdn:   lda #MAXDWY
+        sta dpx
+        stz dpx+1
         rts
+@up:    cmp #$FF                    ; <= -256
+        bne @cup
+        lda dpx
+        cmp #<-MAXDWY
+        bcs @cdone
+@cup:   lda #<-MAXDWY
+        sta dpx
+        lda #$FF
+        sta dpx+1
+@cdone: rts
 
 ; ============================================================================
 ; player alive update
@@ -1227,7 +1249,7 @@ player_update:
         bra @push
 @fell:  mov16 evframe, frame
         stza health
-        jsr draw_health
+        jsr bar_touch
         stz control
         stz vx
         stz vx+1
@@ -1750,6 +1772,9 @@ RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, eac
         .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
         .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
         .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
+        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
+        .byte 105, 147, 113, 152        ; 32: Cleo      <-23, 19, <-15, 24
+        .byte 111, 144, 118, 143        ; 36: boomerang <-17, 16, <-10, 15
         .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
         .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
         .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
@@ -1781,7 +1806,7 @@ addscore:                           ; A = points
         sta score
         bcc :+
         inc score+1
-:       jmp draw_score
+:       jmp bar_touch
 
 ; ---------------------------------------------------------------- STAR (0)
 ob_star:
@@ -1821,7 +1846,7 @@ ob_star:
         lda #1
         sta fc
         dec stars
-        jsr draw_stars
+        jsr bar_touch
         lda #1
         jsr addscore
         lda #SFX_STAR
@@ -1835,12 +1860,41 @@ ob_star:
         cmp #6
         bcs @reg                    ; sparkle frames stay regular (C = 0 below)
         adc boxbase-1,x
+        sta q1
+        jsr star_safe               ; may the next frame leave this one alone?
+        lda q1
         jmp m_addsprite
 @reg:   clc
         adc #34
         jmp m_addsprite
 @done:  rts
 boxbase: .byte 103, 109
+
+; A box star is an opaque rectangle, so if the same frame is already on screen in the
+; same place its pixels are still right -- unless something has been drawn through
+; them.  The converter marks the stars an enemy's range covers; the rest can still be
+; walked through by Cleo or the boomerang, which the collect check tests for with a
+; band widened from "close enough to pick up" to "the rectangles touch".  Safe ones
+; are drawn under an alias id BOXN above the real one.
+star_safe:
+        lda fe+1
+        bne @no
+        ldx #32
+        jsr inrange
+        bcs @no
+        lda bactive
+        beq @yes
+        jsr boomrel
+        mov16 rx, sx
+        mov16 ry, sy
+        ldx #36
+        jsr inrange
+        bcs @no
+@yes:   lda q1
+        clc
+        adc #BOXN
+        sta q1
+@no:    rts
 
 ; ---------------------------------------------------------------- TRAMPOLINE (1)
 ob_tramp:
@@ -2550,7 +2604,7 @@ ob_powerup:
         sta fa
         lda #3
         sta health
-        jsr draw_health
+        jsr bar_touch
         lda #SFX_POWER
         sta SFXREQ
         bra @draw
@@ -2692,6 +2746,9 @@ ob_switch:
         .code
 ; draw digit A at bar pixel column X (even): copies a 64-byte digit tile into the bar image
 bar_digit:
+.ifdef MODELB
+        rts
+.else
         pha
         setbank BANK_SPR
         pla
@@ -2720,29 +2777,38 @@ bar_digit:
         asl
         rol ptr+1
         clc
-        adc #<SPR_BAR
-        sta ptr
+        adc #<BARADDR               ; straight into the back buffer's bar row (no offscreen
+        sta ptr                     ; buffer): bank 4 glyph at $8xxx, screen bar at $7Bxx
         lda ptr+1
-        adc #>SPR_BAR
-        sta ptr+1                   ; bar char address (row 0)
+        adc #>BARADDR
+        sta ptr+1
         ldy #31
 :       lda (w16),y
         sta (ptr),y
         dey
         bpl :-
-        ; row 1: +640 in bar, +32 in tile
-        add16i w16, 32
+        add16i w16, 32              ; row 1: +640 on screen, +32 in the glyph
         add16i ptr, 640
         ldy #31
 :       lda (w16),y
         sta (ptr),y
         dey
         bpl :-
+        setbank BANK_LVL
+        rts
+.endif
+
+bar_touch:
         lda #1
         sta BARDIRTY
         sta BARDIRTY+1
-        setbank BANK_LVL
         rts
+
+redraw_hud:
+        jsr draw_lives
+        jsr draw_health
+        jsr draw_stars
+        jmp draw_score
 
 draw_lives:
         lda lives

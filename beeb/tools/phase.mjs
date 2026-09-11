@@ -6,9 +6,9 @@ import { homedir } from "node:os";
 import path from "node:path";
 function findJsbeeb() { const npx = path.join(homedir(), ".npm", "_npx"); for (const d of readdirSync(npx)) { const p = path.join(npx, d, "node_modules", "jsbeeb", "src", "machine-session.js"); if (existsSync(p)) return p; } throw new Error("no jsbeeb"); }
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
-const A = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) A[m[2]] = parseInt(m[1], 16);
+const A = {}; for (const m of readFileSync(process.env.LABELS ?? "build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) A[m[2]] = parseInt(m[1], 16);
 const lvl = parseInt(process.argv[2] ?? "0");
-const s = new MachineSession("Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleo.ssd"));
+const s = new MachineSession(process.env.MODEL ?? "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(process.env.SSD ?? "build/cleo.ssd"));
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 const cpu = s._machine.processor, rd = (a) => cpu.readmem(a), wr = (a, v) => cpu.writemem(a, v);
 let hit = false; const h = cpu.debugInstruction.add((pc) => (pc === A.title_loop ? (hit = true) : false)); await s.runFor(80_000_000); h.remove();
