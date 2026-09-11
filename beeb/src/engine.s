@@ -113,6 +113,8 @@ K_MENU  = 32
 ; ---------------------------------------------------------------- zero page
         .zeropage
 jv:       .res 2                  ; jmp (abs,x) has no 6502 form: it goes through here
+bufbase:  .res 1                  ; high bytes of the buffer being drawn and of the
+bufend:   .res 1                  ;   byte after it: ringup and ringdn fold between them
 ptr:      .res 2                  ; general pointer
 tp:       .res 2                  ; tile/source pointer
 sp:       .res 2                  ; screen pointer
@@ -206,8 +208,8 @@ MUSPTR:   .res 2
 MASKTAB:   .res 256               ; data byte -> AND mask
 SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
 IDENT:     .res 256               ; identity table: ora IDENT,x == ora X (no temp)
-RINGLO:    .res 32                ; ring row r -> screen address
-RINGHI:    .res 32
+RINGLO:    .res RINGROWS          ; ring row r -> screen address
+RINGHI:    .res RINGROWS
 GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank (low nibble)
 GATHERH:   .res 24                ;                       tile address hi
 SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
@@ -280,6 +282,17 @@ NEXTBUF:   .res 1
 ; Both spell their skip with an anonymous label, so a caller that wants to branch
 ; over one of these has to count it: see spnext, which says :++ for that reason.
 ; A named label here would end the enclosing routine's cheap-local scope.
+.macro ringmod                      ; A = a map char row -> its ring slot
+.ifdef MODELB
+:       cmp #RINGROWS               ; 20 is not a power of two, and A can be any row
+        bcc :+
+        sbc #RINGROWS
+        bcs :-
+:
+.else
+        and #(RINGROWS-1)
+.endif
+.endmacro
 .macro ringup                       ; A = high byte after moving forward
 .ifdef MODELB
         cmp bufend
@@ -322,7 +335,7 @@ NEXTBUF:   .res 1
 ; ringaddr: screen address of map char (w16 = cx 16 bit, A = cy) -> sp
 ; ============================================================================
 ringaddr:
-        and #31
+        ringmod
         tax
         lda w16+1
         sta sp+1
@@ -769,12 +782,12 @@ scroll_validate:
         bra @docols
 @dxpos: lda w16
         beq @dyc
-        cmp #80
+        cmp #ROWCHARS
         bcs @full                   ; not taken: C = 0 for the adc
         ; dx positive: cols (oldcx+80) .. wcx+79 = dx cols starting at wcx+80-dx
         sta rc_w
         lda wcx
-        adc #80
+        adc #ROWCHARS
         sta rc_x
         lda wcx+1
         adc #0
@@ -821,7 +834,7 @@ scroll_validate:
         sta rc_x
         lda wcx+1
         sta rc_x+1
-        lda #80
+        lda #ROWCHARS
         sta rc_w
         lda rc_y
         sta SV_ROWY
@@ -836,7 +849,7 @@ scroll_validate:
         sta rc_x+1
         lda wcy
         sta rc_y
-        lda #80
+        lda #ROWCHARS
         sta rc_w
         lda #BUFROWS
         sta rc_h
@@ -1166,14 +1179,14 @@ drawsprite:
         sta sp_c                    ; starting image column
         bra @vert
 @cpos:  lda w16
-        cmp #80
+        cmp #ROWCHARS
         bcs @out0                   ; not taken: C = 0 for the adc below
         sta sp_c0
         adc sp_w
         deca
-        cmp #80
+        cmp #ROWCHARS
         bcc :+
-        lda #79
+        lda #(ROWCHARS-1)
 :       sta sp_c1
         stz sp_c
         bra @vert
@@ -1809,9 +1822,9 @@ copy_partial:
         bne @all
         ; same source row and lines as last time: only the columns drawn since
         lda PART_HI,x
-        cmp #80
+        cmp #ROWCHARS
         bcc :+
-        lda #79
+        lda #(ROWCHARS-1)
 :       sec
         sbc PART_LO,x
         bcs :+
@@ -1824,7 +1837,7 @@ copy_partial:
         sta PART_F,x
         lda wcy
         sta PART_CY,x
-        lda #80
+        lda #ROWCHARS
         sta cnt
         lda #0
 @go:    tay                         ; range is clean once copied
@@ -1940,7 +1953,7 @@ copy_bar:
         stz BARDIRTY,x
         sec
         sbc #3
-        and #31
+        ringmod
         tax                         ; ring row for bar row 0
         stx tmp2                    ; (X is used as the byte index inside @row)
         lda #BANK_SPR
@@ -1955,7 +1968,7 @@ copy_bar:
         ldx tmp2
         inx
         txa
-        and #31
+        ringmod
         tax
         lda w16
         clc
@@ -2157,13 +2170,13 @@ build_sections:
         lda barq
         sec
         sbc #3
-        and #31
+        ringmod
         tax
-        lda mul80lo,x
+        lda mulrowlo,x
         clc
         adc #<$600
         sta w16b
-        lda mul80hi,x
+        lda mulrowhi,x
         adc #>$600
         sta w16b+1
         ; remember this buffer's bar CRTC start so the ISR can program R12/R13 for
@@ -2243,7 +2256,7 @@ build_sections:
         jmp @setq
 @fine:
         ; T -> A (S-80) [8-f lines] -> P1 (S+80) [208] -> P2 (S+27*80) [f] -> Q
-        jsr @sub80
+        jsr @subrow
         lda w16+1
         sta SECTAB,x
         lda w16
@@ -2256,8 +2269,8 @@ build_sections:
         lda tmp3
         sta SECTAB+7,x
         ; A
-        jsr @add80
-        jsr @add80                  ; S+80
+        jsr @addrow
+        jsr @addrow                  ; S+80
         lda w16+1
         sta SECTAB+8,x
         lda w16
@@ -2278,7 +2291,7 @@ build_sections:
         sta SECTAB+15,x
         ; P1 : next = S + 27*80 = (S+80) + 26*80
         ldy #VISROWS-1
-:       jsr @add80
+:       jsr @addrow
         dey
         bne :-
         lda w16+1
@@ -2358,9 +2371,9 @@ build_sections:
         dec tmp3
 :       rts
 ; w16 = (w16 - 80) with ring wrap (w16 holds CRTC address S+$600 in $600..$FFF)
-@sub80: lda w16
+@subrow: lda w16
         sec
-        sbc #80
+        sbc #ROWCHARS
         sta w16
         bcs :+
         dec w16+1
@@ -2372,9 +2385,9 @@ build_sections:
         adc #$0A
         sta w16+1
 :       rts
-@add80: lda w16
+@addrow: lda w16
         clc
-        adc #80
+        adc #ROWCHARS
         sta w16
         bcc :+
         inc w16+1
@@ -2393,12 +2406,23 @@ QVSYNC = 4                         ; vsync at Q row 4 -> T starts 48 lines after
 ; ============================================================================
 ; select CPU access to the current back buffer (ACCCON X bit)
 select_backbuf:
+.ifdef MODELB
+        ; the two buffers are the halves of one screen, so the ring addresses move
+        ldx curbuf
+        lda bufhi,x
+        sta bufbase
+        clc
+        adc #>RINGBYTES
+        sta bufend
+        jsr build_ring
+.else
         lda ACCCON
         and #$FB
         ldx curbuf
         beq :+
         ora #$04
 :       sta ACCCON
+.endif
         lda #<SPRREC
         sta recp
         lda #>SPRREC
@@ -2543,12 +2567,12 @@ drawrect_clip:
 @right: lda w16+1
         bne @none                   ; rel >= 256 -> off right
         lda w16
-        cmp #80
+        cmp #ROWCHARS
         bcs @none                   ; not taken: C = 0 for the adc
         adc rc_w
         cmp #81
         bcc :+                      ; not taken: C = 1 for the sbc
-        lda #80
+        lda #ROWCHARS
         sbc w16
         sta rc_w
 :       jmp drawrect
@@ -2558,27 +2582,27 @@ drawrect_clip:
 ; (rows wcy..wcy+30, cols wcx..wcx+79).
 calc_ring:
         lda wcy
-        and #31
+        ringmod
         tax
-        lda mul80lo,x
+        lda mulrowlo,x
         clc
         adc wcx
         sta ringS
-        lda mul80hi,x
+        lda mulrowhi,x
         adc wcx+1
         sta ringS+1
-        cmp #>2560
+        cmp #>RINGCHARS
         bcc :+
         bne @sub
         lda ringS
-        cmp #<2560
+        cmp #<RINGCHARS
         bcc :+
 @sub:   lda ringS
         sec
-        sbc #<2560
+        sbc #<RINGCHARS
         sta ringS
         lda ringS+1
-        sbc #>2560
+        sbc #>RINGCHARS
         sta ringS+1
 :       ; q = S / 80
         lda ringS
@@ -2588,7 +2612,7 @@ calc_ring:
         ldx #0
 @div:   lda w16
         sec
-        sbc #80
+        sbc #ROWCHARS
         tay
         lda w16+1
         sbc #0
@@ -2661,41 +2685,28 @@ init_tables:
         inx
         bpl :-
         ; ring rows
-        lda #<SCREEN
-        sta w16
-        lda #>SCREEN
-        sta w16+1
-        ldx #0
-@r:     lda w16
-        sta RINGLO,x
-        lda w16+1
-        sta RINGHI,x
-        lda w16
+        lda #>BUF0
+        sta bufbase
         clc
-        adc #<640
-        sta w16
-        lda w16+1
-        adc #>640
-        sta w16+1
-        inx
-        cpx #32
-        bne @r
-        ; mul80 tables (row slot -> chars)
+        adc #>RINGBYTES
+        sta bufend
+        jsr build_ring
+        ; row slot -> chars
         stz w16
         stz w16+1
         ldx #0
 @m80:   lda w16
-        sta mul80lo,x
+        sta mulrowlo,x
         lda w16+1
-        sta mul80hi,x
+        sta mulrowhi,x
         lda w16
         clc
-        adc #80
+        adc #ROWCHARS
         sta w16
         bcc :+
         inc w16+1
 :       inx
-        cpx #32
+        cpx #RINGROWS
         bne @m80
         ldx #0
         lda #0
@@ -3246,8 +3257,8 @@ blank_palette:
         rts
         .segment "TABLES"
 sprmul5: .res MAXSPR
-mul80lo: .res 32
-mul80hi: .res 32
+mulrowlo: .res RINGROWS
+mulrowhi: .res RINGROWS
         .code
 
 ; ============================================================================
@@ -3515,6 +3526,31 @@ getglyph:
         dey
         bpl :-
         jmp pagelogic
+        .segment "CODE"
+
+        .segment "LOW2"
+; the screen address of each ring row, from the base of the buffer being drawn
+build_ring:
+        stz w16
+        lda bufbase
+        sta w16+1
+        ldx #0
+@r:     lda w16
+        sta RINGLO,x
+        lda w16+1
+        sta RINGHI,x
+        lda w16
+        clc
+        adc #<ROWBYTES
+        sta w16
+        lda w16+1
+        adc #>ROWBYTES
+        sta w16+1
+        inx
+        cpx #RINGROWS
+        bne @r
+        rts
+bufhi:  .byte >BUF0, >BUF1
         .segment "CODE"
 
 ; ---------------------------------------------------------------- level tiles
