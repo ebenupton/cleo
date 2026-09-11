@@ -5,7 +5,6 @@
 ;     with 2-scanline fine vertical scroll, 1-character horizontal scroll
 ;   - tiles are 8x8 game pixels = 4 chars x 2 char rows (64 bytes) in SWR
 ; ============================================================================
-        .setcpu "65C02"
         .include "assets.inc"
 
 ; ---------------------------------------------------------------- hardware
@@ -90,6 +89,7 @@ K_MENU  = 32
 
 ; ---------------------------------------------------------------- zero page
         .zeropage
+jv:       .res 2                  ; jmp (abs,x) has no 6502 form: it goes through here
 ptr:      .res 2                  ; general pointer
 tp:       .res 2                  ; tile/source pointer
 sp:       .res 2                  ; screen pointer
@@ -311,7 +311,7 @@ drawrect:
         sta PART_LO,x
 @plo:   clc
         adc rc_w
-        dec
+        deca
         cmp PART_HI,x
         bcc :+
         sta PART_HI,x
@@ -373,7 +373,7 @@ drawrect:
 :       clc
         adc #>LV_PAGE0
         sta @pglo+2
-        inc
+        inca
         sta @pgbk+2
         lda LV_MAPROWLO,x
         sta ptr
@@ -435,9 +435,10 @@ drawrect:
         stz rc_gi
 @run:
         ldx rc_gi
-        bit GATHERH,x
-        bvc :+
-        jmp @solid                  ; bit 6: solid cyan/black tile, filled not copied
+        lda GATHERH,x               ; bit 6: solid cyan/black tile, filled not copied
+        and #$40                    ; (bit abs,x would be 65C02 only)
+        beq :+
+        jmp @solid
 :       lda GATHERL,x
         and #$0F                    ; bank rides in the low nibble of the pre-shifted lo byte
         cmp curbank
@@ -471,7 +472,7 @@ drawrect:
         adc #0
         bpl :+
         jmp @slow
-:       jmp (@jt-2,x)
+:       jmpx @jt-2
 @jt:    .word @b7, @b15, @b23, @b31
         ; unrolled copy, one block per char in descending char order so that entry at
         ; char n-1 copies chars n-1..0.  A cell whose first byte has bit 7 set repeats
@@ -483,9 +484,9 @@ drawrect:
 .endmacro
 .macro CHARCPY c, per
 .if c = 0
-        lda (tp)                    ; line 0 non-indexed
+        ldaz tp                     ; line 0 non-indexed
         bmi per
-        sta (sp)
+        staz sp
         ldy #1
 .else
         ldy #8*c
@@ -505,7 +506,7 @@ drawrect:
 .endmacro
 .macro CHARPER c, next              ; A = line 0 (Y = 8c unless c = 0)
 .if c = 0
-        sta (sp)
+        staz sp
 .else
         sta (sp),y
 .endif
@@ -620,7 +621,7 @@ drawrect:
         bpl :+
         jmp @fslow
 :       lda tp
-        jmp (@ft-2,x)
+        jmpx @ft-2
 @ft:    .word @f7, @f15, @f23, @f31
 .macro FIL1 k
         ldy #k
@@ -661,7 +662,7 @@ drawrect:
         FILN
         FILN
         FILN
-        sta (sp)                    ; line 0 non-indexed
+        staz sp                     ; line 0 non-indexed
         jmp @advsp
 @fslow: lda rc_n
         sta tmp2
@@ -712,7 +713,7 @@ scroll_validate:
         jmp @full
 :       ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+30
         eor #$FF                    ; (A still holds w16)
-        inc
+        inca
         sta rc_w
         lda wcx
         sta rc_x
@@ -755,7 +756,7 @@ scroll_validate:
         cmp #<-30
         bcc @full
         eor #$FF
-        inc
+        inca
         sta rc_h
         lda wcy
         sta rc_y
@@ -844,7 +845,7 @@ match_sprites:
         jsr boxgrp
         beq @next
         sta tmp3
-        lda (rp)
+        ldaz rp
         jsr boxgrp
         cmp tmp3
         bne @next
@@ -1060,7 +1061,7 @@ drawsprite:
         lda (ptr),y
         sta sp_flags
 @entry2:
-        lda (ptr)
+        ldaz ptr
         sta sp_ptr
         ldy #1
         lda (ptr),y
@@ -1114,7 +1115,7 @@ drawsprite:
         ; first visible column index = -c0
         lda w16
         eor #$FF
-        inc
+        inca
         sta sp_c                    ; starting image column
         bra @vert
 @cpos:  lda w16
@@ -1122,7 +1123,7 @@ drawsprite:
         bcs @out0                   ; not taken: C = 0 for the adc below
         sta sp_c0
         adc sp_w
-        dec
+        deca
         cmp #80
         bcc :+
         lda #79
@@ -1239,13 +1240,13 @@ drawsprite:
         lda sp_c1
         sec
         sbc sp_c0
-        inc
+        inca
         sta (rp),y
         iny
         lda sp_r1
         sec
         sbc sp_r0
-        inc
+        inca
         sta (rp),y
         ; ---- column base pointer & step
         lda sp_flags
@@ -1253,7 +1254,7 @@ drawsprite:
         beq @nomirror
         ; mirror: image column = W-1-c (the column loop then steps backwards)
         lda sp_w
-        dec
+        deca
         sec
         sbc sp_c
         sta sp_c
@@ -1413,14 +1414,14 @@ ds_done: rts
 .macro SPRLINE k, mirror, copy, solid, blank
         .local done, skip, opaque, masked
 .if k = 0
-        lda (ptr)                   ; line 0: non-indexed (Y is not needed)
+        ldaz ptr                    ; line 0: Y is not needed here
 .else
         ldy #k
         lda (ptr),y
 .endif
 .if copy
   .if k = 0
-        sta (sp)                    ; box sprite: every byte opaque, plain copy
+        staz sp                     ; box sprite: every byte opaque, plain copy
   .else
         sta (sp),y
   .endif
@@ -1429,7 +1430,9 @@ ds_done: rts
   .if k = 0
         bpl masked                  ; (N from the load: cmp would set it from the subtraction)
         cmp #$C0
-        bcs solid                   ; bit 7+6: this and the next 7 bytes all opaque
+        bcc :+                      ; bit 7+6: this and the next 7 bytes all opaque
+        jmp solid
+:
         bra opaque
 masked: cmp #$41                    ; and the mirror image of that: this and the next 7
         beq blank                   ; all transparent, so the cell is left alone
@@ -1443,7 +1446,7 @@ masked: cmp #$41                    ; and the mirror image of that: this and the
         lda MASKTAB,x
   .endif
   .if k = 0
-        and (sp)
+        andz sp
   .else
         and (sp),y
   .endif
@@ -1460,7 +1463,7 @@ opaque:
   .endif
 skip:
   .if k = 0
-        sta (sp)
+        staz sp
   .else
         sta (sp),y
   .endif
@@ -1481,7 +1484,7 @@ done:
         tax
         lda SWAPTAB,x
 .if k = 0
-        sta (sp)
+        staz sp
 .else
         sta (sp),y
 .endif
@@ -1502,7 +1505,7 @@ solid:  ; byte 0 carried the RUN flag: the whole cell is opaque, straight copy
         SOLIDM 7
         jmp sprretM
 .else
-        sta (sp)                    ; A = byte 0
+        staz sp                     ; A = byte 0
         SOLID1 1
         SOLID1 2
         SOLID1 3
@@ -1521,7 +1524,7 @@ name:
 :       lda tmp
         asl
         tax
-        jmp (et,x)
+        jmpx et
 et:     .word l0,l1,l2,l3,l4,l5,l6,l7
 .if .not copy
 blank:  ; byte 0 was $41: the whole cell is transparent, so there is nothing to do
@@ -1592,7 +1595,7 @@ pd:
 .macro SPRLINE2 k, mirror
         .local skip, opaque, both, store
 .if k = 0
-        lda (ptr)
+        ldaz ptr
 .else
         ldy #k
         lda (ptr),y
@@ -1614,10 +1617,10 @@ pd:
         stx tmp3
 .endif
 .if k = 0
-        lda (sp)
+        ldaz sp
         and tmp4
         ora tmp3
-        sta (sp)
+        staz sp
         ldy #1
 .else
         ldy #2*k
@@ -1646,7 +1649,7 @@ opaque:
 .endif
 store:
 .if k = 0
-        sta (sp)
+        staz sp
         ldy #1
 .else
         ldy #2*k
@@ -1666,7 +1669,7 @@ name:
         jmp partial
 :       lda tmp                     ; even 0,2,4,6 -> entry 0..3
         tax
-        jmp (et,x)
+        jmpx et
 et:     .word l0,l1,l2,l3
 l0:     SPRLINE2 0, mirror
 l1:     SPRLINE2 1, mirror
@@ -1728,7 +1731,7 @@ pq:     ldy sp_lim
         iny
         sta (sp),y
 ps:     lda sp_lim
-        inc
+        inca
         cmp tmp2
         bcs pd
         inc sp_lim
@@ -1768,7 +1771,7 @@ copy_partial:
         sbc PART_LO,x
         bcs :+
         rts                         ; nothing drawn in the top row
-:       inc
+:       inca
         sta cnt
         lda PART_LO,x
         bra @go
@@ -1814,7 +1817,7 @@ copy_partial:
 :       ; start at line wfine: patched jmp into the unrolled 6-line copy
         lda wfine
         lsr
-        dec                         ; 2,4,6 -> 0,1,2
+        deca                         ; 2,4,6 -> 0,1,2
         asl
         tax
         lda @ftab,x
@@ -2197,7 +2200,7 @@ build_sections:
         sta SECTAB+1,x
         lda wfine
         eor #7
-        inc                         ; 8-f
+        inca                         ; 8-f
         jsr @dur
         sta SECTAB+6,x
         lda tmp3
@@ -2254,7 +2257,7 @@ build_sections:
         lda #0
         sta SECTAB+26,x
         lda wfine
-        dec
+        deca
         sta SECTAB+27,x
         lda #VISROWS
         sta SECTAB+28,x
@@ -2286,7 +2289,7 @@ build_sections:
         sta SECTAB+7,x
         rts
 ; A = lines -> A/tmp3 = lines*64-2
-@dur:   stz tmp3
+@dur:   stza tmp3
         asl
         rol tmp3
         asl
@@ -3033,7 +3036,7 @@ music_tick:
 
 ; A = next music byte; MUSPTR += 1.  Preserves X.  Z reflects A.  Bank 6 selected.
 musbyte:
-        lda (MUSPTR)
+        ldaz MUSPTR
         inc MUSPTR
         bne :+
         inc MUSPTR+1

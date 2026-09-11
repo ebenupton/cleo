@@ -1,7 +1,7 @@
 ; ============================================================================
 ; CLEO - main program: init, loading, game
 ; ============================================================================
-        .setcpu "65C02"
+        .include "cpu.inc"
         .code
         jmp start
         .import __LOGIC_START__, __LOGIC_LAST__
@@ -117,11 +117,11 @@ load_level:
         sta tmp2
         jsr loadfile
         lda tmp2
-        inc
+        inca
         sta tmp2
         jsr loadfile
         lda tmp2
-        inc
+        inca
         jsr loadfile
         jsr load_tiles              ; only the tiles this level's page tables name
         ; geometry
@@ -298,7 +298,7 @@ clamp_window:
         lda maxwy+1
         sta wy+1
         rts
-@wy0:   stz wy
+@wy0:   stza wy
         stz wy+1
 @wyok:  rts
 
@@ -388,7 +388,7 @@ frame_loop:
         clc
         adc logicvs
         sta logicvs
-@steps: stz NSPR
+@steps: stza NSPR
         jsr t_game_frame
         lda exiting
         bne @over

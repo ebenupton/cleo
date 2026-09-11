@@ -609,7 +609,7 @@ level_init:
         lsr
         sta gy
         lda q2
-        inc
+        inca
         lsr
         lsr
         lsr
@@ -678,7 +678,7 @@ level_init:
         lsr
         sta gx0
         lda q1
-        inc
+        inca
         lsr
         lsr
         lsr
@@ -920,7 +920,7 @@ game_frame:
         inc frame
         bne :+
         inc frame+1
-:       stz bounce
+:       stza bounce
         ; ---- camera
         lda health
         beq @cam
@@ -1331,7 +1331,7 @@ player_update:
 @run:   lda #1
         sta running
         bra @hmove
-@norun: stz running
+@norun: stza running
 @hmove:
         ; steps = (vx + 128) >> 8 ; dir = sign
         mov16 dpx, vx
@@ -1476,11 +1476,11 @@ player_update:
         bne @ctl
         lda #22
         ldx vx+1
-        bmi @spr
+        bmi @spr2
         ldx vx
-        beq @spr
+        beq @spr2
         lda #23
-        bra @spr
+@spr2:  jmp @spr
 @ctl:   lda firing
         beq @nofire
         lda anim
@@ -1701,7 +1701,7 @@ process_object:
         lda fe+1
         sta O_EH,y
         rts
-@call:  jmp (@tab,x)
+@call:  jmpx @tab
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
         .word ob_spike, ob_none, ob_flame, ob_powerup, ob_vanish, ob_switch
 ob_none:
@@ -1713,7 +1713,7 @@ ob_none:
 ; Returns carry set if inside. Clobbers A, X.
 inrange:
         lda rx+1
-        inc                         ; $FF -> 0, 0 -> 1, anything else >= 2
+        inca                         ; $FF -> 0, 0 -> 1, anything else >= 2
         cmp #2
         bcs @no
         lda rx
@@ -1727,7 +1727,7 @@ inrange:
         cmp RNGTAB+1,x
         bcs @no                     ; rx < hi
         lda ry+1
-        inc
+        inca
         cmp #2
         bcs @no
         lda ry
@@ -1904,7 +1904,9 @@ ob_snake:
         beq @c5
         jmp @coll
 @c0:    jsr @pausef
-        bcs @coll
+        bcc :+
+        jmp @coll
+:
         inc fb
         bne :+
         inc fb+1
@@ -2058,7 +2060,7 @@ ob_rsnake:
         clc
         adc #64
         eor #$FF
-        inc                         ; -(r&63)-64
+        inca                         ; -(r&63)-64
         sx16 fa
 @norst: ; rise = (A*A >> 3) - 28  (A > -16) -> q6/t16b
         lda fa+1
@@ -2071,7 +2073,7 @@ ob_rsnake:
 @calc:  lda fa
         bpl :+
         eor #$FF
-        inc
+        inca
 :       jsr square
         lsr t16+1
         ror t16
@@ -2382,7 +2384,7 @@ ob_walker:
         stz fe
 :       lda frame
         and #1
-        inc
+        inca
         sta q1                      ; step 1 or 2
         lda fc
         bne @left
@@ -2486,7 +2488,7 @@ ob_spike:
         clc
         adc #64
         eor #$FF
-        inc
+        inca
         sx16 fa
 @nowrap:
         lda health
@@ -2498,7 +2500,7 @@ ob_spike:
         bcs @draw
         ; rx > -8 && rx < (A+1)*2 && ry > -24 && ry < 8
         lda fa
-        inc
+        inca
         asl
         eor #$80                    ; biased limit
         sta RNGTAB+49
@@ -2628,7 +2630,7 @@ ob_vanish:
         ldx q5
         jsr m_mark_dirty
         lda q4
-        inc
+        inca
         ldx q5
         jsr m_mark_dirty
         lda fe
@@ -2674,7 +2676,7 @@ ob_switch:
         ldx q5
         jsr m_mark_dirty
         lda fa
-        inc
+        inca
         ldx q5
         jsr m_mark_dirty
         inc q5

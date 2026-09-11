@@ -298,7 +298,7 @@ menu_list:
         and #K_DOWN
         beq :+
         lda msel
-        inc
+        inca
         cmp mcount
         bcs :+
         sta msel
@@ -443,10 +443,10 @@ level_select:
         lda #1
         sta mclear
         pla
-        inc
+        inca
         sta tmp
         ; top y = (108 - (n-1)*12 - 8)/2 rounded to multiple of 4
-        dec
+        deca
         asl
         asl
         sta tmp2
