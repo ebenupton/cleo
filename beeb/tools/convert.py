@@ -489,30 +489,43 @@ folded = []                          # per set: global id -> the tile it folded 
 remap = [dict(), dict()]             # per set: global id -> byte id
 for g in (0, 1):
     ids = sorted(c for c in _want[g] if c not in tile_solid)
-    thr = 0
-    while True:                      # the least folding that fits a byte
-        keep, rep_of = [], {}
-        for c in ids:
-            if c not in _nomerge and thr:
-                for k in keep:
-                    if k not in _nomerge and alt_class[k] == alt_class[c] \
-                       and _bits(tiles_mode2[c], tiles_mode2[k]) <= thr:
-                        rep_of[c] = k
-                        break
-                else:
-                    keep.append(c)
-            else:
-                keep.append(c)
-        if len(keep) <= 256:
-            break
-        thr += 4
-        assert thr <= 64, 'tile set %s will not fold into a byte' % SETNAME[g]
+    # Fold the closest pairs first and stop the moment the set fits a byte, so the
+    # tiles that disappear are the ones whose twin is nearest.  Only tiles of the
+    # same altitude class fold together, and the animations never fold at all.
+    rep_of, worst = {}, 0
+    if len(ids) > 256:
+        cand = []
+        for i, c in enumerate(ids):
+            if c in _nomerge:
+                continue
+            for k in ids[:i]:
+                if k in _nomerge or alt_class[k] != alt_class[c]:
+                    continue
+                d = _bits(tiles_mode2[c], tiles_mode2[k])
+                if d <= 64:
+                    cand.append((d, c, k))
+        cand.sort()
+        live, target = len(ids), set()
+        for d, c, k in cand:
+            if live <= 256:
+                break
+            if c in rep_of or c in target:      # each tile folds once, and only
+                continue                        # into one that is staying
+            if k in rep_of:
+                continue
+            rep_of[c] = k
+            target.add(k)
+            worst = d
+            live -= 1
+        assert live <= 256, 'tile set %s will not fold into a byte' % SETNAME[g]
+    keep = [c for c in ids if c not in rep_of]
+    thr = worst
     tileset.append(keep)
     folded.append(rep_of)
     idx = {c: i for i, c in enumerate(keep)}
     for c in ids:
         remap[g][c] = idx[rep_of.get(c, c)]
-    print('tile set %s: %d tiles wanted, %d after folding at %d bits, %d bytes'
+    print('tile set %s: %d tiles wanted, %d kept, worst fold %d bits of 512, %d bytes'
           % (SETNAME[g], len(ids), len(keep), thr, len(keep) * 64))
 for g in (0, 1):
     open(os.path.join(OUT, 'TILES' + SETNAME[g]), 'wb').write(

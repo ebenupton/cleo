@@ -80,11 +80,13 @@ LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 ; A Model B has one screen, so the two buffers share the 20K: 64-char rows make
 ; it a ring of 40, and a buffer's rows start BUFOFF = 20 of them further on.
 ; Each holds 18 rows and shows 17, which leaves two rows of gap at each end.
-; The gap is what lets the two be drawn a frame apart: the window moves up to
-; two rows a frame in ordinary play, and a bigger jump invalidates the other
-; buffer instead.  One shared ring also means the video hardware's own wrap at
-; $8000 still closes it, which matters because the CRTC can only be re-pointed
-; at a row boundary and the window rarely starts on one.
+; The gap is what lets the two be drawn a frame apart: with one physics step per
+; frame the window moves two rows at most in ordinary play, and a bigger jump
+; invalidates the other buffer rather than drawing over it.  One row of gap and
+; 18 visible would fit, but the display glitches during a long fall, so the
+; second row stays until that is understood.  One shared ring also means the video
+; hardware's own wrap at $8000 still closes it, which matters because the CRTC
+; can only be re-pointed at a row boundary and the window rarely starts on one.
 .ifdef MODELB
 ROWCHARS  = 64                    ; chars across a screen row (2 pixels each)
 RINGROWS  = 40                    ; rows in the shared ring
@@ -2714,8 +2716,8 @@ render_frame:
 :       jsr draw_dirty
         jsr draw_sprites
         stza DIRTYSEEN
-        jsr copy_partial
-.ifndef MODELB
+.ifndef MODELB                      ; no fine vertical scroll on a Model B, so no
+        jsr copy_partial            ; partial row to prepare, and no status bar
         jsr copy_bar
 .endif
         stza NSPR
