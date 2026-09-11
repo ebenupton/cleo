@@ -1,7 +1,7 @@
 ; ============================================================================
-; CLEO - menus, title, help, level select, win/lose, pause  (HAZEL segment)
+; CLEO - menus, title, help, level select, win/lose, pause  (LOGIC segment: bank 7)
 ; ============================================================================
-        .segment "HAZEL"
+        .segment "LOGIC"
 
 MENU_START = 0
 MENU_HELP  = 1
@@ -12,7 +12,6 @@ MENU_EXIT  = 2
 drawtext:
         sta tx
         stx ty
-        setbank BANK_SPR
         ldy #0
 @ch:    lda (ptr),y
         beq @done
@@ -21,10 +20,11 @@ drawtext:
         beq @space
         cmp #'_'
         bne :+
-        lda #<zero8                 ; '_' = erase: draw an all-zero glyph
-        sta w16b
-        lda #>zero8
-        sta w16b+1
+        ldy #7                      ; '_' = erase: draw an all-zero glyph
+        lda #0
+@z:     sta GLYPHBUF,y
+        dey
+        bpl @z
         jsr draw_glyph_rows
         bra @space
 :       jsr glyph_index
@@ -83,6 +83,7 @@ draw_glyph:
         lda w16b+1
         adc #>SPR_FONT
         sta w16b+1                  ; glyph rows
+        jsr getglyph                ; main RAM: the font is in bank 4, this code in 7
 draw_glyph_rows:
         lda tx
         lsr
@@ -91,7 +92,7 @@ draw_glyph_rows:
         lda ty
         lsr
         lsr
-        jsr ringaddr                ; sp = first char (row 0)
+        jsr m_ringaddr                ; sp = first char (row 0)
         ldx #0                      ; glyph row 0..7
 @row:   cpx #4
         bne :+
@@ -105,9 +106,7 @@ draw_glyph_rows:
         sec
         sbc #$50
 :       sta sp+1
-        txa
-        tay
-        lda (w16b),y
+        lda GLYPHBUF,x
         sta tmp                     ; row bits
         txa
         asl
@@ -165,19 +164,19 @@ clear_ring:
 ; load the title pack into bank 6 unless it is still there (a level load replaces it);
 ; the palette goes black first so neither the disc load nor the screen build-up shows
 load_title:
-        jsr blank_palette
+        jsr m_blank_palette
         lda title_res
         bne :+
         lda #FI_TITLE
-        jsr loadfile
+        jsr m_loadfile
         inc title_res
 :       rts
 
 ; menu_begin: window at (0,0), buffer 0 as work buffer, cleared; screen blanked until
 ; menu_show has flipped the finished page in
 menu_begin:
-        jsr blank_palette
-        jsr wait_flip               ; the game may still have a flip pending
+        jsr m_blank_palette
+        jsr m_wait_flip               ; the game may still have a flip pending
         stz wx
         stz wx+1
         stz wy
@@ -187,8 +186,8 @@ menu_begin:
         stz wcy
         stz wfine
         stz curbuf
-        jsr select_backbuf
-        jsr calc_ring
+        jsr m_select_backbuf
+        jsr m_calc_ring
         jsr clear_ring
         lda #<menurec
         sta rp
@@ -202,7 +201,7 @@ menu_begin:
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stz curbuf
-        jsr build_sections
+        jsr m_build_sections
         stz NEXTBUF
         stz NEXTSECT
         lda #1
@@ -211,7 +210,7 @@ menu_show:
         bne :-
         lda #1
         sta curbuf                  ; next game frame renders into the other buffer
-        jmp set_palette             ; page is on display: colours back
+        jmp m_set_palette             ; page is on display: colours back
 
 ; wait one vsync and return new key edges in A (keys pressed now but not last time)
 menu_keys:
@@ -231,7 +230,7 @@ draw_piece:
         lda #BANK_MAP               ; the title pack sits where the map goes
         sta spbank
         pla
-        jsr drawsprite
+        jsr m_drawsprite
         lda #BANK_SPR
         sta spbank
         rts
@@ -340,7 +339,6 @@ item_y: sta tmp2
 :       rts
 cursor_str: .byte ">                 <", 0
 blank_str:  .byte "_                 _", 0
-zero8:      .byte 0, 0, 0, 0, 0, 0, 0, 0
 
 ; clear the item area rows (below the logo): rows from mtop to bottom -> just clear everything below y=36
 clear_items:
@@ -381,7 +379,7 @@ title_menu:
         jsr load_title
         lda MUSON
         bne :+
-        jsr music_start             ; only if not already playing (back from help)
+        jsr m_music_start             ; only if not already playing (back from help)
 :       jsr menu_begin
         mov16i spx, 40
         mov16i spy, 4
@@ -494,7 +492,7 @@ pause_menu:
 winlose:
         sta tmp4
         jsr load_title
-        jsr music_stop              ; the win/lose screen is silent
+        jsr m_music_stop              ; the win/lose screen is silent
         jsr menu_begin
         lda tmp4
         beq @lose

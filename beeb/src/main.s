@@ -4,7 +4,8 @@
         .setcpu "65C02"
         .code
         jmp start
-        .import __MAIN_LAST__, __HAZEL_START__, __HAZEL_LAST__, __LOW_START__, __LOW_LAST__, __LOW2_START__, __LOW2_LAST__
+        .import __LOGIC_START__, __LOGIC_LAST__
+        .import __MAIN_LAST__, __LOW_START__, __LOW_LAST__, __LOW2_START__, __LOW2_LAST__
         .include "engine.s"
         .include "logic.s"
         .include "menu.s"
@@ -20,35 +21,11 @@ start:
         sta $0D01
         lda #>nmi_handler
         sta $0D02
-        ; page HAZEL in and copy the logic overlay there (before MODE 2 clears the screen area)
-        lda ACCCON
-        ora #$08
-        sta ACCCON
+        ; the LOW overlay (render helpers) comes first in the file after the main code:
+        ; copy it into the NMI page after our JMP at $0D00
         lda #<__MAIN_LAST__
         sta ptr
         lda #>__MAIN_LAST__
-        sta ptr+1
-        stz w16
-        lda #$C0
-        sta w16+1
-        ldx #$20
-@hz:    ldy #0
-:       lda (ptr),y
-        sta (w16),y
-        iny
-        bne :-
-        inc ptr+1
-        inc w16+1
-        dex
-        bne @hz
-        lda ACCCON
-        and #$F7
-        sta ACCCON
-        ; the LOW overlay (render helpers) follows HAZEL in the file: copy it into the
-        ; NMI page after our JMP at $0D00
-        lda #<(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__)
-        sta ptr
-        lda #>(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__)
         sta ptr+1
         ldy #0
 :       lda (ptr),y
@@ -58,9 +35,9 @@ start:
         bne :-
         ; LOW2 follows LOW in the file; its home ($0300) is VDU workspace until MODE 2 has
         ; been selected and the screen clear wipes the file image, so stage it in SPRREC
-        lda #<(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__ + __LOW_LAST__ - __LOW_START__)
+        lda #<(__MAIN_LAST__ + __LOW_LAST__ - __LOW_START__)
         sta ptr
-        lda #>(__MAIN_LAST__ + __HAZEL_LAST__ - __HAZEL_START__ + __LOW_LAST__ - __LOW_START__)
+        lda #>(__MAIN_LAST__ + __LOW_LAST__ - __LOW_START__)
         sta ptr+1
         ldy #0                      ; two whole pages (SPRREC is 640 bytes; the overrun
 :       lda (ptr),y                 ; past LOW2's end lands in MASKTAB, rebuilt below)
@@ -85,12 +62,11 @@ start:
         sta __LOW2_START__+256,y
         iny
         bne :-
-        lda ACCCON
-        ora #$08
-        sta ACCCON
-        jsr init_tables
         jsr blank_palette
         jsr disc_init
+        lda #FI_LOGIC               ; the game logic lives in bank 7 above the level
+        jsr loadfile                ; tables, so it has to come in before init_tables
+        jsr t_init_tables
         lda #FI_SPR
         jsr loadfile
         lda #FI_SPRAND
@@ -213,6 +189,7 @@ FTMODE .set 0
 .endmacro
 .macro FILE_LIST
         FILE F_SPR_SEC,   F_SPR_N,   BANK_SPR,  $8000
+        FILE F_LOGIC_SEC, <((__LOGIC_LAST__ - __LOGIC_START__ + 255) / 256), BANK_LVL, LOGIC_ADDR
         FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
         FILE F_MUSIC_SEC, F_MUSIC_N, BANK_TIL1, MUSIC_ADDR
         FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTTAB
@@ -279,12 +256,13 @@ FTMODE .set 4
 ft_dest:  FILE_LIST
 
 FI_SPR = 0
-FI_BOX = 1
-FI_MUSIC = 2
-FI_ALT = 3
-FI_TITLE = 4
-FI_L0A = 5                        ; two files per level: map part then table part
-FI_SPRAND = 53
+FI_LOGIC = 1
+FI_BOX = 2
+FI_MUSIC = 3
+FI_ALT = 4
+FI_TITLE = 5
+FI_L0A = 6                        ; three pieces per level: pages, map, tables
+FI_SPRAND = 54
 
 ; ---------------------------------------------------------------- camera clamp
 ; clamp wx to [0, maxwx] (and even), wy to [0, maxwy]
@@ -331,10 +309,10 @@ game_main:
         stz maxlevel
         stz title_res
 title_loop:
-        jsr title_menu
+        jsr t_title_menu
         cmp #MENU_HELP
         bne new_game
-        jsr help_screen
+        jsr t_help_screen
         bra title_loop
 new_game:
         stz level
@@ -345,7 +323,7 @@ new_game:
         stz score+1
         lda maxlevel
         beq level_loop
-        jsr level_select
+        jsr t_level_select
         asl
         sta level
 level_loop:
@@ -353,16 +331,16 @@ level_loop:
         stz title_res               ; the level's map replaces the title pack
         ldx level
         jsr load_level
-        jsr level_init
-        jsr draw_lives
-        jsr draw_health
-        jsr draw_stars
-        jsr draw_score
+        jsr t_level_init
+        jsr t_draw_lives
+        jsr t_draw_health
+        jsr t_draw_stars
+        jsr t_draw_score
         ; initial camera; render both buffers before the palette comes back
-        jsr game_frame
+        jsr t_game_frame
         jsr render_frame
         stz NSPR
-        jsr game_frame
+        jsr t_game_frame
         jsr render_frame
         jsr set_palette
         stz NSPR
@@ -376,7 +354,7 @@ frame_loop:
         beq @nopause
         lda pausing
         bne @nopause
-        jsr pause_menu
+        jsr t_pause_menu
         cmp #0
         beq :+
         jmp title_loop
@@ -411,7 +389,7 @@ frame_loop:
         adc logicvs
         sta logicvs
 @steps: stz NSPR
-        jsr game_frame
+        jsr t_game_frame
         lda exiting
         bne @over
         dec lsteps
@@ -445,12 +423,12 @@ frame_loop:
 game_over:
         jsr update_hiscore
         lda #0
-        jsr winlose
+        jsr t_winlose
         jmp title_loop
 game_won:
         jsr update_hiscore
         lda #1
-        jsr winlose
+        jsr t_winlose
         jmp title_loop
 update_hiscore:
         lda hiscore

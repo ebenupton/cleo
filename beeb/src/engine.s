@@ -59,6 +59,8 @@ LV_MAP    = $8900                 ; up to 8K, row major
 ;         $B000  box stars, $B800 music
 
 ; bank 7
+LOGIC_ADDR= $8900                 ; the game logic and menus: bank 7, above the tables
+PGCOPY    = SCREEN                ; level_init's scratch copy of the page tables
 LV_HDR    = $8000
 LV_OBJS   = $8100
 LV_ATTR0  = $8500                 ; per page attribute (kill/push)
@@ -188,6 +190,7 @@ GATHERH:   .res 24                ;                       tile address hi
 SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
 SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
 SPRREC:    .res 2*MAXREC*10       ; per buffer drawn-sprite records: id,xl,xh,yl,yh, cxl,cxh,cy,w,h
+GLYPHBUF:  .res 8                 ; one font glyph, copied out of bank 4 for the menus
 RECCNT:    .res 2
 KEEP:      .res MAXREC
 SV_COLX:   .res 2
@@ -2550,6 +2553,7 @@ calc_ring:
 ; ============================================================================
 ; table init
 ; ============================================================================
+        .segment "LOGIC"            ; cold, and main RAM under the screen is full
 init_tables:
         jsr init_ident
         ldx #0
@@ -2683,6 +2687,7 @@ init_ident:
         inx
         bne :-
         rts
+        .segment "LOW2"             ; back to the render helpers
 
 
 ; ============================================================================
@@ -3355,6 +3360,110 @@ ldread:
         bra @track
 @done:  rts
 
+        .segment "LOW2"             ; main RAM under the screen is full; the old MOS
+; ============================================================================
+; Map access for the logic, which lives in bank 7 and so cannot select bank 6
+; itself.  Each of these leaves bank 7 selected, so the logic calls them directly.
+; ============================================================================
+; A = tile row -> q1 = page, mapptr = address of that map row
+maprow: tay
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
+        lda LV_ROWPAGE,y
+        sta q1
+        lda LV_MAPROWLO,y
+        sta mapptr
+        lda LV_MAPROWHI,y
+        sta mapptr+1
+        jmp pagelogic
+
+; A = (mapptr),y ; Y preserved
+mapbyte:
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
+        lda (mapptr),y
+        jmp pagelogic
+
+; store A at (mapptr),y ; Y preserved
+mapput: pha
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
+        pla
+        sta (mapptr),y
+        jmp pagelogic
+
+; the level's map row address table, from maplw (level_init's first job)
+init_maprows:
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
+        stz t16
+        lda #>LV_MAP
+        sta t16+1
+        stz t16b                    ; row stride = 1 << maplw bytes
+        stz t16b+1
+        lda maplw
+        cmp #8
+        beq :++
+        lda #1
+        ldx maplw
+:       asl
+        dex
+        bne :-
+        sta t16b
+        bra :++
+:       lda #1
+        sta t16b+1
+:       ldx #0
+:       lda t16
+        sta LV_MAPROWLO,x
+        lda t16+1
+        sta LV_MAPROWHI,x
+        lda t16
+        clc
+        adc t16b
+        sta t16
+        lda t16+1
+        adc t16b+1
+        sta t16+1
+        inx
+        bne :-
+        jmp pagelogic
+
+; the page tables, into the screen: level_init needs them and the alt classes at once
+copy_pages:
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
+        ldx #0
+:       lda LV_PAGE0,x
+        sta PGCOPY,x
+        lda LV_PAGE0+256,x
+        sta PGCOPY+256,x
+        lda LV_PAGE1,x
+        sta PGCOPY+512,x
+        lda LV_PAGE1+256,x
+        sta PGCOPY+768,x
+        inx
+        bne :-
+        jmp pagelogic
+
+; one font glyph out of bank 4, for the menus
+getglyph:
+        lda #BANK_SPR
+        sta ROMSEL_CPY
+        sta ROMSEL
+        ldy #7
+:       lda (w16b),y
+        sta GLYPHBUF,y
+        dey
+        bpl :-
+        jmp pagelogic
+        .segment "CODE"
+
 ; ---------------------------------------------------------------- level tiles
 ; A level uses only part of the tile set, so the banks hold only what it asks for.
 ; LV_HDR+32 carries one bit per tile of the global set, MSB first, and the tiles a
@@ -3476,7 +3585,61 @@ sext:   and #$80
         lda #$FF
 :       sta tmp3
         rts
+
+; ============================================================================
+; Bridges between main RAM and the game logic, which lives at $8900 in bank 7
+; because a Model B has no HAZEL to put it in.  t_ goes in, m_ comes back out:
+; both leave bank 7 selected on return, so a tail jump through one is as good as
+; a call.  pagelogic is the whole of the bank switch and the return path of m_.
+; ============================================================================
+pagelogic:                          ; A, X, Y and the carry all come through intact:
+        pha                         ; these sit in the middle of calls that return values
+        lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        pla
+        rts
+.macro TOBANK n
+.ident(.concat("t_", n)):
+        jsr pagelogic
+        jmp .ident(n)
+.endmacro
+.macro TOMAIN n
+.ident(.concat("m_", n)):
+        jsr .ident(n)
+        jmp pagelogic
+.endmacro
+        TOBANK "init_tables"
+        TOBANK "draw_health"
+        TOBANK "draw_lives"
+        TOBANK "draw_score"
+        TOBANK "draw_stars"
+        TOBANK "game_frame"
+        TOBANK "help_screen"
+        TOBANK "level_init"
+        TOBANK "level_select"
+        TOBANK "pause_menu"
+        TOBANK "title_menu"
+        TOBANK "winlose"
+        TOMAIN "addsprite"
+        TOMAIN "blank_palette"
+        TOMAIN "build_sections"
+        TOMAIN "calc_ring"
+        TOMAIN "clamp_window"
+        TOMAIN "drawsprite"
+        TOMAIN "loadfile"
+        TOMAIN "mark_dirty"
+
+        .segment "LOW"              ; and the tail of the NMI page, below the MOS's bytes
+        TOMAIN "music_start"
+        TOMAIN "music_stop"
+        TOMAIN "ringaddr"
+        TOMAIN "rnd"
+
         .segment "CODE"
+        TOMAIN "select_backbuf"
+        TOMAIN "set_palette"
+        TOMAIN "wait_flip"
 
 ; ============================================================================
 ; Random

@@ -205,7 +205,6 @@ O_EH    = O_EL + OBJN
 LV_ALTPAGE = $BC00                ; bank 7: 2 x 256 : map byte -> alt class
 LV_MAPROWLO = $A900               ; bank 6: 256 : tile row -> map row address
 LV_MAPROWHI = $AA00
-PGCOPY  = SCREEN                  ; level_init's scratch copy of the page tables
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)
         .zeropage
@@ -286,7 +285,7 @@ mapptr  = $D9                     ; 2 bytes
 q1x     = $DB
 rise    = $DC                     ; 2 bytes
 
-        .segment "HAZEL"
+        .segment "LOGIC"
 
 ; ============================================================================
 ; Map queries.  The map is in bank 6 with the row tables and the row-page table,
@@ -298,28 +297,10 @@ rise    = $DC                     ; 2 bytes
 ; every page-1 row's altitude lookup into LV_MAPROWLO: no ground, Cleo fell through
 ; the floor at the Vineyards spawn and wherever else those levels use page 1)
 maptile:
-        jsr maptilew
-        pha
-        lda #BANK_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
-        pla
-        rts
-maptilew:
+        jsr maprow                  ; main RAM: the map is in bank 6 and this code is
+        txa                         ; in bank 7, so every touch goes through a helper
         tay
-        lda #BANK_MAP
-        sta ROMSEL_CPY
-        sta ROMSEL
-        lda LV_ROWPAGE,y
-        sta q1
-        lda LV_MAPROWLO,y
-        sta mapptr
-        lda LV_MAPROWHI,y
-        sta mapptr+1
-        txa
-        tay
-        lda (mapptr),y
-        rts
+        jmp mapbyte
 
 ; tilexy: X = qx >> 3, A = qy >> 3, carry set if (qx,qy) is inside the map.
 ; Map sizes are multiples of 256 px, so "0 <= q < size" is just a compare of the high
@@ -453,51 +434,12 @@ gettileattr:
 ; Level initialisation (level pack already loaded in bank 7)
 ; ============================================================================
 level_init:
-        setbank BANK_MAP
-        ; map row address table
-        stz t16
-        lda #>LV_MAP
-        sta t16+1
-        ; row stride = 1 << maplw bytes
-        stz t16b
-        stz t16b+1
-        lda maplw
-        cmp #8
-        beq :+
-        ; stride < 256
-        lda #1
-        ldx maplw
-@sh:    asl
-        dex
-        bne @sh
-        sta t16b
-        bra @rows
-:       lda #1
-        sta t16b+1
-@rows:  ldx #0
-@rl:    lda t16
-        sta LV_MAPROWLO,x
-        lda t16+1
-        sta LV_MAPROWHI,x
-        add16 t16, t16b
-        inx
-        bne @rl
+        jsr init_maprows            ; main RAM: the row tables live with the map
         ; alt class per page: ALTPAGE[p][b] = ALTCLS[id(b)].  Page entries are pre-shifted
         ; tile addresses: lo = (id&3)<<6 | bank, hi = $80 | id>>2 (see convert.py).
         ; The pages are in bank 6 and the alt classes in bank 7, so take a copy of the
         ; pages into the screen, which is blanked for the whole of a level load.
-        ldx #0
-@pc:    lda LV_PAGE0,x
-        sta PGCOPY,x
-        lda LV_PAGE0+256,x
-        sta PGCOPY+256,x
-        lda LV_PAGE1,x
-        sta PGCOPY+512,x
-        lda LV_PAGE1+256,x
-        sta PGCOPY+768,x
-        inx
-        bne @pc
-        setbank BANK_LVL
+        jsr copy_pages              ; main RAM: they are in bank 6 with the map
         ldx #0
 @ap:    lda PGCOPY+256,x
         ldy PGCOPY,x
@@ -706,7 +648,7 @@ level_init:
         jmp @box                    ; 7, 10: defaults
 @t0:    lda q3
         sta O_EL,y                  ; e0 = box class from the converter (0 none/1 cyan/2 black)
-        jsr rnd
+        jsr m_rnd
         jsr mod12
         sta O_AL,y
         inc stars
@@ -796,9 +738,9 @@ level_init:
         lsr
         sta O_BH,y
         ; C = rnd % (A+1) ; D = rnd % (B+1)  (A,B < 4096) -> use rnd16 & mask then reduce
-        jsr rnd
+        jsr m_rnd
         sta t16
-        jsr rnd
+        jsr m_rnd
         and #$0F
         sta t16+1
         lda O_AL,y
@@ -813,9 +755,9 @@ level_init:
         sta O_CL,y
         lda t16+1
         sta O_CH,y
-        jsr rnd
+        jsr m_rnd
         sta t16
-        jsr rnd
+        jsr m_rnd
         and #$0F
         sta t16+1
         lda O_BL,y
@@ -996,7 +938,7 @@ game_frame:
         lda py+1
         sbc #0
         sta wy+1
-        jsr clamp_window
+        jsr m_clamp_window
 @cam:
         setbank BANK_LVL
         ; ---- bucket range (16-bit >> 6)
@@ -1182,7 +1124,7 @@ player_dead:
 @draw:  mov16 spx, px
         mov16 spy, py
         lda #26
-        jmp addsprite
+        jmp m_addsprite
 
 ; vy = (vy + 80) * 31 >> 5
 gravity:
@@ -1599,7 +1541,7 @@ player_update:
 @drawp: mov16 spx, px
         mov16 spy, py
         lda q1
-        jsr addsprite
+        jsr m_addsprite
 @boom:  ; ---- boomerang
         lda bactive
         bne :+
@@ -1676,7 +1618,7 @@ player_update:
         lsr
         clc
         adc #27
-        jsr addsprite
+        jsr m_addsprite
 @bdone:
         ; ---- exit reached?
         blt16 px, exitx, @noexit
@@ -1896,10 +1838,10 @@ ob_star:
         cmp #6
         bcs @reg                    ; sparkle frames stay regular (C = 0 below)
         adc boxbase-1,x
-        jmp addsprite
+        jmp m_addsprite
 @reg:   clc
         adc #34
-        jmp addsprite
+        jmp m_addsprite
 @done:  rts
 boxbase: .byte 103, 109
 
@@ -1931,7 +1873,7 @@ ob_tramp:
         lsr
         clc
         adc #43
-        jmp addsprite
+        jmp m_addsprite
 
 ; ---------------------------------------------------------------- GREEN SNAKE (2)
 ob_snake:
@@ -2079,7 +2021,7 @@ ob_snake:
         and #1
         clc
         adc q1
-        jmp addsprite
+        jmp m_addsprite
 @done:  rts
 ; carry set if anim counter is one of the pause frames 0,3,6,9
 @pausef:
@@ -2111,7 +2053,7 @@ ob_rsnake:
         bne @norst
         lda fa+1
         bne @norst
-        jsr rnd
+        jsr m_rnd
         and #63
         clc
         adc #64
@@ -2199,12 +2141,12 @@ ob_rsnake:
 :       mov16 spy, oy
         add16 spy, rise             ; snake Y = oy + parabola (was t16b: wrong)
         lda q1
-        jsr addsprite
+        jsr m_addsprite
 @basket:
         mov16 spx, ox
         mov16 spy, oy
         lda #60
-        jmp addsprite
+        jmp m_addsprite
 @knocked:
         bgt16i fc, -256, :+
         jmp @done
@@ -2224,12 +2166,12 @@ ob_rsnake:
         mov16 spy, oy
         add16 spy, fc
         lda q1
-        jsr addsprite
+        jsr m_addsprite
         mov16 spx, ox
         add16 spx, fd
         mov16 spy, oy
         lda #60
-        jmp addsprite
+        jmp m_addsprite
 @done:  rts
 
 ; t16 = A * A (A unsigned 0..128)
@@ -2395,7 +2337,7 @@ ob_bat:
         sx16 t16
         add16 spy, t16
         lda q1
-        jmp addsprite
+        jmp m_addsprite
 @kill:  lda #6
         jsr addscore
         mov16i fa, -640
@@ -2427,7 +2369,7 @@ ob_bat:
         bra :++
 :       ldx #66
 :       txa
-        jmp addsprite
+        jmp m_addsprite
 @done:  rts
 batoff: .byte 0,1,1,2,2,2,1,1,0,<-1,<-1,<-2,<-2,<-2,<-1,<-1
 
@@ -2527,7 +2469,7 @@ ob_walker:
 :       lda #76
 :       clc
         adc q1
-        jmp addsprite
+        jmp m_addsprite
 
 ; ---------------------------------------------------------------- SPIKE (7)
 ob_spike:
@@ -2539,7 +2481,7 @@ ob_spike:
         bne @nowrap
         lda fa+1
         bne @nowrap
-        jsr rnd
+        jsr m_rnd
         and #63
         clc
         adc #64
@@ -2577,7 +2519,7 @@ ob_spike:
         lsr
 :       clc
         adc #85
-        jmp addsprite
+        jmp m_addsprite
 @done:  rts
 
 ; ---------------------------------------------------------------- FLAME (9)
@@ -2592,7 +2534,7 @@ ob_flame:
 :       lda fe
         clc
         adc #93
-        jmp addsprite
+        jmp m_addsprite
 
 ; ---------------------------------------------------------------- POWERUP (10)
 ob_powerup:
@@ -2622,7 +2564,7 @@ ob_powerup:
         lsr
         clc
         adc #97
-        jmp addsprite
+        jmp m_addsprite
 @done:  rts
 
 ; ---------------------------------------------------------------- VANISHING BLOCK (11)
@@ -2676,20 +2618,19 @@ ob_vanish:
         sta q3
         ldx q4
         lda q5
-        jsr maptilew                ; sets mapptr, Y = tx; bank 6 for the writes
+        jsr maptile                 ; sets mapptr, Y = tx
         lda q2
-        sta (mapptr),y
+        jsr mapput
         iny
         lda q3
-        sta (mapptr),y
-        setbank BANK_LVL
+        jsr mapput
         lda q4
         ldx q5
-        jsr mark_dirty
+        jsr m_mark_dirty
         lda q4
         inc
         ldx q5
-        jsr mark_dirty
+        jsr m_mark_dirty
         lda fe
         cmp #48
         bne @done
@@ -2715,28 +2656,27 @@ ob_switch:
         sta q5                      ; row counter (q5: the grid-walk cursor must stay intact)
 @rl:    ldx fa
         lda q5
-        jsr maptilew                ; mapptr = row, Y = A; bank 6 for the writes
+        jsr maptile                 ; mapptr = row, Y = A
         dey
         dey
-        lda (mapptr),y
+        jsr mapbyte
         sta q2
         iny
-        lda (mapptr),y
+        jsr mapbyte
         sta q3
         iny
         lda q2
-        sta (mapptr),y
+        jsr mapput
         iny
         lda q3
-        sta (mapptr),y
-        setbank BANK_LVL
+        jsr mapput
         lda fa
         ldx q5
-        jsr mark_dirty
+        jsr m_mark_dirty
         lda fa
         inc
         ldx q5
-        jsr mark_dirty
+        jsr m_mark_dirty
         inc q5
         dec q4
         bne @rl
@@ -2745,7 +2685,7 @@ ob_switch:
 @draw:  lda fd
         clc
         adc #100
-        jmp addsprite
+        jmp m_addsprite
 
 ; ============================================================================
 ; Status bar digits (drawn into the bar master image in bank 4)  [main RAM]
@@ -2869,7 +2809,7 @@ div10_16:
         bne @l
         rts
 
-        .segment "HAZEL"
+        .segment "LOGIC"
 ; ============================================================================
 ; Sound effect ids
 ; ============================================================================
