@@ -522,8 +522,8 @@ level_init:
         inx
         cpx #128
         bne :-
-        stz stars
-        stz bent
+        stza stars
+        stza bent
         ; objects, last to first
         ldy nobj
         bne :+
@@ -869,11 +869,11 @@ level_init:
         lda #1
         sta hurt
         sta control
-        stz bactive
-        stz pausing
-        stz exiting
-        stz frame
-        stz frame+1
+        stza bactive
+        stza pausing
+        stza exiting
+        stza frame
+        stza frame+1
         rts
 ; A = tiles -> A/X = px lo/hi
 @x8:    pha
@@ -1189,8 +1189,8 @@ player_update:
         bra @move
 @stand: lda #1
         sta control
-        stz vy
-        stz vy+1
+        stza vy
+        stza vy+1
         bra @move
 @grav:  jsr gravity
 @move:  jsr vy_step
@@ -1226,7 +1226,7 @@ player_update:
         bgt16 py, t16, @fell
         bra @push
 @fell:  mov16 evframe, frame
-        stz health
+        stza health
         jsr draw_health
         stz control
         stz vx
@@ -1378,7 +1378,7 @@ player_update:
         bcs @alt
 @step:  sx16 t16
         add16 py, t16
-        stz alt
+        stza alt
         bra @hnext
 @alt:   sta alt
 @hnext: ; steps -= dir
@@ -1419,7 +1419,7 @@ player_update:
         bra @animdone
 :       cmp #12
         bne @animdone
-        stz firing
+        stza firing
         bra @animdone
 @notfiring:
         lda running
@@ -1427,7 +1427,7 @@ player_update:
         lda anim
         cmp #16
         bne @animdone
-        stz anim
+        stza anim
         bra @animdone
 :       lda anim
         cmp #128
@@ -1603,10 +1603,10 @@ player_update:
         lda bcnt
         cmp #8
         bne :+
-        stz bcnt
+        stza bcnt
 :       cmp #14
         bne :+
-        stz bactive
+        stza bactive
 :       lda bactive
         beq @bdone
         mov16 spx, bx
@@ -1798,7 +1798,7 @@ ob_star:
         bne :+
         lda fc
         bne :+
-        stz fa
+        stza fa
 :       lda fc
         bne @anim
         lda health
@@ -1850,7 +1850,7 @@ ob_tramp:
         lda fa
         cmp #10
         bne :+
-        stz fa
+        stza fa
 :       lda health
         beq @draw
         ldx #8
@@ -1881,7 +1881,7 @@ ob_snake:
         lda fe
         cmp #12
         bne @st
-        stz fe
+        stza fe
         bra @st
 @s23:   inc fe
         lda fe
@@ -1923,7 +1923,7 @@ ob_snake:
         dec fb+1
 :       dec fb
         bne16 fb, @coll
-        stz fc
+        stza fc
         bra @coll
 @c4:    ; if B < A + 128: B += 16
         mov16 t16, fa
@@ -2084,7 +2084,7 @@ ob_rsnake:
         sta q6                      ; snake visible
         bra @boom
 @nowarm:
-        stz q6
+        stza q6
 @boom:  jsr boomready
         bcc @hitp
         jsr boomrel
@@ -2176,8 +2176,8 @@ ob_rsnake:
 ; t16 = A * A (A unsigned 0..128)
 square: sta q1
         sta q1x
-        stz t16
-        stz t16+1
+        stza t16
+        stza t16+1
         ldx #8
 @l:     asl t16
         rol t16+1
@@ -2203,7 +2203,7 @@ ob_bat:
         lda fe
         cmp #8
         bne :+
-        stz fe
+        stza fe
 :       ; rx += C>>1 ; ry += D>>1
         mov16 t16, fc
         asr16 t16
@@ -2378,7 +2378,7 @@ ob_walker:
         lda fe
         cmp #12
         bne :+
-        stz fe
+        stza fe
 :       lda frame
         and #1
         inca
@@ -2633,7 +2633,7 @@ ob_vanish:
         lda fe
         cmp #48
         bne @done
-        stz fe
+        stza fe
 @done:  rts
 
 ; ---------------------------------------------------------------- SWITCH (12)
@@ -2695,7 +2695,7 @@ bar_digit:
         pha
         setbank BANK_SPR
         pla
-        stz w16+1
+        stza w16+1
         asl
         asl
         asl
@@ -2712,7 +2712,7 @@ bar_digit:
         sta w16+1                   ; digit tile
         txa
         lsr                         ; char = x/2
-        stz ptr+1
+        stza ptr+1
         asl
         rol ptr+1
         asl
@@ -2793,7 +2793,7 @@ draw_score:                         ; 5 digits at 108..140
         rts
 ; t16 = t16 / 10 ; q1 = remainder
 div10_16:
-        stz q1
+        stza q1
         ldx #16
 @l:     asl t16
         rol t16+1

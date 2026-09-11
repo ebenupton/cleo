@@ -83,21 +83,21 @@ start:
         lda #$12
         sta seed+1
         jsr crtc_init
-        stz wx
-        stz wx+1
-        stz wy
-        stz wy+1
-        stz wcx
-        stz wcx+1
-        stz wcy
-        stz wfine
-        stz curbuf
+        stza wx
+        stza wx+1
+        stza wy
+        stza wy+1
+        stza wcx
+        stza wcx+1
+        stza wcy
+        stza wfine
+        stza curbuf
         jsr calc_ring
         jsr build_sections
         inc curbuf
         jsr build_sections
-        stz curbuf
-        stz DISPSECT
+        stza curbuf
+        stza DISPSECT
         jsr take_over
         jsr set_palette
         jmp game_main
@@ -133,7 +133,7 @@ load_level:
         ; mapw = 8 << lw ; maph = 8 << lh
         lda #8
         sta mapw
-        stz mapw+1
+        stza mapw+1
         ldx maplw
 :       asl mapw
         rol mapw+1
@@ -141,7 +141,7 @@ load_level:
         bne :-
         lda #8
         sta maph
-        stz maph+1
+        stza maph+1
         ldx maplh
 :       asl maph
         rol maph+1
@@ -161,13 +161,13 @@ load_level:
         lda maph+1
         sbc #0
         sta maxwy+1
-        stz BUF_VALID
-        stz BUF_VALID+1
-        stz RECCNT
-        stz RECCNT+1
-        stz DIRTYCNT
-        stz DIRTYCNT+1
-        stz NSPR
+        stza BUF_VALID
+        stza BUF_VALID+1
+        stza RECCNT
+        stza RECCNT+1
+        stza DIRTYCNT
+        stza DIRTYCNT+1
+        stza NSPR
         rts
 
 ; File table.  Five parallel arrays rather than five-byte records: there are more
@@ -303,15 +303,15 @@ clamp_window:
         sta wy+1
         rts
 @wy0:   stza wy
-        stz wy+1
+        stza wy+1
 @wyok:  rts
 
 ; ---------------------------------------------------------------- game
 game_main:
-        stz hiscore
-        stz hiscore+1
-        stz maxlevel
-        stz title_res
+        stza hiscore
+        stza hiscore+1
+        stza maxlevel
+        stza title_res
 title_loop:
         jsr t_title_menu
         cmp #MENU_HELP
@@ -332,7 +332,7 @@ new_game:
         sta level
 level_loop:
         jsr blank_palette           ; hide the loading and the first-frame build-up
-        stz title_res               ; the level's map replaces the title pack
+        stza title_res               ; the level's map replaces the title pack
         ldx level
         jsr load_level
         jsr t_level_init
@@ -343,7 +343,7 @@ level_loop:
         ; initial camera; render both buffers before the palette comes back
         jsr t_game_frame
         jsr render_frame
-        stz NSPR
+        stza NSPR
         jsr t_game_frame
         jsr render_frame
         jsr set_palette

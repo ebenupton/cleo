@@ -137,6 +137,7 @@ wcy:      .res 1                  ; window y in map char rows (wy/4)
 wfine:    .res 1                  ; fine scanline offset 0,2,4,6
 curbuf:   .res 1                  ; buffer being drawn: 0 = main, 1 = shadow
 tset:     .res 1                  ; tile set in bank 5 ($FF = none yet)
+tchar:    .res 1                  ; drawtext's place in the string
 curbank:  .res 1
 recp:     .res 2                  ; current buffer's sprite record base
 rp:       .res 2                  ; current record
@@ -236,7 +237,8 @@ PART_F:    .res 2
 PART_LO:   .res 2                 ; per buffer: window columns of row wcy drawn since that copy
 PART_HI:   .res 2                 ;   (LO > HI = none)
 BUF_BARQ:  .res 2
-BUF_BARADDR: .res 4          ; per buffer: bar CRTC start (hi,lo) x2 (fixes cross-buffer carryover)
+BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
+BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
 BARDIRTY:  .res 2
 DIRTYLIST: .res 2*2*16            ; per buffer dirty tiles (tx, ty)
 DIRTYCNT:  .res 2
@@ -909,7 +911,7 @@ match_sprites:
 @l:     ldx tmp4
         cpx NSPR
         bcs @done
-        stz KEEP,x
+        stza KEEP,x
         cpx cnt
         bcs @next
         lda sprmul5,x
@@ -1091,7 +1093,7 @@ draw_sprites:
 ; entry's flag bit2 is set. Title pieces (spbank != BANK_SPR): directory and data
 ; both live at TITLE_ADDR of that bank.
 drawsprite:
-        stz ptr+1
+        stza ptr+1
         asl                         ; id*8 -> offset
         rol ptr+1
         asl
@@ -1206,7 +1208,7 @@ drawsprite:
         bcc :+
         lda #(ROWCHARS-1)
 :       sta sp_c1
-        stz sp_c
+        stza sp_c
         bra @vert
 @out0:  rts
 @vert:
@@ -1962,7 +1964,7 @@ copy_bar:
         rts
 @do:    lda barq
         sta BUF_BARQ,x
-        stz BARDIRTY,x
+        stza BARDIRTY,x
         sec
         sbc #3
         ringmod
@@ -2174,6 +2176,222 @@ copy_bar:
 
 .endif
 ; ============================================================================
+.ifdef MODELB
+; build_sections (Model B): no status bar, so the chain is the playfield and the
+; blank tail below it:
+;   f = 0 : P (VISROWS rows) -> Q
+;   f > 0 : A (the 8-f lines copy_partial left in the row above the window)
+;           -> P1 (VISROWS-1 rows) -> P2 (the last f lines) -> Q
+; The vsync handler starts the chain, so the first section's address and length
+; go into BUF_SEC0 and BUF_SEC0T1 rather than into a SECTAB entry.
+; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi (T1 = duration of section i+1)
+; ============================================================================
+LINE = 64
+build_sections:
+        lda ringS                   ; S + $600: the window start in CRTC units
+        clc
+        adc #<$600
+        sta w16
+        lda ringS+1
+        adc #>$600
+        sta w16+1
+        ldy #0                      ; SECTAB base for this buffer
+        lda curbuf
+        beq @b0
+        ldy #BUFOFF                 ; and its rows are BUFOFF further round the ring
+@bo:    jsr @addrow
+        dey
+        bne @bo
+        ldy #48
+@b0:    sty tmp4
+        lda curbuf
+        asl                         ; the per-buffer word index
+        tax
+        lda wfine
+        bne @fine
+        ; ---- f = 0: the whole playfield is one section
+        lda w16+1
+        sta BUF_SEC0,x
+        sta w16b+1
+        lda w16
+        sta BUF_SEC0+1,x
+        sta w16b
+        lda #<(VISLINES*LINE-2)
+        sta BUF_SEC0T1,x
+        lda #>(VISLINES*LINE-2)
+        sta BUF_SEC0T1+1,x
+        ldx tmp4
+        lda #VISROWS-1
+        sta SECTAB+2,x
+        lda #7
+        sta SECTAB+3,x
+        lda #30                     ; R6 and R7 past the end: T1 cuts the section
+        sta SECTAB+4,x
+        sta SECTAB+5,x
+        ldy #VISROWS                ; Q starts on the row below the playfield, so the
+:       jsr @addrow                 ; line the 6845 always shows is playfield coloured
+        dey
+        bne :-
+        lda w16+1
+        sta SECTAB,x
+        lda w16
+        sta SECTAB+1,x
+        lda #<(40*LINE-2)
+        sta SECTAB+6,x
+        lda #>(40*LINE-2)
+        sta SECTAB+7,x
+        txa
+        clc
+        adc #8
+        tax
+        jmp @setq
+@fine:
+        jsr @subrow                 ; the row copy_partial filled with the top slice
+        lda w16+1
+        sta BUF_SEC0,x
+        sta w16b+1
+        lda w16
+        sta BUF_SEC0+1,x
+        sta w16b
+        lda wfine
+        eor #7
+        inca                        ; 8 - f lines of it
+        jsr @dur
+        sta BUF_SEC0T1,x
+        lda tmp3
+        sta BUF_SEC0T1+1,x
+        ldx tmp4
+        ; ---- A: that one short row; P1 starts one row past the window
+        lda #0
+        sta SECTAB+2,x
+        lda #7
+        sec
+        sbc wfine
+        sta SECTAB+3,x
+        lda #2
+        sta SECTAB+4,x
+        lda #30
+        sta SECTAB+5,x
+        jsr @addrow
+        jsr @addrow
+        lda w16+1
+        sta SECTAB,x
+        lda w16
+        sta SECTAB+1,x
+        lda #<((VISROWS-1)*8*LINE-2)
+        sta SECTAB+6,x
+        lda #>((VISROWS-1)*8*LINE-2)
+        sta SECTAB+7,x
+        ; ---- P1: the full rows; P2 starts on the row below the playfield
+        ldy #VISROWS-1
+:       jsr @addrow
+        dey
+        bne :-
+        lda w16+1
+        sta SECTAB+8,x
+        lda w16
+        sta SECTAB+9,x
+        lda #VISROWS-2
+        sta SECTAB+10,x
+        lda #7
+        sta SECTAB+11,x
+        lda #VISROWS
+        sta SECTAB+12,x
+        lda #30
+        sta SECTAB+13,x
+        lda wfine
+        jsr @dur
+        sta SECTAB+14,x
+        lda tmp3
+        sta SECTAB+15,x
+        ; ---- P2: the last f lines of that row
+        lda w16+1
+        sta SECTAB+16,x
+        lda w16
+        sta SECTAB+17,x
+        lda #0
+        sta SECTAB+18,x
+        lda wfine
+        deca
+        sta SECTAB+19,x
+        lda #VISROWS
+        sta SECTAB+20,x
+        lda #30
+        sta SECTAB+21,x
+        lda #<(40*LINE-2)
+        sta SECTAB+22,x
+        lda #>(40*LINE-2)
+        sta SECTAB+23,x
+        txa
+        clc
+        adc #24
+        tax
+@setq:  ; ---- Q: blank to the end of the frame, and the vsync sits in it.  Its
+        ; address is section 0's, because the chain keeps firing through Q and
+        ; would otherwise undo what the vsync handler just programmed.
+        lda w16b+1
+        sta SECTAB,x
+        lda w16b
+        sta SECTAB+1,x
+        lda #QROWS-1
+        sta SECTAB+2,x
+        lda #7
+        sta SECTAB+3,x
+        lda #0
+        sta SECTAB+4,x
+        lda #QVSYNC
+        sta SECTAB+5,x
+        lda #<(40*LINE-2)
+        sta SECTAB+6,x
+        lda #>(40*LINE-2)
+        sta SECTAB+7,x
+        rts
+; A = lines -> A/tmp3 = lines*64-2
+@dur:   stza tmp3
+        asl
+        rol tmp3
+        asl
+        rol tmp3
+        asl
+        rol tmp3
+        asl
+        rol tmp3
+        asl
+        rol tmp3
+        asl
+        rol tmp3
+        sec
+        sbc #2
+        bcs :+
+        dec tmp3
+:       rts
+; w16 -/+ one row, wrapping inside the $600..$FFF ring
+@subrow: lda w16
+        sec
+        sbc #ROWCHARS
+        sta w16
+        bcs :+
+        dec w16+1
+:       lda w16+1
+        cmp #6
+        bcs :+
+        clc
+        adc #$0A
+        sta w16+1
+:       rts
+@addrow: lda w16
+        clc
+        adc #ROWCHARS
+        sta w16
+        bcc :+
+        inc w16+1
+:       lda w16+1
+        cmp #$10
+        bcc :+                      ; not taken: C = 1 for the sbc
+        sbc #$0A
+        sta w16+1
+:       rts
+.else
 ; build_sections: fill SECTAB for current buffer from ringS/barq/wfine
 ; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi (T1 = duration of section i+1)
 ; ============================================================================
@@ -2198,9 +2416,13 @@ build_sections:
         asl
         tax
         lda w16b+1
-        sta BUF_BARADDR,x
+        sta BUF_SEC0,x
         lda w16b
-        sta BUF_BARADDR+1,x
+        sta BUF_SEC0+1,x
+        lda #<(BARROWS*8*LINE-2)    ; section 0 is the bar, and always that long
+        sta BUF_SEC0T1,x
+        lda #>(BARROWS*8*LINE-2)
+        sta BUF_SEC0T1+1,x
         ; S + $600 -> w16
         lda ringS
         clc
@@ -2411,8 +2633,15 @@ build_sections:
         sta w16+1
 :       rts
 
-QROWS  = 10                        ; blank rows after the display (312 - 232 = 80 lines)
-QVSYNC = 4                         ; vsync at Q row 4 -> T starts 48 lines after vsync
+.endif
+
+BARROWS = 2 - (2 * .defined(MODELB))   ; the status bar, which a Model B has not
+QROWS  = 39 - VISROWS - BARROWS    ; blank rows after the display: 312 lines in all
+.ifdef MODELB                      ; put the shorter picture in the middle of the frame
+QVSYNC = QROWS / 2
+.else
+QVSYNC = 4                         ; vsync at Q row 4 -> section 0 starts QROWS-4 later
+.endif
 
 ; ============================================================================
 ; Frame control
@@ -2457,6 +2686,14 @@ render_frame:
         and #3
         asl
         sta wfine
+.ifdef MODELB
+        ; No fine vertical scroll yet on a Model B.  The chain needs a section's
+        ; registers programmed during the section before it, and with no status
+        ; bar there is nothing before the first one: the partial top row's own R4
+        ; and R9 arrive too late and the frame never recovers.  Scrolling by whole
+        ; character rows, four game pixels at a time, is the price for now.
+        stz wfine
+.endif
         lda wy+1                    ; wcy = wy >> 2, a full 16-bit shift: shifting the
         lsr                         ; high byte once only was right below wy = 512 and
         sta wcy                     ; lost 128 rows above it, which put the tall maps
@@ -2476,12 +2713,12 @@ render_frame:
         sta DIRTYSEEN
 :       jsr draw_dirty
         jsr draw_sprites
-        stz DIRTYSEEN
+        stza DIRTYSEEN
         jsr copy_partial
 .ifndef MODELB
         jsr copy_bar
 .endif
-        stz NSPR
+        stza NSPR
         jsr build_sections
         ; hand over to ISR
         lda curbuf
@@ -2524,7 +2761,7 @@ drawrect_clip:
         sta rc_h
         lda wcy
         sta rc_y
-        stz tmp
+        stza tmp
 :       lda tmp
         clc
         adc rc_h                    ; rel end+1
@@ -2677,7 +2914,7 @@ init_tables:
         sta SWAPTAB+$44
         lda #$FF                    ; $41 marks eight transparent bytes; if it reaches
         sta MASKTAB+$41             ; the tables (a clipped cell, or as a line 1..7)
-        stz IDENT+$41               ; it must leave the screen byte alone.  $82 is its
+        stza IDENT+$41               ; it must leave the screen byte alone.  $82 is its
         sta MASKTAB+$82             ; mirror image, and unreachable otherwise
         stz IDENT+$82
         ; MASKTAB+$80..: the mask of the mirrored byte, so the mirrored blitters do one
@@ -2800,7 +3037,7 @@ draw_dirty:
         sta lidx
 @l:     ldy lidx
         lda DIRTYLIST,y
-        stz rc_x+1
+        stza rc_x+1
         asl
         rol rc_x+1
         asl
@@ -2819,7 +3056,7 @@ draw_dirty:
         dec lcnt
         bne @l
         ldx curbuf
-        stz DIRTYCNT,x
+        stza DIRTYCNT,x
 @done:  rts
 
         .segment "CODE"
@@ -2884,9 +3121,13 @@ irq_handler:
         sta VIA_T1LL
         lda VS2T+1
         sta VIA_T1CH
-        lda #<(16*LINE-2)
+        ldx #0                      ; the latch is how long section 0 lasts, which on
+        lda DISPSECT                ; a Model B depends on the fine scroll
+        beq :+
+        ldx #2
+:       lda BUF_SEC0T1,x
         sta VIA_T1LL
-        lda #>(16*LINE-2)
+        lda BUF_SEC0T1+1,x
         sta VIA_T1LH
         lda #$02
         sta VIA_IFR
@@ -2932,11 +3173,11 @@ irq_handler:
         ldx #2
 :       lda #12
         sta CRTC_IDX
-        lda BUF_BARADDR,x
+        lda BUF_SEC0,x
         sta CRTC_DAT
         lda #13
         sta CRTC_IDX
-        lda BUF_BARADDR+1,x
+        lda BUF_SEC0+1,x
         sta CRTC_DAT
         jsr scan_keys
         jsr sound_tick
@@ -3108,8 +3349,8 @@ musbyte:
 
 ; X = voice (0..2), A = MIDI note (0 = rest)
 set_voice:
-        phx
-        tay
+        tay                         ; the note goes in Y before X is pushed: on a 6502
+        phx                         ; phx is txa/pha and would land on it
         txa
         asl
         asl
@@ -3161,9 +3402,9 @@ music_start:
         sta MUSPTR+1
         lda #1
         sta MUSDUR
-        stz MUSNOTE
-        stz MUSNOTE+1
-        stz MUSNOTE+2
+        stza MUSNOTE
+        stza MUSNOTE+1
+        stza MUSNOTE+2
         sta MUSON
         rts
 
@@ -3206,7 +3447,7 @@ take_over:
         sta VIA_IER
         lda #$7F
         sta VIA_IFR
-        stz flipreq
+        stza flipreq
         cli
         rts
 
@@ -3225,9 +3466,9 @@ crtc_init:
         lda crtctab+7
         sta curR7
         rts
-.ifdef MODELB                       ; 64 chars wide, and the sync moved eight chars
-crtctab: .byte 127,ROWCHARS,90,$28, 38,0,32,34, 0,7, $20,8, $06,$00
-.else                               ; later to keep the narrower picture centred
+.ifdef MODELB                       ; 64 chars wide, and the sync eight chars later
+crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
+.else                               ; so the narrower picture sits in the middle
 crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
 .endif
 
@@ -3324,7 +3565,7 @@ disc_init:
         lda #$00                    ; restore, spin up, 6ms
         sta FDC_CMD
         jsr fdc_wait
-        stz cur_trk
+        stza cur_trk
         rts
 
 fdc_wait:
@@ -3424,7 +3665,7 @@ ldread:
         sbc tmp
         sta ld_n
         beq @done
-        stz ld_sc
+        stza ld_sc
         inc ld_trk
         bra @track
 @done:  rts

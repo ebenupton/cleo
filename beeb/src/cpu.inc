@@ -58,11 +58,13 @@
 ; jmp (abs,x), and the non-indexed zero page indirects, have no 6502 equivalent:
 ; the first goes through a zero-page vector and the others burn Y, which is free
 ; at every site that uses them.
-.macro jmpx tab
+.macro jmpx tab                     ; A survives: drawrow dispatches with the fill
+        pha                         ; value in it
         lda tab,x
         sta jv
         lda tab+1,x
         sta jv+1
+        pla
         jmp (jv)
 .endmacro
 .macro ldaz zp

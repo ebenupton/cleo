@@ -15,8 +15,8 @@ drawtext:
         ldy #0
 @ch:    lda (ptr),y
         beq @done
-        phy
-        cmp #' '
+        sty tchar                   ; not phy: on a 6502 that is tya/pha, and the
+        cmp #' '                    ; character is in A
         beq @space
         cmp #'_'
         bne :+
@@ -33,7 +33,7 @@ drawtext:
         clc
         adc #8
         sta tx
-        ply
+        ldy tchar
         iny
         bra @ch
 @done:  rts
@@ -72,7 +72,7 @@ glyph_index:
 
 ; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows
 draw_glyph:
-        stz w16b+1
+        stza w16b+1
         asl
         asl
         asl
@@ -176,15 +176,15 @@ load_title:
 menu_begin:
         jsr m_blank_palette
         jsr m_wait_flip               ; the game may still have a flip pending
-        stz wx
-        stz wx+1
-        stz wy
-        stz wy+1
-        stz wcx
-        stz wcx+1
-        stz wcy
-        stz wfine
-        stz curbuf
+        stza wx
+        stza wx+1
+        stza wy
+        stza wy+1
+        stza wcx
+        stza wcx+1
+        stza wcy
+        stza wfine
+        stza curbuf
         jsr m_select_backbuf
         jsr m_calc_ring
         jsr clear_ring
@@ -199,7 +199,7 @@ menu_begin:
 
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
-        stz curbuf
+        stza curbuf
         jsr m_build_sections
         stz NEXTBUF
         stz NEXTSECT
