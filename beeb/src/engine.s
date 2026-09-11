@@ -133,6 +133,7 @@ wcx:      .res 2                  ; window x in map chars (wx/2)
 wcy:      .res 1                  ; window y in map char rows (wy/4)
 wfine:    .res 1                  ; fine scanline offset 0,2,4,6
 curbuf:   .res 1                  ; buffer being drawn: 0 = main, 1 = shadow
+tset:     .res 1                  ; tile set in bank 5 ($FF = none yet)
 curbank:  .res 1
 recp:     .res 2                  ; current buffer's sprite record base
 rp:       .res 2                  ; current record
@@ -2734,6 +2735,7 @@ init_tables:
         lda #$FF
         sta BUF_BARQ
         sta BUF_BARQ+1
+        sta tset                    ; no tile set resident yet
         stz BARDIRTY
         stz BARDIRTY+1
         lda #<VS2T_DEFAULT
@@ -3554,117 +3556,19 @@ bufhi:  .byte >BUF0, >BUF1
         .segment "CODE"
 
 ; ---------------------------------------------------------------- level tiles
-; A level uses only part of the tile set, so the banks hold only what it asks for.
-; LV_HDR+32 carries one bit per tile of the global set, MSB first, and the tiles a
-; level wants keep their relative order, so copying them out in order gives exactly
-; the numbering its page tables use.  TILES is read a track at a time into the
-; screen, which is blanked for the whole of a level load.
-TBUF     = SCREEN                   ; 2560 bytes: one track
-TILEBITS = (NTILES_DATA + 7) / 8
+; There are two fixed tile sets, outdoors and indoors, each a bank of at most
+; 256 tiles, and a level's header says which it wants.  Levels alternate, so
+; this reads 16K about every other level and nothing in between.
 load_tiles:
-        jsr music_stop
-        setbank BANK_LVL            ; the bitmap must come out of bank 7 first: a tile
-        ldx #0                      ; bank is selected throughout the copy below
-:       lda LV_HDR+32,x
-        sta SPRREC,x
-        inx
-        cpx #TILEBITS
-        bne :-
-        lda #BANK_TIL0              ; destination: bank 5, then bank 6
-        sta curbank
-        sta ROMSEL_CPY
-        sta ROMSEL
-        stz tp
-        lda #$80
-        sta tp+1
-        stz tmp3                    ; bitmap byte index
-        lda #$80
-        sta w16b                    ; bit mask
-        lda #<F_TILES_SEC
-        sta w16
-        lda #>F_TILES_SEC
-        sta w16+1
-        lda #F_TILES_N
-        sta tmp4                    ; sectors still to read
-        lda #(10 - (F_TILES_SEC .mod 10))
-        bne @first                  ; chunks stop at the track boundary, or a read
-@chunk: lda #10                     ; that straddles one costs a whole extra revolution
-@first: sta cnt
-        lda tmp4
-        bne :+
-        rts
-:       cmp cnt
-        bcs :+
-        sta cnt
-:       lda w16
-        sta ld_sec
-        lda w16+1
-        sta ld_sec+1
-        lda cnt
-        sta ld_n
-        stz ptr
-        lda #>TBUF
-        sta ptr+1
-        jsr ldread
-        lda w16                     ; on to the next chunk
-        clc
-        adc cnt
-        sta w16
-        bcc :+
-        inc w16+1
-:       lda tmp4
-        sec
-        sbc cnt
-        sta tmp4
-        lda cnt                     ; four tiles to a sector
-        asl
-        asl
-        sta tmp2
-        stz ptr
-        lda #>TBUF
-        sta ptr+1
-        lda curbank
-        sta ROMSEL_CPY
-        sta ROMSEL
-@tile:  ldx tmp3
-        lda SPRREC,x
-        and w16b
-        beq @skip
-        ldy #63
-:       lda (ptr),y
-        sta (tp),y
-        dey
-        bpl :-
-        lda tp                      ; 64 on, and into bank 6 past the end of bank 5
-        clc
-        adc #64
-        sta tp
-        bcc @skip
-        inc tp+1
-        lda tp+1
-        cmp #$C0
-        bne @skip
-        lda #BANK_TIL1
-        sta curbank
-        sta ROMSEL_CPY
-        sta ROMSEL
-        lda #$80
-        sta tp+1
-@skip:  lda ptr
-        clc
-        adc #64
-        sta ptr
-        bcc :+
-        inc ptr+1
-:       lsr w16b                    ; next bit, and next byte every eighth tile
-        bne :+
-        lda #$80
-        sta w16b
-        inc tmp3
-:       dec tmp2
+        setbank BANK_LVL
+        lda LV_HDR+32
+        cmp tset
         beq :+
-        jmp @tile
-:       jmp @chunk
+        sta tset
+        clc
+        adc #FI_TILESO
+        jmp loadfile
+:       rts
 
 ; sign extend A -> tmp3 (0 or $FF).  In LOW2 (the old MOS vector page) because main
 ; RAM below the screen is full: there is room to spare there.

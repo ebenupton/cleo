@@ -189,6 +189,8 @@ FTMODE .set 0
 .endmacro
 .macro FILE_LIST
         FILE F_SPR_SEC,   F_SPR_N,   BANK_SPR,  $8000
+        FILE F_TILESO_SEC, F_TILESO_N, BANK_TIL0, $8000
+        FILE F_TILESI_SEC, F_TILESI_N, BANK_TIL0, $8000
         FILE F_LOGIC_SEC, <((__LOGIC_LAST__ - __LOGIC_START__ + 255) / 256), BANK_LVL, LOGIC_ADDR
         FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
         FILE F_MUSIC_SEC, F_MUSIC_N, BANK_TIL1, MUSIC_ADDR
@@ -256,13 +258,15 @@ FTMODE .set 4
 ft_dest:  FILE_LIST
 
 FI_SPR = 0
-FI_LOGIC = 1
-FI_BOX = 2
-FI_MUSIC = 3
-FI_ALT = 4
-FI_TITLE = 5
-FI_L0A = 6                        ; three pieces per level: pages, map, tables
-FI_SPRAND = 54
+FI_TILESO = 1                     ; the two tile sets, outdoors and indoors
+FI_TILESI = 2
+FI_LOGIC = 3
+FI_BOX = 4
+FI_MUSIC = 5
+FI_ALT = 6
+FI_TITLE = 7
+FI_L0A = 8                        ; three pieces per level: pages, map, tables
+FI_SPRAND = 56
 
 ; ---------------------------------------------------------------- camera clamp
 ; clamp wx to [0, maxwx] (and even), wy to [0, maxwy]

@@ -453,12 +453,14 @@ level_init:
         bne @ap
         bra @apdone
         ; A = hi, Y = lo -> A = alt class of that tile (X preserved)
-@altof: asl
-        asl                         ; (id >> 2) << 2 = id & $FC
-        sta t16
+@altof: cmp #$C0                    ; a solid tile has no id: its class is in the
+        bcc :+                      ; low nibble of the entry, where the bank would be
         tya
         and #$0F
-        sta t16+1                   ; bank 5/6
+        rts
+:       asl
+        asl                         ; (id >> 2) << 2 = id & $FC
+        sta t16
         tya
         asl
         rol
@@ -466,12 +468,7 @@ level_init:
         and #3                      ; id & 3
         ora t16
         tay
-        lda t16+1
-        cmp #6
-        beq :+
         lda LV_ALTCLS,y
-        rts
-:       lda LV_ALTCLS+256,y
         rts
 @apdone:
         ; header
