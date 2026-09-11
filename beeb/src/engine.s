@@ -73,8 +73,31 @@ LV_BNEXT  = $BAD0                 ; 255
 ;         $BC00  LV_ALTPAGE (512, see logic.s)
 LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 
+; ---------------------------------------------------------------- screen shape
+; The Master has a 20K shadow screen for each buffer: an 80-char, 32-row ring
+; with 27 rows visible and the status bar above them.  A Model B has one 20K
+; screen, so the two buffers are 10K halves of it: 64 chars, 20 rows each, 19
+; visible and no bar.  Both are a ring of ROWCHARS x RINGROWS chars whose
+; addresses wrap back to the buffer's base.
+.ifdef MODELB
+ROWCHARS  = 64                    ; chars across a screen row (2 pixels each)
+RINGROWS  = 20                    ; rows in one buffer's ring
+VISROWS   = 19                    ; visible char rows (152 lines = 76 game px)
+BUFROWS   = 20                    ; rows held (visible + partial top row source)
+BUF0      = $3000                 ; the two buffers, 10K apart
+BUF1      = $5800
+.else
+ROWCHARS  = 80
+RINGROWS  = 32
 VISROWS   = 27                    ; visible char rows (216 lines = 108 game px)
 BUFROWS   = 28                    ; rows held (visible + partial top row source)
+BUF0      = $3000                 ; main and shadow: the same address, ACCCON picks
+BUF1      = $3000
+.endif
+ROWBYTES  = ROWCHARS*8
+RINGCHARS = ROWCHARS*RINGROWS
+RINGBYTES = RINGCHARS*8
+WINPX     = ROWCHARS*2            ; window width in pixels
 VISLINES  = VISROWS*8
 MAXREC    = 32
 MAXSPR    = 32
@@ -250,16 +273,47 @@ NEXTBUF:   .res 1
 .endmacro
 
 ; advance sp (screen pointer) by one char (8 bytes) with ring wrap
+; ---------------------------------------------------------------- ring wrapping
+; A screen address that runs off the end of the buffer folds back to its start.
+; On the Master the buffer is the whole 20K and the test is the sign bit; on a
+; Model B it is one of two 10K halves, so bufbase and bufend say which.
+; Both spell their skip with an anonymous label, so a caller that wants to branch
+; over one of these has to count it: see spnext, which says :++ for that reason.
+; A named label here would end the enclosing routine's cheap-local scope.
+.macro ringup                       ; A = high byte after moving forward
+.ifdef MODELB
+        cmp bufend
+        bcc :+
+        sbc #>RINGBYTES
+.else
+        bpl :+
+        sec
+        sbc #$50
+.endif
+:
+.endmacro
+.macro ringdn                       ; A = high byte after moving back
+.ifdef MODELB
+        cmp bufbase
+        bcs :+
+        adc #>RINGBYTES
+.else
+        cmp #$30
+        bcs :+
+        adc #$50
+.endif
+:
+.endmacro
+
 .macro spnext
         lda sp
         clc
         adc #8
         sta sp
-        bcc :+
+        bcc :++                     ; past ringup's own anonymous label
         inc sp+1
-        bpl :+
-        lda sp+1                    ; C = 1 here: the adc #8 above carried
-        sbc #$50
+        lda sp+1
+        ringup
         sta sp+1
 :
 .endmacro
@@ -284,12 +338,9 @@ ringaddr:
         sta sp
         lda sp+1
         adc RINGHI,x
+        ringup
         sta sp+1
-        bpl :+
-        sec
-        sbc #$50
-        sta sp+1
-:       rts
+        rts
 
 ; ============================================================================
 ; drawrect: draw map tiles into the current back buffer.
@@ -546,12 +597,10 @@ drawrect:
         clc
         adc tmp
         sta sp
-        bcc :+
+        bcc :++                     ; past ringup's own anonymous label
         inc sp+1
-        bpl :+
         lda sp+1
-        sec
-        sbc #$50
+        ringup
         sta sp+1
 :       bra @runend
 @slow:
@@ -585,14 +634,12 @@ drawrect:
 @rowdone:
         lda rc_sp                   ; next char row: +640 with ring wrap
         clc
-        adc #<640
+        adc #<ROWBYTES
         sta rc_sp
         lda rc_sp+1
-        adc #>640
-        bpl :+
-        sec
-        sbc #$50
-:       sta rc_sp+1
+        adc #>ROWBYTES
+        ringup
+        sta rc_sp+1
         rts
         ; ---- solid tile: store one constant, no bank switch, no source pointer
 @solid: lda GATHERL,x
@@ -1398,14 +1445,12 @@ ds_rowdone:
         inc sp_rp+1
 :       lda sp_rb                   ; next char row: +640 with ring wrap
         clc
-        adc #<640
+        adc #<ROWBYTES
         sta sp_rb
         lda sp_rb+1
-        adc #>640
-        bpl :+
-        sec
-        sbc #$50
-:       sta sp_rb+1
+        adc #>ROWBYTES
+        ringup
+        sta sp_rb+1
         jmp ds_rowloop
 ds_done: rts
 
@@ -1799,14 +1844,12 @@ copy_partial:
         ; dest = sp - 640 (ring)
         lda sp
         sec
-        sbc #<640
+        sbc #<ROWBYTES
         sta ptr
         lda sp+1
-        sbc #>640
-        cmp #$30
-        bcs :+
-        adc #$50
-:       sta ptr+1
+        sbc #>ROWBYTES
+        ringdn
+        sta ptr+1
         ; dest pointer adjusted by -wfine so that same Y indexes both
         lda ptr
         sec
@@ -1856,17 +1899,24 @@ copy_partial:
         bcc :+
         inc ptr+1
 :       lda ptr+1
-        cmp #$7F
+.ifndef MODELB
+        cmp #$7F                    ; only the last page before $8000 can wrap
         bcc :+
+.endif
         lda ptr
         clc
         adc wfine
         lda ptr+1
         adc #0
+.ifdef MODELB                       ; the store is conditional here: fold back only
+        cmp bufend                  ; if this row's copy would run off the end
+        bcc :+
+.else
         bpl :+
+.endif
         lda ptr+1
         sec
-        sbc #$50
+        sbc #>RINGBYTES
         sta ptr+1
 :       dec cnt
         beq @done
