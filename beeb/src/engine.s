@@ -252,7 +252,8 @@ GLYPHBUF:  .res 8                 ; one font glyph, copied out of bank 4 for the
 RECCNT:    .res 2
 KEEP:      .res MAXREC
 dpass:     .res 1                 ; draw_sprites pass: 1 = box stars, 0 = the rest
-MIRR_LO:   .res 2                 ; where the straddling row starts in the ring's last row
+MIRR_R:    .res 2                 ; per buffer: the mirror is valid from this char on
+MIRR_LO:   .res 2                 ; the address of that char in the ring's last row
 spclip:    .res 1                 ; drawsprite: the last sprite came off a window edge
 SV_COLX:   .res 2
 SV_COLW:   .res 1
@@ -324,8 +325,8 @@ NEXTBUF:   .res 1
 .if (RINGROWS & (RINGROWS - 1)) = 0
         and #(RINGROWS-1)
 .elseif .defined(MODELB)
-        sec                         ; not a power of two, and A can be any row: a
-:       sbc #RINGROWS               ; Model B has no room for the table
+        sec                         ; not a power of two: a Model B has no room for the
+:       sbc #RINGROWS               ; table, so it folds by repeated subtraction
         bcs :-
         adc #RINGROWS
 .else
@@ -345,22 +346,6 @@ NEXTBUF:   .res 1
         sec
         sbc #>RINGBYTES
 :
-.endmacro
-.macro ringfix ptr                  ; a Master row that straddles the ring end is drawn
-.ifndef MODELB                      ; at its mirror address instead: the mirror sits
-        lda ptr+1                   ; right below the ring base, so the row runs on into
-        cmp MIRR_LO+1               ; ring row 0 with no fold at all, and the chars the
-        bcc :++                     ; CRTC shows from the mirror are the only copy
-        bne :+
-        lda ptr
-        cmp MIRR_LO
-        bcc :++
-:       lda ptr+1
-        sec
-        sbc #>RINGBYTES
-        sta ptr+1
-:
-.endif
 .endmacro
 .macro ringdn                       ; A = high byte after moving back
         cmp #>RINGBASE
@@ -411,7 +396,6 @@ ringaddr:
         adc RINGHI,x
         ringup
         sta sp+1
-        ringfix sp
         rts
 
 ; ============================================================================
@@ -705,6 +689,16 @@ drawrect:
         inc rc_gi
         jmp @run
 @rowdone:
+.ifndef MODELB
+        lda rc_sp+1                 ; a row is 640 bytes: only one starting in the last
+        cmp #(>RINGEND - 5)         ; 1280 can reach the mirror's source row
+        bcc :+
+        lda rc_sp
+        ldy rc_sp+1
+        ldx rc_w
+        jsr mirror_run
+:
+.endif
         lda rc_sp                   ; next char row: +640 with ring wrap
         clc
         adc #<ROWBYTES
@@ -713,7 +707,6 @@ drawrect:
         adc #>ROWBYTES
         ringup
         sta rc_sp+1
-        ringfix rc_sp
         rts
         ; ---- solid tile: store one constant, no bank switch, no source pointer
 @solid: lda GATHERL,x
@@ -1556,6 +1549,17 @@ sprnext:
         dec sp_cnt
         bpl ds_colloop
 ds_rowdone:
+.ifndef MODELB
+        lda sp_rb+1                 ; (see drawrect's @rowdone)
+        cmp #(>RINGEND - 5)
+        bcc :+
+        lda sp_rb
+        ldy sp_rb+1
+        ldx sp_ncol
+        inx
+        jsr mirror_run
+:
+.endif
         lda sp_row
         cmp sp_r1
         beq ds_done
@@ -1574,7 +1578,6 @@ ds_rowdone:
         adc #>ROWBYTES
         ringup
         sta sp_rb+1
-        ringfix sp_rb
         jmp ds_rowloop
 ds_done: rts
 
@@ -2073,8 +2076,8 @@ copy_partial:
 ; re-copying 1280 bytes for that cost 13,310 cycles of an 80,000 cycle frame.
 ; bar_bg: blit the static bar template (icons, labels, blank digit slots) from bank 4
 ; into the current back buffer's fixed bar rows.  Source art, not a maintained buffer.
-bar_bg:
-        lda #BANK_SPR
+bar_bg:                             ; runs only when a buffer needs its bar template
+        lda #BANK_SPR               ; (twice per level), so a compact loop is fine
         sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
@@ -2086,198 +2089,16 @@ bar_bg:
         sta w16b
         lda #>BARADDR
         sta w16b+1
-        jsr @row
-        lda w16
-        clc
-        adc #<640
-        sta w16
-        lda w16+1
-        adc #>640
-        sta w16+1
-        lda w16b
-        clc
-        adc #<640
-        sta w16b
-        lda w16b+1
-        adc #>640
-        sta w16b+1
-@row:   ; one 640-byte row: src = w16, dst = w16b; 8x unrolled abs,x copy
-        lda w16
-        clc
-        adc #0
-        sta @s0+1
-        lda w16+1
-        adc #0
-        sta @s0+2
-        lda w16b
-        clc
-        adc #0
-        sta @d0+1
-        lda w16b+1
-        adc #0
-        sta @d0+2
-        lda w16
-        clc
-        adc #1
-        sta @s1+1
-        lda w16+1
-        adc #0
-        sta @s1+2
-        lda w16b
-        clc
-        adc #1
-        sta @d1+1
-        lda w16b+1
-        adc #0
-        sta @d1+2
-        lda w16
-        clc
-        adc #2
-        sta @s2+1
-        lda w16+1
-        adc #0
-        sta @s2+2
-        lda w16b
-        clc
-        adc #2
-        sta @d2+1
-        lda w16b+1
-        adc #0
-        sta @d2+2
-        lda w16
-        clc
-        adc #3
-        sta @s3+1
-        lda w16+1
-        adc #0
-        sta @s3+2
-        lda w16b
-        clc
-        adc #3
-        sta @d3+1
-        lda w16b+1
-        adc #0
-        sta @d3+2
-        lda w16
-        clc
-        adc #4
-        sta @s4+1
-        lda w16+1
-        adc #0
-        sta @s4+2
-        lda w16b
-        clc
-        adc #4
-        sta @d4+1
-        lda w16b+1
-        adc #0
-        sta @d4+2
-        lda w16
-        clc
-        adc #5
-        sta @s5+1
-        lda w16+1
-        adc #0
-        sta @s5+2
-        lda w16b
-        clc
-        adc #5
-        sta @d5+1
-        lda w16b+1
-        adc #0
-        sta @d5+2
-        lda w16
-        clc
-        adc #6
-        sta @s6+1
-        lda w16+1
-        adc #0
-        sta @s6+2
-        lda w16b
-        clc
-        adc #6
-        sta @d6+1
-        lda w16b+1
-        adc #0
-        sta @d6+2
-        lda w16
-        clc
-        adc #7
-        sta @s7+1
-        lda w16+1
-        adc #0
-        sta @s7+2
-        lda w16b
-        clc
-        adc #7
-        sta @d7+1
-        lda w16b+1
-        adc #0
-        sta @d7+2
-        lda #32
-        sta cnt
-        jsr @chunk                  ; bytes 0..255
-        inc @s0+2
-        inc @d0+2
-        inc @s1+2
-        inc @d1+2
-        inc @s2+2
-        inc @d2+2
-        inc @s3+2
-        inc @d3+2
-        inc @s4+2
-        inc @d4+2
-        inc @s5+2
-        inc @d5+2
-        inc @s6+2
-        inc @d6+2
-        inc @s7+2
-        inc @d7+2
-        lda #32
-        sta cnt
-        jsr @chunk                  ; bytes 256..511
-        inc @s0+2
-        inc @d0+2
-        inc @s1+2
-        inc @d1+2
-        inc @s2+2
-        inc @d2+2
-        inc @s3+2
-        inc @d3+2
-        inc @s4+2
-        inc @d4+2
-        inc @s5+2
-        inc @d5+2
-        inc @s6+2
-        inc @d6+2
-        inc @s7+2
-        inc @d7+2
-        lda #16
-        sta cnt                     ; bytes 512..639
-@chunk: ldx #0
-@cp:
-@s0:   lda $FFFF,x
-@d0:   sta $FFFF,x
-@s1:   lda $FFFF,x
-@d1:   sta $FFFF,x
-@s2:   lda $FFFF,x
-@d2:   sta $FFFF,x
-@s3:   lda $FFFF,x
-@d3:   sta $FFFF,x
-@s4:   lda $FFFF,x
-@d4:   sta $FFFF,x
-@s5:   lda $FFFF,x
-@d5:   sta $FFFF,x
-@s6:   lda $FFFF,x
-@d6:   sta $FFFF,x
-@s7:   lda $FFFF,x
-@d7:   sta $FFFF,x
-        txa
-        clc
-        adc #8
-        tax
-        dec cnt
-        bne @cp
+        ldx #>(BARROWS*640)         ; 1280 bytes = 5 pages
+        ldy #0
+@bp:    lda (w16),y
+        sta (w16b),y
+        iny
+        bne @bp
+        inc w16+1
+        inc w16b+1
+        dex
+        bne @bp
         rts
 
 .endif
@@ -2514,15 +2335,18 @@ LINE = 64
 BARCRTC  = BARADDR / 8
 PARTCRTC = PARTADDR / 8
         .code
-; Tail of calc_ring: the row that straddles the ring end starts at char r = wcx mod 80
-; of the ring's last row.  From that char on, the CRTC shows the row out of the mirror
-; below the ring base, so ringfix draws it there in the first place.  Nothing may
-; draw with a stale MIRR_LO, which is why this hangs off calc_ring and not render_frame.
-mirror_frame:
+; The row that straddles the ring end is shown from the mirror below the ring base,
+; but only its chars from r = wcx mod 80 up: the ones before r are the part of that
+; row the CRTC reads from the ring itself.  So the mirror is kept right on [r, 80)
+; and no further -- writes below r are dropped by mirror_run -- and when the window
+; scrolls left and r falls, the chars that have just come into range are fetched
+; from the ring, which is always right.  Once per frame, before anything draws.
+mirror_seek:
         ldx barq
         lda ringS
         sec
         sbc mulrowlo,x              ; r
+        sta tmp2
         stz w16+1
         asl
         rol w16+1
@@ -2536,8 +2360,128 @@ mirror_frame:
         lda w16+1
         adc #>(RINGEND-ROWBYTES)
         sta MIRR_LO+1
+        ldx curbuf
+        lda tmp2
+        cmp MIRR_R,x
+        bcs @ok                     ; not scrolled left: what was valid still is
+        lda MIRR_R,x
+        sec
+        sbc tmp2
+        tax                         ; chars r..old-1 have become needed
+        lda MIRR_LO
+        ldy MIRR_LO+1
+        jsr mirror_run
+        ldx curbuf
+@ok:    lda tmp2
+        sta MIRR_R,x
         rts
 
+; Every write into the ring's last row from the fragment on is repeated RINGBYTES
+; lower, so the mirror keeps up with the drawing.  A/Y = the first
+; char of a run just drawn, X = how many chars; the callers only bother for rows that
+; start within reach of the last 640 bytes.  A run steps and folds like the drawing
+; did, so the chars that wrapped into ring row 0 fall below the source and are skipped.
+; w16/w16b are borrowed and put back: scroll_validate holds dx/dy in them across the
+; drawrect calls this runs inside.
+mirror_run:
+        sta tmp3
+        stx tmp4                    ; n
+        lda w16
+        pha
+        lda w16+1
+        pha
+        lda w16b
+        pha
+        lda w16b+1
+        pha
+        lda tmp3
+        sta w16
+        sty w16+1
+        ; the run starts below the needed fragment: skip (fragment - start) / 8 chars
+        lda w16+1
+        cmp MIRR_LO+1
+        bcc @below
+        bne @inside
+        lda w16
+        cmp MIRR_LO
+        bcs @inside
+@below: lda MIRR_LO
+        sec
+        sbc w16
+        sta tmp3
+        lda MIRR_LO+1
+        sbc w16+1
+        lsr
+        ror tmp3
+        lsr
+        ror tmp3
+        lsr
+        ror tmp3                    ; (the gate keeps this under 1280 bytes: 160 chars)
+        lda tmp3
+        cmp tmp4
+        bcs @done                   ; it ends before the source row
+        lda tmp4
+        sec
+        sbc tmp3
+        sta tmp4
+        lda MIRR_LO
+        sta w16
+        lda MIRR_LO+1
+        sta w16+1
+@inside:
+        ; and it may run past the ring end (those chars wrapped into ring row 0)
+        lda #<RINGEND
+        sec
+        sbc w16
+        sta tmp3
+        lda #>RINGEND
+        sbc w16+1
+        lsr
+        ror tmp3
+        lsr
+        ror tmp3
+        lsr
+        ror tmp3
+        lda tmp3
+        cmp tmp4
+        bcs :+
+        sta tmp4
+:       ldx tmp4
+        beq @done
+        lda w16
+        sta w16b
+        lda w16+1
+        sec
+        sbc #>RINGBYTES             ; RINGBYTES is whole pages, so the low byte holds
+        sta w16b+1
+@cp:    ldy #7
+:       lda (w16),y
+        sta (w16b),y
+        dey
+        bpl :-
+        lda w16
+        clc
+        adc #8
+        sta w16
+        bcc :+
+        inc w16+1
+:       lda w16b
+        clc
+        adc #8
+        sta w16b
+        bcc :+
+        inc w16b+1
+:       dex
+        bne @cp
+@done:  pla
+        sta w16b+1
+        pla
+        sta w16b
+        pla
+        sta w16+1
+        pla
+        sta w16
+        rts
         .segment "LOGIC"            ; back to the bank
 build_sections:
         lda curbuf
@@ -2602,8 +2546,8 @@ build_sections:
         jsr @wrap
         lda #VISROWS-1
         sta tmp4                    ; rows in the run
-        lda barq                    ; which starts one ring row after the window (X here
-        clc                         ; is the live SECTAB entry index, so compute in A)
+        lda barq                    ; which starts one ring row after the window (X is
+        clc                         ; the live SECTAB entry index, so compute in A)
         adc #1
         cmp #RINGROWS
         bcc :+
@@ -2719,11 +2663,11 @@ build_sections:
         sta w16b
         lda w16+1
         sta w16b+1
-        cmp #>(RINGCHARS-ROWCHARS)
+        cmp #>(RINGCHARS-ROWCHARS+1)
         bcc :++
         bne :+
         lda w16b
-        cmp #<(RINGCHARS-ROWCHARS)
+        cmp #<(RINGCHARS-ROWCHARS+1)
         bcc :++
 :       lda w16b
         sec
@@ -2775,10 +2719,10 @@ build_sections:
         sbc #>RINGCHARS
         sta w16+1
 :       rts
-; --- rows of the run that end before the ring end.  The run starts on ring row tmp3
-; (its chars are 80*tmp3 + r .. ), so RINGROWS-1-tmp3 rows finish before the last one,
-; and the row that reaches the end -- even exactly -- is the one drawn through the
-; mirror, which is how @addr and ringfix count it too.
+; --- rows of the run that end before the ring end: floor((RINGCHARS - w16) / 80)
+; --- rows of the run that finish before the ring end.  The run starts on ring row
+; tmp3, so RINGROWS-1-tmp3 rows end before the last (straddling) one -- the same count
+; the old walking loop produced, and what @addr/ringfix assume.
 @nfull: lda #RINGROWS-1
         sec
         sbc tmp3
@@ -2893,6 +2837,9 @@ render_frame:
         ror
         sta wcy
         jsr calc_ring
+.ifndef MODELB
+        jsr mirror_seek
+.endif
         jsr match_sprites
         jsr erase_old
         jsr scroll_validate
@@ -3067,9 +3014,6 @@ calc_ring:
         inx
         bra @div
 @dd:    stx barq
-.ifndef MODELB
-        jmp mirror_frame            ; and where the straddling row starts, so every
-.endif                              ; caller that moves the window keeps ringfix right
         rts
 
         .segment "LOW2"            ; MOS vector/VDU pages ($0206..$03FF), copied there after MODE 2:
@@ -3682,7 +3626,7 @@ crtc_init:
 crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
 .else                               ; so the narrower picture sits in the middle
 crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
-ringmodtab:                         ; map char row -> ring slot, for ringmod
+ringmodtab:
 .repeat 256, i
         .byte i .mod RINGROWS
 .endrepeat
