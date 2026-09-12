@@ -433,6 +433,27 @@ def star_reachable(x, y, reach):
             return True
     return False
 
+# A trampoline whose whole drawn rectangle sits on solid black can be drawn the same
+# way a star box is: opaque, its black background baked in, no mask and no erase.
+def box_reachable(box, x, y, reach, skip=None):
+    sx0, sx1, sy0, sy1 = 8 * x + box[0], 8 * x + box[1], 8 * y + box[2], 8 * y + box[3]
+    for r in reach:
+        if skip is not None and r == skip:
+            continue
+        x0, x1, y0, y1 = r
+        if x0 < sx1 and sx0 < x1 and y0 < sy1 and sy0 < y1:
+            return True
+    return False
+
+def tramp_class(cm, x, y):           # 1 = its rectangle is all solid black (bakeable)
+    h, w = cm.shape
+    dx0, dx1, dy0, dy1 = TYPE_BOX[1]
+    for ty in range((8 * y + dy0) // 8, (8 * y + dy1 - 1) // 8 + 1):
+        for tx in range((8 * x + dx0) // 8, (8 * x + dx1 - 1) // 8 + 1):
+            if not (0 <= tx < w and 0 <= ty < h) or tile_class[int(cm[ty, tx])] != 2:
+                return 0
+    return 1
+
 # ---------------------------------------------------------------------------
 # Renumber so that every tile carrying pixel data comes first.  A solid tile is
 # filled by drawrow from a constant and its 64 bytes are never read, so it needs
@@ -676,6 +697,11 @@ for (lv, sub), L in levels.items():
             e[1] = 1 if star_reachable(x, y, reach) else 0
             star_stats.setdefault((lv, sub), [0, 0, 0, 0])[3] += e[1] if e[0] else 0
             star_stats.setdefault((lv, sub), [0, 0, 0, 0])[e[0]] += 1
+        elif t == 1:                              # trampoline: same box treatment
+            e[0] = tramp_class(cm, x, y)
+            b = TYPE_BOX[1]
+            selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
+            e[1] = 1 if box_reachable(b, x, y, reach, skip=selfbox) else 0
         objs += bytes([t, x, y] + e)
     pack += objs.ljust(0x400, b'\0')              # bank 7 $8100
     for p in range(2):
@@ -890,9 +916,59 @@ for bg in (6, 0):
         box_bytes.append(bytes(b))
 print('box stars: widths (chars) per frame', [w for _l, w in box_geom],
       '= %d bytes for 12 boxes (was %d)' % (sum(len(b) for b in box_bytes), 12 * 7 * 24))
+
+# trampoline black boxes: the three bounce frames (43,44,45) composited over black,
+# same scheme as the star boxes but one background.  8 px tall, ~24 px wide; the
+# hotspot is TRAMP_HOT px in so every frame lines up, and each frame's box covers it
+# and the frame that can precede it (the cycle is 43->44->45->43, or a static 43).
+TRAMP_IDS = [43, 44, 45]
+TRAMP_H = 8
+TRAMP_FIELD = 26
+TRAMP_HOT = 16
+tramp_art = []
+for _i in TRAMP_IDS:
+    _j, _mir, _rx, _ry = entry[_i]
+    _im = images[_j][0]
+    _h, _w = _im.shape
+    assert _h == TRAMP_H and not _mir and _ry == -8, (_i, _h, _mir, _ry)
+    _W = (_w + 1) // 2
+    _pad = np.full((_h, _W * 2), spr_tr, dtype=_im.dtype)
+    _pad[:, :_w] = _im
+    _col = dither(spr_rgb[_pad], _pad != spr_tr, full=True) & 7
+    _x0 = TRAMP_HOT - _rx
+    assert 0 <= _x0 and _x0 + 2 * _W <= TRAMP_FIELD, (_i, _x0, _W)
+    tramp_art.append((_col, _x0))
+
+def _tspan(f):
+    col, x0 = tramp_art[f]
+    xs = np.where((col != 0).any(axis=0))[0]
+    return x0 + int(xs.min()), x0 + int(xs.max())
+
+def _tboxgeom(f):
+    p = (f - 1) % 3
+    lo = min(_tspan(f)[0], _tspan(p)[0]) // 2
+    hi = max(_tspan(f)[1], _tspan(p)[1]) // 2
+    return lo, hi - lo + 1
+
+tramp_geom = [_tboxgeom(f) for f in range(3)]
+tramp_bytes = []
+for f in range(3):
+    col, x0 = tramp_art[f]
+    lo, Wc = tramp_geom[f]
+    field = np.zeros((TRAMP_H * 2, TRAMP_FIELD), np.uint8)   # black background
+    field[:, x0:x0 + col.shape[1]] = np.where(col != 0, col, field[:, x0:x0 + col.shape[1]])
+    packed = pack_mode2(field[:, 2 * lo:2 * (lo + Wc)])
+    b = bytearray()
+    for c in range(Wc):
+        b += packed[:, c].tobytes()
+    tramp_bytes.append(bytes(b))
+print('trampoline black boxes: widths', [w for _l, w in tramp_geom],
+      '= %d bytes' % sum(len(b) for b in tramp_bytes))
+
+allbox_bytes = box_bytes + tramp_bytes
 BOX_BASE = 0xB000                  # bank 6, above anything a level's tiles can reach
-assert BOX_BASE + sum(len(b) for b in box_bytes) <= 0xC000
-open(os.path.join(OUT, 'BOX'), 'wb').write(b''.join(box_bytes))
+assert BOX_BASE + sum(len(b) for b in allbox_bytes) <= 0xC000
+open(os.path.join(OUT, 'BOX'), 'wb').write(b''.join(allbox_bytes))
 print('box stars at $%04X in bank 6; classes per level:' % BOX_BASE,
       ' '.join('L%d%s=%s' % (lv, 'B' if sub == 0 else 'A', '/'.join(map(str, v))) for (lv, sub), v in sorted(star_stats.items())),
       '(regular/cyan/black, and how many boxes an enemy can reach)')
@@ -935,6 +1011,12 @@ for k in range(12):                                # 103..108 cyan, 109..114 bla
     # refx: the hotspot sits at field px 6, the box starts at field px 2*lo
     table += bytes([ptr & 255, ptr >> 8, _wc, BOX_H, (6 - 2 * _lo) & 255, 8,
                     2 | 8 | 16, BOX_H * 2])
+for f in range(3):                                 # 115..117: trampoline black boxes
+    _lo, _wc = tramp_geom[f]
+    ptr = BOX_BASE + _off
+    _off += len(tramp_bytes[f])
+    table += bytes([ptr & 255, ptr >> 8, _wc, TRAMP_H, (TRAMP_HOT - 2 * _lo) & 255,
+                    (-8) & 255, 2 | 8 | 16, TRAMP_H * 2])
 
 # font: 40 glyphs 8x8 at tit.png y=26.., 10 per row -> 1 bit per pixel
 tit_idx, tit_rgb, tit_tr = load_indexed('tit.png')
@@ -1103,8 +1185,9 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     # the box stars are the last sprite ids, so "is this an opaque pre-composited
     # rectangle?" is a single compare rather than a range test on two ends
     f.write('BOXID0 = %d\n' % 103)
-    f.write('BOXN = %d\n' % 12)        # and the aliases above them: same picture, but
-                                        # the logic has decided nothing can disturb it
+    f.write('BOXN = %d\n' % 15)        # 12 star boxes + 3 trampoline boxes; the skip
+                                        # aliases sit BOXN above, same picture, the logic
+                                        # having decided nothing can disturb them
     f.write('TITLE_ADDR = $%04X\n' % TITLE_ADDR)
     for _n, (_p, _m) in sorted(level_split.items()):
         f.write('LP_%s = %d\nLM_%s = %d\n' % (_n, _p, _n, _m))

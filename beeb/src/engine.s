@@ -1608,6 +1608,10 @@ masked: cmp #$41                    ; and the mirror image of that: this and the
         beq blank                   ; all transparent, so the cell is left alone
   .else
         bmi opaque                  ; bit 7: both pixels opaque (see encode_sprite)
+        cmp #$41                    ; a blank-run tag reached below line 0 (the packer marks
+        bne :+                      ; every line a run covers): the rest of this cell is all
+        jmp blank                   ; transparent, so skip it -- $41 else draws a red pixel
+:
   .endif
         tax
   .if mirror
@@ -1726,6 +1730,8 @@ pl:     lda (ptr),y
 pl:     lda (ptr),y
         beq ps
         bmi po                      ; both pixels opaque
+        cmp #$41                    ; blank-run tag mid cell: the rest of the cell is empty
+        beq pd
         tax
 .if mirror
         lda MASKTAB+$80,x

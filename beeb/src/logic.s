@@ -1783,6 +1783,10 @@ RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, eac
         .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
         .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
         .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
+        ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
+        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
+        .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
+        .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
 
 ; boomerang-relative position: sx = spx - bx ; sy = spy - by  (uses spx/spy as the object's draw pos)
 boomrel:
@@ -1896,6 +1900,28 @@ star_safe:
         sta q1
 @no:    rts
 
+; The trampoline box is opaque the same way; nothing may draw through it if it is to be
+; left alone.  rx/ry are still Cleo-relative here (ob_tramp does not call boomrel).
+tramp_safe:
+        lda fe+1                    ; an enemy's range covers it
+        bne @no
+        ldx #72
+        jsr inrange                 ; Cleo overlaps its rectangle
+        bcs @no
+        lda bactive
+        beq @yes
+        jsr boomrel
+        mov16 rx, sx
+        mov16 ry, sy
+        ldx #76
+        jsr inrange                 ; the boomerang overlaps it
+        bcs @no
+@yes:   lda q1
+        clc
+        adc #BOXN
+        sta q1
+@no:    rts
+
 ; ---------------------------------------------------------------- TRAMPOLINE (1)
 ob_tramp:
         lda fa
@@ -1921,8 +1947,16 @@ ob_tramp:
         clc
         adc #2
         lsr
-        lsr
+        lsr                         ; bounce frame 0..2
+        ldx fe                      ; e0 = 1: the trampoline sits on solid black, so draw
+        beq @reg                    ;         the opaque baked box; else the masked sprite
         clc
+        adc #115                    ; 115..117 = the trampoline black boxes
+        sta q1
+        jsr tramp_safe              ; may the next frame leave this one alone?
+        lda q1
+        jmp m_addsprite
+@reg:   clc
         adc #43
         jmp m_addsprite
 
