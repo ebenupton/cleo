@@ -376,18 +376,22 @@ frame_loop:
         and #K_MENU
         bne :+
         stz pausing
-:       ; 25Hz logic: exactly one step per render, and any time lost to a long
-        ; frame is dropped rather than caught up.  Catching up ran two or three
-        ; steps in a row, which moved the window several char rows in one frame;
-        ; the two buffers share a ring on a Model B and have only two rows of
-        ; slack between them, so a frame is a frame.
+:       ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes two
+        ; steps for each one, so the player, every animation and every enemy move
+        ; twice as far per frame as they used to.  Two steps is a fixed pairing,
+        ; not catching up: time lost to a long frame is still dropped, so the
+        ; window never moves more in a frame than these two steps ask for.
         lda vsyncs
         sec
         sbc logicvs
-        cmp #2
+        cmp #3
         bcc @wait
         lda vsyncs
         sta logicvs
+        stza NSPR                   ; the list is rebuilt by each step; only the
+        jsr t_game_frame            ; second one's survives to be drawn
+        lda exiting
+        bne @over
         stza NSPR
         jsr t_game_frame
         lda exiting
