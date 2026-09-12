@@ -202,7 +202,6 @@ O_DL    = O_CH + OBJN
 O_DH    = O_DL + OBJN
 O_EL    = O_DH + OBJN
 O_EH    = O_EL + OBJN
-LV_ALTPAGE = $BC00                ; bank 7: 2 x 256 : map byte -> alt class
 LV_MAPROWLO = $A900               ; bank 6: 256 : tile row -> map row address
 LV_MAPROWHI = $AA00
 
@@ -346,13 +345,9 @@ getinfo:
         lda #8
         rts
 :       jsr maptile
-        ; alt class = ALTPAGE[page][byte]
+        ; alt class = LV_ALTCLS[tile id]
         tay
-        lda q1
-        clc
-        adc #>LV_ALTPAGE
-        sta @ap+2
-@ap:    lda LV_ALTPAGE,y
+        lda LV_ALTCLS,y
         ; ALTTAB[cls*8 + (qx&7)]
         asl
         asl
@@ -423,11 +418,7 @@ gettileattr:
         rts
 :       jsr maptile
         tay
-        lda q1
-        clc
-        adc #>LV_ATTR0
-        sta @at+2
-@at:    lda LV_ATTR0,y
+        lda LV_ATTR0,y
         rts
 
 ; ============================================================================
@@ -435,42 +426,6 @@ gettileattr:
 ; ============================================================================
 level_init:
         jsr init_maprows            ; main RAM: the row tables live with the map
-        ; alt class per page: ALTPAGE[p][b] = ALTCLS[id(b)].  Page entries are pre-shifted
-        ; tile addresses: lo = (id&3)<<6 | bank, hi = $80 | id>>2 (see convert.py).
-        ; The pages are in bank 6 and the alt classes in bank 7, so take a copy of the
-        ; pages into the screen, which is blanked for the whole of a level load.
-        jsr copy_pages              ; main RAM: they are in bank 6 with the map
-        ldx #0
-@ap:    lda PGCOPY+256,x
-        ldy PGCOPY,x
-        jsr @altof
-        sta LV_ALTPAGE,x
-        lda PGCOPY+768,x
-        ldy PGCOPY+512,x
-        jsr @altof
-        sta LV_ALTPAGE+256,x
-        inx
-        bne @ap
-        bra @apdone
-        ; A = hi, Y = lo -> A = alt class of that tile (X preserved)
-@altof: cmp #$C0                    ; a solid tile has no id: its class is in the
-        bcc :+                      ; low nibble of the entry, where the bank would be
-        tya
-        and #$0F
-        rts
-:       asl
-        asl                         ; (id >> 2) << 2 = id & $FC
-        sta t16
-        tya
-        asl
-        rol
-        rol
-        and #3                      ; id & 3
-        ora t16
-        tay
-        lda LV_ALTCLS,y
-        rts
-@apdone:
         ; header
         lda LV_HDR+2
         jsr @x8
@@ -2692,13 +2647,7 @@ ob_vanish:
         jsr tilexy
         stx q4                      ; tile x (q4/q5: gx/gy are the live grid-walk cursor)
         sta q5                      ; tile y
-        tay
-        lda LV_ROWPAGE,y
-        beq :+
-        lda #12
-:       clc
-        adc q1
-        tax
+        ldx q1
         lda LV_HDR+8,x
         sta q2
         lda LV_HDR+9,x

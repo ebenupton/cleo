@@ -51,27 +51,29 @@ BANK_MAP  = 6                     ; the map and the tables read alongside it
 ; because a Model B has to put the game logic in a bank, and the map is the only
 ; thing big enough to make the room.
 ;         $8000  tiles 256.. of this level (16 tiles: no level needs more)
-LV_ROWPAGE= $8400
-LV_PAGE0  = $8500                 ; 256 lo ((idx&3)<<6), 256 hi ($80 | idx>>2)
-LV_PAGE1  = $8700                 ; only loaded for the levels that need two pages
+LV_PAGE0  = $8500                 ; tile id -> tile data address: 256 lo ((id&3)<<6),
+                                  ; 256 hi ($80 | id>>2).  A map byte is a tile id, so
+                                  ; this is the whole translation -- and it is the same
+                                  ; for every level and both sets, so build_tileaddr
+                                  ; writes it once instead of every level shipping one.
 LV_MAP    = $8900                 ; up to 8K, row major
 ;         $A900  LV_MAPROWLO, LV_MAPROWHI (built by level_init, see logic.s)
 ;         $B000  box stars, $B800 music
 
 ; bank 7
 LOGIC_ADDR= $8900                 ; the game logic and menus: bank 7, above the tables
-PGCOPY    = SCREEN                ; level_init's scratch copy of the page tables
 LV_HDR    = $8000
 LV_OBJS   = $8100
-LV_ATTR0  = $8500                 ; per page attribute (kill/push)
+LV_ATTR0  = $8500                 ; attribute (kill/push) by tile id
 LV_ATTR1  = $8600
-LV_ALTCLS = $8700                 ; 512 : this level's tile id -> alt class
+LV_ALTCLS = $8600                 ; 256 : tile id -> alt class (the map byte is
+                                  ; the id, so the logic indexes this directly)
 ;         $8900..$AFFF free: the game logic lives here on a Model B
 LV_OBJST  = $B000                 ; object state arrays (16 x 149)
 LV_GRID   = $B950                 ; 128 grid heads
 LV_BOBJ   = $B9D0                 ; 255
 LV_BNEXT  = $BAD0                 ; 255
-;         $BC00  LV_ALTPAGE (512, see logic.s)
+;         $BC00  free (was LV_ALTPAGE, built per level; the map byte is the tile id now)
 LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 
 ; ---------------------------------------------------------------- screen shape
@@ -477,14 +479,6 @@ drawrect:
         lda rc_y
         lsr
         tax
-        lda LV_ROWPAGE,x
-        beq :+
-        lda #2
-:       clc
-        adc #>LV_PAGE0
-        sta @pglo+2
-        inca
-        sta @pgbk+2
         lda LV_MAPROWLO,x
         sta ptr
         lda LV_MAPROWHI,x
@@ -498,9 +492,9 @@ drawrect:
 :       ldy rc_nt
 @gl:    lda (ptr),y
         tax
-@pglo:  lda LV_PAGE0,x
+        lda LV_PAGE0,x
         sta GATHERL,y
-@pgbk:  lda LV_PAGE0+$100,x
+        lda LV_PAGE0+$100,x
         sta GATHERH,y
         dey
         bpl @gl
@@ -3934,13 +3928,11 @@ ldr_end:  rts
 ; Map access for the logic, which lives in bank 7 and so cannot select bank 6
 ; itself.  Each of these leaves bank 7 selected, so the logic calls them directly.
 ; ============================================================================
-; A = tile row -> q1 = page, mapptr = address of that map row
+; A = tile row -> mapptr = address of that map row
 maprow: tay
         lda #BANK_MAP
         sta ROMSEL_CPY
         sta ROMSEL
-        lda LV_ROWPAGE,y
-        sta q1
         lda LV_MAPROWLO,y
         sta mapptr
         lda LV_MAPROWHI,y
@@ -4002,22 +3994,36 @@ init_maprows:
         bne :-
         jmp pagelogic
 
-; the page tables, into the screen: level_init needs them and the alt classes at once
-copy_pages:
+; build_tileaddr: the tile id -> data address table, into bank 6 at LV_PAGE0.  Ids
+; 0..253 address 64 bytes each from $8000 in the tile bank; 254 and 255 are the two
+; solid fills, which own no bytes there -- hi bit 6 says "fill from a constant" and
+; lo bit 4 picks cyan over black.  Constant, so this runs once at startup.
+build_tileaddr:
         lda #BANK_MAP
         sta ROMSEL_CPY
         sta ROMSEL
         ldx #0
-:       lda LV_PAGE0,x
-        sta PGCOPY,x
-        lda LV_PAGE0+256,x
-        sta PGCOPY+256,x
-        lda LV_PAGE1,x
-        sta PGCOPY+512,x
-        lda LV_PAGE1+256,x
-        sta PGCOPY+768,x
+@t:     txa
+        asl                         ; (id & 3) << 6: the rest shifts out
+        asl
+        asl
+        asl
+        asl
+        asl
+        sta LV_PAGE0,x
+        txa
+        lsr
+        lsr
+        ora #$80                    ; $80 | id >> 2
+        sta LV_PAGE0+256,x
         inx
-        bne :-
+        bne @t
+        lda #$C0                    ; the two solid ids carry a fill, not an address
+        sta LV_PAGE0+256+SOLID_CYAN
+        sta LV_PAGE0+256+SOLID_BLACK
+        lda #$10
+        sta LV_PAGE0+SOLID_CYAN
+        stz LV_PAGE0+SOLID_BLACK
         jmp pagelogic
 
 ; one font glyph out of bank 4, for the menus
@@ -4063,7 +4069,7 @@ build_ring:
 ; this reads 16K about every other level and nothing in between.
 load_tiles:
         setbank BANK_LVL
-        lda LV_HDR+32
+        lda LV_HDR+20               ; which tile set (header: 20 fixed bytes, then gset)
         cmp tset
         beq :+
         sta tset

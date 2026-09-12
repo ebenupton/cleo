@@ -6,7 +6,8 @@ Outputs (in build/):
   TIL0     bank 5 image: compact tiles 0..255
   TIL1     bank 6 image: compact tiles 256..
   ALT      altitude classes + table (bank 7 @ &A900)
-  L<n>A/B  level packs (bank 7 @ &8000): map, page tables, rowpage, header, objects
+  L<n>A/B  level packs: map (bank 6), then header, objects, attr and alt class
+           by tile id (bank 7 @ &8000)
   TITLE    title pack (bank 6 @ &8900, over the map): logo, you/win/lose, big cleo
   preview PNGs for eyeballing the dither
 """
@@ -512,43 +513,27 @@ open(os.path.join(OUT, 'ALT'), 'wb').write(altfile)
 # ----------------------------------------------------------------------------
 # Level packs
 # ----------------------------------------------------------------------------
-def partition_rows(m, maxpages=2, extra=set()):
-    """assign each map row to a page such that each page's tile set <= 256."""
-    h = m.shape[0]
-    rowsets = [set(int(t) for t in np.unique(m[r])) | extra for r in range(h)]
-    pages = [set() for _ in range(maxpages)]
-    rowpage = [0] * h
-    # greedy: rows in order, choose the page with the largest overlap that still fits
-    for r in range(h):
-        best = None
-        for p in range(maxpages):
-            u = pages[p] | rowsets[r]
-            if len(u) <= 256:
-                score = len(pages[p] & rowsets[r]) - 0.001 * len(u)
-                if best is None or score > best[0]:
-                    best = (score, p)
-        if best is None:
-            return None
-        rowpage[r] = best[1]
-        pages[best[1]] |= rowsets[r]
-    return rowpage, pages
-
-
 BANK_TILES = 5                       # every tile is in this bank now
 rng = np.random.RandomState(1234)
 level_tiles = []
-level_split = {}                     # level -> sectors in the bank-6 half of its pack
+level_split = {}                     # level -> sectors of map (the bank-6 piece)
 def name_of(lv, sub):
     return 'L%d%s' % (lv, 'B' if sub == 0 else 'A')
 
 # ----------------------------------------------------------------------------
-# Two fixed tile sets, so a tile id is one byte and a level load is one read.
-# Levels alternate outdoors and indoors, and between them they want 309 and 178
-# tiles with data.  The indoor set fits a bank as it stands; the outdoor one is
-# brought under 256 by folding together tiles that differ in at most a few per
-# cent of their pixels and that share an altitude class, so nothing a level
+# Two fixed tile sets, so a map byte IS a tile id: no per-level tables, no paging.
+# Ids 0..253 are the tiles with pixel data, at $8000 + id * 64 in the tile bank;
+# 254 and 255 are the two solid fills (cyan sky, black), which own no bytes there.
+# Every solid tile in the game reduces to one of those two -- they all have
+# altitude class 0 and differ only in colour -- so the whole 47-tile solid set
+# costs two ids.  Levels alternate outdoors and indoors, and between them they
+# want 309 and 178 tiles with data; the indoor set fits as it stands, the outdoor
+# one is brought under 254 by folding together tiles that differ in at most a few
+# per cent of their pixels and that share an altitude class, so nothing a level
 # stands on or walks through changes shape.
 # ----------------------------------------------------------------------------
+SOLID_CYAN, SOLID_BLACK = 254, 255   # reserved ids, identical in both sets
+TILE_DATA_MAX = SOLID_CYAN           # ids 0..253 may carry data
 maps = {}
 for (lv, sub), L in levels.items():
     m = L['map'].copy()
@@ -583,7 +568,7 @@ for g in (0, 1):
     # tiles that disappear are the ones whose twin is nearest.  Only tiles of the
     # same altitude class fold together, and the animations never fold at all.
     rep_of, worst = {}, 0
-    if len(ids) > 256:
+    if len(ids) > TILE_DATA_MAX:
         cand = []
         for i, c in enumerate(ids):
             if c in _nomerge:
@@ -597,7 +582,7 @@ for g in (0, 1):
         cand.sort()
         live, target = len(ids), set()
         for d, c, k in cand:
-            if live <= 256:
+            if live <= TILE_DATA_MAX:
                 break
             if c in rep_of or c in target:      # each tile folds once, and only
                 continue                        # into one that is staying
@@ -607,7 +592,7 @@ for g in (0, 1):
             target.add(k)
             worst = d
             live -= 1
-        assert live <= 256, 'tile set %s will not fold into a byte' % SETNAME[g]
+        assert live <= TILE_DATA_MAX, 'tile set %s will not fold into a byte' % SETNAME[g]
     keep = [c for c in ids if c not in rep_of]
     thr = worst
     tileset.append(keep)
@@ -615,6 +600,9 @@ for g in (0, 1):
     idx = {c: i for i, c in enumerate(keep)}
     for c in ids:
         remap[g][c] = idx[rep_of.get(c, c)]
+    for c in _want[g]:                          # the solids share two reserved ids
+        if c in tile_solid:
+            remap[g][c] = SOLID_CYAN if tile_solid[c] == 1 else SOLID_BLACK
     print('tile set %s: %d tiles wanted, %d kept, worst fold %d bits of 512, %d bytes'
           % (SETNAME[g], len(ids), len(keep), thr, len(keep) * 64))
 for g in (0, 1):
@@ -625,63 +613,28 @@ for (lv, sub), L in levels.items():
     cm = maps[(lv, sub)]
     gset = tileset_of(lv, sub)
     extra = set(special['VANISH0'] + i for i in range(8)) if any(o[0] == 11 for o in L['objs']) else set()
-    res = partition_rows(cm, extra=extra)
-    if res is None:
-        res = partition_rows(cm, 4, extra=extra)
-        assert res is not None, 'cannot partition level %d/%d' % (lv, sub)
-    rowpage, pages = res
-    npages = max(rowpage) + 1
-    # per page: byte -> compact id
-    tables = []
-    mapbytes = np.zeros_like(cm, dtype=np.uint8)
-    local = remap[gset]              # the level's tiles are its set's, by byte id
-    level_tiles.append((name_of(lv, sub), len(set().union(*pages[:npages])), 0))
-    for p in range(npages):
-        ids = sorted(pages[p])
-        # put the vanish/flower animation tiles at fixed byte codes if present so the game
-        # can write them: we handle this by giving the game code a per-page code table
-        code = {cid: i for i, cid in enumerate(ids)}
-        tables.append((ids, code))
-    for r in range(cm.shape[0]):
-        code = tables[rowpage[r]][1]
-        for c in range(cm.shape[1]):
-            mapbytes[r, c] = code[int(cm[r, c])]
+    local = remap[gset]              # compact id -> tile id (0..255), solids included
+    lut = np.zeros(len(compact), dtype=np.uint8)
+    for _c, _t in local.items():
+        lut[_c] = _t
+    mapbytes = lut[cm]               # the map byte IS the tile id: no table, no paging
+    used = set(int(x) for x in np.unique(mapbytes))
+    level_tiles.append((name_of(lv, sub), len(used), 0))
     # A level is loaded in two pieces, because the game logic has to live in bank 7 on
-    # a Model B and the map is the only thing big enough to make room for it.
-    #   bank 6, from $8400:  rowpage (256), page tables (512 each; the second only
-    #                        when the level needs two), map (row-major) at $8900
-    #   bank 7, from $8000:  header (256), objects (1024), attr page0, attr page1,
-    #                        alt class per tile id (512)
-    pack = bytearray(bytes(rowpage).ljust(256, b'\0'))
-    for p in range(npages):
-        # entry = (lo, hi) of the tile's data address in its bank, pre-shifted so the
-        # renderer needs no arithmetic: tile data at $8000 + (cid & 255) * 64, so
-        #   lo = (cid & 3) << 6   (every tile is in bank 5 now, so the renderer hard
-        #                          codes BANK_TILES and no bank rides in the low bits)
-        #   hi = $80 | (cid & 255) >> 2
-        lo = bytearray(256); hi = bytearray(256)
-        if True:
-            for i, cid in enumerate(tables[p][0]):
-                if cid in tile_solid:
-                    # no source bytes, so no tile id: the entry carries the fill
-                    # colour and the altitude class the game would have looked up
-                    hi[i] = 0xC0
-                    lo[i] = alt_class[cid] | (0x10 if tile_solid[cid] == 1 else 0)
-                else:
-                    lid = local[cid]
-                    lo[i] = (lid & 3) << 6
-                    hi[i] = 0x80 | (lid >> 2)
-        pack += lo + hi
+    # a Model B and the map is the only thing big enough to make room for it.  The
+    # tile id -> address table is the same for every level and both sets, so the engine
+    # builds it once in bank 6 rather than every level shipping a copy of it.
+    #   bank 6, at $8900:  map (row-major)
+    #   bank 7, from $8000:  header (256), objects (1024), attr by tile id (256),
+    #                        alt class by tile id (256)
     name = name_of(lv, sub)
-    packp = bytes(pack)                            # DFS holds only 31 files, so the
-    packm = mapbytes.tobytes()                     # three pieces travel as one
+    packm = mapbytes.tobytes()
     pack = bytearray()
     hdr = bytearray()
-    hdr += bytes([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1], len(L['objs']), npages])
-    for p in range(2):
-        for cid in [special['VANISH0'] + i for i in range(8)] + [special['FLOWER0'] + i for i in range(4)]:
-            hdr.append(tables[p][1].get(cid, 255) if p < npages else 255)
-    assert len(packp) == 256 + 512 * npages
+    hdr += bytes([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1], len(L['objs']), 1])
+    for cid in [special['VANISH0'] + i for i in range(8)] + [special['FLOWER0'] + i for i in range(4)]:
+        hdr.append(local.get(cid, 255))            # plain tile ids, so one table not two
+    assert len(hdr) == 20                          # gset sits at a fixed offset
     hdr.append(gset)                               # which tile set the level wants
     pack += hdr.ljust(0x100, b'\0')                # bank 7 $8000
     objs = bytearray()
@@ -704,27 +657,28 @@ for (lv, sub), L in levels.items():
             e[1] = 1 if box_reachable(b, x, y, reach, skip=selfbox) else 0
         objs += bytes([t, x, y] + e)
     pack += objs.ljust(0x400, b'\0')              # bank 7 $8100
-    for p in range(2):
-        attr = bytearray(256)
-        if p < npages:
-            for i, cid in enumerate(tables[p][0]):
-                a = 3
-                if cid in push_tiles:
-                    a = push_tiles[cid] + 3
-                if cid in kill_tiles:
-                    a |= 0x80
-                attr[i] = a
-        pack += attr                               # bank 7 $8500 page0, $8600 page1
-    acls = bytearray(512)                          # bank 7 $8700: class per tile id
-    for c in set().union(*pages[:npages]):
-        if c not in tile_solid:
-            acls[local[c]] = alt_class[c]
+    attr = bytearray(256)                          # bank 7 $8500: attr by tile id
+    acls = bytearray(256)                          # bank 7 $8600: alt class by tile id
+    # the animation tiles are written into the map at run time, so they need table
+    # entries even when the level does not start with one on the ground
+    live = set(int(x) for x in np.unique(cm))
+    live |= {special['VANISH0'] + i for i in range(8)} | {special['FLOWER0'] + i for i in range(4)}
+    for c in sorted(live & set(local)):
+        t = local[c]
+        a = 3
+        if c in push_tiles:
+            a = push_tiles[c] + 3
+        if c in kill_tiles:
+            a |= 0x80
+        attr[t] = a
+        acls[t] = 0 if c in tile_solid else alt_class[c]
+    pack += attr
     pack += acls
-    assert len(pack) == 0x900
-    open(os.path.join(OUT, name), 'wb').write(packp + packm + pack)
-    level_split[name] = (len(packp) // 256, len(packm) // 256)
-    print(name, 'pages', npages, [len(t[0]) for t in tables], 'objs', len(L['objs']),
-          'pages', len(packp), 'map', len(packm), 'tables', len(pack))
+    assert len(pack) == 0x700
+    assert max(used) <= 255
+    open(os.path.join(OUT, name), 'wb').write(packm + pack)
+    level_split[name] = len(packm) // 256
+    print(name, 'ids', len(used), 'objs', len(L['objs']), 'map', len(packm), 'tables', len(pack))
 
 print('levels want at most %d tiles (%s)' % max((d, n) for n, d, s in level_tiles))
 
@@ -1184,13 +1138,14 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('BOX_BASE = $%04X\n' % BOX_BASE)
     # the box stars are the last sprite ids, so "is this an opaque pre-composited
     # rectangle?" is a single compare rather than a range test on two ends
+    f.write('SOLID_CYAN = %d\nSOLID_BLACK = %d\n' % (SOLID_CYAN, SOLID_BLACK))
     f.write('BOXID0 = %d\n' % 103)
     f.write('BOXN = %d\n' % 15)        # 12 star boxes + 3 trampoline boxes; the skip
                                         # aliases sit BOXN above, same picture, the logic
                                         # having decided nothing can disturb them
     f.write('TITLE_ADDR = $%04X\n' % TITLE_ADDR)
-    for _n, (_p, _m) in sorted(level_split.items()):
-        f.write('LP_%s = %d\nLM_%s = %d\n' % (_n, _p, _n, _m))
+    for _n, _m in sorted(level_split.items()):
+        f.write('LM_%s = %d\n' % (_n, _m))
     f.write('SPR_FONT = $%04X\nSPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_ANDY = $%04X\n' %
             (SPR_FONT, SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_ANDY))
     for i, (name, ptr, W, hpx, lines, full) in enumerate(tdir):
