@@ -428,21 +428,18 @@ drawrect:
         bcc :+
         sta PART_HI,x
 :       ; ---- per-rect invariants: tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
-        lda rc_x
+        lda rc_w
+        deca
         clc
-        adc rc_w
+        adc rc_x
         sta w16
         lda rc_x+1
         adc #0
-        sta w16+1
-        lda w16
-        bne :+
-        dec w16+1
-:       dec w16
-        lsr w16+1
+        lsr a
         ror w16
-        lsr w16+1
+        lsr a
         ror w16                     ; w16 = tx1
+        sta w16+1
         lda rc_x+1
         lsr
         sta tmp
