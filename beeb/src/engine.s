@@ -42,6 +42,7 @@ BARBUF    = SPR_BAR               ; master bar image lives in bank 4 (2 char row
 BANK_SPR  = 4
 BANK_TIL0 = 5
 BANK_TIL1 = 6
+BANK_TILES= 5                     ; every level's tile data now fits one bank
 BANK_LVL  = 7
 BANK_MAP  = 6                     ; the map and the tables read alongside it
 
@@ -51,7 +52,7 @@ BANK_MAP  = 6                     ; the map and the tables read alongside it
 ; thing big enough to make the room.
 ;         $8000  tiles 256.. of this level (16 tiles: no level needs more)
 LV_ROWPAGE= $8400
-LV_PAGE0  = $8500                 ; 256 lo ((idx&3)<<6 | bank), 256 hi ($80 | idx>>2)
+LV_PAGE0  = $8500                 ; 256 lo ((idx&3)<<6), 256 hi ($80 | idx>>2)
 LV_PAGE1  = $8700                 ; only loaded for the levels that need two pages
 LV_MAP    = $8900                 ; up to 8K, row major
 ;         $A900  LV_MAPROWLO, LV_MAPROWHI (built by level_init, see logic.s)
@@ -266,6 +267,8 @@ BUF_CY:    .res 2
 BUF_VALID: .res 2
 PART_CY:   .res 2                 ; per buffer: row/fine the partial (A) row was last copied for
 PART_F:    .res 2
+PART_CXL:  .res 2                 ; per buffer: the window column it was last copied for (16 bit):
+PART_CXH:  .res 2                 ;   a horizontal scroll shifts every column, not just dirty ones
 PART_LO:   .res 2                 ; per buffer: window columns of row wcy drawn since that copy
 PART_HI:   .res 2                 ;   (LO > HI = none)
 BUF_BARQ:  .res 2
@@ -501,6 +504,8 @@ drawrect:
         sta GATHERH,y
         dey
         bpl @gl
+        setbank BANK_TILES          ; gather done (it read bank 6); the tiles all live in
+                                    ; bank 5, so switch once here, not per tile in @run
         ; ---- draw this char row, and (without re-gathering) the odd row of the same tile row
         jsr @drawrow
         inc rc_y
@@ -546,14 +551,7 @@ drawrect:
         and #$40                    ; (bit abs,x would be 65C02 only)
         beq :+
         jmp @solid
-:       lda GATHERL,x
-        and #$0F                    ; bank rides in the low nibble of the pre-shifted lo byte
-        cmp curbank
-        beq :+
-        sta curbank
-        sta ROMSEL_CPY
-        sta ROMSEL
-:       lda GATHERL,x
+:       lda GATHERL,x               ; every tile is in bank 5, selected once per tile row
         and #$C0
         ora rowoff
         sta tp
@@ -1934,7 +1932,13 @@ copy_partial:
         lda wcy
         cmp PART_CY,x
         bne @all
-        ; same source row and lines as last time: only the columns drawn since
+        lda wcx                     ; a horizontal scroll re-sources every column of the
+        cmp PART_CXL,x              ; A row (it maps to ring row wcy shifted by wcx), so the
+        bne @all                    ; dirty-column shortcut is only valid when wcx is unchanged
+        lda wcx+1
+        cmp PART_CXH,x
+        bne @all
+        ; same source row, lines and column as last time: only the columns drawn since
         lda PART_HI,x
         cmp #ROWCHARS
         bcc :+
@@ -1951,6 +1955,10 @@ copy_partial:
         sta PART_F,x
         lda wcy
         sta PART_CY,x
+        lda wcx
+        sta PART_CXL,x
+        lda wcx+1
+        sta PART_CXH,x
         lda #ROWCHARS
         sta cnt
         lda #0
@@ -2753,12 +2761,24 @@ build_sections:
         sbc #>RINGCHARS
         sta w16+1
 :       rts
-; --- rows of the run that end before the ring end: floor((RINGCHARS - w16) / 80)
 ; --- rows of the run that finish before the ring end.  The run starts on ring row
-; tmp3, so RINGROWS-1-tmp3 rows end before the last (straddling) one -- the same count
-; the old walking loop produced, and what @addr/ringfix assume.
-@nfull: lda #RINGROWS-1
+; tmp3.  When the window has a char offset r = ringS mod 80, ring row RINGROWS-1 is the
+; straddling row (@addr redirects it to the mirror), so RINGROWS-1-tmp3 rows come first.
+; But when r == 0 the window is row aligned: that last ring row is whole and shown from
+; the ring itself, with the wrap falling after it -- so it belongs to this run, giving
+; RINGROWS-tmp3.  Getting this wrong emits a section that reads off the ring end into the
+; bar (a duplicate bar mid screen when scrolling to a column that is a multiple of 80).
+@nfull: stx tmp2                    ; X is the live SECTAB entry index: save it
+        ldx barq
+        lda ringS
         sec
+        sbc mulrowlo,x              ; r = ringS mod 80
+        ldx tmp2                    ; restore X (r survives in A)
+        cmp #1                      ; C = 0 iff r == 0
+        lda #RINGROWS
+        bcc :+                      ; r == 0: the last ring row is whole, keep it here
+        lda #RINGROWS-1             ; r  > 0: that row straddles, @addr sends it to the mirror
+:       sec
         sbc tmp3
         rts
 ; A = lines -> A/tmp3 = lines*64-2

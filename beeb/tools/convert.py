@@ -635,7 +635,8 @@ for (lv, sub), L in levels.items():
     for p in range(npages):
         # entry = (lo, hi) of the tile's data address in its bank, pre-shifted so the
         # renderer needs no arithmetic: tile data at $8000 + (cid & 255) * 64, so
-        #   lo = (cid & 3) << 6 | bank (ROMSEL value 5/6 in the free low bits)
+        #   lo = (cid & 3) << 6   (every tile is in bank 5 now, so the renderer hard
+        #                          codes BANK_TILES and no bank rides in the low bits)
         #   hi = $80 | (cid & 255) >> 2
         lo = bytearray(256); hi = bytearray(256)
         if True:
@@ -647,7 +648,7 @@ for (lv, sub), L in levels.items():
                     lo[i] = alt_class[cid] | (0x10 if tile_solid[cid] == 1 else 0)
                 else:
                     lid = local[cid]
-                    lo[i] = ((lid & 3) << 6) | BANK_TILES
+                    lo[i] = (lid & 3) << 6
                     hi[i] = 0x80 | (lid >> 2)
         pack += lo + hi
     name = name_of(lv, sub)
