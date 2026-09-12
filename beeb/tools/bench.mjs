@@ -17,6 +17,18 @@
 //      buffer.  We patch the blink test out (see patchBlink) so she is always drawn.
 //   3. Rendering ping-pongs between two buffers whose per-frame cost differs, so a
 //      single frame is a +-15% coin flip on parity.  Average an even frame count.
+//
+// And the reason this is a DETERMINISTIC set: render cost and the game world are
+// coupled (the logic runs one step per render), so anything that lets one build run
+// a different number of logic steps puts the enemies somewhere else and changes what
+// is drawn.  Every wait below is therefore counted in GAME FRAMES, never in emulator
+// cycles -- a cycle budget for the level load alone was enough to leak a 1280-byte
+// pack size difference into a 6-frame head start.  There is no physics settle (the
+// locations are already landed positions, so Cleo is placed straight onto the
+// ground), the run accelerates for a fixed frame count rather than "until fast", and
+// she is held invulnerable, because a hit zeroes 'control' and changes how many
+// frames the run takes.  Each sample records the frame counter: two builds whose
+// f0 values agree were measured with the world in the same state.
 import { readdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url"; import { homedir } from "node:os"; import path from "node:path";
 function findJsbeeb(){const npx=path.join(homedir(),".npm","_npx");for(const d of readdirSync(npx)){const p=path.join(npx,d,"node_modules","jsbeeb","src","machine-session.js");if(existsSync(p))return p;}throw new Error("jsbeeb not found");}
@@ -30,6 +42,8 @@ const A={};for(const m of readFileSync("build/labels.txt","utf8").matchAll(/^al 
 
 const MAXVX=766, THRESH=Math.round(0.8*MAXVX);
 const AVG_FRAMES=4;                 // even: two frames per buffer
+const ACCEL=48, WARM=30;            // fixed frame counts: no state-dependent waits
+                                    // 48 frames is comfortably past the 766 cap
 const s=new MachineSession("Master");await s.initialise();await s.boot(30);s.loadDisc(path.resolve("build/cleo.ssd"));
 s.keyDown(16);s.reset(true);await s.runFor(2_000_000);s.keyUp(16);
 const cpu=s._machine.processor,rd=a=>cpu.readmem(a),wr=(a,v)=>cpu.writemem(a,v);
@@ -37,8 +51,8 @@ const w16=a=>rd(a)|(rd(a+1)<<8), s16=a=>{const v=w16(a);return v>=32768?v-65536:
 let hit=false;const h=cpu.debugInstruction.add(pc=>(pc===A.title_loop?(hit=true):false));await s.runFor(80_000_000);h.remove();
 wr(A.title_loop,0xa9);wr(A.title_loop+1,0);wr(A.title_loop+2,0xea);
 for(let a=A.level_loop;a<A.level_loop+16;a++)if(rd(a)===0xa6&&rd(a+1)===(A.level&255)){wr(a,0xa2);wr(a+1,lv);break;}
-await s.runFor(9_000_000);
-wr(A.scan_keys,0x60);
+// anchor on level_init itself, then count frames -- never cycles
+let initHit=false, fcInit=-1;
 
 // Disable the invulnerability blink so the player is drawn on every frame.
 // While 'hurt' is set, logic.s draws her only when (frame & 3) == 0:
@@ -65,41 +79,49 @@ if(blinkPatch.length!==1) console.error(`WARNING: blink test matched ${blinkPatc
 // render work = cycles from select_backbuf (just past wait_flip) to render_done
 let inFrame=false,wkCyc=-1,lastRender=0,fcount=0;
 cpu.debugInstruction.add(pc=>{
-  if(pc===A.render_frame){inFrame=true;wkCyc=-1;}
+  if(pc===A.level_init){initHit=true;fcInit=fcount;}
+  else if(pc===A.render_frame){inFrame=true;wkCyc=-1;}
   else if(pc===A.select_backbuf&&inFrame&&wkCyc<0){wkCyc=cpu.currentCycles;}
   else if(pc===A.render_done&&inFrame){let d=cpu.currentCycles-(wkCyc>=0?wkCyc:cpu.currentCycles);if(d<0)d+=2_000_000;
     lastRender=d;inFrame=false;fcount++;}
   return false;});
 async function frames(keys,n){const start=fcount;const costs=[];let last=fcount,guard=0;
-  while(fcount-start<n && guard++<300){wr(A.keys,keys);await s.runFor(20_000);if(fcount>last){costs.push(lastRender);last=fcount;}}
+  while(fcount-start<n && guard++<400){
+    wr(A.keys,keys); wr(A.hurt,1); wr(A.health,3);   // invulnerable: a hit zeroes control
+    await s.runFor(20_000);
+    if(fcount>last){costs.push(lastRender);last=fcount;}}
   return costs;}   // guard: a death screen stops render_frame; bail rather than hang
-// settle: drop to the ground and come to rest.  With the blink patched out the hurt
-// state no longer changes what is drawn, so there is nothing to wait out beyond the fall.
-async function settle(){await frames(0,12);let n=0;
-  while(n++<120){if(rd(A.health)!==0&&s16(A.vy)===0)break;await frames(0,1);}
-  await frames(0,4);return rd(A.health)!==0;}
+// place Cleo directly: bench_locations holds landed positions (ground is py+16, her
+// height), so no fall is needed and none of its frame-count variance is incurred
+function place(px,py){w16w(A.px,px);w16w(A.py,py);w16w(A.vx,0);w16w(A.vy,0);}
 const mean=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null;
+
+while(!initHit)await s.runFor(20_000);
+wr(A.scan_keys,0x60);
+while(fcount-fcInit<WARM)await s.runFor(20_000);     // warm-up, counted from the anchor
 
 const samples=[];
 for(const loc of LOCS){
-  w16w(A.px,loc.px);w16w(A.py,loc.py);w16w(A.vx,0);w16w(A.vy,0);
-  await settle();
-  if(rd(A.health)===0){samples.push({px:loc.px,py:loc.py,jumpCost:null,runCost:null,dead:1});
-    wr(A.keys,0);await frames(0,40);continue;}          // fell into a pit: skip, let it respawn
-  const landPx=w16(A.px), landPy=w16(A.py);
-  const jc=await frames(4,1+AVG_FRAMES);                // jump: mean of rise frames 2..5
+  place(loc.px,loc.py); await frames(0,3);
+  const f0=w16(A.frame);
+  const jc=await frames(4,1+AVG_FRAMES);             // jump: mean of rise frames 2..5
   const jumpCost=mean(jc.slice(1,1+AVG_FRAMES));
-  await frames(0,20);
-  w16w(A.px,landPx);w16w(A.py,landPy);w16w(A.vx,0);w16w(A.vy,0);await settle();
-  let dir=(landPx<((1<<8)*8/2))?2:1, runCost=null;      // whichever way has room
-  for(const d of [dir,dir===2?1:2]){
-    for(let f=0;f<40;f++){await frames(d,1);if(Math.abs(s16(A.vx))>=THRESH){runCost=mean(await frames(d,AVG_FRAMES));break;}}
-    if(runCost!==null)break;
-    w16w(A.px,landPx);w16w(A.py,landPy);w16w(A.vx,0);w16w(A.vy,0);await settle();
+  place(loc.px,loc.py); await frames(0,3);
+  // both directions, each for the same fixed number of frames, and keep the one she
+  // actually gets going in.  Picking by "whichever has room" needs a variable-length
+  // retry, which is exactly the state-dependent wait this protocol exists to avoid.
+  let vx=0, runCost=null;
+  for(const dir of [2,1]){
+    await frames(dir,ACCEL);
+    const v=Math.abs(s16(A.vx));
+    const c=mean(await frames(dir,AVG_FRAMES));
+    if(v>vx){vx=v;runCost=c;}
+    place(loc.px,loc.py); await frames(0,3);
   }
-  samples.push({px:landPx,py:landPy,jumpCost,runCost,hurt:rd(A.hurt)});
+  place(loc.px,loc.py); await frames(0,3);
+  samples.push({px:loc.px,py:loc.py,f0,vx,jumpCost,runCost});
 }
 writeFileSync(out,JSON.stringify({lv,MAXVX,THRESH,blinkPatched:blinkPatch.length,
-  method:"work=select_backbuf..render_done; blink patched out (player drawn every frame); mean of "+AVG_FRAMES+" frames",samples}));
+  method:"work=select_backbuf..render_done; no settle; frame-counted; invulnerable; blink patched out; mean of "+AVG_FRAMES+" frames",samples}));
 const m=a=>{a=a.filter(x=>x!=null).sort((x,y)=>x-y);return a.length?a[a.length>>1]:0;};
-console.log(`L${lv}: ${samples.length} locations; jump med=${m(samples.map(x=>x.jumpCost))} run med=${m(samples.map(x=>x.runCost))} cy (work, no-blink, ${AVG_FRAMES}-frame mean)`);
+console.log(`L${lv}: ${samples.length} locations; jump med=${m(samples.map(x=>x.jumpCost))} run med=${m(samples.map(x=>x.runCost))} cy (deterministic, ${AVG_FRAMES}-frame mean)`);
