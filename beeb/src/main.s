@@ -9,9 +9,6 @@
         .include "engine.s"
         .include "logic.s"
         .include "menu.s"
-.ifdef MODELB
-        .include "reloc.s"          ; the file loads clear of the DFS and moves down
-.endif
 
         .code
 ; ---------------------------------------------------------------- entry

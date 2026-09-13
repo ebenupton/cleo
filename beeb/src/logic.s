@@ -2729,9 +2729,6 @@ ob_switch:
         .code
 ; draw digit A at bar pixel column X (even): copies a 64-byte digit tile into the bar image
 bar_digit:
-.ifdef MODELB
-        rts
-.else
         pha
         setbank BANK_SPR
         pla
@@ -2779,7 +2776,6 @@ bar_digit:
         bpl :-
         setbank BANK_LVL
         rts
-.endif
 
 bar_touch:
         lda #1

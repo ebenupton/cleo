@@ -77,60 +77,30 @@ LV_BNEXT  = $BAD0                 ; 255
 LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 
 ; ---------------------------------------------------------------- screen shape
-; The Master gives each buffer its own 20K screen, main and shadow, so both are
-; an 80-char 32-row ring at $3000 with 27 rows visible and the status bar above.
-;
-; A Model B has one screen, so the two buffers share the 20K: 64-char rows make
-; it a ring of 40, and a buffer's rows start BUFOFF = 20 of them further on.
-; Each holds 18 rows and shows 17, which leaves two rows of gap at each end.
-; The gap is what lets the two be drawn a frame apart: with one physics step per
-; frame the window moves two rows at most in ordinary play, and a bigger jump
-; invalidates the other buffer rather than drawing over it.  One row of gap and
-; 18 visible would fit, but the display glitches during a long fall, so the
-; second row stays until that is understood.  One shared ring also means the video
-; hardware's own wrap at $8000 still closes it, which matters because the CRTC
-; can only be re-pointed at a row boundary and the window rarely starts on one.
-.ifdef MODELB
-ROWCHARS  = 64                    ; chars across a screen row (2 pixels each)
-RINGROWS  = 40                    ; rows in the shared ring
-BUFOFF    = 20                    ; ring rows between the two buffers
-VISROWS   = 17                    ; visible char rows (136 lines = 68 game px)
-BUFROWS   = 18                    ; rows held (visible + partial top row source)
-.else
+; Each buffer gets its own 20K screen, main and shadow, so both are an 80-char
+; ring at $3000 with 27 rows visible and the status bar above.
 ROWCHARS  = 80
 RINGROWS  = 28                    ; playfield rows only: the bar, the partial-row source
-BUFOFF    = 0                     ; and the wrap mirror all have fixed homes below
 VISROWS   = 27                    ; visible char rows (216 lines = 108 game px)
 BUFROWS   = 28                    ; rows held (visible + partial top row source)
-.endif
 ; The camera follows Cleo one for one, so her fall speed is also how far the window
-; moves in a frame.  On a Model B the two buffers share one ring with BUFOFF-BUFROWS
-; rows of gap at each end, and a window that moves further than the gap writes over
-; the rows the other buffer is displaying.  A char row is four map pixels.
-.ifdef MODELB
-MAXDWY    = (BUFOFF - BUFROWS) * 4
-.else
-MAXDWY    = 8                     ; main and shadow are separate, so nothing forces
-.endif                            ; this here -- it is only so both targets play alike
+; moves in a frame.  A char row is four map pixels.  Main and shadow are separate,
+; so nothing in the layout forces a limit; this one is a play decision.
+MAXDWY    = 8
 BUF0      = $3000
 ROWBYTES  = ROWCHARS*8
 RINGCHARS = ROWCHARS*RINGROWS
 RINGBYTES = RINGCHARS*8
-; A Model B's ring is the whole 20K and the hardware's own $8000 wrap closes it.  A
-; Master takes three rows out of the ring so the status bar can stop chasing it:
+; Three rows come out of the ring so the status bar can stop chasing it:
 ;   $3000  the row copy_partial fills with the window's top slice
 ;   $3280  a copy of the ring's last 80 chars, immediately before the ring, so a row
 ;          that straddles the ring end can still be read as one run
 ;   $3500  the ring, 28 rows -- both ends page aligned, so ringup stays a byte compare
 ;   $7B00  the bar
-.ifdef MODELB
-RINGBASE  = BUF0
-.else
 PARTADDR  = BUF0
 MIRROR    = PARTADDR + ROWBYTES
 RINGBASE  = MIRROR + ROWBYTES
 BARADDR   = RINGBASE + RINGBYTES
-.endif
 RINGEND   = RINGBASE + RINGBYTES
 CRTCBASE  = RINGBASE / 8          ; the CRTC counts characters, so the ring starts here
 WINPX     = ROWCHARS*2            ; window width in pixels
@@ -321,35 +291,39 @@ NEXTBUF:   .res 1
 ; advance sp (screen pointer) by one char (8 bytes) with ring wrap
 ; ---------------------------------------------------------------- ring wrapping
 ; A screen address that runs off the end of the buffer folds back to its start.
-; On the Master the buffer is the whole 20K and the test is the sign bit; on a
-; Model B they are one ring shared by both buffers.
+; The buffer is the whole 20K and the test is the sign bit.
 ; These spell their skip with an anonymous label, so a caller that wants to branch
 ; over one has to count it: see spnext, which says :++ for that reason.  A named
 ; label here would end the enclosing routine's cheap-local scope.
 .macro ringmod                      ; A = a map char row -> its ring slot
 .if (RINGROWS & (RINGROWS - 1)) = 0
         and #(RINGROWS-1)
-.elseif .defined(MODELB)
-        sec                         ; not a power of two: a Model B has no room for the
-:       sbc #RINGROWS               ; table, so it folds by repeated subtraction
-        bcs :-
-        adc #RINGROWS
 .else
         tax
         lda ringmodtab,x
 .endif
 .endmacro
-; Both ends of the ring are page boundaries, so the fold is a compare on the high byte
-; alone -- on a Model B the ring ends at $8000 and the sign bit says so for free.
-.macro ringup                       ; A = high byte after moving forward
-.if RINGEND = $8000
-        bpl :+
-.else
+; Both ends of the ring are page boundaries, so the fold is a compare on the high
+; byte alone.  A = high byte after moving forward, folded back into the ring.
+;
+; Two spellings, by what the caller's carry is known to be: the sites reached
+; through a bcc from an eight-bit add that carried arrive with it set, the ones
+; reached from an adc that cannot overflow arrive with it clear.  Either way the
+; cmp sets the carry before the sbc, so neither has to pay for a sec and the two
+; are currently the same three instructions -- the names are the caller's contract,
+; and they earn their keep the moment the fold stops being a compare (a ring ending
+; at $8000 would test the sign bit instead, which leaves the carry alone, and then
+; the clear form has to subtract one less and let the missing borrow make it up).
+.macro ringup_cs                    ; carry known set
         cmp #>RINGEND
         bcc :+
-.endif
-        sec
         sbc #>RINGBYTES
+:
+.endmacro
+.macro ringup_cc                    ; carry known clear
+        cmp #>RINGEND
+        bcc :+
+        sbc #>RINGBYTES             ; the cmp has already set it
 :
 .endmacro
 .macro ringdn                       ; A = high byte after moving back
@@ -364,10 +338,10 @@ NEXTBUF:   .res 1
         clc
         adc #8
         sta sp
-        bcc :++                     ; past ringup's own anonymous label
+        bcc :++                     ; past the fold's own anonymous label
         inc sp+1
         lda sp+1
-        ringup
+        ringup_cs
         sta sp+1
 :
 .endmacro
@@ -376,13 +350,6 @@ NEXTBUF:   .res 1
 ; ringaddr: screen address of map char (w16 = cx 16 bit, A = cy) -> sp
 ; ============================================================================
 ringaddr:
-.if BUFOFF                          ; the back buffer's rows sit BUFOFF further on
-        ldx curbuf
-        beq :+
-        clc
-        adc #BUFOFF
-:
-.endif
         ringmod
         tax
         lda w16+1
@@ -399,7 +366,7 @@ ringaddr:
         sta sp
         lda sp+1
         adc RINGHI,x
-        ringup
+        ringup_cc
         sta sp+1
         rts
 
@@ -643,10 +610,10 @@ drawrect:
         clc
         adc tmp
         sta sp
-        bcc :++                     ; past ringup's own anonymous label
+        bcc :++                     ; past the fold's own anonymous label
         inc sp+1
         lda sp+1
-        ringup
+        ringup_cs
         sta sp+1
 :       bra @runend
 @slow:
@@ -678,7 +645,6 @@ drawrect:
         inc rc_gi
         jmp @run
 @rowdone:
-.ifndef MODELB
         lda rc_sp+1                 ; a row is 640 bytes: only one starting in the last
         cmp #(>RINGEND - 5)         ; 1280 can reach the mirror's source row
         bcc :+
@@ -687,14 +653,13 @@ drawrect:
         ldx rc_w
         jsr mirror_run
 :
-.endif
         lda rc_sp                   ; next char row: +640 with ring wrap
         clc
         adc #<ROWBYTES
         sta rc_sp
         lda rc_sp+1
         adc #>ROWBYTES
-        ringup
+        ringup_cc
         sta rc_sp+1
         rts
         ; ---- solid tile: store one constant, no bank switch, no source pointer
@@ -783,25 +748,6 @@ drawrect:
 ; ============================================================================
 ; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
 scroll_validate:
-.ifdef MODELB
-        ; The other buffer's rows sit BUFOFF further round the shared ring, which
-        ; leaves (RINGROWS - 2*BUFROWS)/2 rows of gap at each end.  If the window
-        ; has moved further than that since the other buffer was drawn, what we
-        ; are about to draw lands on top of its rows, so it has to go.
-        lda curbuf
-        eor #1
-        tax
-        lda wcy
-        sec
-        sbc BUF_CY,x
-        bpl :+
-        eor #$FF
-        inca
-:       cmp #((RINGROWS - 2*BUFROWS) / 2) + 1
-        bcc :+
-        stza BUF_VALID,x
-:
-.endif
         stz SV_COLW
         stz SV_ROWH
         ldx curbuf
@@ -1538,7 +1484,6 @@ sprnext:
         dec sp_cnt
         bpl ds_colloop
 ds_rowdone:
-.ifndef MODELB
         lda sp_rb+1                 ; (see drawrect's @rowdone)
         cmp #(>RINGEND - 5)
         bcc :+
@@ -1548,7 +1493,6 @@ ds_rowdone:
         inx
         jsr mirror_run
 :
-.endif
         lda sp_row
         cmp sp_r1
         beq ds_done
@@ -1565,7 +1509,7 @@ ds_rowdone:
         sta sp_rb
         lda sp_rb+1
         adc #>ROWBYTES
-        ringup
+        ringup_cc
         sta sp_rb+1
         jmp ds_rowloop
 ds_done: rts
@@ -1974,17 +1918,6 @@ copy_partial:
         sta w16+1
         lda wcy
         jsr ringaddr                ; sp = source start (row wcy, first dirty column)
-.ifdef MODELB
-        ; dest = sp - 640, the ring row above the window
-        lda sp
-        sec
-        sbc #<ROWBYTES
-        sta ptr
-        lda sp+1
-        sbc #>ROWBYTES
-        ringdn
-        sta ptr+1
-.else
         ; dest = the same column of the fixed partial row, which is all section A of
         ; the rupture chain ever displays
         lda tmp4
@@ -2001,7 +1934,6 @@ copy_partial:
         lda ptr+1
         adc #>PARTADDR
         sta ptr+1
-.endif
         ; dest pointer adjusted by -wfine so that same Y indexes both
         lda ptr
         sec
@@ -2050,21 +1982,6 @@ copy_partial:
         sta ptr
         bcc :+
         inc ptr+1
-.ifdef MODELB                       ; the destination is a ring row and can wrap; a
-:       lda ptr+1                   ; Master's is a plain 640-byte row that cannot
-        cmp #$7F                    ; only the last page before $8000 can wrap
-        bcc :+
-        lda ptr
-        clc
-        adc wfine
-        lda ptr+1
-        adc #0
-        bpl :+                      ; the store is conditional: fold back only if
-        lda ptr+1                   ; this row's copy would run off the end
-        sec
-        sbc #>RINGBYTES
-        sta ptr+1
-.endif
 :       dec cnt
         beq @done
         jmp @fjmp
@@ -2073,7 +1990,6 @@ copy_partial:
 ; ============================================================================
 ; calc_ring: ringS = ((wcy & 31) * 80 + wcx) mod 2560 ; barq = ringS / 80
 ; ============================================================================
-.ifndef MODELB                      ; a Model B shows no status bar
 ; copy_bar: if this buffer's bar rows are stale, write bar image into ring slots q-3, q-2
 ; The bar has a fixed home outside the ring, so it stays put however the window
 ; scrolls and is only written when its contents change.  It used to live in the two
@@ -2140,227 +2056,10 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
         bra @bs
 @bsdone: rts
 
-.endif
 ; ============================================================================
         .segment "LOGIC"           ; main RAM is full on a Master: this touches
                                     ; nothing but main RAM and the CRTC, so it can
                                     ; live in the bank the game logic already uses
-.ifdef MODELB
-; build_sections (Model B): no status bar, so the chain is the playfield and the
-; blank tail below it:
-;   f = 0 : P (VISROWS rows) -> Q
-;   f > 0 : A (the 8-f lines copy_partial left in the row above the window)
-;           -> P1 (VISROWS-1 rows) -> P2 (the last f lines) -> Q
-; The vsync handler starts the chain, so the first section's address and length
-; go into BUF_SEC0 and BUF_SEC0T1 rather than into a SECTAB entry.
-; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi (T1 = duration of section i+1)
-; ============================================================================
-LINE = 64
-build_sections:
-        lda ringS                   ; S + $600: the window start in CRTC units
-        clc
-        adc #<CRTCBASE
-        sta w16
-        lda ringS+1
-        adc #>CRTCBASE
-        sta w16+1
-        ldy #0                      ; SECTAB base for this buffer
-        lda curbuf
-        beq @b0
-        ldy #BUFOFF                 ; and its rows are BUFOFF further round the ring
-@bo:    jsr @addrow
-        dey
-        bne @bo
-        ldy #48
-@b0:    sty tmp4
-        lda curbuf
-        asl                         ; the per-buffer word index
-        tax
-        lda wfine
-        bne @fine
-        ; ---- f = 0: the whole playfield is one section
-        lda w16+1
-        sta BUF_SEC0,x
-        sta w16b+1
-        lda w16
-        sta BUF_SEC0+1,x
-        sta w16b
-        lda #<(VISLINES*LINE-2)
-        sta BUF_SEC0T1,x
-        lda #>(VISLINES*LINE-2)
-        sta BUF_SEC0T1+1,x
-        ldx tmp4
-        lda #VISROWS-1
-        sta SECTAB+2,x
-        lda #7
-        sta SECTAB+3,x
-        lda #30                     ; R6 and R7 past the end: T1 cuts the section
-        sta SECTAB+4,x
-        sta SECTAB+5,x
-        ldy #VISROWS                ; Q starts on the row below the playfield, so the
-:       jsr @addrow                 ; line the 6845 always shows is playfield coloured
-        dey
-        bne :-
-        lda w16+1
-        sta SECTAB,x
-        lda w16
-        sta SECTAB+1,x
-        lda #<(QROWS*8*LINE-2)      ; Q's own length: the vsync lands inside it and
-        sta SECTAB+6,x              ; reprograms the timer, so nothing needs to tick
-        lda #>(QROWS*8*LINE-2)      ; in between
-        sta SECTAB+7,x
-        txa
-        clc
-        adc #8
-        tax
-        jmp @setq
-@fine:
-        jsr @subrow                 ; the row copy_partial filled with the top slice
-        lda w16+1
-        sta BUF_SEC0,x
-        sta w16b+1
-        lda w16
-        sta BUF_SEC0+1,x
-        sta w16b
-        lda wfine
-        eor #7
-        inca                        ; 8 - f lines of it
-        jsr @dur
-        sta BUF_SEC0T1,x
-        lda tmp3
-        sta BUF_SEC0T1+1,x
-        ldx tmp4
-        ; ---- A: that one short row; P1 starts one row past the window
-        lda #0
-        sta SECTAB+2,x
-        lda #7
-        sec
-        sbc wfine
-        sta SECTAB+3,x
-        lda #2
-        sta SECTAB+4,x
-        lda #30
-        sta SECTAB+5,x
-        jsr @addrow
-        jsr @addrow
-        lda w16+1
-        sta SECTAB,x
-        lda w16
-        sta SECTAB+1,x
-        lda #<((VISROWS-1)*8*LINE-2)
-        sta SECTAB+6,x
-        lda #>((VISROWS-1)*8*LINE-2)
-        sta SECTAB+7,x
-        ; ---- P1: the full rows; P2 starts on the row below the playfield
-        ldy #VISROWS-1
-:       jsr @addrow
-        dey
-        bne :-
-        lda w16+1
-        sta SECTAB+8,x
-        lda w16
-        sta SECTAB+9,x
-        lda #VISROWS-2
-        sta SECTAB+10,x
-        lda #7
-        sta SECTAB+11,x
-        lda #VISROWS
-        sta SECTAB+12,x
-        lda #30
-        sta SECTAB+13,x
-        lda wfine
-        jsr @dur
-        sta SECTAB+14,x
-        lda tmp3
-        sta SECTAB+15,x
-        ; ---- P2: the last f lines of that row
-        lda w16+1
-        sta SECTAB+16,x
-        lda w16
-        sta SECTAB+17,x
-        lda #0
-        sta SECTAB+18,x
-        lda wfine
-        deca
-        sta SECTAB+19,x
-        lda #VISROWS
-        sta SECTAB+20,x
-        lda #30
-        sta SECTAB+21,x
-        lda #<(QROWS*8*LINE-2)      ; Q's own length (see above)
-        sta SECTAB+22,x
-        lda #>(QROWS*8*LINE-2)
-        sta SECTAB+23,x
-        txa
-        clc
-        adc #24
-        tax
-@setq:  ; ---- Q: blank to the end of the frame, and the vsync sits in it.  Its
-        ; address is section 0's, because the chain keeps firing through Q and
-        ; would otherwise undo what the vsync handler just programmed.
-        lda w16b+1
-        sta SECTAB,x
-        lda w16b
-        sta SECTAB+1,x
-        lda #QROWS-1
-        sta SECTAB+2,x
-        lda #7
-        sta SECTAB+3,x
-        lda #0
-        sta SECTAB+4,x
-        lda #QVSYNC
-        sta SECTAB+5,x
-        lda #<(QROWS*8*LINE-2)      ; only reached if a vsync is missed; then the
-        sta SECTAB+6,x              ; chain simply repeats Q
-        lda #>(QROWS*8*LINE-2)
-        sta SECTAB+7,x
-        rts
-; A = lines -> A/tmp3 = lines*64-2
-@dur:   stza tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        sec
-        sbc #2
-        bcs :+
-        dec tmp3
-:       rts
-; w16 -/+ one row, wrapping inside the $600..$FFF ring
-@subrow: lda w16
-        sec
-        sbc #ROWCHARS
-        sta w16
-        bcs :+
-        dec w16+1
-:       lda w16+1
-        cmp #6
-        bcs :+
-        clc
-        adc #$0A
-        sta w16+1
-:       rts
-@addrow: lda w16
-        clc
-        adc #ROWCHARS
-        sta w16
-        bcc :+
-        inc w16+1
-:       lda w16+1
-        cmp #$10
-        bcc :+                      ; not taken: C = 1 for the sbc
-        sbc #$0A
-        sta w16+1
-:       rts
-.else
 ; build_sections: fill SECTAB for the current buffer from ringS and wfine.
 ; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi (T1 = duration of section i+1)
 ;
@@ -2825,30 +2524,23 @@ build_sections:
         sta w16+1
 :       rts
 
-.endif
         .code
 
-BARROWS = 2 - (2 * .defined(MODELB))   ; the status bar, which a Model B has not
+BARROWS = 2                        ; the status bar
 QROWS  = 39 - VISROWS - BARROWS    ; blank rows after the display: 312 lines in all
-.ifdef MODELB                      ; put the shorter picture in the middle of the frame
-QVSYNC = QROWS / 2
-.else
 QVSYNC = 4                         ; vsync at Q row 4 -> section 0 starts QROWS-4 later
-.endif
 
 ; ============================================================================
 ; Frame control
 ; ============================================================================
 ; select CPU access to the current back buffer (ACCCON X bit)
 select_backbuf:
-.ifndef MODELB                      ; a Model B has no shadow: its two buffers are
-        lda ACCCON                  ; the same memory, BUFOFF ring rows apart
+        lda ACCCON
         and #$FB
         ldx curbuf
         beq :+
         ora #$04
 :       sta ACCCON
-.endif
         lda #<SPRREC
         sta recp
         lda #>SPRREC
@@ -2888,9 +2580,7 @@ render_frame:
         ror
         sta wcy
         jsr calc_ring
-.ifndef MODELB
         jsr mirror_seek
-.endif
         jsr match_sprites
         jsr erase_old
         jsr scroll_validate
@@ -2903,7 +2593,6 @@ render_frame:
         jsr draw_sprites
         stza DIRTYSEEN
         jsr copy_partial
-.ifndef MODELB                      ; a Model B has no status bar
         ldx curbuf
         lda BARBG,x                 ; first time this buffer is drawn: lay the template
         beq :+
@@ -2917,7 +2606,6 @@ render_frame:
         ldx curbuf                  ; redraw_hud clobbers X
         stza BARDIRTY,x
 :
-.endif
         stza NSPR
         jsr t_build_sections
         ; hand over to ISR
@@ -3354,12 +3042,10 @@ irq_handler:
         sta flipvs
         lda NEXTSECT
         sta DISPSECT
-.ifndef MODELB                      ; on a Model B $FE34 is another ROMSEL decode, and
         lda ACCCON                  ; there is no shadow to switch: the flip is the
         and #$FE                    ; section chain moving to the other buffer's rows
         ora NEXTBUF
         sta ACCCON
-.endif
         stz flipreq
 @noflip:
         ; everything section 0 needs comes from the buffer that is about to be
@@ -3673,15 +3359,11 @@ crtc_init:
         lda crtctab+7
         sta curR7
         rts
-.ifdef MODELB                       ; 64 chars wide, and the sync eight chars later
-crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
-.else                               ; so the narrower picture sits in the middle
 crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
 ringmodtab:
 .repeat 256, i
         .byte i .mod RINGROWS
 .endrepeat
-.endif
 
 set_palette:
         ldx #15
