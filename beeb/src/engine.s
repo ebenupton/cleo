@@ -1555,8 +1555,10 @@ masked: cmp #$41                    ; and the mirror image of that: this and the
   .else
         ora IDENT,x
   .endif
-        bra skip
-opaque:
+  .if mirror
+        bra skip                    ; only the mirrored form has anything at 'opaque' to
+  .endif                            ; jump over; unmirrored, this branched to the next
+opaque:                             ; instruction, 3 cycles on every masked byte
   .if mirror
         tax
         lda SWAPTAB,x
