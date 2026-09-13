@@ -770,7 +770,7 @@ scroll_validate:
         cmp #<-79
         bcs :+
         jmp @full
-:       ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+30
+:       ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+BUFROWS-1
         eor #$FF                    ; (A still holds w16)
         inca
         sta rc_w
@@ -2659,25 +2659,18 @@ drawrect_clip:
         sbc wcx+1
         sta w16+1
         bpl @right
-        ; rel < 0: visible only if -rel < w
+        ; rel < 0: the visible width is w + rel, and rel is already two's complement,
+        ; so add rather than negate-and-subtract.  Only a result whose high byte comes
+        ; out exactly 0 survives: anything else is the whole rect off the left edge.
         lda w16
-        eor #$FF
-        sta tmp
-        lda w16+1
-        eor #$FF
-        sta tmp2
-        inc tmp
-        bne :+
-        inc tmp2
-:       lda tmp2
-        bne @none                   ; -rel >= 256 > any width
-        lda tmp
-        cmp rc_w
-        bcs @none
-        lda rc_w
-        sec
-        sbc tmp
+        clc
+        adc rc_w
         sta rc_w
+        lda w16+1
+        adc #0
+        bne @none
+        lda rc_w
+        beq @none
         lda wcx
         sta rc_x
         lda wcx+1
@@ -2690,7 +2683,7 @@ drawrect_clip:
         cmp #ROWCHARS
         bcs @none                   ; not taken: C = 0 for the adc
         adc rc_w
-        cmp #81
+        cmp #ROWCHARS+1
         bcc :+                      ; not taken: C = 1 for the sbc
         lda #ROWCHARS
         sbc w16
@@ -2699,7 +2692,7 @@ drawrect_clip:
 @none:  rts
 ; ============================================================================
 ; drawrect_clip: like drawrect but clips the rect to the current window
-; (rows wcy..wcy+30, cols wcx..wcx+79).
+; (rows wcy..wcy+BUFROWS-1, cols wcx..wcx+ROWCHARS-1).
 calc_ring:
         lda wcy
         ringmod
