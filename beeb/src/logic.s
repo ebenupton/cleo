@@ -185,6 +185,8 @@
 .endmacro
 
 ; ---------------------------------------------------------------- object arrays (bank 7)
+NLEAN   = 2                        ; object types below this take the lean path in
+                                   ; process_object: no zero-page staging at all
 OBJN    = 149
 O_STAMP = LV_OBJST
 O_TYPE  = O_STAMP + OBJN
@@ -1613,8 +1615,9 @@ player_update:
 process_object:
         lda O_TYPE,y
         sta otype
-        bne @gen                    ; type 0, the star, is 60-74% of every call
-        jmp @star
+        cmp #NLEAN                  ; types below NLEAN read and write the arrays in
+        bcs @gen                    ; place; the rest are still staged through zero page
+        jmp @lean
 @gen:   lda O_XL,y
         sta ox
         lda O_XH,y
@@ -1675,13 +1678,11 @@ process_object:
         lda fe+1
         sta O_EH,y
         rts
-@star:  ; Nothing is staged through zero page.  Y is the object index the whole way --
-        ; ob_star never touches it and nor does anything it calls (inrange, boomrel,
-        ; bar_touch, addscore, star_safe, addsprite) -- so every field is read and
-        ; written where it lives, at one cycle over a zero-page access instead of seven
-        ; to fetch it and eight to put it back.  Every object field is 8-bit; O_EH is a
-        ; second flag rather than a high byte.  The bank is BANK_LVL throughout: the only
-        ; switch is inside the m_addsprite tail call, after the last write.
+@lean:  ; Nothing staged.  Y is the object index throughout -- none of these handlers,
+        ; nor anything they call, touches it -- so each reads and writes its own fields
+        ; where they live: one cycle over a zero-page access, against seven to fetch a
+        ; field and eight to put it back.  Every object field is 8-bit (tools/objaudit.py
+        ; and tools/objfields.mjs are how that was established per handler).
         lda O_XL,y                  ; rx/ry = object relative to the player
         sec
         sbc px
@@ -1704,7 +1705,10 @@ process_object:
         sta spy
         lda O_YH,y
         sta spy+1
-        jmp ob_star                 ; tail call: ob_star returns to our caller
+        lda otype
+        asl
+        tax
+        jmpx @tab                   ; tail dispatch: the handler returns to our caller
 @call:  jmpx @tab
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
         .word ob_spike, ob_none, ob_flame, ob_powerup, ob_vanish, ob_switch
@@ -1890,7 +1894,7 @@ star_safe:
 ; The trampoline box is opaque the same way; nothing may draw through it if it is to be
 ; left alone.  rx/ry are still Cleo-relative here (ob_tramp does not call boomrel).
 tramp_safe:
-        lda fe+1                    ; an enemy's range covers it
+        lda O_EH,y                    ; an enemy's range covers it
         bne @no
         ldx #72
         jsr inrange                 ; Cleo overlaps its rectangle
@@ -1911,13 +1915,14 @@ tramp_safe:
 
 ; ---------------------------------------------------------------- TRAMPOLINE (1)
 ob_tramp:
-        lda fa
+        lda O_AL,y
         beq :+
-        inc fa
-        lda fa
+        inc a                       ; there is no inc abs,y, and A holds it anyway --
+        sta O_AL,y                  ; which also saves the reload the old code did
         cmp #10
         bne :+
-        stza fa
+        lda #0                      ; nor stz abs,y
+        sta O_AL,y
 :       lda health
         beq @draw
         ldx #8
@@ -1926,16 +1931,16 @@ ob_tramp:
         bmi16 vy, @draw
         beq16 vy, @draw
         lda #1
-        sta fa
+        sta O_AL,y
         mov16i vy, -2048
         lda #SFX_JUMP
         sta SFXREQ
-@draw:  lda fa
+@draw:  lda O_AL,y
         clc
         adc #2
         lsr
         lsr                         ; bounce frame 0..2
-        ldx fe                      ; e0 = 1: the trampoline sits on solid black, so draw
+        ldx O_EL,y                  ; e0 = 1: the trampoline sits on solid black, so draw
         beq @reg                    ;         the opaque baked box; else the masked sprite
         clc
         adc #115                    ; 115..117 = the trampoline black boxes
