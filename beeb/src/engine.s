@@ -497,15 +497,14 @@ drawrect:
 @run:
         ldx rc_gi
         lda GATHERH,x               ; bit 6: solid cyan/black tile, filled not copied
-        and #$40                    ; (bit abs,x would be 65C02 only)
-        beq :+
+        sta tp+1                    ; it is also the tile pointer's high byte, so keep it
+        and #$40                    ; now rather than load it a second time below (the
+        beq :+                      ; solid path does not read tp+1, so writing it is free)
         jmp @solid
 :       lda GATHERL,x               ; every tile is in bank 5, selected once per tile row
         and #$C0
         ora rowoff
         sta tp
-        lda GATHERH,x
-        sta tp+1
         ; chars in this run: min(4 - rc_subc, cnt) -> rc_n, X = 2*rc_n, tmp = 8*rc_n
         lda #4
         sec
@@ -606,8 +605,21 @@ drawrect:
         inca
         ringup
         sta sp+1
-:       bra @runend
-@slow:
+:
+@runend:
+        lda cnt
+        sec
+        sbc rc_n
+        sta cnt
+        beq @rowdone
+        stz rc_subc
+        lda rc_sub
+        sta rowoff                  ; later tiles in the row start at column 0
+        inc rc_gi
+        jmp @run
+@slow:  ; a run that crosses the ring end: copy a char at a time through the fold.  This
+        ; sits after the common path so @advsp can fall into @runend -- it is reached at
+        ; most once per row, so the jump back is free and the branch saved is not.
         lda rc_n
         sta tmp2
 @sc:    ldy #7
@@ -624,17 +636,7 @@ drawrect:
 :       spnext
         dec tmp2
         bne @sc
-@runend:
-        lda cnt
-        sec
-        sbc rc_n
-        sta cnt
-        beq @rowdone
-        stz rc_subc
-        lda rc_sub
-        sta rowoff                  ; later tiles in the row start at column 0
-        inc rc_gi
-        jmp @run
+        jmp @runend
 @rowdone:
         lda rc_sp+1                 ; a row is 640 bytes: only one starting in the last
         cmp #(>RINGEND - 5)         ; 1280 can reach the mirror's source row
