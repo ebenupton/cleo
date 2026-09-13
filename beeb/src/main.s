@@ -350,9 +350,9 @@ frame_loop:
         ; pause?
         lda keys
         and #K_MENU
-        beq @nopause
+        beq fl_nopause
         lda pausing
-        bne @nopause
+        bne fl_nopause
         jsr t_pause_menu
         cmp #0
         beq :+
@@ -362,7 +362,7 @@ frame_loop:
         lda vsyncs
         sta logicvs
         bra frame_loop
-@nopause:
+fl_nopause:
         lda keys
         and #K_MENU
         bne :+
@@ -376,25 +376,29 @@ frame_loop:
         sec
         sbc logicvs
         cmp #3
-        bcc @wait
+        bcc fl_wait
         lda vsyncs
         sta logicvs
+frame_top:                          ; exactly once per rendered frame, before the two
+                                    ; logic steps read 'keys': the test harness breaks
+                                    ; here so every wait and every input it applies is
+                                    ; quantised to a frame boundary (tools/harness.mjs)
         stza NSPR                   ; the list is rebuilt by each step; only the
         jsr t_game_frame            ; second one's survives to be drawn
         lda exiting
-        bne @over
+        bne fl_over
         stza NSPR
         jsr t_game_frame
         lda exiting
-        bne @over
+        bne fl_over
         jsr render_frame
         bra frame_loop
-@wait:  ; nothing to do yet: wait for the next vsync
+fl_wait:  ; nothing to do yet: wait for the next vsync
         lda vsyncs
 :       cmp vsyncs
         beq :-
         bra frame_loop
-@over:
+fl_over:
         ; level over
         lda lives
         beq game_over
