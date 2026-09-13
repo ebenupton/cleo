@@ -107,6 +107,9 @@ RINGEND   = RINGBASE + RINGBYTES
 CRTCBASE  = RINGBASE / 8          ; the CRTC counts characters, so the ring starts here
 WINPX     = ROWCHARS*2            ; window width in pixels
 VISLINES  = VISROWS*8
+BINMAX    = 40                    ; cached object list: 24-32 objects a frame is the most
+                                  ; seen across the levels, and the walk falls back to
+                                  ; processing directly if it ever overflows
 MAXREC    = 32
 MAXSPR    = 32
 
@@ -243,6 +246,11 @@ BUF_BARQ:  .res 2
 BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
 BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
 BARDIRTY:  .res 2
+BINR:      .res 4                  ; gx0,gx1,gy,gy1 the cached object list was built for
+BINN:      .res 1                  ; entries in it
+BINI:      .res 1                  ; walk position
+BINOK:     .res 1                  ; 0 = rebuild (level load, or the list overflowed)
+BINLIST:   .res BINMAX
 MAPSTRIDE: .res 2                  ; bytes per map row (1 << maplw): drawrect walks the
                                    ; row pointer by this instead of re-deriving it
 BARCACHE:  .res 32                 ; per buffer (slot | curbuf<<4): the nine digit values

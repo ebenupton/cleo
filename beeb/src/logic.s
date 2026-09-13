@@ -457,6 +457,7 @@ level_init:
         dex
         bne :-
 :       ; clear object state, then grid  (this ':' is counted by the beq :++ above)
+        stz BINOK                   ; the cached object list belongs to the old level
         ldx #0
         lda #0
 :       sta O_STAMP,x
@@ -926,6 +927,40 @@ game_frame:
         sta t16+1
         jsr shr6
         sta gy1
+        ; ---- the object list, cached between steps.
+        ; LV_GRID/LV_BOBJ/LV_BNEXT and every O_TYPE are written only by level_init, so
+        ; which objects the walk yields depends on nothing but the bucket rectangle --
+        ; and that is unchanged on 77% of frames on L0 and 95% on L6.  So walk the grid
+        ; only when the rectangle moves, and keep the deduped list to step through
+        ; otherwise.  Order is preserved exactly: it sets the sprite draw order, which
+        ; box stars depend on (see convert.py).
+        lda gx0
+        cmp BINR
+        bne @rebuild
+        lda gx1
+        cmp BINR+1
+        bne @rebuild
+        lda gy
+        cmp BINR+2
+        bne @rebuild
+        lda gy1
+        cmp BINR+3
+        bne @rebuild
+        lda BINOK
+        beq @rebuild
+        jmp @runlist                ; (the traversal between here and it is too far for
+@rebuild:                           ;  a branch)
+        lda gx0
+        sta BINR
+        lda gx1
+        sta BINR+1
+        lda gy
+        sta BINR+2
+        lda gy1
+        sta BINR+3
+        stz BINN
+        lda #1
+        sta BINOK
 @rows:  lda gx0
         sta gx
         lda gy                      ; row base = gy << gridsh, once per row
@@ -951,7 +986,15 @@ game_frame:
         beq @skip
         lda frame
         sta O_STAMP,y
-        sty obj
+        ldx BINN                    ; append rather than process: @runlist below does
+        cpx #BINMAX                 ; that, so a cached step and a rebuilt one take the
+        bcs @full                   ; same path through the handlers
+        tya
+        sta BINLIST,x
+        inc BINN
+        bra @skip
+@full:  stz BINOK                   ; more objects than the list holds: process this one
+        sty obj                     ; now and rebuild next step rather than lose it
         jsr process_object
         setbank BANK_LVL
 @skip:  ldx bent
@@ -968,7 +1011,25 @@ game_frame:
         beq :+
         inc gy
         bra @rows
-:       ; ---- after objects
+:
+@runlist:
+        stz BINI
+@rl:    ldx BINI
+        cpx BINN
+        beq @rldone
+        ldy BINLIST,x
+        lda frame                   ; keep the dedupe stamp exactly as fresh as the walk
+        sta O_STAMP,y               ; used to.  It is only read when the list is rebuilt,
+        sty obj                     ; but 'cmp frame' tests the low byte alone: let a
+                                    ; stamp go 256 steps stale and an object returning to
+                                    ; range is skipped -- for one step before, but now for
+                                    ; the whole life of the cached list.
+        jsr process_object
+        setbank BANK_LVL
+        inc BINI
+        bra @rl
+@rldone:
+        ; ---- after objects
         lda bounce
         beq :+
         mov16i vy, -1280
