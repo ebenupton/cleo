@@ -1611,7 +1611,11 @@ player_update:
 ; Object processing.  Y = object index (obj).  Loads fields into zp, dispatches, stores back.
 ; ============================================================================
 process_object:
-        lda O_XL,y
+        lda O_TYPE,y
+        sta otype
+        bne @gen                    ; type 0, the star, is 60-74% of every call
+        jmp @star
+@gen:   lda O_XL,y
         sta ox
         lda O_XH,y
         sta ox+1
@@ -1639,8 +1643,6 @@ process_object:
         sta fe
         lda O_EH,y
         sta fe+1
-        lda O_TYPE,y
-        sta otype
         dif16 rx, ox, px
         dif16 ry, oy, py
         mov16 spx, ox
@@ -1672,6 +1674,46 @@ process_object:
         sta O_EL,y
         lda fe+1
         sta O_EH,y
+        rts
+@star:  ; The star reads ox, oy, fa, fc and fe, and writes fa and fc.  The generic path
+        ; loads fourteen bytes into zero page and stores ten back whatever the handler
+        ; touches; for the commonest object in the game that is four bytes loaded and six
+        ; stored for nothing, plus a table dispatch to a known address.
+        lda O_XL,y
+        sta ox
+        lda O_XH,y
+        sta ox+1
+        lda O_YL,y
+        sta oy
+        lda O_YH,y
+        sta oy+1
+        lda O_AL,y
+        sta fa
+        lda O_AH,y
+        sta fa+1
+        lda O_CL,y
+        sta fc
+        lda O_CH,y
+        sta fc+1
+        lda O_EL,y                  ; read by star_safe, never written
+        sta fe
+        lda O_EH,y
+        sta fe+1
+        dif16 rx, ox, px
+        dif16 ry, oy, py
+        mov16 spx, ox
+        mov16 spy, oy
+        jsr ob_star
+        setbank BANK_LVL
+        ldy obj
+        lda fa
+        sta O_AL,y
+        lda fa+1
+        sta O_AH,y
+        lda fc
+        sta O_CL,y
+        lda fc+1
+        sta O_CH,y
         rts
 @call:  jmpx @tab
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker

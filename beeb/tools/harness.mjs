@@ -87,12 +87,18 @@ export class Harness {
   // hundred cycles the cycle figure cannot tell a real win from a relocation.  The
   // instruction count can: it is exactly what the code did, wherever it sits.
   installMeter() {
-    const A = this.A, m = { work: 0, isr: 0, isrCount: 0, frames: 0, instrs: 0 };
+    // 'work' is the render window.  'logic' is frame_top..render_frame, the two game
+    // steps -- about 18000 cycles a frame, and invisible to the render figure, so a
+    // change to the logic measures as nothing at all unless it is timed separately.
+    const A = this.A, m = { work: 0, isr: 0, isrCount: 0, frames: 0, instrs: 0, logic: 0, logicI: 0 };
     let t0 = -1, inWin = false, isrAt = -1, exiting = false;
     this.meter = m;
-    let n = 0;
+    let n = 0, lt0 = -1, li = 0, inLogic = false;
     this.cpu.debugInstruction.add((pc, op) => {
       if (inWin) n++;
+      if (inLogic) li++;
+      if (pc === A.frame_top) { lt0 = this.cyc(); inLogic = true; li = 0; }
+      else if (pc === A.render_frame && inLogic) { m.logic = this.cyc() - lt0; m.logicI = li; inLogic = false; }
       if (pc === A.select_backbuf) { t0 = this.cyc(); inWin = true; m.isr = 0; m.isrCount = 0; n = 0; }
       else if (pc === A.render_done && inWin) { m.work = this.cyc() - t0; m.instrs = n; inWin = false; m.frames++; }
       else if (pc === A.irq_handler) { isrAt = this.cyc(); }
