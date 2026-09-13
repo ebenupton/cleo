@@ -328,8 +328,8 @@ NEXTBUF:   .res 1
         adc #8
         sta sp
         bcc :++                     ; past the fold's own anonymous label
-        inc sp+1
         lda sp+1
+        inca
         ringup
         sta sp+1
 :
@@ -600,8 +600,8 @@ drawrect:
         adc tmp
         sta sp
         bcc :++                     ; past the fold's own anonymous label
-        inc sp+1
         lda sp+1
+        inca
         ringup
         sta sp+1
 :       bra @runend
