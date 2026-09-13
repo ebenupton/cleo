@@ -2727,8 +2727,25 @@ ob_switch:
 ; Status bar digits (drawn into the bar master image in bank 4)  [main RAM]
 ; ============================================================================
         .code
-; draw digit A at bar pixel column X (even): copies a 64-byte digit tile into the bar image
+; draw digit A at bar pixel column X (even), digit slot Y (0..8): copies a 64-byte digit
+; tile into the bar image.
+;
+; Each buffer remembers the nine values its bar was last drawn with, because redraw_hud
+; redraws all nine whenever anything changes and a score tick usually moves only one of
+; them -- the other eight were 128 bytes of copy for no pixels (measured 5.0K cycles a
+; render on an L0 run, 3.2% of the frame).  The bank is BANK_LVL on entry and on exit, so
+; the skip path must not touch it.
 bar_digit:
+        pha                         ; X is the column and must survive: test curbuf in A,
+        lda curbuf                  ; which the push has already saved
+        beq :+
+        tya
+        ora #16
+        tay
+:       pla
+        cmp BARCACHE,y
+        beq bd_same
+        sta BARCACHE,y
         pha
         setbank BANK_SPR
         pla
@@ -2775,6 +2792,7 @@ bar_digit:
         dey
         bpl :-
         setbank BANK_LVL
+bd_same:
         rts
 
 bar_touch:
@@ -2792,18 +2810,22 @@ redraw_hud:
 draw_lives:
         lda lives
         ldx #18
+        ldy #0
         jmp bar_digit
 draw_health:
         lda health
         ldx #46
+        ldy #1
         jmp bar_digit
 draw_stars:                         ; stars remaining: 2 digits at 74, 82
         lda stars
         jsr div10
         ldx #74
+        ldy #2
         jsr bar_digit
         lda q1
         ldx #82
+        ldy #3
         jmp bar_digit
 ; A = A / 10 ; q1 = A mod 10
 div10:  ldx #0
@@ -2823,6 +2845,10 @@ draw_score:                         ; 5 digits at 108..140
         jsr div10_16
         plx
         phx
+        txa
+        clc
+        adc #4                      ; score digits are slots 4..8
+        tay
         txa
         asl
         asl

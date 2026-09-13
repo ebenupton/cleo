@@ -249,6 +249,8 @@ BUF_BARQ:  .res 2
 BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
 BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
 BARDIRTY:  .res 2
+BARCACHE:  .res 32                 ; per buffer (slot | curbuf<<4): the nine digit values
+                                   ; its bar was last drawn with, $FF = unknown
 BARBG:     .res 2                 ; per buffer: its bar needs the static template blitted
 DIRTYLIST: .res 2*2*16            ; per buffer dirty tiles (tx, ty)
 DIRTYCNT:  .res 2
@@ -1987,7 +1989,16 @@ copy_partial:
 ; bar_bg: blit the static bar template (icons, labels, blank digit slots) from bank 4
 ; into the current back buffer's fixed bar rows.  Source art, not a maintained buffer.
 bar_bg:                             ; runs only when a buffer needs its bar (twice per
-        lda #BANK_SPR               ; level).  The bar is black with a few icon spans, so
+        ldx curbuf                  ; level).  The template buries the digits, so the
+        beq :+                      ; cached "already drawn" values for this buffer are
+        ldx #16                     ; no longer true
+:       lda #$FF
+        ldy #9
+@bci:   sta BARCACHE,x
+        inx
+        dey
+        bne @bci
+        lda #BANK_SPR               ; The bar is black with a few icon spans, so
         sta curbank                 ; fill black and lay the spans (BARBUF is now the span
         sta ROMSEL_CPY              ; list: offset16, len, bytes... ending $FFFF).
         sta ROMSEL
