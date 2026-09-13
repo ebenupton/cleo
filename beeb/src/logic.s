@@ -2468,25 +2468,26 @@ ob_walker:
         sta q1                      ; step 1 or 2
         lda fc
         bne @left
-        lda fb
-        clc
-        adc q1
-        sta fb
+        lda fb                      ; walking right.  fb can be -1 coming in (the left
+        clc                         ; path rests one past the near end), and the carry
+        adc q1                      ; out of the add is what clears its sign byte -- drop
+        sta fb                      ; that and -1 + 2 becomes -255, not 1.
         bcc :+
         inc fb+1
-:       bge16 fb, fa, :+
-        bra @coll
-:       lda #1
+:       cmp fa                      ; past here fb+1 is 0 and fb is 0..194, so the
+        bcc @coll                   ; unsigned compare says what the signed 16-bit did
+        lda #1
         sta fc
         bra @coll
-@left:  lda fb
-        sec
-        sbc q1
+@left:  lda fb                      ; walking left it can still step one past the near
+        sec                         ; end, so the sign byte is still maintained and the
+        sbc q1                      ; sign test stays 16-bit
         sta fb
         bcs :+
         dec fb+1
-:       bmi16 fb, @stop
-        bne16 fb, @coll
+:       bmi16 fb, @stop             ; bmi16 is 'bit fb+1', which sets Z from A AND fb+1
+        lda fb                      ; -- not from fb -- so the zero test needs its own
+        bne @coll                   ; load.  fb+1 is 0 here, so eight bits is enough.
 @stop:  stz fc
 @coll:  add16 rx, fb
         add16 spx, fb
@@ -2516,14 +2517,17 @@ ob_walker:
         bra @bset
 @bleft: ; bvx < 0: if B > 0: C = 1
         bmi16 fb, @bset
-        beq16 fb, @bset
+        lda fb
+        beq @bset
         lda #1
         sta fc
 @bset:  lda #8
         sta bcnt
-@draw:  bmi16 fb, @f8
-        beq16 fb, @f8
-        bge16 fb, fa, @f8
+@draw:  bmi16 fb, @f8               ; standing frame at either end.  Past the sign test
+        lda fb                      ; fb+1 is 0, so the rest is an 8-bit compare
+        beq @f8
+        cmp fa
+        bcs @f8
         lda fe
         cmp #3
         bcc @f0
