@@ -958,7 +958,8 @@ game_frame:
         sta BINR+2
         lda gy1
         sta BINR+3
-        stz BINN
+        stz NSTARL
+        stz NOTHL
         lda #1
         sta BINOK
 @rows:  lda gx0
@@ -986,14 +987,23 @@ game_frame:
         beq @skip
         lda frame
         sta O_STAMP,y
-        ldx BINN                    ; append rather than process: @runlist below does
-        cpx #BINMAX                 ; that, so a cached step and a rebuilt one take the
-        bcs @full                   ; same path through the handlers
+        lda O_TYPE,y                ; append rather than process: @runlist below does
+        bne @apo                    ; that, so a cached step and a rebuilt one take the
+        ldx NSTARL                  ; same path through the handlers.  Stars go in their
+        cpx #BINMAX                 ; own list: the walk then reaches ob_star without
+        bcs @full                   ; reading the type or going through the table.
         tya
-        sta BINLIST,x
-        inc BINN
+        sta LV_BINSTAR,x
+        inc NSTARL
         bra @skip
-@full:  stz BINOK                   ; more objects than the list holds: process this one
+@apo:   ldx NOTHL
+        cpx #BINMAX
+        bcs @full
+        tya
+        sta LV_BINOTH,x
+        inc NOTHL
+        bra @skip
+@full:  stz BINOK                   ; more objects than a list holds: process this one
         sty obj                     ; now and rebuild next step rather than lose it
         jsr process_object
         setbank BANK_LVL
@@ -1013,21 +1023,34 @@ game_frame:
         bra @rows
 :
 @runlist:
+        ; The stamp is written exactly as the traversal wrote it.  It is only read when
+        ; a list is rebuilt, but 'cmp frame' tests the low byte alone: let a stamp go 256
+        ; steps stale and an object returning to range matches it and is skipped -- for
+        ; one step before, but for the whole life of a cached list now.
         stz BINI
-@rl:    ldx BINI
-        cpx BINN
+@rls:   ldx BINI
+        cpx NSTARL
+        beq @rlo
+        ldy LV_BINSTAR,x
+        lda frame
+        sta O_STAMP,y
+        sty obj
+        jsr po_star                 ; no type read, no table
+        setbank BANK_LVL
+        inc BINI
+        bra @rls
+@rlo:   stz BINI
+@rl2:   ldx BINI
+        cpx NOTHL
         beq @rldone
-        ldy BINLIST,x
-        lda frame                   ; keep the dedupe stamp exactly as fresh as the walk
-        sta O_STAMP,y               ; used to.  It is only read when the list is rebuilt,
-        sty obj                     ; but 'cmp frame' tests the low byte alone: let a
-                                    ; stamp go 256 steps stale and an object returning to
-                                    ; range is skipped -- for one step before, but now for
-                                    ; the whole life of the cached list.
+        ldy LV_BINOTH,x
+        lda frame
+        sta O_STAMP,y
+        sty obj
         jsr process_object
         setbank BANK_LVL
         inc BINI
-        bra @rl
+        bra @rl2
 @rldone:
         ; ---- after objects
         lda bounce
@@ -1773,6 +1796,30 @@ process_object:
 @call:  jmpx @tab
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
         .word ob_spike, ob_none, ob_flame, ob_powerup, ob_vanish, ob_switch
+po_star:                            ; the lean prologue, then straight in: the star list
+        lda O_XL,y                  ; rx/ry = object relative to the player
+        sec
+        sbc px
+        sta rx
+        lda O_XH,y
+        sbc px+1
+        sta rx+1
+        lda O_YL,y
+        sec
+        sbc py
+        sta ry
+        lda O_YH,y
+        sbc py+1
+        sta ry+1
+        lda O_XL,y                  ; spx/spy = where it draws
+        sta spx
+        lda O_XH,y
+        sta spx+1
+        lda O_YL,y
+        sta spy
+        lda O_YH,y
+        sta spy+1
+        jmp ob_star
 ob_none:
         rts
 

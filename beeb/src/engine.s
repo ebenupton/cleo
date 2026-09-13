@@ -76,6 +76,8 @@ LV_GRID   = $B950                 ; 128 grid heads
 LV_BOBJ   = $B9D0                 ; 255
 LV_BNEXT  = $BAD0                 ; 255
 ;         $BC00  free (was LV_ALTPAGE, built per level; the map byte is the tile id now)
+LV_BINSTAR= $BBD0                 ; cached bin-walk lists: star object indices, then
+LV_BINOTH = $BC00                 ;   everything else (BINMAX each)
 LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 
 ; ---------------------------------------------------------------- screen shape
@@ -246,11 +248,11 @@ BUF_BARQ:  .res 2
 BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
 BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
 BARDIRTY:  .res 2
-BINR:      .res 4                  ; gx0,gx1,gy,gy1 the cached object list was built for
-BINN:      .res 1                  ; entries in it
+BINR:      .res 4                  ; gx0,gx1,gy,gy1 the cached lists were built for
+NSTARL:    .res 1                  ; entries in the star list
+NOTHL:     .res 1                  ;   and in the other one
 BINI:      .res 1                  ; walk position
-BINOK:     .res 1                  ; 0 = rebuild (level load, or the list overflowed)
-BINLIST:   .res BINMAX
+BINOK:     .res 1                  ; 0 = rebuild (level load, or a list overflowed)
 MAPSTRIDE: .res 2                  ; bytes per map row (1 << maplw): drawrect walks the
                                    ; row pointer by this instead of re-deriving it
 BARCACHE:  .res 32                 ; per buffer (slot | curbuf<<4): the nine digit values

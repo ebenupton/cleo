@@ -54,7 +54,7 @@ function diffBuffer() {
   for (let a = 0x3000; a < 0x8000; a++) if (A.rd(a) !== B.rd(a)) n++;
   return n;
 }
-let worst = 0, firstBad = -1, bad = 0, bufBad = 0, bufFirst = -1, bufWorst = 0;
+let worst = 0, firstBad = -1, bad = 0, bufBad = 0, bufFirst = -1, bufWorst = 0, sceneWarned = false;
 for (let f = 0; f < N; f++) {
   const k = KEYS[PAT[f % PAT.length]] ?? 0;
   await step(A, k); await step(B, k);
@@ -64,10 +64,15 @@ for (let f = 0; f < N; f++) {
   const { n: d, box } = diffPixels();
   if (d) { bad++; if (firstBad < 0) firstBad = f; worst = Math.max(worst, d);
            if (bad <= 4) console.log(`  frame ${f}: ${d} px differ (${box})`); }
-  // the scene fingerprint should also agree; if it does not, the builds differ in logic
+  // the scene fingerprint should also agree; if it does not, the builds differ in logic.
+  // PIXDIFF_IGNORE_SCENE=1 carries on anyway, for a change that reorders the scene on
+  // purpose -- SPRLIST order, say -- where the question is whether the pixels move.
   if (A.fingerprint().fp !== B.fingerprint().fp) {
-    console.log(`frame ${f}: SCENE fingerprints differ -- the builds do not behave alike`);
-    process.exit(1);
+    if (!process.env.PIXDIFF_IGNORE_SCENE) {
+      console.log(`frame ${f}: SCENE fingerprints differ -- the builds do not behave alike`);
+      process.exit(1);
+    }
+    if (!sceneWarned) { sceneWarned = true; console.log(`  (scene fingerprints differ from frame ${f}; comparing pixels anyway)`); }
   }
 }
 const total = fbA.length / 4;
