@@ -1675,46 +1675,36 @@ process_object:
         lda fe+1
         sta O_EH,y
         rts
-@star:  ; The star reads ox, oy, fa, fc and fe, and writes fa and fc.  The generic path
-        ; loads fourteen bytes into zero page and stores ten back whatever the handler
-        ; touches; for the commonest object in the game that is four bytes loaded and six
-        ; stored for nothing, plus a table dispatch to a known address.
-        lda O_XL,y
-        sta ox
+@star:  ; Nothing is staged through zero page.  Y is the object index the whole way --
+        ; ob_star never touches it and nor does anything it calls (inrange, boomrel,
+        ; bar_touch, addscore, star_safe, addsprite) -- so every field is read and
+        ; written where it lives, at one cycle over a zero-page access instead of seven
+        ; to fetch it and eight to put it back.  Every object field is 8-bit; O_EH is a
+        ; second flag rather than a high byte.  The bank is BANK_LVL throughout: the only
+        ; switch is inside the m_addsprite tail call, after the last write.
+        lda O_XL,y                  ; rx/ry = object relative to the player
+        sec
+        sbc px
+        sta rx
         lda O_XH,y
-        sta ox+1
+        sbc px+1
+        sta rx+1
         lda O_YL,y
-        sta oy
+        sec
+        sbc py
+        sta ry
         lda O_YH,y
-        sta oy+1
-        lda O_AL,y
-        sta fa
-        lda O_AH,y
-        sta fa+1
-        lda O_CL,y
-        sta fc
-        lda O_CH,y
-        sta fc+1
-        lda O_EL,y                  ; read by star_safe, never written
-        sta fe
-        lda O_EH,y
-        sta fe+1
-        dif16 rx, ox, px
-        dif16 ry, oy, py
-        mov16 spx, ox
-        mov16 spy, oy
-        jsr ob_star
-        setbank BANK_LVL
-        ldy obj
-        lda fa
-        sta O_AL,y
-        lda fa+1
-        sta O_AH,y
-        lda fc
-        sta O_CL,y
-        lda fc+1
-        sta O_CH,y
-        rts
+        sbc py+1
+        sta ry+1
+        lda O_XL,y                  ; spx/spy = where it draws
+        sta spx
+        lda O_XH,y
+        sta spx+1
+        lda O_YL,y
+        sta spy
+        lda O_YH,y
+        sta spy+1
+        jmp ob_star                 ; tail call: ob_star returns to our caller
 @call:  jmpx @tab
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
         .word ob_spike, ob_none, ob_flame, ob_powerup, ob_vanish, ob_switch
@@ -1812,18 +1802,20 @@ ob_star:
         lda frame
         and #1
         bne @nostep
-        lda fa
-        cmp #18                     ; cap: a collected star's fa must not wrap 8-bit
-        bcs @nostep                 ; (it would make the star reappear ~every 20s)
-        inc fa
+        lda O_AL,y
+        cmp #18                     ; cap: a collected star's A must not wrap 8-bit
+        bcs @nostep                 ; (it would make the star reappear ~every 20s).
+        inc a                       ; A still holds it: there is no inc abs,y
+        sta O_AL,y
 @nostep:
-        lda fa
+        lda O_AL,y
         cmp #12
         bne :+
-        lda fc
+        lda O_CL,y
         bne :+
-        stza fa
-:       lda fc
+        lda #0                      ; (no stz abs,y either)
+        sta O_AL,y
+:       lda O_CL,y
         bne @anim
         lda health
         beq @tryboom
@@ -1841,20 +1833,20 @@ ob_star:
         bcc @anim
 @collect:
         lda #12
-        sta fa
+        sta O_AL,y
         lda #1
-        sta fc
+        sta O_CL,y
         dec stars
         jsr bar_touch
         lda #1
         jsr addscore
         lda #SFX_STAR
         sta SFXREQ
-@anim:  lda fa
+@anim:  lda O_AL,y
         cmp #18
         bcs @done
         lsr
-        ldx fe                      ; box class: spin frames on a uniform background use
+        ldx O_EL,y                      ; box class: spin frames on a uniform background use
         beq @reg                    ; the pre-composited box sprites (no mask, no erase)
         cmp #6
         bcs @reg                    ; sparkle frames stay regular (C = 0 below)
@@ -1876,7 +1868,7 @@ boxbase: .byte 103, 109
 ; band widened from "close enough to pick up" to "the rectangles touch".  Safe ones
 ; are drawn under an alias id BOXN above the real one.
 star_safe:
-        lda fe+1
+        lda O_EH,y
         bne @no
         ldx #32
         jsr inrange
