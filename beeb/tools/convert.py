@@ -620,8 +620,9 @@ for (lv, sub), L in levels.items():
     mapbytes = lut[cm]               # the map byte IS the tile id: no table, no paging
     used = set(int(x) for x in np.unique(mapbytes))
     level_tiles.append((name_of(lv, sub), len(used), 0))
-    # A level is loaded in two pieces, because the game logic has to live in bank 7 on
-    # a Model B and the map is the only thing big enough to make room for it.  The
+    # A level is loaded in two pieces: the game logic has bank 7 (inherited from the
+    # Model B, which had no HAZEL), and the map is the only thing big enough to make
+    # the room for it.  The
     # tile id -> address table is the same for every level and both sets, so the engine
     # builds it once in bank 6 rather than every level shipping a copy of it.
     #   bank 6, at $8900:  map (row-major)

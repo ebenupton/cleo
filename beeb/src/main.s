@@ -13,11 +13,6 @@
         .code
 ; ---------------------------------------------------------------- entry
 start:
-        jsr disc_detect             ; first, while the MOS is still whole: it calls
-                                    ; OSBYTE, and the LOW2 overlay below lands on
-                                    ; BYTEV.  Nothing may touch the controller until
-                                    ; this has run -- on a Model B the Master's
-                                    ; control register is the video ULA.
         sei
         ; NMI handler: jump to ours (1770 DRQ/INTRQ driven sector transfer)
         lda #$4C
@@ -68,9 +63,8 @@ start:
         iny
         bne :-
         ; The tables are bss and nothing has zeroed them.  A Master happens to hand
-        ; them over clear; a Model B leaves the filing system's function key buffer
-        ; and the rest of its workspace lying in $0400..$0CFF, and SECIDX picking up
-        ; a stray value walks the rupture chain off the end of SECTAB.
+        ; them over clear, but SECIDX picking up a stray value walks the rupture
+        ; chain off the end of SECTAB, so they are cleared rather than trusted.
         lda #<$0400
         sta ptr
         lda #>$0400

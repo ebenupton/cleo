@@ -48,8 +48,10 @@ BANK_MAP  = 6                     ; the map and the tables read alongside it
 
 ; bank 6: this level's overflow tiles, then the map and everything the renderer or
 ; the logic reads in the same breath as the map.  It is here rather than in bank 7
-; because a Model B has to put the game logic in a bank, and the map is the only
-; thing big enough to make the room.
+; because the game logic took that bank: the Model B it was written for had no
+; HAZEL, and the map was the only thing big enough to make the room.  A Master
+; does have HAZEL, so that placement is now a free choice rather than a forced
+; one -- moving the logic there would hand bank 7 back.
 ;         $8000  tiles 256.. of this level (16 tiles: no level needs more)
 LV_PAGE0  = $8500                 ; tile id -> tile data address: 256 lo ((id&3)<<6),
                                   ; 256 hi ($80 | id>>2).  A map byte is a tile id, so
@@ -68,7 +70,7 @@ LV_ATTR0  = $8500                 ; attribute (kill/push) by tile id
 LV_ATTR1  = $8600
 LV_ALTCLS = $8600                 ; 256 : tile id -> alt class (the map byte is
                                   ; the id, so the logic indexes this directly)
-;         $8900..$AFFF free: the game logic lives here on a Model B
+;         $8900..$AFFF free: the game logic lives here
 LV_OBJST  = $B000                 ; object state arrays (16 x 149)
 LV_GRID   = $B950                 ; 128 grid heads
 LV_BOBJ   = $B9D0                 ; 255
@@ -3424,11 +3426,11 @@ ld_secs:   .res 1
 ; NMI handler (reached via JMP at $0D00): 1770 data request / completion (multi-sector read)
 nmi_handler:
         pha
-nh_s:   lda FDC_STAT
+        lda FDC_STAT
         and #3
         cmp #3
         bne nmi_nd
-nh_d:   lda FDC_DATA
+        lda FDC_DATA
 nmi_sta:
         sta $FFFF
         inc nmi_sta+1
@@ -3437,7 +3439,7 @@ nmi_sta:
         dec ld_secs                 ; a whole sector done
         bne :+
         lda #$D0                    ; force interrupt: stop the multi-sector read
-nh_c:   sta FDC_CMD
+        sta FDC_CMD
         lda #1
         sta ld_done
 :       pla
@@ -3449,52 +3451,16 @@ nmi_nd: and #1
 :       pla
         rti
 
-; ---------------------------------------------------------------- which board
-; The 1770 answers at $FE24 (control) and $FE28 (registers) on a Master and at
-; $FE80/$FE84 on the Acorn Model B board.  This has to run before anything else
-; touches the controller, because on a Model B $FE24 is the video ULA and the
-; first write would land in its control register instead.  The control register
-; itself differs too: the Master has reset in bit 2 (active low) and density in
-; bit 5, the Model B board reset in bit 5 and density in bit 3.  A Model B is
-; assumed to have the 1770 upgrade; the 8271 is not handled yet.
-disc_detect:
-        lda #0
-        ldx #1
-        jsr OSBYTE                  ; OSBYTE 0: X = MOS version, 3 on a Master
-        cpx #3
-        bcs @done                   ; Master: the assembled addresses are right
-        ldx #(fdc_ops_end - fdc_ops - 2)
-@p:     lda fdc_ops,x               ; each register is $FE24 + n on one board and
-        sta ptr                     ; $FE80 + n on the other, so one offset does
-        lda fdc_ops+1,x             ; for the lot
-        sta ptr+1
-        ldy #0
-        lda (ptr),y
-        clc
-        adc #$80-$24
-        sta (ptr),y
-        dex
-        dex
-        bpl @p
-        lda #$08                    ; reset asserted, no drive selected
-        sta di_v1+1
-        lda #$29                    ; drive 0, single density, reset released
-        sta di_v2+1
-@done:  rts
-; the operand byte of every instruction above that names a controller register
-fdc_ops:
-        .word nh_s+1, nh_d+1, nh_c+1, di_c1+1, di_c2+1, di_c3+1
-        .word fw_s+1, lr_d+1, lr_c1+1, lr_x+1, lr_c2+1, lr_s+1
-fdc_ops_end:
-
+; The 1770 answers at $FE24 (control) and $FE28 (registers).  Control has reset in
+; bit 2 (active low) and density in bit 5.
 ; initialise: reset controller, restore head to track 0
 disc_init:
-di_v1:  lda #$20
-di_c1:  sta FDC_CTRL                ; reset asserted (active low bit 2)
-di_v2:  lda #$25
-di_c2:  sta FDC_CTRL                ; drive 0, FM, reset released
+        lda #$20
+        sta FDC_CTRL                ; reset asserted (active low bit 2)
+        lda #$25
+        sta FDC_CTRL                ; drive 0, FM, reset released
         lda #$00                    ; restore, spin up, 6ms
-di_c3:  sta FDC_CMD
+        sta FDC_CMD
         jsr fdc_wait
         stza cur_trk
         rts
@@ -3504,7 +3470,7 @@ fdc_wait:
 :       dex
         bne :-
 :
-fw_s:   lda FDC_STAT
+        lda FDC_STAT
         and #1
         bne :-
         rts
@@ -3557,9 +3523,9 @@ ldr_trk: lda ld_trk
         cmp cur_trk
         beq ldr_rd
         sta cur_trk
-lr_d:   sta FDC_DATA
+        sta FDC_DATA
         lda #$10                    ; seek (no verify)
-lr_c1:  sta FDC_CMD
+        sta FDC_CMD
         jsr fdc_wait
 ldr_rd:  ; sectors to read on this track: min(ld_n, 10 - ld_sc)
         lda #10
@@ -3571,20 +3537,20 @@ ldr_rd:  ; sectors to read on this track: min(ld_n, 10 - ld_sc)
 :       sta ld_secs
         sta tmp
         lda ld_sc
-lr_x:   sta FDC_SEC
+        sta FDC_SEC
         lda ptr
         sta nmi_sta+1
         lda ptr+1
         sta nmi_sta+2
         stz ld_done
         lda #$94                    ; read multiple sectors with head settle (NMI handler transfers and stops)
-lr_c2:  sta FDC_CMD
+        sta FDC_CMD
         ldx #20
 :       dex
         bne :-
 :       lda ld_done
         bne :+
-lr_s:   lda FDC_STAT                ; fallback: command finished without a completion NMI
+        lda FDC_STAT                ; fallback: command finished without a completion NMI
         and #1
         bne :-
 :       jsr fdc_wait                ; the abort takes a moment to clear busy
@@ -3767,8 +3733,9 @@ sext:   and #$80
         rts
 
 ; ============================================================================
-; Bridges between main RAM and the game logic, which lives at $8900 in bank 7
-; because a Model B has no HAZEL to put it in.  t_ goes in, m_ comes back out:
+; Bridges between main RAM and the game logic, which lives at $8900 in bank 7 --
+; a choice inherited from the Model B, which had no HAZEL to put it in.  t_ goes
+; in, m_ comes back out:
 ; both leave bank 7 selected on return, so a tail jump through one is as good as
 ; a call.  pagelogic is the whole of the bank switch and the return path of m_.
 ; ============================================================================
