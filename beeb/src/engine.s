@@ -1524,8 +1524,8 @@ ds_done: rts
         sta (sp),y
   .endif
 .else
-        beq done                    ; 0: both pixels transparent, no store
   .if k = 0
+        beq done                    ; 0: both pixels transparent, no store
         bpl masked                  ; (N from the load: cmp would set it from the subtraction)
         cmp #$C0
         bcc :+                      ; bit 7+6: this and the next 7 bytes all opaque
@@ -1535,7 +1535,10 @@ ds_done: rts
 masked: cmp #$41                    ; and the mirror image of that: this and the next 7
         beq blank                   ; all transparent, so the cell is left alone
   .else
-        bmi opaque                  ; bit 7: both pixels opaque (see encode_sprite)
+        bmi opaque                  ; bit 7: both pixels opaque (see encode_sprite).  Tested
+        beq done                    ; before the transparent case because the sprite data is
+                                    ; 45.7% opaque against 24.1% transparent, and both read
+                                    ; the same load's flags -- $00 is never negative
         cmp #$41                    ; a blank-run tag reached below line 0 (the packer marks
         bne :+                      ; every line a run covers): the rest of this cell is all
         jmp blank                   ; transparent, so skip it -- $41 else draws a red pixel
