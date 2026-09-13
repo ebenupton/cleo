@@ -102,7 +102,7 @@ draw_glyph_rows:
         sta sp
         lda sp+1
         adc #>ROWBYTES
-        ringup_cc
+        ringup
         sta sp+1
 :
         lda GLYPHBUF,x

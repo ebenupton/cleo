@@ -307,25 +307,12 @@ NEXTBUF:   .res 1
 .endmacro
 ; Both ends of the ring are page boundaries, so the fold is a compare on the high
 ; byte alone.  A = high byte after moving forward, folded back into the ring.
-;
-; Two spellings, by what the caller's carry is known to be: the sites reached
-; through a bcc from an eight-bit add that carried arrive with it set, the ones
-; reached from an adc that cannot overflow arrive with it clear.  Either way the
-; cmp sets the carry before the sbc, so neither has to pay for a sec and the two
-; are currently the same three instructions -- the names are the caller's contract,
-; and they earn their keep the moment the fold stops being a compare (a ring ending
-; at $8000 would test the sign bit instead, which leaves the carry alone, and then
-; the clear form has to subtract one less and let the missing borrow make it up).
-.macro ringup_cs                    ; carry known set
+; The cmp leaves the carry set on the path that reaches the sbc, so the fold needs
+; no sec of its own whatever the caller was holding.
+.macro ringup
         cmp #>RINGEND
         bcc :+
         sbc #>RINGBYTES
-:
-.endmacro
-.macro ringup_cc                    ; carry known clear
-        cmp #>RINGEND
-        bcc :+
-        sbc #>RINGBYTES             ; the cmp has already set it
 :
 .endmacro
 .macro ringdn                       ; A = high byte after moving back
@@ -343,7 +330,7 @@ NEXTBUF:   .res 1
         bcc :++                     ; past the fold's own anonymous label
         inc sp+1
         lda sp+1
-        ringup_cs
+        ringup
         sta sp+1
 :
 .endmacro
@@ -368,7 +355,7 @@ ringaddr:
         sta sp
         lda sp+1
         adc RINGHI,x
-        ringup_cc
+        ringup
         sta sp+1
         rts
 
@@ -615,7 +602,7 @@ drawrect:
         bcc :++                     ; past the fold's own anonymous label
         inc sp+1
         lda sp+1
-        ringup_cs
+        ringup
         sta sp+1
 :       bra @runend
 @slow:
@@ -661,7 +648,7 @@ drawrect:
         sta rc_sp
         lda rc_sp+1
         adc #>ROWBYTES
-        ringup_cc
+        ringup
         sta rc_sp+1
         rts
         ; ---- solid tile: store one constant, no bank switch, no source pointer
@@ -1511,7 +1498,7 @@ ds_rowdone:
         sta sp_rb
         lda sp_rb+1
         adc #>ROWBYTES
-        ringup_cc
+        ringup
         sta sp_rb+1
         jmp ds_rowloop
 ds_done: rts
