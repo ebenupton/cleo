@@ -1978,8 +1978,7 @@ copy_partial:
         bcc :+
         inc ptr+1
 :       dec cnt
-        beq @done
-        jmp @fjmp
+        bne @fjmp                   ; (in branch range: no jmp needed)
 @done:  rts
 
 ; ============================================================================
@@ -2642,8 +2641,7 @@ drawrect_clip:
         ; rows
         lda rc_y
         sec
-        sbc wcy
-        sta tmp                     ; rel row start (may be negative)
+        sbc wcy                     ; rel row start (may be negative), kept in A
         bpl :+
         ; start above window: shrink
         clc
@@ -2653,8 +2651,8 @@ drawrect_clip:
         sta rc_h
         lda wcy
         sta rc_y
-        stza tmp
-:       lda tmp
+        lda #0                      ; clipped to the top: rel is now 0
+:       sta tmp                     ; stored here, so the common path never reloads it
         clc
         adc rc_h                    ; rel end+1
         cmp #BUFROWS+1
