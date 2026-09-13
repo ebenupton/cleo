@@ -1626,12 +1626,13 @@ solid:  ; byte 0 carried the RUN flag: the whole cell is opaque, straight copy
 name:
         lda tmp2
         cmp #7
-        beq :+
-        jmp partial
-:       lda tmp
-        asl
-        tax
+        bne @np
+        lda tmp
+        beq l0                      ; the whole cell: the overwhelmingly common case, and
+        asl                         ; it needs no table at all (was lda/asl/tax/jmpx, 21
+        tax                         ; cycles of dispatch to reach the same place)
         jmpx et
+@np:    jmp partial
 et:     .word l0,l1,l2,l3,l4,l5,l6,l7
 .if .not copy
 blank:  ; byte 0 was $41: the whole cell is transparent, so there is nothing to do
