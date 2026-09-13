@@ -1775,11 +1775,12 @@ skip:
 name:
         lda tmp2
         cmp #7
-        beq :+
-        jmp partial
-:       lda tmp                     ; even 0,2,4,6 -> entry 0..3
+        bne @np
+        lda tmp                     ; even 0,2,4,6 -> entry 0..3
+        beq l0                      ; whole cell: no table needed (see SPRFULL)
         tax
         jmpx et
+@np:    jmp partial
 et:     .word l0,l1,l2,l3
 l0:     SPRLINE2 0, mirror
 l1:     SPRLINE2 1, mirror
