@@ -243,6 +243,8 @@ BUF_BARQ:  .res 2
 BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
 BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
 BARDIRTY:  .res 2
+MAPSTRIDE: .res 2                  ; bytes per map row (1 << maplw): drawrect walks the
+                                   ; row pointer by this instead of re-deriving it
 BARCACHE:  .res 32                 ; per buffer (slot | curbuf<<4): the nine digit values
                                    ; its bar was last drawn with, $FF = unknown
 BARBG:     .res 2                 ; per buffer: its bar needs the static template blitted
@@ -420,23 +422,24 @@ drawrect:
         sta rc_sp
         lda sp+1
         sta rc_sp+1
-@row:
-        ; ---- tile row ty = rc_y >> 1 ; map row pointer from the level's row tables
+        ; ---- map row pointer: the row tables only ever step it on by one map row, so
+        ; build it once here and add the stride per tile row (see @nextrow) rather than
+        ; index LV_MAPROW* and re-add rc_tx0 every time round.  The tables live in the
+        ; map bank, so this needs the bank selected too.
         setbank BANK_MAP
         lda rc_y
         lsr
         tax
         lda LV_MAPROWLO,x
-        sta ptr
-        lda LV_MAPROWHI,x
-        sta ptr+1
-        lda rc_tx0
         clc
-        adc ptr
+        adc rc_tx0
         sta ptr                     ; ptr -> first tile of the row (so Y counts from 0)
-        bcc :+
-        inc ptr+1
-:       ldy rc_nt
+        lda LV_MAPROWHI,x
+        adc #0
+        sta ptr+1
+@row:
+        setbank BANK_MAP            ; @drawrow left the tile bank selected
+        ldy rc_nt
 @gl:    lda (ptr),y
         tax
         lda LV_PAGE0,x
@@ -455,12 +458,20 @@ drawrect:
         lda rc_y
         and #1
         bne @second
-        jmp @row
+        bra @nextrow
 @second:
         jsr @drawrow
         inc rc_y
         dec rc_h
         beq @done
+@nextrow:                           ; one map row on
+        lda ptr
+        clc
+        adc MAPSTRIDE
+        sta ptr
+        lda ptr+1
+        adc MAPSTRIDE+1
+        sta ptr+1
         jmp @row
 @done:  rts
 @drawrow:
@@ -3587,7 +3598,11 @@ init_maprows:
         bra :++
 :       lda #1
         sta t16b+1
-:       ldx #0
+:       lda t16b                    ; (this ':' is counted by the beq/bra :++ above)
+        sta MAPSTRIDE
+        lda t16b+1
+        sta MAPSTRIDE+1
+        ldx #0
 :       lda t16
         sta LV_MAPROWLO,x
         lda t16+1
