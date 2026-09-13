@@ -141,7 +141,6 @@ wfine:    .res 1                  ; fine scanline offset 0,2,4,6
 curbuf:   .res 1                  ; buffer being drawn: 0 = main, 1 = shadow
 tset:     .res 1                  ; tile set in bank 5 ($FF = none yet)
 tchar:    .res 1                  ; drawtext's place in the string
-curbank:  .res 1
 recp:     .res 2                  ; current buffer's sprite record base
 rp:       .res 2                  ; current record
 
@@ -230,11 +229,6 @@ dpass:     .res 1                 ; draw_sprites pass: 1 = box stars, 0 = the re
 MIRR_R:    .res 2                 ; per buffer: the mirror is valid from this char on
 MIRR_LO:   .res 2                 ; the address of that char in the ring's last row
 spclip:    .res 1                 ; drawsprite: the last sprite came off a window edge
-SV_COLX:   .res 2
-SV_COLW:   .res 1
-SV_ROWY:   .res 1
-SV_ROWH:   .res 1
-DIRTYSEEN: .res 1
 NSPR:      .res 1
 BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
 BUF_CY:    .res 2
@@ -260,7 +254,6 @@ NEXTSECT:  .res 1
 SECIDX:    .res 1
 OLDIRQ:    .res 2
 OLDIER:    .res 1
-OLDACR:    .res 1
 SFXREQ:    .res 1
 SFXDUR:    .res 1
 MUSON:     .res 1
@@ -278,10 +271,9 @@ NEXTBUF:   .res 1
         .code
 
 ; ---------------------------------------------------------------- macros
-.macro setbank n
-        lda #n
-        sta curbank
-        sta ROMSEL_CPY
+.macro setbank n                    ; ROMSEL_CPY is the MOS's own shadow of ROMSEL, which
+        lda #n                      ; the IRQ handler restores from -- nothing ever read
+        sta ROMSEL_CPY              ; the private copy this used to keep as well
         sta ROMSEL
 .endmacro
 
@@ -741,8 +733,6 @@ drawrect:
 ; ============================================================================
 ; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
 scroll_validate:
-        stz SV_COLW
-        stz SV_ROWH
         ldx curbuf
         lda BUF_VALID,x
         bne :+
@@ -806,12 +796,6 @@ scroll_validate:
         sta rc_y
         lda #BUFROWS
         sta rc_h
-        lda rc_x
-        sta SV_COLX
-        lda rc_x+1
-        sta SV_COLX+1
-        lda rc_w
-        sta SV_COLW
         jsr drawrect
 @dyc:   lda w16b
         beq @done
@@ -839,10 +823,6 @@ scroll_validate:
         sta rc_x+1
         lda #ROWCHARS
         sta rc_w
-        lda rc_y
-        sta SV_ROWY
-        lda rc_h
-        sta SV_ROWH
         jsr drawrect
         bra @done
 @full:
@@ -856,8 +836,6 @@ scroll_validate:
         sta rc_w
         lda #BUFROWS
         sta rc_h
-        lda #1
-        sta DIRTYSEEN
         jsr drawrect
 @done:
         ldx curbuf
@@ -1126,8 +1104,7 @@ drawsprite:
         and #$10                    ; bit4 -> data above the tiles in bank 6 (box stars)
         beq :+
         ldx #BANK_TIL1
-:       stx curbank
-        stx ROMSEL_CPY
+:       stx ROMSEL_CPY
         stx ROMSEL
         bra @entry2
 @titledir:
@@ -1137,7 +1114,6 @@ drawsprite:
         adc #>TITLE_ADDR
         sta ptr+1
         lda spbank
-        sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
         ldy #6
@@ -2007,7 +1983,7 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
         dey
         bne @bci
         lda #BANK_SPR               ; The bar is black with a few icon spans, so
-        sta curbank                 ; fill black and lay the spans (BARBUF is now the span
+                                    ; fill black and lay the spans (BARBUF is now the span
         sta ROMSEL_CPY              ; list: offset16, len, bytes... ending $FFFF).
         sta ROMSEL
         lda #<BARADDR               ; --- fill the bar rows with opaque black ($C0)
@@ -2592,14 +2568,8 @@ render_frame:
         jsr match_sprites
         jsr erase_old
         jsr scroll_validate
-        ldx curbuf
-        lda DIRTYCNT,x
-        beq :+
-        lda #1
-        sta DIRTYSEEN
-:       jsr draw_dirty
+        jsr draw_dirty
         jsr draw_sprites
-        stza DIRTYSEEN
         jsr copy_partial
         ldx curbuf
         lda BARBG,x                 ; first time this buffer is drawn: lay the template
@@ -2843,7 +2813,6 @@ init_tables:
         bne @m
         stz RECCNT
         stz RECCNT+1
-        stz DIRTYSEEN
         stz DIRTYCNT
         stz DIRTYCNT+1
         stz BUF_VALID
@@ -3188,7 +3157,6 @@ MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), decoded
 ; decode the period table (the first 144 hidden bytes) into music_tab; bank 5 loaded
 music_init:
         lda #BANK_TIL1
-        sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
         ldx #0
@@ -3320,7 +3288,6 @@ take_over:
         lda IRQ1V+1
         sta OLDIRQ+1
         lda VIA_ACR
-        sta OLDACR
         lda #<irq_handler
         sta IRQ1V
         lda #>irq_handler
@@ -3487,7 +3454,6 @@ loadfile:
         sta ld_n
         lda ft_bank,x
         beq :+
-        sta curbank
         sta ROMSEL_CPY
         sta ROMSEL
 :       lda ft_dest,x

@@ -57,7 +57,7 @@ async function frame(keys) {
   // left the state it was measuring, so say so rather than average the wreckage in
   if (H.rd(A.exiting)) { deaths++; return null; }
   if (m.frames === before) return null;
-  return { work: m.work, isr: m.isr, isrCount: m.isrCount };
+  return { work: m.work, isr: m.isr, isrCount: m.isrCount, instrs: m.instrs };
 }
 async function frames(keys, n) { const r = []; for (let i = 0; i < n; i++) r.push(await frame(keys)); return r; }
 function place(px, py) { H.wr16(A.px, px); H.wr16(A.py, py); H.wr16(A.vx, 0); H.wr16(A.vy, 0); }
@@ -74,17 +74,17 @@ for (const loc of LOCS) {
   // both directions for the same fixed frame count, keep the one she gets going in;
   // "whichever has room" needs a variable-length retry, i.e. exactly the
   // state-dependent wait this protocol exists to remove
-  let vx = 0, run = null, runIsr = null, fpRun = null;
+  let vx = 0, run = null, runIsr = null, runI = null, fpRun = null;
   for (const dir of [2, 1]) {
     await frames(dir, ACCEL);
     const v = Math.abs(H.rds16(A.vx)), fp = H.fingerprint().fp;
     const c = await frames(dir, AVG);
-    if (v > vx) { vx = v; run = avg(c, "work"); runIsr = avg(c, "isr"); fpRun = fp; }
+    if (v > vx) { vx = v; run = avg(c, "work"); runIsr = avg(c, "isr"); runI = avg(c, "instrs"); fpRun = fp; }
     place(loc.px, loc.py); await frames(0, 3);
   }
   samples.push({ px: loc.px, py: loc.py, f0, fp0, fpRun, vx,
-                 jump: avg(jc, "work"), jumpIsr: avg(jc, "isr"),
-                 run, runIsr, ...(deaths > d0 ? { died: deaths - d0 } : {}) });
+                 jump: avg(jc, "work"), jumpIsr: avg(jc, "isr"), jumpI: avg(jc, "instrs"),
+                 run, runIsr, runI, ...(deaths > d0 ? { died: deaths - d0 } : {}) });
 }
 writeFileSync(out, JSON.stringify({ lv, deaths,
   method: "frame-exact (harness.mjs); work=select_backbuf..render_done; ISR separated; scene fingerprinted",

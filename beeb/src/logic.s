@@ -231,7 +231,6 @@ startx:   .res 2
 starty:   .res 2
 exitx:    .res 2
 exity:    .res 2
-gridw:    .res 1
 nobj:     .res 1
 pausing:  .res 1
 exiting:  .res 1
@@ -244,7 +243,7 @@ maxlevel: .res 1
 lastkeys: .res 1
 logicvs:  .res 1
 lsteps:   .res 1
-gridsh:   .res 1                  ; log2 gridw
+gridsh:   .res 1                  ; log2 of the collision grid width
 
 ; transient temps (not preserved across disc loads)
 ox      = $A8
@@ -455,8 +454,7 @@ level_init:
 :       asl
         dex
         bne :-
-:       sta gridw
-        ; clear object state, then grid
+:       ; clear object state, then grid  (this ':' is counted by the beq :++ above)
         ldx #0
         lda #0
 :       sta O_STAMP,x

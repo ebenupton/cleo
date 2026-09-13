@@ -49,12 +49,14 @@ for (let r = 1; r < runs.length; r++) {
     if (mism.some((m) => m.i === i)) continue;
     const a = runs[0].d.samples[i], b = runs[r].d.samples[i];
     for (const k of ["jump", "run"]) if (a[k] != null && b[k] != null) ds[k].push(b[k] - a[k]);
+    for (const k of ["jumpI", "runI"]) if (a[k] != null && b[k] != null) (ds[k] ??= []).push(b[k] - a[k]);
     const dj = (b.jump ?? 0) - (a.jump ?? 0), dr = (b.run ?? 0) - (a.run ?? 0);
     if (dj || dr) nz.push(`${a.px},${a.py}:${dj >= 0 ? "+" : ""}${dj}/${dr >= 0 ? "+" : ""}${dr}`);
   }
   const sum = (a) => a.reduce((x, y) => x + y, 0);
   console.log(`\n${runs[r].name} - ${runs[0].name}:  d(jump) median ${med(ds.jump)} mean ${Math.round(sum(ds.jump) / (ds.jump.length || 1))};  d(run) median ${med(ds.run)} mean ${Math.round(sum(ds.run) / (ds.run.length || 1))}`);
   console.log(`  locations that moved at all (jump/run): ${nz.length ? nz.join("  ") : "none"}`);
+  if (ds.jumpI?.length) console.log(`  INSTRUCTIONS retired (placement-independent): d(jump) median ${med(ds.jumpI)};  d(run) median ${med(ds.runI)}`);
 }
 if (sceneOk) {
   console.log(`CYCLES where the scene matches: jump spread median ${med(spreads.jump)} worst ${worst.jump}; run spread median ${med(spreads.run)} worst ${worst.run}`);

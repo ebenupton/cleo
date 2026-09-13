@@ -82,13 +82,19 @@ export class Harness {
   // idle spin of 6-23k cycles that is not work).  The vsync/timer ISR fires inside
   // that window, and how many times depends on where the CRTC phase happens to sit --
   // so it is accounted separately rather than left to pollute the figure.
+  // Also counts instructions retired in the window.  Cycles move when code moves --
+  // a taken branch costs an extra cycle across a page -- so for a change of a few
+  // hundred cycles the cycle figure cannot tell a real win from a relocation.  The
+  // instruction count can: it is exactly what the code did, wherever it sits.
   installMeter() {
-    const A = this.A, m = { work: 0, isr: 0, isrCount: 0, frames: 0 };
+    const A = this.A, m = { work: 0, isr: 0, isrCount: 0, frames: 0, instrs: 0 };
     let t0 = -1, inWin = false, isrAt = -1, exiting = false;
     this.meter = m;
+    let n = 0;
     this.cpu.debugInstruction.add((pc, op) => {
-      if (pc === A.select_backbuf) { t0 = this.cyc(); inWin = true; m.isr = 0; m.isrCount = 0; }
-      else if (pc === A.render_done && inWin) { m.work = this.cyc() - t0; inWin = false; m.frames++; }
+      if (inWin) n++;
+      if (pc === A.select_backbuf) { t0 = this.cyc(); inWin = true; m.isr = 0; m.isrCount = 0; n = 0; }
+      else if (pc === A.render_done && inWin) { m.work = this.cyc() - t0; m.instrs = n; inWin = false; m.frames++; }
       else if (pc === A.irq_handler) { isrAt = this.cyc(); }
       else if (isrAt >= 0 && op === 0x40) { exiting = true; }   // RTI: measure to the
       else if (exiting) {                                       // instruction after it
