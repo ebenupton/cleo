@@ -1,0 +1,116 @@
+# Plan: hardware-wrapped playfield, single-buffered status bar below $3000
+
+Status: plan only, no code. 14 Sep 2026, after a conversation with Bitshifters
+(kieran, tom_seddon, RichTW) that corrected a premise this port has carried from the
+start.
+
+## The premise that was wrong
+
+Everything in `docs/` and the "Ring, Bar, Rupture" memo assumes the CRTC can only scan
+out of `$3000-$7FFF`. It cannot see anything else *through the wrap* -- the fold is still
+hard-wired from the top of screen RAM to its base -- but the start address is simply RAM
+address / 8, twelve bits, and **anything below `$8000` is fair game**. The bar and the
+partial row never needed to be inside the wrapped range. Put them below `$3000` and the
+whole of `$3000-$7FFF` becomes one hardware-wrapped ring, which is what the Beeb wants to
+do anyway.
+
+One Master-specific catch, from tom_seddon: with shadow RAM selected for display (ACCCON
+D = 1), addresses below `$3000` scan out of **HAZEL and ANDY**, not main RAM. So a bar in
+main RAM at `$2B00` is only visible while D = 0. D can be switched at any point, including
+mid-scanline, so the bar section simply runs with D = 0 and the playfield with D = the
+buffer being shown.
+
+## What changes
+
+| now | proposed |
+|---|---|
+| ring `$3500-$7AFF`, 28 rows, software fold at the ring end | ring `$3000-$7FFF`, **32 rows**, hardware fold |
+| MIRROR row at `$3280` so a straddling row reads as one run | gone: the hardware folds mid-row |
+| PART row at `$3000`, fixed | partial row composed **into a spare ring row** (per buffer, free) |
+| bar at `$7B00`, one per buffer, BARCACHE/BARDIRTY/BARBG per buffer | bar at **`$2B00-$2FFF` in main RAM, one copy**, drawn once |
+| sections T, A, P, P2, Q -- up to 5, one IRQ each | T, A, P, Q -- up to 4 |
+| `mirror_seek` per frame, `mirror_run` gating every drawrect near the ring end | gone |
+| 27 visible rows (108 px) | **30 visible rows (120 px)**; 32 - 30 = 1 partial-compose row + 1 spare |
+
+Row budget for 30 visible: bar 2 + playfield 30 = 32 displayed rows, Q 7 rows -- exactly a
+standard MODE 2 frame (R6 = 32, R4 = 38). Vsync at Q row 1 keeps the existing 48-line
+vsync-to-T constant. 31 visible is possible (Q = 6, vsync at Q row 0) with zero slack; not
+first.
+
+`maxwy = maph - VISLINES/2` and the rest of the camera derive from `VISLINES`, and
+`ringmod` already collapses to `and #31` when `RINGROWS` is a power of two. Verify 120 px
+against the J2ME reference before assuming it is the original height.
+
+## Memory: the one real constraint
+
+The bar needs 1280 bytes below `$3000`, and that pool is nearly full:
+
+| region | size | used | free |
+|---|---:|---:|---:|
+| LOW2 `$0206` | 506 | 481 | 25 |
+| TABLES `$0400` | 2304 | 2265 | 39 |
+| LOW `$0D03` | 237 | 184 | 53 |
+| CODE `$0E00` | 8704 | 8181 | 523 |
+
+640 free; 1280 needed; **short by ~640**. Where it comes from, in order:
+
+1. Deleting the mirror: `mirror_run`, `mirror_seek`, the `@rowdone` gate in `drawrect`,
+   the w16/w16b borrowing in `scroll_validate`, `MIRR_R`/`MIRR_LO`. Estimate 250-300.
+2. Simplifying `build_sections`: no `@addr` fold, no `@nfull` straddle arithmetic, no P2,
+   SECTAB 96 -> 64. Estimate 150.
+3. Single bar: `BARCACHE` 32 -> 16, `BARDIRTY`/`BARBG`/`BUF_BARQ` halve, `bar_bg`'s
+   per-buffer invalidation goes. Estimate 50-80.
+4. If still short: move cold CODE routines to the LOGIC bank through the existing
+   bridges. Candidates in `engine.s`: `init_tables`, `init_ident`, `music_init`,
+   `set_voice`, `build_tileaddr`. Not the disc loader -- it writes bank 7.
+   LOGIC has 1565 bytes free.
+
+Measure with `build/map.txt` after each step; do not guess.
+
+## The one new race
+
+`select_backbuf` does `lda ACCCON / ora / sta ACCCON` to set the X bit. If the section-1
+IRQ fires between that load and store and writes D, the store puts the stale D back and
+the playfield displays from the wrong buffer for one frame. Either bracket
+`select_backbuf` with `sei`/`cli`, or keep a shadow copy of ACCCON that both writers
+update and store from. Same for the flip in the vsync handler (already in an IRQ, so
+only the main-code writer needs guarding).
+
+## Bar tearing, and the answer
+
+A single-buffered bar is drawn where it is displayed. Its 16 lines are scanned starting
+48 lines after vsync, ~3 ms in. HUD draws total ~250 cycles a frame, so: **flush bar
+updates at `frame_top`**, immediately after `wait_flip` returns, inside that 48-line
+window. Logic sets a dirty flag; nothing in the logic phase touches the bar directly.
+`BARCACHE` is then unnecessary (it existed so each buffer's copy could be brought up to
+date independently).
+
+## Staging, with the oracle at each step
+
+The object state must be identical to `build/base` throughout stages 1-5 (nothing in the
+logic changes until the height does), and `pixdiff`'s DISPLAY comparison is the oracle for
+the picture once buffer addresses no longer line up.
+
+0. **Spike, before anything else.** A throwaway program: display from `$2B00` with D=0;
+   switch D mid-frame from a T1 IRQ; hardware-wrap a 20K ring from a start address in the
+   last row. jsbeeb for the first and third; the D-toggle and HAZEL/ANDY behaviour need
+   b2 or a real Master -- this is tom_seddon's claim about his own emulator's subject, and
+   the one thing in this plan that cannot be verified from this desk.
+1. Ring to 32 rows, `RINGBASE=$3000`, `RINGEND=$8000`; delete the mirror; keep
+   `VISROWS=27`, keep the bar where it is (it still fits inside the ring's spare rows for
+   now). DISPLAY-identical to the current build.
+2. Partial row into a spare ring row; sections T/A/P/Q. DISPLAY-identical.
+3. Bar to `$2B00`, single copy, D toggle, `frame_top` flush, memory moves. DISPLAY-identical
+   except that the bar never tears differently.
+4. `VISROWS` 27 -> 30. Audit every `VISROWS`/`VISLINES`/`RINGROWS`-derived constant,
+   including sprite clip bounds and off-screen culling. Compare against the reference.
+5. Follow-ons: `ringup` with `RINGEND=$8000` is a sign test (`bpl` for `cmp #$80/bcc`,
+   2 cycles off every `spnext`); drop the second buffer's `PART_*` if the compose row
+   makes them redundant.
+
+## What it costs
+
+Horizontal-scroll frames draw a column of 30 chars instead of 27 (+11% on that path);
+everything else is cheaper: one fewer IRQ, no mirror upkeep (~0.6% of frame work), no
+bar double-draw, no P2 arithmetic. Expect a small net win on L6 and roughly neutral
+elsewhere, plus 12 more pixels of playfield.
