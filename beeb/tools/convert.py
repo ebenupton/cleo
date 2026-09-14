@@ -68,6 +68,44 @@ def dither(rgb_img, alpha, x0=0, y0=0, full=True):
     return col
 
 
+def dither_cpc(rgb_img, alpha, x0=0, y0=0, full=True):
+    """DITHER=cpc: a 1x2 dither to the CPC's 27 colours.  Each channel is quantised to
+    0, 1/2 or 1 (in the same gamma space as the Bayer path) and a half channel lights one
+    of the pixel's two scanlines -- which one alternating with x, so a run of one colour
+    is a checker rather than stripes -- with a pixel's half channels spread across both
+    lines so the pair is as close in brightness as it can be (olive is red over green,
+    not yellow over black).  Nothing is dithered ACROSS pixels: every source pixel is its
+    own CPC colour.  Half-res images (one line per pixel: the bar) get the same mix as a
+    horizontal checker instead."""
+    h, w, _ = rgb_img.shape
+    v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
+    lev = np.clip(np.rint(v * 2), 0, 2).astype(np.uint8)
+    fullc = lev == 2
+    halfc = lev == 1
+    rank = np.cumsum(halfc, axis=2) - 1                 # k-th half channel of the pixel
+    p = ((np.arange(w) + x0) & 1)[None, :, None]
+    lineA = fullc | (halfc & (((p + rank) & 1) == 0))
+    lineB = fullc | (halfc & (((p + rank) & 1) == 1))
+    pack = lambda b: (b[:, :, 0] | (b[:, :, 1] << 1) | (b[:, :, 2] << 2)).astype(np.uint8)
+    if full:
+        col = np.empty((2 * h, w), np.uint8)
+        col[0::2] = pack(lineA)
+        col[1::2] = pack(lineB)
+        alpha = np.repeat(alpha, 2, axis=0)
+    else:
+        yy = ((np.arange(h) + y0) & 1)[:, None]
+        col = np.where(yy == 0, pack(lineA), pack(lineB))
+    col = np.where(col == 0, 8, col).astype(np.uint8)
+    col = np.where(alpha, col, 0).astype(np.uint8)
+    return col
+
+DITHER = os.environ.get('DITHER', 'bayer')   # bayer (2x4 ordered, the default) or cpc
+if DITHER == 'cpc':
+    dither = dither_cpc
+elif DITHER != 'bayer':
+    sys.exit('DITHER must be bayer or cpc')
+
+
 def pack_mode2(col):
     """col: (lines, w) colour indices (w even). Returns (lines, w//2) bytes."""
     lines, w = col.shape
