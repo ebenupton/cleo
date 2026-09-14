@@ -206,7 +206,7 @@ FTMODE .set 0
         FILE F_TILESI_SEC, F_TILESI_N, BANK_TIL0, $8000
         FILE F_LOGIC_SEC, <((__LOGIC_LAST__ - __LOGIC_START__ + 255) / 256), BANK_LVL, LOGIC_ADDR
         FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
-        FILE F_MUSIC_SEC, F_MUSIC_N, BANK_TIL1, MUSIC_ADDR
+        FILE F_MUSIC_SEC, F_MUSIC_N, BANK_LVL,  MUSIC_ADDR
         FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTTAB
         FILE F_TITLE_SEC, F_TITLE_N, BANK_MAP,  TITLE_ADDR
         FILE F_L0A_SEC, LM_L0A, BANK_MAP, LV_MAP
@@ -327,6 +327,8 @@ new_game:
 level_loop:
         jsr blank_palette           ; hide the loading and the first-frame build-up
         stza title_res               ; the level's map replaces the title pack
+        lda #FI_BOX                  ; and the title pack replaced the box stars
+        jsr loadfile
         ldx level
         jsr load_level
         jsr t_level_init

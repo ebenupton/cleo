@@ -1236,12 +1236,12 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
         data += pk[:, c].tobytes()
     return W, (2 * h if full else h), h, data, col
 
-TITLE_ADDR = 0x8900               # bank 6, where the map goes during a level
+TITLE_ADDR = 0x8900               # bank 6, where the map and the box stars go during a level
 title = bytearray()
 tdir = []
 pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38, 58, 39, 13, True), ('lose', 0, 71, 45, 13, True)]
-for f in range(9):
-    pieces.append(('cleo%d' % f, (f % 3) * 26, 85 + (f // 3) * 32, 26, 31, False))
+for f in range(9):                  # full-res like everything else: a half-res image
+    pieces.append(('cleo%d' % f, (f % 3) * 26, 85 + (f // 3) * 32, 26, 31, True))   # dithers per line, and looked it
 tpreview = []
 for (name, x, y, w, h, full) in pieces:
     W, lines, hpx, data, col = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=name.startswith('cleo'))
@@ -1253,6 +1253,8 @@ tdirbytes = bytearray()
 for (name, ptr, W, hpx, lines, full) in tdir:
     tdirbytes += bytes([ptr & 255, ptr >> 8, W, hpx, 0, 0, 2 if full else 0, lines])
 titlefile = tdirbytes.ljust(0x80, b'\0') + title
+TITLE_END = 0xB800                # the title pack may overwrite the box stars (reloaded at
+assert len(titlefile) <= TITLE_END - TITLE_ADDR, len(titlefile)   # level start), not the music
 open(os.path.join(OUT, 'TITLE'), 'wb').write(titlefile)
 print('title pack', len(titlefile))
 print('sprite blank runs: %d tagged bytes of %d' % (encode_sprite.blank_runs, encode_sprite.cells))

@@ -1445,7 +1445,7 @@ ds_rowloop:
 ds_colloop:
 ds_dispatch:
         jmp sprFN                   ; operand patched per sprite
-sprdisp_tab: .word sprHN, sprHM, sprFN, sprFM, sprFC
+sprdisp_tab: .word sprFN, sprFM, sprFN, sprFM, sprFC
 sprretM:                            ; next column, mirrored: source pointer - lines
         lda ptr
         sec
@@ -1703,186 +1703,9 @@ pd:
         SPRFULL sprFM, 1, MODE1
         SPRFULL sprFC, 0, 1         ; box stars: pre-composited on their background, no mask
 
-; half res: one source byte -> two screen lines (2k, 2k+1)
-.macro SPRLINE2 k, mirror, copy
-        .local skip, opaque, both, store
-.if k = 0
-        ldaz ptr
-.else
-        ldy #k
-        lda (ptr),y
-.endif
-.if copy                            ; MODE 1: opaque boxes, both screen lines stored
-  .if mirror
-        tax
-        lda SWAPTAB,x
-  .endif
-  .if k = 0
-        staz sp
-        ldy #1
-  .else
-        ldy #2*k
-        sta (sp),y
-        iny
-  .endif
-        sta (sp),y
-.else
-        beq skip
-        bmi both                    ; bit 7: both pixels opaque
-        tax
-.if mirror
-        lda MASKTAB+$80,x
-.else
-        lda MASKTAB,x
-.endif
-        beq opaque
-        sta tmp4
-.if mirror
-        lda IDENT+$80,x
-        sta tmp3
-.else
-        stx tmp3
-.endif
-.if k = 0
-        ldaz sp
-        and tmp4
-        ora tmp3
-        staz sp
-        ldy #1
-.else
-        ldy #2*k
-        lda (sp),y
-        and tmp4
-        ora tmp3
-        sta (sp),y
-        iny
-.endif
-        lda (sp),y
-        and tmp4
-        ora tmp3
-        sta (sp),y
-        bra skip
-both:
-.if mirror
-        tax
-        lda SWAPTAB,x
-.endif
-        bra store
-opaque:
-.if mirror
-        lda SWAPTAB,x
-.else
-        txa
-.endif
-store:
-.if k = 0
-        staz sp
-        ldy #1
-.else
-        ldy #2*k
-        sta (sp),y
-        iny
-.endif
-        sta (sp),y
-skip:
-.endif
-.endmacro
-
-.macro SPRHALF name, mirror, copy
-        .local partial, et, l0, l1, l2, l3, pl, ps, po, pb, pq, pd
-name:
-        lda tmp2
-        cmp #7
-        bne @np
-        lda tmp                     ; even 0,2,4,6 -> entry 0..3
-        beq l0                      ; whole cell: no table needed (see SPRFULL)
-        tax
-        jmpx et
-@np:    jmp partial
-et:     .word l0,l1,l2,l3
-l0:     SPRLINE2 0, mirror, copy
-l1:     SPRLINE2 1, mirror, copy
-l2:     SPRLINE2 2, mirror, copy
-l3:     SPRLINE2 3, mirror, copy
-        .if mirror
-        jmp sprretM
-        .else
-        jmp sprretP
-        .endif
-partial:
-        lda tmp
-        sta sp_lim                  ; current screen line (even)
-pl:     lda sp_lim
-        lsr
-        tay
-        lda (ptr),y
-.if copy
-  .if mirror
-        tax
-        lda SWAPTAB,x
-  .endif
-        bra pq
-.endif
-        beq ps
-        bmi pb                      ; bit 7: both pixels opaque
-        tax
-.if mirror
-        lda MASKTAB+$80,x
-.else
-        lda MASKTAB,x
-.endif
-        beq po
-        sta tmp4
-.if mirror
-        lda IDENT+$80,x
-        sta tmp3
-.else
-        stx tmp3
-.endif
-        ldy sp_lim
-        lda (sp),y
-        and tmp4
-        ora tmp3
-        sta (sp),y
-        iny
-        lda (sp),y
-        and tmp4
-        ora tmp3
-        sta (sp),y
-        bra ps
-pb:
-.if mirror
-        tax
-        lda SWAPTAB,x
-.endif
-        bra pq
-po:
-.if mirror
-        lda SWAPTAB,x
-.else
-        txa
-.endif
-pq:     ldy sp_lim
-        sta (sp),y
-        iny
-        sta (sp),y
-ps:     lda sp_lim
-        inca
-        cmp tmp2
-        bcs pd
-        inc sp_lim
-        inc sp_lim
-        bra pl
-pd:
-        .if mirror
-        jmp sprretM
-        .else
-        jmp sprretP
-        .endif
-.endmacro
-
-        SPRHALF sprHN, 0, MODE1
-        SPRHALF sprHM, 1, MODE1
+; (There were half-res blitters here -- one source byte to two screen lines -- for the
+; title's Cleo frames.  Every image is full-res now, so entries 0/1 of sprdisp_tab
+; alias the full blitters and the flag bit is vestigial.)
 
 ; ============================================================================
 ; copy_partial: copy lines wfine..7 of ring row wcy into lines 0..(7-wfine) of the
@@ -3059,13 +2882,15 @@ sndwrite:
 ; 144-byte period table then the sequence (4-byte records: frames, note0..2;
 ; frames = 0 -> loop).  It used to be hidden in bit 6 of the tile bytes, which only
 ; worked while the whole tile set was resident; a level now loads just the tiles it
-; uses, so the music is its own file in bank 6.
-MUSIC_ADDR = $B800                  ; bank 6, above the box stars
+; uses, so the music is its own file -- in bank 7 above the logic: bank 6 has no room
+; ($B000 + 2208 bytes of box stars runs past $B800, which is where it used to sit, and
+; the music load then took the tail off the last trampoline box).
+MUSIC_ADDR = $B000                  ; bank 7: LOGIC may reach $B000, LV_ALTTAB is at $BE00
 MUSIC_SEQ  = MUSIC_ADDR + 144
 MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), decoded into RAM
 ; decode the period table (the first 144 hidden bytes) into music_tab; bank 5 loaded
 music_init:
-        lda #BANK_TIL1
+        lda #BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         ldx #144
@@ -3081,7 +2906,7 @@ music_tick:
         bne @done
         lda ROMSEL_CPY
         pha
-        lda #BANK_TIL1
+        lda #BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         jsr musbyte
