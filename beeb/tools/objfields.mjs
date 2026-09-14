@@ -3,7 +3,7 @@
 // The rule is that a field is 8-bit unless it can be proved otherwise, so this reports
 // the observed min/max per (type, field) and, separately, whether the high byte is ever
 // anything but 0 or $FF -- 0/$FF only means it is a sign extension, not a 16-bit value.
-import { open } from "./harness.mjs";
+import { open, ALLOW_DAMAGE } from "./harness.mjs";
 const lv=parseInt(process.argv[2]??"0"), N=parseInt(process.argv[3]??"250");
 const H=await open({disc:"build/cleo.ssd",labels:"build/labels.txt",level:lv});
 const OBJN=149, BASE=0xB000, ROMSEL=0xFE30, BANK_LVL=7;
@@ -15,7 +15,7 @@ const per={};
 const PAT="ssrrrrrrrrrrrrrrrrrrrrrrjrjrjrjssllllllllllllllljljljss";
 const K={s:0,r:2,l:1,j:4,rj:6,lj:5};
 for(let f=0;f<N;f++){
-  H.wr(H.A.keys,K[PAT[f%PAT.length]]??0); H.wr(H.A.hurt,1); H.wr(H.A.health,3);
+  H.wr(H.A.keys,K[PAT[f%PAT.length]]??0); if(!ALLOW_DAMAGE)H.wr(H.A.hurt,1); H.wr(H.A.health,3);
   await H.runTo(H.A.frame_top);
   for(let i=0;i<OBJN;i++){
     const t=rd(T+i); if(t===0&&rd(F.X[0]+i)===0) continue;

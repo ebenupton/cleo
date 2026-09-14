@@ -2232,29 +2232,30 @@ ob_rsnake:
         beq :+
         jmp @knocked
 :
+        ; A is a dormancy counter running -127..17 (CleoApp.run case 3: A++, and at 17
+        ; A = -(rnd&63)-64) -- the same idiom as the spike, and a signed byte holds it.
         inc fa
-        bne :+
-        inc fa+1
-:       lda fa
+        lda fa
         cmp #17
-        bne @norst
-        lda fa+1
         bne @norst
         jsr m_rnd
         and #63
+        eor #63
         clc
-        adc #64
-        eor #$FF
-        inca                         ; -(r&63)-64
-        sx16 fa
-@norst: ; rise = (A*A >> 3) - 28  (A > -16) -> q6/t16b
-        lda fa+1
-        beq @calc
-        cmp #$FF
-        bne @nowarm
+        adc #129                    ; 192-r: the byte form of -(r&63)-64
+        sta fa
+@norst: ; rise = (A*A >> 3) - 28 while the snake is up.
+        ; NOTE: the reference skips when A <= -16 (CleoApp.run 2865: bipush -16,
+        ; if_icmple), so it is up for A >= -15.  This port has always used A >= -16 -- one
+        ; frame earlier.  Kept as it was, because a representation change should not carry
+        ; a behaviour change: threshold 113 below instead of 112 matches the reference,
+        ; and costs 18 frames of 300 on L7.
         lda fa
-        cmp #<-16
-        bcc @nowarm
+        clc
+        adc #128                    ; bias the signed byte so the compare can be unsigned
+        cmp #112                    ; -16 -> 112
+        bcs @calc
+        bra @nowarm
 @calc:  lda fa
         bpl :+
         eor #$FF
@@ -2313,10 +2314,11 @@ ob_rsnake:
 @draw:  lda q6
         beq @basket
         ldx #0
-        bit fa+1
+        lda fa
         bmi @fr
         ldx #2
-        beq16 fa, @fr
+        lda fa                      ; the ldx above set Z from 2, not from A
+        beq @fr
         ldx #4
 @fr:    txa
         clc

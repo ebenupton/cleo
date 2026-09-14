@@ -7,7 +7,7 @@
 // handler writes and the epilogue no longer stores just stops advancing, and a pixel
 // diff will not see it until the object drifts.  So check the state itself: all 16
 // O_* arrays x 149 objects, every frame, byte for byte.
-import { open } from "./harness.mjs";
+import { open, ALLOW_DAMAGE } from "./harness.mjs";
 const [dA,lA,dB,lB,lvS,nS]=process.argv.slice(2);
 const lv=parseInt(lvS??"0"), N=parseInt(nS??"200");
 const OBJN=149, BASE=0xB000, NARR=16, ROMSEL=0xFE30, BANK_LVL=7;
@@ -27,7 +27,7 @@ const PAT="ssrrrrrrrrrrrrrrrrrrrrrrjrjrjrjssllllllllllllllljljljss";
 const K={s:0,r:2,l:1,j:4,rj:6,lj:5};
 let bad=0,first=-1,worst="";
 for(let f=0;f<N;f++){
-  for(const H of [A,B]){H.wr(H.A.keys,K[PAT[f%PAT.length]]??0);H.wr(H.A.hurt,1);H.wr(H.A.health,3);await H.runTo(H.A.frame_top);}
+  for(const H of [A,B]){H.wr(H.A.keys,K[PAT[f%PAT.length]]??0);if(!ALLOW_DAMAGE)H.wr(H.A.hurt,1); H.wr(H.A.health,3);await H.runTo(H.A.frame_top);}
   const sa=snap(A), sb=snap(B);
   if(IGN.size) for(let i=0;i<sa.length;i++) if(!MASK[i]) sb[i]=sa[i];
   if(!sa.equals(sb)){

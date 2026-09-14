@@ -144,6 +144,11 @@ export class Harness {
 }
 
 // ---- bring a build up to a level, with every game-visible patch applied -----------
+// HARNESS_ALLOW_DAMAGE=1 stops the driver pinning 'hurt', so enemies can actually
+// connect.  Knockback states (an object's C and D carrying a 16-bit throw offset, say)
+// are unreachable otherwise, and a field's range measured without them is not its range.
+// Health stays pinned either way: a death leaves the frame loop and the run just hangs.
+export const ALLOW_DAMAGE = !!process.env.HARNESS_ALLOW_DAMAGE;
 export async function open({ disc, labels, level, quiet = true }) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);

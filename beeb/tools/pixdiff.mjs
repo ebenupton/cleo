@@ -20,7 +20,7 @@
 // frames of 100 with the buffers bit-identical.  So DISPLAY-only differences are a
 // re-phasing of a pre-existing real-time race, not a drawing bug -- judge a change on
 // BUFFER, and treat a DISPLAY difference as something to understand, not to fear.
-import { open } from "./harness.mjs";
+import { open, ALLOW_DAMAGE } from "./harness.mjs";
 
 const [dA, lA, dB, lB, lvS, nS, script] = process.argv.slice(2);
 const lv = parseInt(lvS ?? "0"), N = parseInt(nS ?? "120");
@@ -43,7 +43,7 @@ function diffPixels() {
   return { n, box: n ? `x ${x0}-${x1}, y ${y0}-${y1}` : "" };
 }
 async function step(H, keys) {
-  H.wr(H.A.keys, keys); H.wr(H.A.hurt, 1); H.wr(H.A.health, 3);
+  H.wr(H.A.keys, keys); if(!ALLOW_DAMAGE)H.wr(H.A.hurt,1); H.wr(H.A.health,3);
   await H.runTo(H.A.frame_top);
 }
 
