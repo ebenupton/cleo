@@ -1165,11 +1165,12 @@ drawsprite:
         lda (ptr),y
         sta sp_flags
   .if MODE1
-        ldy #4
-        lda (ptr),y
+        lda sp_id                   ; the mask address table behind the directory
+        asl
+        tax
+        lda TITLE_ADDR+$80,x
         sta sp_mbase
-        iny
-        lda (ptr),y
+        lda TITLE_ADDR+$81,x
         sta sp_mbase+1
   .endif
 @entry2:

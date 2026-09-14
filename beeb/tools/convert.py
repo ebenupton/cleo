@@ -1322,21 +1322,27 @@ pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38
 for f in range(9):                  # full-res like everything else: a half-res image
     pieces.append(('cleo%d' % f, (f % 3) * 26, 85 + (f // 3) * 32, 26, 31, True))   # dithers per line, and looked it
 tpreview = []
+TDIR = 0x80 if MODE == 2 else 0xA0      # MODE 1: a mask-address table at +$80, 2 bytes a piece
 for (name, x, y, w, h, full) in pieces:
     opaque = name.startswith('cleo')
     W, lines, hpx, data, col, mask = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=opaque)
-    ptr = TITLE_ADDR + 0x80 + len(title)
+    ptr = TITLE_ADDR + TDIR + len(title)
     title += data
-    mptr = TITLE_ADDR + 0x80 + len(title) if mask else 0
+    mptr = TITLE_ADDR + TDIR + len(title) if mask else 0
     title += mask
     flags = (2 if full else 0) | (8 if (MODE == 1 and opaque) else 0)   # MODE 1: opaque pieces copy
     tdir.append((name, ptr, W, hpx, lines, flags, mptr))
     tpreview.append(col)
-# directory at &8000: 8 bytes per piece: ptr lo, hi, W, h, mask lo, hi (MODE 1), flags, lines
+# directory at &8000: 8 bytes per piece: ptr lo, hi, W, h, refx, refy (0: the prologue
+# is the sprite one), flags, lines.  MODE 1: mask addresses at +$80, two bytes a piece.
 tdirbytes = bytearray()
 for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
-    tdirbytes += bytes([ptr & 255, ptr >> 8, W, hpx, mptr & 255, mptr >> 8, flags, lines])
-titlefile = tdirbytes.ljust(0x80, b'\0') + title
+    tdirbytes += bytes([ptr & 255, ptr >> 8, W, hpx, 0, 0, flags, lines])
+tdirbytes = tdirbytes.ljust(0x80, b'\0')
+if MODE == 1:
+    for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
+        tdirbytes += bytes([mptr & 255, mptr >> 8])
+titlefile = tdirbytes.ljust(TDIR, b'\0') + title
 TITLE_END = 0xB800                # the title pack may overwrite the box stars (reloaded at
 assert len(titlefile) <= TITLE_END - TITLE_ADDR, len(titlefile)   # level start), not the music
 open(os.path.join(OUT, 'TITLE'), 'wb').write(titlefile)
