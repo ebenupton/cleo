@@ -1512,10 +1512,8 @@ ds_done: rts
         beq done                    ; 0: both pixels transparent, no store
         bpl masked                  ; (N from the load: cmp would set it from the subtraction)
         cmp #$C0
-        bcc :+                      ; bit 7+6: this and the next 7 bytes all opaque
-        jmp solid
-:
-        bra opaque
+        bcc opaque                  ; bit7 alone: single opaque byte
+        jmp solid                   ; bit 7+6: this and the next 7 bytes all opaque
 masked: cmp #$41                    ; and the mirror image of that: this and the next 7
         beq blank                   ; all transparent, so the cell is left alone
   .else
