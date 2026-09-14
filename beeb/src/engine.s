@@ -2325,9 +2325,10 @@ build_sections:
 
 BARROWS = 2                        ; the status bar
 QROWS  = 39 - VISROWS - BARROWS    ; blank rows after the display: 312 lines in all
-QVSYNC = 2                         ; vsync at Q row 2 of 7: five rows (40 lines) between the
-                                   ; vsync and the bar, which is where the bar is drawn,
-                                   ; and two below the picture: the standard MODE 2 frame.
+QVSYNC = 3                         ; vsync at Q row 3 of 7: four rows (32 lines) between the
+                                   ; vsync and the bar, which is where the bar is drawn, and
+                                   ; three below.  Measured against the Master MOS's own
+                                   ; MODE 2 (R7 = 35): the picture sits exactly where it does.
 
 ; ============================================================================
 ; Frame control

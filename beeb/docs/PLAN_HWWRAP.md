@@ -177,8 +177,11 @@ the copy's dest can straddle `$8000`, so it folds on the page crossing like the 
 -- which needed the *source* pointer to carry the `wfine` offset instead of the dest
 (an offset under 8 on an 8-aligned pointer keeps page crossings on the real char
 boundaries; a negative one does not), and the unrolled copy runs its line pairs in
-descending order so the entry point still selects by `wfine`. `QROWS = 7`, `QVSYNC = 2`:
-40 lines vsync-to-bar as before, 16 below -- the standard MODE 2 frame, 256 lines.
+descending order so the entry point still selects by `wfine`. `QROWS = 7`, `QVSYNC = 3`:
+32 lines vsync-to-bar, 24 below. That is where the Master MOS's own MODE 2 puts its
+picture (measured: R7 = 35, lit scanlines 32-287 in jsbeeb's frame; I had assumed the
+Model B's R7 = 34). The bar-drawing window is 2048 cycles now, and the bar probe shows
+0 unstable frames on L0/L3/L6.
 
 Verified with the logic pinned to the 29-row world: object state identical on all 8
 levels, window contents identical over 30 rows (L0/L3/L6, `ringdiff`), borders dark,
