@@ -3095,14 +3095,7 @@ ob_switch:
 ; render on an L0 run, 3.2% of the frame).  The bank is BANK_LVL on entry and on exit, so
 ; the skip path must not touch it.
 bar_digit:
-        pha                         ; X is the column and must survive: test curbuf in A,
-        lda curbuf                  ; which the push has already saved
-        beq :+
-        tya
-        ora #16
-        tay
-:       pla
-        cmp BARCACHE,y
+        cmp BARCACHE,y              ; one bar, so one cache: no curbuf in the index
         beq bd_same
         sta BARCACHE,y
         pha
@@ -3164,7 +3157,6 @@ bd_same:
 bar_touch:
         lda #1
         sta BARDIRTY
-        sta BARDIRTY+1
         rts
 
 redraw_hud:

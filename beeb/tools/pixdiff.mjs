@@ -24,6 +24,9 @@ import { open, ALLOW_DAMAGE } from "./harness.mjs";
 
 const [dA, lA, dB, lB, lvS, nS, script] = process.argv.slice(2);
 const lv = parseInt(lvS ?? "0"), N = parseInt(nS ?? "120");
+const MASK = process.env.PIXDIFF_MASK
+  ? process.env.PIXDIFF_MASK.split(":").map(x => parseInt(x, 16)) : null;
+if (MASK) console.log(`BUFFER comparison masks $${MASK[0].toString(16)}-$${(MASK[1]-1).toString(16)}`);
 const KEYS = { s: 0, r: 2, l: 1, j: 4, rj: 6, lj: 5 };
 // one character per frame, cycled: stand, run right, jump-right, run left, jump-left
 const PAT = script ?? "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjssllllllllllllllllllllllllllllljljljljljss";
@@ -51,7 +54,15 @@ async function step(H, keys) {
 // so over any run of frames both are covered.
 function diffBuffer() {
   let n = 0;
-  for (let a = 0x3000; a < 0x8000; a++) if (A.rd(a) !== B.rd(a)) n++;
+  // PIXDIFF_MASK=lo:hi (hex) excludes a byte range from the BUFFER comparison.  It
+  // exists for one situation: a change that RETIRES a region of screen RAM.  The old
+  // build still writes it and the new one never does, so it differs on every frame and
+  // means nothing -- masking it keeps the rest of the comparison honest instead of
+  // discarding the whole result.  Never mask a region either build still draws.
+  for (let a = 0x3000; a < 0x8000; a++) {
+    if (MASK && a >= MASK[0] && a < MASK[1]) continue;
+    if (A.rd(a) !== B.rd(a)) n++;
+  }
   return n;
 }
 let worst = 0, firstBad = -1, bad = 0, bufBad = 0, bufFirst = -1, bufWorst = 0, sceneWarned = false;

@@ -145,9 +145,9 @@ pairtab: .byte $00, $05, $0A, $0F
 ; clear the current back buffer ring ($3000-$7FFF) to black
 clear_ring:
         stz w16
-        lda #$30
-        sta w16+1
-        ldx #$50
+        lda #>BARADDR               ; from the bar, not the ring base: the bar sits below
+        sta w16+1                   ; $3000 now and the menu still wants it black
+        ldx #((RINGEND - BARADDR) >> 8)
         ldy #0
         tya
 @l:     sta (w16),y
@@ -192,7 +192,6 @@ menu_begin:
         sta rp+1
         lda #1
         sta BARDIRTY
-        sta BARDIRTY+1
         rts
 
 ; menu_show: display buffer 0 (build sections, flip)
@@ -474,7 +473,6 @@ pause_menu:
         stz RECCNT+1
         lda #1
         sta BARDIRTY
-        sta BARDIRTY+1
         pla
         rts
 

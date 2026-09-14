@@ -104,8 +104,14 @@ RINGBYTES = RINGCHARS*8
 PARTADDR  = BUF0
 MIRROR    = PARTADDR + ROWBYTES
 RINGBASE  = MIRROR + ROWBYTES
-BARADDR   = RINGBASE + RINGBYTES
 RINGEND   = RINGBASE + RINGBYTES
+; The bar is BELOW the screen, in main RAM, and there is only one of it.  The CRTC's
+; start address is just RAM/8, so it can scan from anywhere under $8000 -- but with
+; shadow selected for display (ACCCON D = 1) everything under $3000 reads HAZEL/ANDY
+; instead of main RAM, so the bar's section runs with D = 0 and the playfield's with
+; D = the buffer being shown.  Single buffered: it is drawn where it is displayed,
+; inside the 48 lines between vsync and the first scanned bar line.
+BARADDR   = $2B00
 CRTCBASE  = RINGBASE / 8          ; the CRTC counts characters, so the ring starts here
 WINPX     = ROWCHARS*2            ; window width in pixels
 VISLINES  = VISROWS*8
@@ -253,7 +259,7 @@ PART_HI:   .res 2                 ;   (LO > HI = none)
 BUF_BARQ:  .res 2
 BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
 BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
-BARDIRTY:  .res 2
+BARDIRTY:  .res 1                 ; one bar, so one flag
 BINR:      .res 4                  ; gx0,gx1,gy,gy1 the cached lists were built for
 NSTARL:    .res 1                  ; entries in the star list
 NOTHL:     .res 1                  ;   and in the other one
@@ -261,12 +267,15 @@ BINI:      .res 1                  ; walk position
 BINOK:     .res 1                  ; 0 = rebuild (level load, or a list overflowed)
 MAPSTRIDE: .res 2                  ; bytes per map row (1 << maplw): drawrect walks the
                                    ; row pointer by this instead of re-deriving it
-BARCACHE:  .res 32                 ; per buffer (slot | curbuf<<4): the nine digit values
+BARCACHE:  .res 16                 ; the nine digit values last blitted into the one bar
                                    ; its bar was last drawn with, $FF = unknown
-BARBG:     .res 2                 ; per buffer: its bar needs the static template blitted
+BARBG:     .res 1                 ; the bar needs its static template blitted
 DIRTYLIST: .res 2*2*16            ; per buffer dirty tiles (tx, ty)
 DIRTYCNT:  .res 2
-DISPSECT:  .res 1                 ; SECTAB offset the ISR chain uses (0/48)
+DISPSECT:  .res 1
+dispD:     .res 1                 ; ACCCON D for the PLAYFIELD sections: which buffer is
+                                  ;   displayed.  The bar's section forces D = 0, because
+                                  ;   below $3000 D = 1 reads HAZEL/ANDY, not main RAM.                 ; SECTAB offset the ISR chain uses (0/48)
 curR7:     .res 1                 ; last R7 written by the chain (for the vsync re-phase)
 NEXTSECT:  .res 1
 SECIDX:    .res 1
@@ -2484,12 +2493,15 @@ QVSYNC = 4                         ; vsync at Q row 4 -> section 0 starts QROWS-
 ; ============================================================================
 ; select CPU access to the current back buffer (ACCCON X bit)
 select_backbuf:
+        php                         ; the ISR writes ACCCON's D bit; this read-modify-
+        sei                         ; write of the X bit must not straddle one
         lda ACCCON
         and #$FB
         ldx curbuf
         beq :+
         ora #$04
 :       sta ACCCON
+        plp
         lda curbuf
         beq :+
         lda #<(SPRREC+MAXREC*10)
@@ -2507,6 +2519,19 @@ select_backbuf:
 render_frame:
         jsr wait_flip               ; the previous frame's flip must land before we
         jsr select_backbuf          ; draw into the buffer it is leaving
+        ; ---- the bar first.  It is single buffered and drawn where it is displayed,
+        ; so it has to be finished before the CRTC reaches it: T starts 48 lines after
+        ; the vsync wait_flip just returned from, which is 3072 cycles.  A full
+        ; template blit does not fit and does not need to -- it runs twice a level.
+        lda BARBG
+        beq :+
+        jsr bar_bg
+        stz BARBG
+:       lda BARDIRTY
+        beq :+
+        jsr t_redraw_hud
+        stz BARDIRTY
+:
         ; derive char window
         lda wx
         sta wcx
@@ -2534,18 +2559,6 @@ render_frame:
         jsr draw_dirty
         jsr draw_sprites
         jsr copy_partial
-        ldx curbuf
-        lda BARBG,x
-        beq :+
-        jsr bar_bg
-        ldx curbuf                  ; bar_bg pages banks -> X clobbered
-        stza BARBG,x
-:       lda BARDIRTY,x
-        beq :+
-        jsr t_redraw_hud
-        ldx curbuf                  ; redraw_hud clobbers X
-        stza BARDIRTY,x
-:
         stza NSPR
         jsr t_build_sections
         ; hand over to ISR
@@ -2787,9 +2800,7 @@ init_tables:
         sta BUF_BARQ+1
         sta tset                    ; no tile set resident yet
         stz BARDIRTY
-        stz BARDIRTY+1
         stz BARBG
-        stz BARBG+1
         lda #<VS2T_DEFAULT
         sta VS2T
         lda #>VS2T_DEFAULT
@@ -2917,6 +2928,10 @@ irq_handler:
         lda SECTAB+7,x
         sta VIA_T1LH
         lda VIA_T1CL                ; clear T1 flag
+        lda ACCCON                  ; past the bar now: the playfield scans from the
+        and #$FE                    ; displayed buffer.  Re-applied on every step, which
+        ora dispD                   ; costs 13 cycles and needs no "is this the first"
+        sta ACCCON                  ; test in the time-critical arm
         ; next entry; the chain stops at Q (the only entry with R6 = 0): a late vsync
         ; must not walk the chain off the end of SECTAB
         cpy #0                      ; R6 is still in Y from the write above
@@ -2969,11 +2984,9 @@ irq_handler:
         sta flipvs
         lda NEXTSECT
         sta DISPSECT
-        lda ACCCON                  ; there is no shadow to switch: the flip is the
-        and #$FE                    ; section chain moving to the other buffer's rows
-        ora NEXTBUF
-        sta ACCCON
-        stz flipreq
+        lda NEXTBUF                 ; the flip is the section chain moving to the other
+        sta dispD                   ; buffer's rows; D follows it, but only from the
+        stz flipreq                 ; first playfield section -- the bar needs D = 0
 @noflip:
         ; everything section 0 needs comes from the buffer that is about to be
         ; displayed -- its start address, and (with no status bar) its length
@@ -2996,6 +3009,9 @@ irq_handler:
         lda #$40
         sta VIA_IFR
         sty SECIDX
+        lda ACCCON                  ; the bar is below $3000: it is only main RAM to the
+        and #$FE                    ; CRTC while D = 0
+        sta ACCCON
         jsr scan_keys
         jsr sound_tick
 @exit:

@@ -328,9 +328,7 @@ level_loop:
         jsr t_level_init
         lda #1                      ; lay the bar template + digits into both buffers on
         sta BARBG                   ; the first two renders (drawing now would hit the
-        sta BARBG+1                 ; wrong buffer -- this is before the flip)
         sta BARDIRTY
-        sta BARDIRTY+1
         ; initial camera; render both buffers before the palette comes back
         jsr t_game_frame
         jsr render_frame
