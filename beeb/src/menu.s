@@ -139,7 +139,11 @@ draw_glyph_rows:
         cpx #8
         bne @row
         rts
+  .if MODE1
+pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game px
+  .else
 pairtab: .byte $00, $05, $0A, $0F
+  .endif
 
 ; ---------------------------------------------------------------- menu screen helpers
 ; clear the current back buffer ring ($3000-$7FFF) to black

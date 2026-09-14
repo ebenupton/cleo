@@ -1,6 +1,9 @@
 ; ============================================================================
 ; CLEO - main program: init, loading, game
 ; ============================================================================
+        .ifndef MODE1
+MODE1 = 0                           ; ca65 -D MODE1=1: MODE 1 build (assets from
+        .endif                      ; MODE=1 convert.py): 4 colours, opaque sprites
         .include "cpu.inc"
         .code
         jmp start
@@ -52,7 +55,7 @@ start:
         cli
         lda #22
         jsr OSWRCH
-        lda #2
+        lda #2-MODE1
         jsr OSWRCH
         sei
         ldy #0
@@ -182,6 +185,7 @@ load_level:
 ; File table.  Five parallel arrays rather than five-byte records: there are more
 ; than fifty files now and index * 5 does not fit in a byte.
         .include "files.inc"
+        .assert VMODE = 2 - MODE1, error, "assets were converted for the other MODE: rerun tools/convert.py"
 FTMODE .set 0
 .macro FILE sec, n, bank, dest
 .if FTMODE = 0

@@ -90,12 +90,12 @@ def dither_cpc(rgb_img, alpha, x0=0, y0=0, full=True):
     pack = lambda b: (b[:, :, 0] | (b[:, :, 1] << 1) | (b[:, :, 2] << 2)).astype(np.uint8)
     if full:
         col = np.empty((2 * h, w), np.uint8)
-        col[0::2] = pack(lineA)
-        col[1::2] = pack(lineB)
+        col[0::2] = packcol(lineA)
+        col[1::2] = packcol(lineB)
         alpha = np.repeat(alpha, 2, axis=0)
     else:
         yy = ((np.arange(h) + y0) & 1)[:, None]
-        col = np.where(yy == 0, pack(lineA), pack(lineB))
+        col = np.where(yy == 0, packcol(lineA), packcol(lineB))
     col = np.where(col == 0, 8, col).astype(np.uint8)
     col = np.where(alpha, col, 0).astype(np.uint8)
     return col
@@ -115,6 +115,71 @@ elif KERNEL == '2x2':
 elif KERNEL != '2x4':
     sys.exit('KERNEL must be 1x2, 2x2 or 2x4')
 
+# MODE=1: a MODE 1 build.  Same memory layout (80 bytes a row, a byte = 2 game px) but
+# 4 colours and 4 dots a byte, so a game pixel is a 2x2 block of dots, each one of
+# C, M, Y or K (logical 1, 2, 3, 0).  The 2x2 kernel IS the pixel: per pixel the ink
+# counts nearest its colour are chosen, then laid in kernel order.  A col entry is one
+# game px on one scanline: (left dot << 2) | right dot, so 0 is black -- and also
+# transparent, which is why MODE 1 sprites are opaque boxes drawn by the copy blitters,
+# and why no tile or sprite byte may carry a tag: every bit is a pixel.
+MODE = int(os.environ.get('MODE', '2'))
+if MODE not in (1, 2):
+    sys.exit('MODE must be 1 or 2')
+_CMYK_RGB = np.array([[0, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 0]], np.float32)   # K C M Y
+def _cmyk_tables():
+    res = {}
+    for n in (4, 2):
+        cs = [(k, c, m, n - k - c - m) for k in range(n + 1) for c in range(n + 1 - k)
+              for m in range(n + 1 - k - c)]
+        rgb = np.array([(m + y, c + y, c + m) for k, c, m, y in cs], np.float32) / n
+        seq = np.array([[1] * c + [2] * m + [3] * y + [0] * k for k, c, m, y in cs], np.uint8)
+        res[n] = (rgb, seq)
+    return res
+_CMYK = _cmyk_tables()
+
+
+def dither_cmyk(rgb_img, alpha, x0=0, y0=0, full=True):
+    h, w, _ = rgb_img.shape
+    v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
+    n = 4 if full else 2
+    crgb, seq = _CMYK[n]
+    d = ((v[:, :, None, :] - crgb[None, None, :, :]) ** 2).sum(axis=3)
+    dots = seq[d.argmin(axis=2)]                       # (h, w, n) inks in kernel order
+    if full:
+        # kernel positions 0 (top left) 1 (bottom right) 2 (top right) 3 (bottom left):
+        # two inks of two make a checker, not stripes
+        l0 = (dots[:, :, 0] << 2) | dots[:, :, 2]
+        l1 = (dots[:, :, 3] << 2) | dots[:, :, 1]
+        col = np.empty((2 * h, w), np.uint8)
+        col[0::2] = l0
+        col[1::2] = l1
+        alpha = np.repeat(alpha, 2, axis=0)
+    else:                                              # one line a pixel: two dots, the
+        yy = ((np.arange(h) + y0) & 1)[:, None]        # order alternating by row
+        col = np.where(yy == 0, (dots[:, :, 0] << 2) | dots[:, :, 1],
+                       (dots[:, :, 1] << 2) | dots[:, :, 0]).astype(np.uint8)
+    return np.where(alpha, col, 0).astype(np.uint8)
+
+
+def pack_mode1(col):
+    """col: (lines, w) dot pairs (w even). Returns (lines, w//2) MODE 1 bytes: dot i's
+    colour bit 1 in bit 7-i, bit 0 in bit 3-i."""
+    lines, w = col.shape
+    assert w % 2 == 0
+    a = col[:, 0::2].astype(np.uint16)
+    b = col[:, 1::2].astype(np.uint16)
+    dots = (a >> 2, a & 3, b >> 2, b & 3)
+    out = np.zeros(a.shape, np.uint16)
+    for i, d in enumerate(dots):
+        out |= (((d >> 1) & 1) << (7 - i)) | ((d & 1) << (3 - i))
+    return out.astype(np.uint8)
+
+
+if MODE == 1:
+    dither = dither_cmyk
+CYAN_COL = 6 if MODE == 2 else 5          # a col entry that is all cyan
+strip = (lambda c: c & 7) if MODE == 2 else (lambda c: c)   # drop MODE 2's opaque-black 8
+
 
 def pack_mode2(col):
     """col: (lines, w) colour indices (w even). Returns (lines, w//2) bytes."""
@@ -130,9 +195,12 @@ def pack_mode2(col):
     return (spread(l, 1) | spread(r, 0)).astype(np.uint8)
 
 
+packcol = pack_mode2 if MODE == 2 else pack_mode1
+
+
 def encode_sprite(col, packed, blanks=True):
     """Sprite byte encoding for the blitters (col: (lines, 2W) indices, 0 = transparent,
-    8 = opaque black; packed = pack_mode2(col)).
+    8 = opaque black; packed = packcol(col)).
       bit 7 set        : both pixels opaque. Left colour in bits 5,3,1, right in 4,2,0,
                          black as 0 (the palette shows nibbles 8-15 as 0-7, so the tag
                          and the RUN bit are invisible on screen).
@@ -145,6 +213,8 @@ def encode_sprite(col, packed, blanks=True):
       < $80            : one pixel opaque, decoded through MASKTAB/ORTAB: the old nibble
                          codes, except left-black-only ($80 would clash) -> $44.
     """
+    if MODE == 1:                    # every bit is a pixel: nothing to tag
+        return packed
     l = col[:, 0::2].astype(np.uint16)
     r = col[:, 1::2].astype(np.uint16)
     both = (l != 0) & (r != 0)
@@ -175,6 +245,9 @@ encode_sprite.cells = 0
 
 
 def col_to_rgb(col):
+    if MODE == 1:                    # the mean of the two dots
+        c = _CMYK_RGB[col >> 2] + _CMYK_RGB[col & 3]
+        return (c * 127.5).astype(np.uint8)
     rgb = BEEB_RGB[np.clip(col & 7, 0, 7)]
     rgb[col == 0] = [40, 40, 40]
     return rgb
@@ -311,7 +384,7 @@ blackened = {}                  # compact id -> tile image with its backdrop bla
 for cid, orig in enumerate(compact):
     col = tile_preview[cid]
     bg = bg_mask(orig)
-    if not bg.any() or np.all((col & 7) == 0):
+    if not bg.any() or np.all(strip(col) == 0):
         continue
     src = til_idx[orig * 8:orig * 8 + 8, :]
     frac = float(np.mean(wall_pal[src][bg[::2]]))
@@ -364,10 +437,10 @@ print('blackened %d tiles; %d texture-keeping twins for %d filler cells'
 
 tiles_mode2 = []
 for cid in range(len(compact)):
-    col = tile_preview[cid] & 7
+    col = strip(tile_preview[cid])
                              # black = 0 not 8: bits 7/6 of every tile byte stay free (bit 6
                              # hides the music, tools/embed_music.py; bit 7 flags periodic cells)
-    b = pack_mode2(col)   # (16, 4)
+    b = packcol(col)   # (16, 4)
     # Beeb layout: char row 0 (lines 0-7): chars 0..3 each 8 bytes ; then char row 1
     data = bytearray()
     for crow in range(2):
@@ -377,7 +450,7 @@ for cid in range(len(compact)):
     assert len(data) == 64
     # bit 7 of a char cell's first byte: lines 4..7 repeat lines 0..3 (the 2x4 dither makes
     # this true of most flat-ish cells), so drawrow copies the cell with 4 loads and 8 stores
-    for c in range(0, 64, 8):
+    for c in range(0, 64, 8) if MODE == 2 else ():   # MODE 1: bit 7 is a pixel
         if data[c + 4:c + 8] == data[c:c + 4]:
             data[c] |= 0x80
     tiles_mode2.append(bytes(data))
@@ -390,9 +463,9 @@ tile_class = []
 # being copied: flagged in the page-table entry (hi bit 6 = solid, lo bit 4 = cyan)
 tile_solid = {}
 for cid, col in enumerate(tile_preview):
-    if np.all((col & 7) == 6):
+    if np.all(strip(col) == CYAN_COL):
         tile_solid[cid] = 1
-    elif np.all((col & 7) == 0):
+    elif np.all(strip(col) == 0):
         tile_solid[cid] = 2
 # a star is drawn as a pre-composited box only where its whole 2x2 tile
 # neighbourhood is exactly one colour, so the box's background matches the map
@@ -819,7 +892,7 @@ def _pack(im, full, shift):
     padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
     padded[:, shift:shift + w] = im
     col = dither(spr_rgb[padded], padded != spr_tr, x0=(-shift) & 1, full=full)
-    return col, encode_sprite(col, pack_mode2(col))  # (lines, W): see encode_sprite
+    return col, encode_sprite(col, packcol(col))  # (lines, W): see encode_sprite
 
 _masked = lambda e: int((((e & 0x80) == 0) & (e != 0x41)).sum())
 _saved = 0
@@ -870,6 +943,7 @@ print('sprite images', len(images),
 BOX_H = 12                      # game px (24 lines)
 FIELD = 14                      # px: the widest frame, hotspot at px 6
 box_art = []
+box_alpha = []
 for f in range(6):
     j, mirror, rx, ry = entry[34 + f]
     im = images[j][0]
@@ -880,15 +954,19 @@ for f in range(6):
     if mirror:
         padded = padded[:, ::-1]
         rx = (2 * W - 1) - rx
-    col = dither(spr_rgb[padded], padded != spr_tr, full=True) & 7
+    col = strip(dither(spr_rgb[padded], padded != spr_tr, full=True))
     assert h == BOX_H and ry == 8, (f, ry, h)
     x0 = 6 - rx
     assert 0 <= x0 and x0 + 2 * W <= FIELD, (f, x0, W)
     box_art.append((col, x0))
+    box_alpha.append(np.repeat(padded != spr_tr, 2, axis=0))
 
+# MODE 2 keeps its old rule (a black star pixel over the background reads as the
+# background); MODE 1 has no black-vs-transparent distinction in col, so it uses alpha
+_boxmask = (lambda f: box_art[f][0] != 0) if MODE == 2 else (lambda f: box_alpha[f])
 def _span(f):                   # opaque pixel range of one frame, in field px
     col, x0 = box_art[f]
-    xs = np.where((col != 0).any(axis=0))[0]
+    xs = np.where(_boxmask(f).any(axis=0))[0]
     return x0 + int(xs.min()), x0 + int(xs.max())
 
 # Every box has to be able to erase whatever the record holds, and the record is the
@@ -905,14 +983,14 @@ def _boxgeom(f):
     return lo, hi - lo + 1
 box_geom = [_boxgeom(f) for f in range(6)]
 box_bytes = []
-for bg in (6, 0):
+for bg in (CYAN_COL, 0):
     for f in range(6):
         col, x0 = box_art[f]
         lo, Wc = box_geom[f]
         field = np.full((BOX_H * 2, FIELD), bg, np.uint8)
         sub = field[:, x0:x0 + col.shape[1]]
-        field[:, x0:x0 + col.shape[1]] = np.where(col != 0, col, sub)
-        packed = pack_mode2(field[:, 2 * lo:2 * (lo + Wc)])
+        field[:, x0:x0 + col.shape[1]] = np.where(_boxmask(f), col, sub)
+        packed = packcol(field[:, 2 * lo:2 * (lo + Wc)])
         b = bytearray()
         for c in range(Wc):
             b += packed[:, c].tobytes()
@@ -929,6 +1007,7 @@ TRAMP_H = 8
 TRAMP_FIELD = 26
 TRAMP_HOT = 16
 tramp_art = []
+tramp_alpha = []
 for _i in TRAMP_IDS:
     _j, _mir, _rx, _ry = entry[_i]
     _im = images[_j][0]
@@ -937,14 +1016,16 @@ for _i in TRAMP_IDS:
     _W = (_w + 1) // 2
     _pad = np.full((_h, _W * 2), spr_tr, dtype=_im.dtype)
     _pad[:, :_w] = _im
-    _col = dither(spr_rgb[_pad], _pad != spr_tr, full=True) & 7
+    _col = strip(dither(spr_rgb[_pad], _pad != spr_tr, full=True))
     _x0 = TRAMP_HOT - _rx
     assert 0 <= _x0 and _x0 + 2 * _W <= TRAMP_FIELD, (_i, _x0, _W)
     tramp_art.append((_col, _x0))
+    tramp_alpha.append(np.repeat(_pad != spr_tr, 2, axis=0))
 
+_tmask = (lambda f: tramp_art[f][0] != 0) if MODE == 2 else (lambda f: tramp_alpha[f])
 def _tspan(f):
     col, x0 = tramp_art[f]
-    xs = np.where((col != 0).any(axis=0))[0]
+    xs = np.where(_tmask(f).any(axis=0))[0]
     return x0 + int(xs.min()), x0 + int(xs.max())
 
 def _tboxgeom(f):
@@ -959,8 +1040,8 @@ for f in range(3):
     col, x0 = tramp_art[f]
     lo, Wc = tramp_geom[f]
     field = np.zeros((TRAMP_H * 2, TRAMP_FIELD), np.uint8)   # black background
-    field[:, x0:x0 + col.shape[1]] = np.where(col != 0, col, field[:, x0:x0 + col.shape[1]])
-    packed = pack_mode2(field[:, 2 * lo:2 * (lo + Wc)])
+    field[:, x0:x0 + col.shape[1]] = np.where(_tmask(f), col, field[:, x0:x0 + col.shape[1]])
+    packed = packcol(field[:, 2 * lo:2 * (lo + Wc)])
     b = bytearray()
     for c in range(Wc):
         b += packed[:, c].tobytes()
@@ -1077,7 +1158,7 @@ bar_icon(3, 0, y0=4, crop_h=8, crop_w=14)             # cleo head: native, two g
 bar_icon(31, 97, fit=True)                            # heart: resampled onto the 16-line grid
 bar_icon(59, 34, fit=True)                            # star: resampled onto the 16-line grid (full star fits)
 barcol = dither(bar16, np.ones((16, 160), bool), full=False)   # 16 lines x 160
-barpk = pack_mode2(barcol)     # 16 x 80
+barpk = packcol(barcol)     # 16 x 80
 barbytes = bytearray()
 for crow in range(2):
     for cx in range(80):
@@ -1092,7 +1173,7 @@ for n in range(10):
     for bg in BAR_BG:
         img[idxblk == bg] = BAR_BLACK        # drop the blue/brick surround -> black
     col = dither(img, np.ones((8, 8), bool), full=True)
-    pk = pack_mode2(col)
+    pk = packcol(col)
     for crow in range(2):
         for cx in range(4):
             for ra in range(8):
@@ -1103,12 +1184,13 @@ andy = bytearray(4096)
 # The bar is a black background (opaque black = $C0) with a few icon spans, so store it
 # as span records (offset16, len, bytes...) ended by $FFFF, not the full 1280 bytes --
 # bar_bg fills black and lays the spans, freeing the rest of the region for sprite code.
+BARFILL = 0xC0 if MODE == 2 else 0      # what 'black' packs to
 barspans = bytearray()
 i = 0
 while i < len(barbytes):
-    if barbytes[i] != 0xC0:
+    if barbytes[i] != BARFILL:
         j = i
-        while j < len(barbytes) and barbytes[j] != 0xC0:
+        while j < len(barbytes) and barbytes[j] != BARFILL:
             j += 1
         barspans += bytes([i & 0xFF, i >> 8, j - i]) + barbytes[i:j]
         i = j
@@ -1149,7 +1231,7 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     if opaque:
         src[im == tr] = 0          # transparent key -> black
     col = dither(src, alpha, full=full)
-    pk = encode_sprite(col, pack_mode2(col), blanks=False)   # no blank-run tags: the
+    pk = encode_sprite(col, packcol(col), blanks=False)   # no blank-run tags: the
                                                    # half-res blitter cannot decode them
     data = bytearray()
     for c in range(W):
@@ -1182,6 +1264,7 @@ print('sprite blank runs: %d tagged bytes of %d' % (encode_sprite.blank_runs, en
 # ----------------------------------------------------------------------------
 with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by convert.py\n')
+    f.write('VMODE = %d\n' % MODE)
     f.write('NTILES = %d\n' % len(compact))
     f.write('TSET_O = %d\nTSET_I = %d\n' % (len(tileset[0]), len(tileset[1])))
     f.write('BOX_BASE = $%04X\n' % BOX_BASE)

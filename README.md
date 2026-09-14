@@ -41,6 +41,21 @@ python3 tools/convert.py   # levels, tiles, sprites, bar, title -> build/   (run
 `build.sh` does not run the converter, so re-run `convert.py` after touching anything in
 the asset pipeline.
 
+Build variants, all off by default and all leaving the standard build byte-identical:
+
+```
+DITHER=cpc python3 beeb/tools/convert.py   # 1x2 dither to the CPC's 27 colours
+KERNEL=1x2 python3 beeb/tools/convert.py   # ordered dither with a 1x2 (or 2x2) kernel
+MODE=1 python3 beeb/tools/convert.py && MODE1=1 ./build.sh   # a MODE 1 build
+```
+
+The MODE 1 build keeps the memory layout (a byte is still two game pixels, now as a
+2x2 block of C/M/Y/K dots chosen per pixel) but loses the spare bits the MODE 2 engine
+signals with: no sprite transparency (sprites are opaque boxes drawn by the copy
+blitters), no periodic-cell flag in the tiles, a four-dot SWAPTAB for mirroring and a
+CMYK palette. The assembler checks that the assets were converted for the mode it is
+building.
+
 ## How it works, briefly
 
 * **Picture.** MODE 2, 160×256, 8 colours. Each square game pixel becomes one MODE 2

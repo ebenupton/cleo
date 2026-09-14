@@ -567,13 +567,17 @@ drawrect:
 .macro CHARCPY c, per
 .if c = 0
         ldaz tp                     ; line 0 non-indexed
+  .if .not MODE1
         bmi per
+  .endif
         staz sp
         ldy #1
 .else
         ldy #8*c
         lda (tp),y
-        bmi per
+  .if .not MODE1
+        bmi per                     ; MODE 1: bit 7 is a pixel, no periodic cells
+  .endif
         sta (sp),y
         iny
 .endif
@@ -679,7 +683,11 @@ drawrect:
 @solid: lda GATHERL,x
         and #$10
         beq :+
+  .if MODE1
+        lda #$0F                    ; four dots of logical 1 (cyan); else 0 = black
+  .else
         lda #$3C                    ; both pixels colour 6 (cyan); else 0 = black
+  .endif
 :       sta tp                      ; fill value (tp is otherwise unused on this path)
         lda #4
         sec
@@ -1490,6 +1498,10 @@ ds_done: rts
         lda (ptr),y
 .endif
 .if copy
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
   .if k = 0
         staz sp                     ; box sprite: every byte opaque, plain copy
   .else
@@ -1643,6 +1655,10 @@ partial:
         ldy tmp
 .if copy
 pl:     lda (ptr),y
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
         sta (sp),y
 .else
 pl:     lda (ptr),y
@@ -1683,12 +1699,12 @@ pd:
         .endif
 .endmacro
 
-        SPRFULL sprFN, 0, 0
-        SPRFULL sprFM, 1, 0
+        SPRFULL sprFN, 0, MODE1     ; MODE 1: every sprite is an opaque box, plain copy
+        SPRFULL sprFM, 1, MODE1
         SPRFULL sprFC, 0, 1         ; box stars: pre-composited on their background, no mask
 
 ; half res: one source byte -> two screen lines (2k, 2k+1)
-.macro SPRLINE2 k, mirror
+.macro SPRLINE2 k, mirror, copy
         .local skip, opaque, both, store
 .if k = 0
         ldaz ptr
@@ -1696,6 +1712,21 @@ pd:
         ldy #k
         lda (ptr),y
 .endif
+.if copy                            ; MODE 1: opaque boxes, both screen lines stored
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
+  .if k = 0
+        staz sp
+        ldy #1
+  .else
+        ldy #2*k
+        sta (sp),y
+        iny
+  .endif
+        sta (sp),y
+.else
         beq skip
         bmi both                    ; bit 7: both pixels opaque
         tax
@@ -1754,9 +1785,10 @@ store:
 .endif
         sta (sp),y
 skip:
+.endif
 .endmacro
 
-.macro SPRHALF name, mirror
+.macro SPRHALF name, mirror, copy
         .local partial, et, l0, l1, l2, l3, pl, ps, po, pb, pq, pd
 name:
         lda tmp2
@@ -1768,10 +1800,10 @@ name:
         jmpx et
 @np:    jmp partial
 et:     .word l0,l1,l2,l3
-l0:     SPRLINE2 0, mirror
-l1:     SPRLINE2 1, mirror
-l2:     SPRLINE2 2, mirror
-l3:     SPRLINE2 3, mirror
+l0:     SPRLINE2 0, mirror, copy
+l1:     SPRLINE2 1, mirror, copy
+l2:     SPRLINE2 2, mirror, copy
+l3:     SPRLINE2 3, mirror, copy
         .if mirror
         jmp sprretM
         .else
@@ -1784,6 +1816,13 @@ pl:     lda sp_lim
         lsr
         tay
         lda (ptr),y
+.if copy
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
+        bra pq
+.endif
         beq ps
         bmi pb                      ; bit 7: both pixels opaque
         tax
@@ -1842,8 +1881,8 @@ pd:
         .endif
 .endmacro
 
-        SPRHALF sprHN, 0
-        SPRHALF sprHM, 1
+        SPRHALF sprHN, 0, MODE1
+        SPRHALF sprHM, 1, MODE1
 
 ; ============================================================================
 ; copy_partial: copy lines wfine..7 of ring row wcy into lines 0..(7-wfine) of the
@@ -1999,7 +2038,11 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
                                     ; fill black and lay the spans (BARBUF is now the span
         sta ROMSEL_CPY              ; list: offset16, len, bytes... ending $FFFF).
         sta ROMSEL
+  .if MODE1
+        lda #0                      ; MODE 1 black is plain 0: no opaque-black tag
+  .else
         lda #$C0                    ; BARADDR is a constant, so the fill needs no pointer:
+  .endif
         ldx #0                      ; five abs,x stores cover the 5 pages in one pass
 @bf:    sta BARADDR+$000,x
         sta BARADDR+$100,x
@@ -2562,6 +2605,32 @@ init_tables:
 :       lda #$55
 :       ora tmp
         sta MASKTAB,x
+  .if MODE1
+        ; MODE 1: a byte is four dots, bit 7-i / bit 3-i for dot i; mirroring reverses
+        ; them: 7<->4, 6<->5, 3<->0, 2<->1
+        txa
+        and #$88
+        lsr
+        lsr
+        lsr
+        sta tmp
+        txa
+        and #$44
+        lsr
+        ora tmp
+        sta tmp
+        txa
+        and #$22
+        asl
+        ora tmp
+        sta tmp
+        txa
+        and #$11
+        asl
+        asl
+        asl
+        ora tmp
+  .else
         txa
         and #$AA
         lsr
@@ -2570,6 +2639,7 @@ init_tables:
         and #$55
         asl
         ora tmp
+  .endif
         sta SWAPTAB,x
         inx
         bne @t
@@ -3171,6 +3241,34 @@ ringmodtab:                         ; only a non-power-of-two ring needs the tab
 .endif
 
 set_palette:
+  .if MODE1
+        ; MODE 1: a pixel's two bits land in bits 3 and 1 of the palette index, the other
+        ; two bits are don't-cares, so all 16 entries are written: logical 0..3 = K C M Y
+        ldx #15
+:       txa
+        and #8
+        lsr
+        lsr
+        sta tmp
+        txa
+        and #2
+        lsr
+        ora tmp
+        tay
+        lda @cmyk,y
+        sta tmp
+        txa
+        asl
+        asl
+        asl
+        asl
+        ora tmp
+        sta ULA_PAL
+        dex
+        bpl :-
+        rts
+@cmyk:  .byte 0^7, 6^7, 5^7, 3^7    ; physical black, cyan, magenta, yellow (inverted)
+  .else
         ldx #15
 :       txa
         asl
@@ -3186,6 +3284,7 @@ set_palette:
         dex
         bpl :-
         rts
+  .endif
 
 blank_palette:
         ldx #15
