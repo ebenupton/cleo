@@ -1124,10 +1124,12 @@ player_hit:
         stz vx+1
         lda health
         beq :+
-        mov16i vx, 768
+        lda #>768                   ; vx low is already 0 from the stz above, and both
+        sta vx+1                    ; knockback speeds have a zero low byte
         bit hx+1
         bmi :+
-        mov16i vx, -768
+        lda #>(-768)                ; -768 is $FD00: the HIGH byte is the non-zero one
+        sta vx+1
 :       mov16i vy, -1280
         lda #SFX_HIT
         sta SFXREQ

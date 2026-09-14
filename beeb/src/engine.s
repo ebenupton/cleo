@@ -595,7 +595,9 @@ drawrect:
         sta (sp),y
         ldy #8*c+7
         sta (sp),y
+.if .paramcount = 2                 ; @p0 omits it: @advsp is the next instruction
         jmp next
+.endif
 .endmacro
 @t3:    jmp @p3                     ; the periodic blocks are out of branch range: trampolines
 @t2:    jmp @p2
@@ -609,7 +611,7 @@ drawrect:
 @p3:    CHARPER 3, @b23
 @p2:    CHARPER 2, @b15
 @p1:    CHARPER 1, @b7
-@p0:    CHARPER 0, @advsp
+@p0:    CHARPER 0                   ; no trailing jmp: falls into @advsp
 @advsp: lda sp
         adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
@@ -1330,10 +1332,9 @@ drawsprite:
         and #1
         beq @nomirror
         ; mirror: image column = W-1-c (the column loop then steps backwards)
+        clc
         lda sp_w
-        deca
-        sec
-        sbc sp_c
+        sbc sp_c                    ; C=0 subtracts the extra 1: sp_w - sp_c - 1
         sta sp_c
 @nomirror:
         ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
@@ -1951,7 +1952,6 @@ copy_partial:
         iny
         lda (sp),y
         sta (ptr),y
-        iny
 @g4:    ldy #4
         lda (sp),y
         sta (ptr),y
@@ -3694,19 +3694,37 @@ pagelogic:                          ; A, X, Y and the carry all come through int
         jsr pagelogic
         jmp .ident(n)
 .endmacro
+; Only TOBANK pays for pagelogic being a subroutine: the jsr and its rts are 12 cycles
+; of ceremony, where m_ and the six direct `jmp pagelogic` are tail jumps that waste
+; nothing.  Of pagelogic's 54 executions a frame only 3.1 are t_ entries, so this is
+; worth 36 cycles a frame, not the 646 the window-wide count suggested.  The inline form
+; is 7 bytes dearer and the bridges live in LOW2, which has ten bytes to its name -- so
+; the two that are worth it move to CODE, which gives LOW2 twelve bytes back.
+.macro TOBANKI n
+.ident(.concat("t_", n)):
+        pha
+        lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        pla
+        jmp .ident(n)
+.endmacro
+        .segment "CODE"             ; the two hot bridges, inlined, out of LOW2
+        TOBANKI "game_frame"
+        TOBANKI "build_sections"
+        .segment "LOW2"
+
 .macro TOMAIN n
 .ident(.concat("m_", n)):
         jsr .ident(n)
         jmp pagelogic
 .endmacro
-        TOBANK "build_sections"
         TOBANK "init_tables"
         TOBANK "draw_health"
         TOBANK "draw_lives"
         TOBANK "draw_score"
         TOBANK "redraw_hud"
         TOBANK "draw_stars"
-        TOBANK "game_frame"
         TOBANK "help_screen"
         TOBANK "level_init"
         TOBANK "level_select"
