@@ -868,6 +868,8 @@ SPR_FONT   = 0x8000
 SPR_DIGITS = 0x8140
 SPR_BAR    = 0x83C0
 SPR_DATA   = 0x88C0
+if MODE == 1:                     # the mask planes need the room: the font, digits and
+    SPR_DATA = 0x8000             # bar spans go to bank 6 behind the box stars (below)
 SPR_ANDY   = 0x8000                     # ANDY 4K RAM, paged at $8000 with ROMSEL bit7
 BANK4_END  = 0xC000
 ANDY_END   = 0x9000
@@ -915,17 +917,52 @@ for (im, full, src) in images:
 print('sprite padding phase: %d of %d images pad on the left, %d fewer masked bytes'
       % (sum(img_shift), len(images), _saved))
 
+
+def mask_plane(alpha):
+    """MODE 1 sprite mask: one bit per game pixel, 1 = opaque.  A data byte's two pixels
+    are a 2-bit pair (left in bit 1), four horizontally adjacent columns pack into one
+    byte (column 4g+j in bits 7-2j, 6-2j), and the plane is column-group-major: for
+    group g, h consecutive bytes, one per pixel row -- the shape of the data itself, so
+    the blitter's mask pointer walks exactly like its data pointer."""
+    h, w2 = alpha.shape
+    W = w2 // 2
+    pair = (alpha[:, 0::2].astype(np.uint8) << 1) | alpha[:, 1::2].astype(np.uint8)   # (h, W)
+    out = bytearray()
+    for g in range((W + 3) // 4):
+        for r in range(h):
+            b = 0
+            for j in range(4):
+                c = 4 * g + j
+                if c < W:
+                    b |= int(pair[r, c]) << (6 - 2 * j)
+            out.append(b)
+    return bytes(out)
+
+img_mask = []
+if MODE == 1:
+    for (im, full, src), shift in zip(images, img_shift):
+        h, w = im.shape
+        W = (w + 1) // 2
+        padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
+        padded[:, shift:shift + w] = im
+        img_mask.append(mask_plane(padded != spr_tr))
+
 # greedy assignment: fill bank4 data region first (largest sprites there), rest to ANDY
 order = sorted(range(len(images)), key=lambda j: -len(img_bytes[j]))
-img_addr = [None] * len(images)         # (base_addr, in_andy)
+img_addr = [None] * len(images)         # (base_addr, region: 0 bank 4, 1 ANDY, 2 bank 6)
 b4 = SPR_DATA
 an = SPR_ANDY
+SPILL_BASE, SPILL_END = 0xBE00, 0xC000  # MODE 1 only: a few small images (with their
+b6 = SPILL_BASE                          # masks) in bank 6 above the HUD blobs, flag bit 4
+data_end = BANK4_END - sum(len(m) for m in img_mask)   # MODE 1: the masks take the top
 for j in order:
     n = len(img_bytes[j])
-    if b4 + n <= BANK4_END:
+    if b4 + n <= data_end:
         img_addr[j] = (b4, 0); b4 += n
     elif an + n <= ANDY_END:
         img_addr[j] = (an, 1); an += n
+    elif MODE == 1 and b6 + n + len(img_mask[j]) <= SPILL_END:
+        img_addr[j] = (b6, 2); b6 += n + len(img_mask[j])
     else:
         raise SystemExit('sprite data overflow: no room for image %d (%d bytes)' % (j, n))
 n_andy = sum(1 for a in img_addr if a[1])
@@ -933,6 +970,21 @@ print('sprite images', len(images),
       'bank4 data %d/%d bytes' % (b4 - SPR_DATA, BANK4_END - SPR_DATA),
       'ANDY %d/%d bytes' % (an - SPR_ANDY, ANDY_END - SPR_ANDY),
       '(%d imgs in ANDY)' % n_andy)
+mask_addr = [None] * len(images)
+if MODE == 1:
+    for j in range(len(images)):
+        n = len(img_mask[j])
+        if img_addr[j][1] == 2:                       # bank 6 spill: mask right after its data
+            mask_addr[j] = img_addr[j][0] + len(img_bytes[j])
+            continue
+        if b4 + n > BANK4_END:
+            raise SystemExit('mask plane overflow: no room for image %d (%d bytes, %d over)'
+                             % (j, n, b4 + n - BANK4_END))
+        assert not img_addr[j][1] or b4 >= 0x9000, j    # ANDY sprite: mask above ANDY's window
+        mask_addr[j] = b4
+        b4 += n
+    print('mask planes %d bytes; bank 4 %d/%d used; %d images (%d bytes) spilled to bank 6 $BE00'
+          % (sum(len(m) for m in img_mask), b4 - 0x8000, 0x4000, sum(1 for a in img_addr if a[1] == 2), b6 - SPILL_BASE))
 
 # box stars: each spin frame (34..39) composited over cyan and over black in a box just
 # wide enough to cover its own art AND the previous frame's, so drawing frame N erases
@@ -1051,7 +1103,6 @@ print('trampoline black boxes: widths', [w for _l, w in tramp_geom],
 allbox_bytes = box_bytes + tramp_bytes
 BOX_BASE = 0xB000                  # bank 6, above anything a level's tiles can reach
 assert BOX_BASE + sum(len(b) for b in allbox_bytes) <= 0xC000
-open(os.path.join(OUT, 'BOX'), 'wb').write(b''.join(allbox_bytes))
 print('box stars at $%04X in bank 6; classes per level:' % BOX_BASE,
       ' '.join('L%d%s=%s' % (lv, 'B' if sub == 0 else 'A', '/'.join(map(str, v))) for (lv, sub), v in sorted(star_stats.items())),
       '(regular/cyan/black, and how many boxes an enemy can reach)')
@@ -1082,8 +1133,8 @@ for i in range(103):
         # the mirrored pairs closer to symmetric than rounding up (25 px against 43).
         if not rx & 1:
             rx -= 1
-    ptr, in_andy = img_addr[j]
-    flags = (1 if mirror else 0) | 2 | (4 if in_andy else 0)
+    ptr, region = img_addr[j]
+    flags = (1 if mirror else 0) | 2 | (4 if region == 1 else 0) | (0x10 if region == 2 else 0)
     lines = 2 * h
     table += bytes([ptr & 255, ptr >> 8, W, h, rx & 255, ry & 255, flags, lines])
 _off = 0
@@ -1180,6 +1231,7 @@ for n in range(10):
 
 bank4 = bytearray(16384)
 andy = bytearray(4096)
+spill = bytearray(SPILL_END - SPILL_BASE)
 # The bar is a black background (opaque black = $C0) with a few icon spans, so store it
 # as span records (offset16, len, bytes...) ended by $FFFF, not the full 1280 bytes --
 # bar_bg fills black and lays the spans, freeing the rest of the region for sprite code.
@@ -1199,17 +1251,42 @@ barspans += bytes([0xFF, 0xFF])
 print('bar: %d span bytes vs %d raw (%d free in bank 4)'
       % (len(barspans), len(barbytes), len(barbytes) - len(barspans)))
 
-bank4[SPR_FONT - 0x8000:SPR_FONT - 0x8000 + len(font)] = font
-bank4[SPR_BAR - 0x8000:SPR_BAR - 0x8000 + len(barspans)] = barspans
-bank4[SPR_DIGITS - 0x8000:SPR_DIGITS - 0x8000 + len(digits)] = digits
-assert len(font) <= SPR_DIGITS - SPR_FONT and len(digits) <= SPR_BAR - SPR_DIGITS
-assert len(barspans) <= SPR_DATA - SPR_BAR
+if MODE == 2:
+    bank4[SPR_FONT - 0x8000:SPR_FONT - 0x8000 + len(font)] = font
+    bank4[SPR_BAR - 0x8000:SPR_BAR - 0x8000 + len(barspans)] = barspans
+    bank4[SPR_DIGITS - 0x8000:SPR_DIGITS - 0x8000 + len(digits)] = digits
+    assert len(font) <= SPR_DIGITS - SPR_FONT and len(digits) <= SPR_BAR - SPR_DIGITS
+    assert len(barspans) <= SPR_DATA - SPR_BAR
+    HUD_BANK = 4
+    boxfile = b''.join(allbox_bytes)
+else:                             # bank 6, in the box-star file, behind the boxes
+    boxfile = b''.join(allbox_bytes)
+    SPR_FONT = BOX_BASE + len(boxfile); boxfile += font
+    SPR_DIGITS = BOX_BASE + len(boxfile); boxfile += digits
+    SPR_BAR = BOX_BASE + len(boxfile); boxfile += barspans
+    HUD_BANK = 6
+    assert BOX_BASE + len(boxfile) <= SPILL_BASE, len(boxfile)
+    if b6 > SPILL_BASE:                           # spilled images at $BE00: pad up to them
+        boxfile = boxfile.ljust(SPILL_BASE - BOX_BASE, b'\0') + bytes(spill[:b6 - SPILL_BASE])
+open(os.path.join(OUT, 'BOX'), 'wb').write(boxfile)
 for j in range(len(images)):
-    base, in_andy = img_addr[j]
-    if in_andy:
+    base, region = img_addr[j]
+    if region == 1:
         andy[base - SPR_ANDY:base - SPR_ANDY + len(img_bytes[j])] = img_bytes[j]
+    elif region == 2:
+        spill[base - SPILL_BASE:base - SPILL_BASE + len(img_bytes[j])] = img_bytes[j]
+        spill[mask_addr[j] - SPILL_BASE:mask_addr[j] - SPILL_BASE + len(img_mask[j])] = img_mask[j]
     else:
         bank4[base - 0x8000:base - 0x8000 + len(img_bytes[j])] = img_bytes[j]
+    if MODE == 1 and region != 2:
+        m = mask_addr[j]
+        bank4[m - 0x8000:m - 0x8000 + len(img_mask[j])] = img_mask[j]
+if MODE == 1:
+    sprmask = bytearray()
+    for i in range(103 + 15):                     # box ids draw by copy: no mask
+        a = mask_addr[entry[i][0]] if i < 103 and entry[i] is not None else 0
+        sprmask += bytes([a & 255, a >> 8])
+    open(os.path.join(OUT, 'SPRMASK'), 'wb').write(sprmask)
 open(os.path.join(OUT, 'SPR'), 'wb').write(bank4)
 # ANDY 4K sprite overflow (loaded with ROMSEL bit7 set)
 an_used = max((b - SPR_ANDY + len(img_bytes[j]) for j,(b,a) in enumerate(img_addr) if a), default=0)
@@ -1235,7 +1312,8 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     data = bytearray()
     for c in range(W):
         data += pk[:, c].tobytes()
-    return W, (2 * h if full else h), h, data, col
+    mask = mask_plane(alpha) if (MODE == 1 and not opaque) else b''
+    return W, (2 * h if full else h), h, data, col, mask
 
 TITLE_ADDR = 0x8900               # bank 6, where the map and the box stars go during a level
 title = bytearray()
@@ -1245,14 +1323,19 @@ for f in range(9):                  # full-res like everything else: a half-res 
     pieces.append(('cleo%d' % f, (f % 3) * 26, 85 + (f // 3) * 32, 26, 31, True))   # dithers per line, and looked it
 tpreview = []
 for (name, x, y, w, h, full) in pieces:
-    W, lines, hpx, data, col = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=name.startswith('cleo'))
-    tdir.append((name, TITLE_ADDR + 0x80 + len(title), W, hpx, lines, full))
+    opaque = name.startswith('cleo')
+    W, lines, hpx, data, col, mask = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=opaque)
+    ptr = TITLE_ADDR + 0x80 + len(title)
     title += data
+    mptr = TITLE_ADDR + 0x80 + len(title) if mask else 0
+    title += mask
+    flags = (2 if full else 0) | (8 if (MODE == 1 and opaque) else 0)   # MODE 1: opaque pieces copy
+    tdir.append((name, ptr, W, hpx, lines, flags, mptr))
     tpreview.append(col)
-# directory at &8000: 8 bytes per piece: ptr lo, hi, W, h, flags(2=full), lines, 0, 0
+# directory at &8000: 8 bytes per piece: ptr lo, hi, W, h, mask lo, hi (MODE 1), flags, lines
 tdirbytes = bytearray()
-for (name, ptr, W, hpx, lines, full) in tdir:
-    tdirbytes += bytes([ptr & 255, ptr >> 8, W, hpx, 0, 0, 2 if full else 0, lines])
+for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
+    tdirbytes += bytes([ptr & 255, ptr >> 8, W, hpx, mptr & 255, mptr >> 8, flags, lines])
 titlefile = tdirbytes.ljust(0x80, b'\0') + title
 TITLE_END = 0xB800                # the title pack may overwrite the box stars (reloaded at
 assert len(titlefile) <= TITLE_END - TITLE_ADDR, len(titlefile)   # level start), not the music
@@ -1281,8 +1364,9 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
         f.write('LM_%s = %d\n' % (_n, _m))
     f.write('SPR_FONT = $%04X\nSPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_ANDY = $%04X\n' %
             (SPR_FONT, SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_ANDY))
-    for i, (name, ptr, W, hpx, lines, full) in enumerate(tdir):
+    for i, (name, ptr, W, hpx, lines, flags, mptr) in enumerate(tdir):
         f.write('TP_%s = %d\n' % (name.upper(), i))
+    f.write('HUD_BANK = %d\n' % HUD_BANK)
 
 # ----------------------------------------------------------------------------
 # previews

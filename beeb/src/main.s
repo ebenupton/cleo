@@ -455,4 +455,8 @@ sfx_die:   .byte $C0|0, 12, $D0, 6, $C0|0, 16, $D1, 6, $C0|0, 22, $D2, 8, $C0|0,
         .segment "LOGIC"
 SPR_TABLE:
         .incbin "build/SPRTAB"
+  .if MODE1
+SPRMASK:                            ; mask plane address by sprite id (MODE 1)
+        .incbin "build/SPRMASK"
+  .endif
         .code

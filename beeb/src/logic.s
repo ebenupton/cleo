@@ -3099,7 +3099,7 @@ bar_digit:
         beq bd_same
         sta BARCACHE,y
         pha
-        setbank BANK_SPR
+        setbank HUD_BANK
         pla
         lsr                         ; C = d bit0, A = d >> 1
         sta w16+1

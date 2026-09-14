@@ -51,9 +51,12 @@ MODE=1 python3 beeb/tools/convert.py && MODE1=1 ./build.sh   # a MODE 1 build
 
 The MODE 1 build keeps the memory layout (a byte is still two game pixels, now as a
 2x2 block of C/M/Y/K dots chosen per pixel) but loses the spare bits the MODE 2 engine
-signals with: no sprite transparency (sprites are opaque boxes drawn by the copy
-blitters), no periodic-cell flag in the tiles, a four-dot SWAPTAB for mirroring and a
-CMYK palette. The assembler checks that the assets were converted for the mode it is
+signals with. Sprite transparency comes from a mask plane instead: one bit per game
+pixel, four columns' pairs packed into a byte, decoded by four page tables (`MASKTAB0..3`,
+one per column phase, no shifting) into the AND mask for a data byte. No periodic-cell
+flag in the tiles, a four-dot SWAPTAB for mirroring, a CMYK palette, and the font,
+digits and bar spans live in bank 6 behind the box stars because the masks take the
+room in bank 4. The assembler checks that the assets were converted for the mode it is
 building.
 
 ## How it works, briefly

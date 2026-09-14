@@ -219,6 +219,15 @@ sp_row:   .res 1
 sp_c:     .res 1
 sp_lim:   .res 1
 sp_cnt:   .res 1                  ; sprite column countdown
+  .if MODE1                       ; the MODE 1 mask blitter (see SPRMSK).  Zero page is
+                                  ; full past $A5 -- the MOS's disc code scribbles on
+                                  ; $A8-$BF during a load -- so these alias zp the blit
+                                  ; no longer needs, and the rest sit in main RAM (mrest)
+mptr    = w16                     ; this column group's mask bytes, one per pixel row
+mtab    = tmp3                    ; MASKTAB page for this column's phase (tmp3 = 0, tmp4 = page)
+sp_msk  = tmp4c8                  ; the AND mask of the pair being drawn
+sp_id   = sp_ext                  ; the sprite id, until sp_ext is set a few lines later
+  .endif
 spi:      .res 1
 lcnt:     .res 1
 lidx:     .res 1
@@ -244,7 +253,7 @@ MUSPTR:   .res 2
 
 ; ---------------------------------------------------------------- tables (uninitialised RAM $0400-$0CFF)
         .segment "TABLES"
-MASKTAB:   .res 256               ; data byte -> AND mask
+MASKTAB:   .res 256               ; data byte -> AND mask (MODE 1: MASKTAB0, see SPRMSK)
 SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
 IDENT:     .res 256               ; ora IDENT,x == ora X (no temp) -- EXCEPT at $41, $44
                                    ; and $82, which init_tables zeroes on purpose: $41 is
@@ -1097,7 +1106,11 @@ drawsprite:
         cmp #BOXID0+BOXN            ; the "nothing can disturb it" aliases draw the same
         bcc :+                      ; picture as the ids BOXN below them
         sbc #BOXN
-:       stza ptr+1
+:
+  .if MODE1
+        sta sp_id
+  .endif
+        stza ptr+1
         asl                         ; id*8 -> offset
         rol ptr+1
         asl
@@ -1127,6 +1140,15 @@ drawsprite:
         beq :+
         ldx #BANK_TIL1
 :       stx sp_dbank            ; wanted later: the directory is still being read
+  .if MODE1
+        lda sp_id
+        asl
+        tax
+        lda SPRMASK,x
+        sta sp_mbase
+        lda SPRMASK+1,x
+        sta sp_mbase+1
+  .endif
         bra @entry2
 @titledir:
         ; ---- title piece: directory + data at TITLE_ADDR of bank(spbank)
@@ -1142,6 +1164,14 @@ drawsprite:
         ldy #6
         lda (ptr),y
         sta sp_flags
+  .if MODE1
+        ldy #4
+        lda (ptr),y
+        sta sp_mbase
+        iny
+        lda (ptr),y
+        sta sp_mbase+1
+  .endif
 @entry2:
         ldaz ptr
         sta sp_ptr
@@ -1157,6 +1187,10 @@ drawsprite:
         lda (ptr),y
         sta sp_lines
         sta sp_ext
+  .if MODE1
+        lsr
+        sta sp_mh                   ; mask bytes per column group = pixel rows
+  .endif
         lda sp_flags
         and #2
         bne :+
@@ -1375,6 +1409,28 @@ drawsprite:
 :       dex
         bne @mul
 @mdone: sta sp_col
+  .if MODE1
+        stz mtab                    ; the MASKTAB pages are indexed by the mask byte
+        ; mask column base = mask plane + (first image column / 4) * pixel rows
+        lda sp_mbase
+        sta sp_mrp
+        lda sp_mbase+1
+        sta sp_mrp+1
+        lda sp_c
+        lsr
+        lsr
+        beq @mgdone
+        tax
+@mgrp:  lda sp_mrp
+        clc
+        adc sp_mh
+        sta sp_mrp
+        bcc @mgnc
+        inc sp_mrp+1
+@mgnc:  dex
+        bne @mgrp
+@mgdone:
+  .endif
 @rows:
         lda sp_r0
         sta sp_row
@@ -1415,6 +1471,19 @@ drawsprite:
         lda sp_col+1
         adc w16+1
         sta sp_rp+1
+  .if MODE1
+        lda w16+1                   ; the same offset in pixel rows (signed >> 1)
+        cmp #$80
+        ror w16+1
+        ror w16
+        lda sp_mrp
+        clc
+        adc w16
+        sta sp_mrp
+        lda sp_mrp+1
+        adc w16+1
+        sta sp_mrp+1
+  .endif
         lda sp_c1
         sec
         sbc sp_c0
@@ -1428,6 +1497,18 @@ ds_rowloop:
         sta ptr
         lda sp_rp+1
         sta ptr+1
+  .if MODE1
+        lda sp_mrp
+        sta mptr
+        lda sp_mrp+1
+        sta mptr+1
+        lda sp_c
+        and #3
+        sta sp_mph
+        tax
+        lda mpage,x
+        sta mtab+1
+  .endif
         ; ra range for this row
         stz tmp                     ; ra0' = 0 unless this is the first row
         lda sp_row
@@ -1446,6 +1527,22 @@ ds_colloop:
 ds_dispatch:
         jmp sprFN                   ; operand patched per sprite
 sprdisp_tab: .word sprFN, sprFM, sprFN, sprFM, sprFC
+  .if MODE1
+sprretMk:                           ; mask blitter, mirrored: the image column descends,
+        dec sp_mph                  ; so the phase does too, into the previous group
+        bpl @mk
+        lda #3
+        sta sp_mph
+        lda mptr
+        sec
+        sbc sp_mh
+        sta mptr
+        bcs @mk
+        dec mptr+1
+@mk:    ldx sp_mph
+        lda mpage,x
+        sta mtab+1
+  .endif
 sprretM:                            ; next column, mirrored: source pointer - lines
         lda ptr
         sec
@@ -1454,6 +1551,23 @@ sprretM:                            ; next column, mirrored: source pointer - li
         bcs sprnext
         dec ptr+1
         bra sprnext
+  .if MODE1
+sprretPk:                           ; mask blitter: next phase, next group every four
+        inc sp_mph
+        lda sp_mph
+        cmp #4
+        bne @pk
+        stz sp_mph
+        lda mptr
+        clc
+        adc sp_mh
+        sta mptr
+        bcc @pk
+        inc mptr+1
+@pk:    ldx sp_mph
+        lda mpage,x
+        sta mtab+1
+  .endif
 sprretP:                            ; next column: source pointer + lines
         lda ptr
         clc
@@ -1477,7 +1591,17 @@ ds_rowdone:
         bcc :+
         inc sp_rp+1
         clc
-:       lda sp_rb
+:
+  .if MODE1
+        lda sp_mrp
+        adc #4                      ; C is clear
+        sta sp_mrp
+        bcc @mrnc
+        inc sp_mrp+1
+        clc
+@mrnc:
+  .endif
+        lda sp_rb
         adc #<ROWBYTES
         sta sp_rb
         lda sp_rb+1
@@ -1699,8 +1823,143 @@ pd:
         .endif
 .endmacro
 
-        SPRFULL sprFN, 0, MODE1     ; MODE 1: every sprite is an opaque box, plain copy
-        SPRFULL sprFM, 1, MODE1
+  .if MODE1
+; ---- MODE 1 masked blitter.  A col entry has no spare bit, so the mask is a plane of
+; its own: one bit per game pixel, a data byte's two pixels as a 2-bit pair, four
+; horizontally adjacent columns packed into one byte (column 4g+j in bits 7-2j, 6-2j),
+; column-group-major: for group g, one byte per pixel row -- the shape of the data, so
+; mptr walks like ptr.  MASKTAB0..3 turn a whole mask byte into the AND mask for the
+; column of that phase, no shifting: $FF (both transparent) $CC $33 $00 (both opaque).
+; The two scanlines of a pixel row share a mask, so lines go in pairs, and a sprite's
+; first line in a cell is always even (refy is a multiple of 4 game px).  The data has
+; 0 in transparent pixels, so screen = (screen AND mask) OR data.  Mirrored: the pair's
+; mask is SWAPTAB of the table's answer ($33 <-> $CC), and the data byte is swapped.
+.macro MLINE mirror                 ; masked store of line Y
+  .if mirror
+        lda (ptr),y
+        tax
+        lda SWAPTAB,x
+        sta sp_ext                  ; dead during the blit
+        lda (sp),y
+        and sp_msk
+        ora sp_ext
+  .else
+        lda (sp),y
+        and sp_msk
+        ora (ptr),y
+  .endif
+        sta (sp),y
+.endmacro
+.macro CLINE mirror                 ; plain store of line Y
+        lda (ptr),y
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
+        sta (sp),y
+.endmacro
+.macro MPAIR k, mirror              ; lines k, k+1 of the cell
+        .local opq, done
+        ldy #k/2
+        lda (mptr),y
+        tay
+        lda (mtab),y
+        beq opq                     ; $00: both pixels opaque, plain stores
+        cmp #$FF
+        beq done                    ; both transparent
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
+        sta sp_msk
+        ldy #k
+        MLINE mirror
+        iny
+        MLINE mirror
+        bra done
+opq:    ldy #k
+        CLINE mirror
+        iny
+        CLINE mirror
+done:
+.endmacro
+.macro SPRMSK name, mirror
+        .local partial, np, et, p0, p1, p2, p3, pl, pop, pnext
+name:
+        lda tmp2
+        cmp #7
+        bne np
+        lda tmp                     ; even: 0,2,4,6 -> entry p0..p3
+        beq p0
+        tax
+        jmpx et
+np:     jmp partial
+et:     .word p0, p1, p2, p3
+p0:     MPAIR 0, mirror
+p1:     MPAIR 2, mirror
+p2:     MPAIR 4, mirror
+p3:     MPAIR 6, mirror
+  .if mirror
+        jmp sprretMk
+  .else
+        jmp sprretPk
+  .endif
+partial:                            ; lines tmp..tmp2: tmp even, tmp2 odd
+        lda tmp
+        sta sp_lim
+pl:     lda sp_lim
+        lsr
+        tay
+        lda (mptr),y
+        tay
+        lda (mtab),y
+        beq pop
+        cmp #$FF
+        beq pnext
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
+        sta sp_msk
+        ldy sp_lim
+        MLINE mirror
+        iny
+        MLINE mirror
+        bra pnext
+pop:    ldy sp_lim
+        CLINE mirror
+        iny
+        CLINE mirror
+pnext:  lda sp_lim
+        inca
+        inca
+        sta sp_lim
+        cmp tmp2
+        bcc pl
+  .if mirror
+        jmp sprretMk
+  .else
+        jmp sprretPk
+  .endif
+.endmacro
+        SPRMSK sprFN, 0
+        SPRMSK sprFM, 1
+mpage:  .byte >MASKTAB0, >MASKTAB1, >MASKTAB2, >MASKTAB3
+mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit 0 = right):
+                                    ; keep what is NOT opaque -- right only opaque keeps the left dots
+sp_mph:   .res 1                  ; column phase 0..3 within the mask byte
+sp_mh:    .res 1                  ; pixel rows = mask bytes per column group
+sp_mrp:   .res 2                  ; mask pointer for the current row's first column
+sp_mbase: .res 2                  ; the sprite's mask plane
+MASKTAB0 = MASKTAB                  ; both page aligned in TABLES, both free in MODE 1
+MASKTAB1 = IDENT
+        .align 256
+MASKTAB2: .res 256
+MASKTAB3: .res 256
+  .else
+        SPRFULL sprFN, 0, 0
+        SPRFULL sprFM, 1, 0
+  .endif
         SPRFULL sprFC, 0, 1         ; box stars: pre-composited on their background, no mask
 
 ; (There were half-res blitters here -- one source byte to two screen lines -- for the
@@ -1857,7 +2116,7 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
         inx
         dey
         bne @bci
-        lda #BANK_SPR               ; The bar is black with a few icon spans, so
+        lda #HUD_BANK               ; The bar is black with a few icon spans, so
                                     ; fill black and lay the spans (BARBUF is now the span
         sta ROMSEL_CPY              ; list: offset16, len, bytes... ending $FFFF).
         sta ROMSEL
@@ -2411,9 +2670,47 @@ calc_ring:
 ; ============================================================================
         .segment "LOGIC"            ; cold, and main RAM under the screen is full
 init_tables:
+  .if MODE1
+        ldx #0
+@mt:    txa                         ; MASKTABk[x] = mask4[(x >> (6 - 2k)) & 3]
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        tay
+        lda mask4,y
+        sta MASKTAB0,x
+        txa
+        lsr
+        lsr
+        lsr
+        lsr
+        and #3
+        tay
+        lda mask4,y
+        sta MASKTAB1,x
+        txa
+        lsr
+        lsr
+        and #3
+        tay
+        lda mask4,y
+        sta MASKTAB2,x
+        txa
+        and #3
+        tay
+        lda mask4,y
+        sta MASKTAB3,x
+        inx
+        bne @mt
+  .else
         jsr init_ident
+  .endif
         ldx #0
 @t:     txa
+  .if .not MODE1
         and #$AA
         beq :+
         lda #0
@@ -2428,6 +2725,7 @@ init_tables:
 :       lda #$55
 :       ora tmp
         sta MASKTAB,x
+  .endif
   .if MODE1
         ; MODE 1: a byte is four dots, bit 7-i / bit 3-i for dot i; mirroring reverses
         ; them: 7<->4, 6<->5, 3<->0, 2<->1
@@ -2466,6 +2764,7 @@ init_tables:
         sta SWAPTAB,x
         inx
         bne @t
+  .if .not MODE1
         ; sprite encoding (convert.py encode_sprite): bit 7 = both pixels opaque and never
         ; reaches the tables; left-black-only is code $44 (its $80 slot is taken)
         lda #$55
@@ -2490,6 +2789,7 @@ init_tables:
         sta IDENT+$80,x             ; and its OR value (differs from SWAPTAB only at \$40)
         inx
         bpl :-
+  .endif
         jsr build_ring              ; ring row -> screen address
         ; row slot -> chars
         stz w16
@@ -3400,7 +3700,7 @@ build_tileaddr:
 
 ; one font glyph out of bank 4, for the menus
 getglyph:
-        lda #BANK_SPR
+        lda #HUD_BANK
         sta ROMSEL_CPY
         sta ROMSEL
         ldy #7
