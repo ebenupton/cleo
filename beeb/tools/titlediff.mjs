@@ -26,5 +26,9 @@ for (let step=0; step<40; step++){
   const d=diff();
   if(d){ bad++; if(bad<=3) console.log(`  after ${(step+1)*2}M cycles: ${d}/640000 pixels differ`); }
 }
-console.log(bad? `title/menu: DIFFERS on ${bad}/40 samples` : "title/menu: pixel-identical over 80M cycles (attract loop, menus)");
+console.log(bad? `title/menu: DIFFERS on ${bad}/40 samples`
+                 + "\n  This compares the PAINTED frame at a fixed cycle count, so a build whose"
+                 + "\n  render is shorter is simply further into the attract loop.  Before treating"
+                 + "\n  it as a drawing bug, run:  node tools/titlephase.mjs <discA> <discB>"
+               : "title/menu: pixel-identical over 80M cycles (attract loop, menus)");
 process.exit(bad?1:0);

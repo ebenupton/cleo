@@ -1,6 +1,9 @@
 #!/bin/sh
 # Find the first accumulated snapshot that fails a given check.
 #   tools/bisect.sh all   -        <frames>     every check in tools/check.sh, in parallel
+#   tools/bisect.sh title -        -             the attract loop and menus, which no
+#                                                in-level test reaches (drawsprite takes
+#                                                its @titledir path there)
 #   tools/bisect.sh state <level> <frames>     object state
 #   tools/bisect.sh pix   <level> <frames>     drawn pixels (BUFFER only; DISPLAY
 #                                              differences are rupture-chain re-phasing)
@@ -22,6 +25,8 @@ probe() {
              | grep -q "identical over" && echo ok || echo bad ;;
     pix)   node tools/pixdiff.mjs $B $L $F 2>&1 | grep -q "BUFFER identical" && echo ok || echo bad ;;
     all)   tools/check.sh $F ;;
+    title) node tools/titlediff.mjs build/base/cleo.ssd build/cleo.ssd 2>&1 \
+             | grep -q "pixel-identical" && echo ok || echo bad ;;
   esac
 }
 lo=0; hi=$N
