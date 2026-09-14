@@ -1,0 +1,14 @@
+import { findJsbeeb } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
+import { pathToFileURL } from "node:url";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
+const s = new MachineSession("B-DFS1.2");
+await s.initialise(); await s.boot(30);
+s.loadDisc(path.resolve("build/cleob.ssd"));
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(4_000_000);
+const cpu = s._machine.processor;
+const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
+console.log("IRQ1V =", (cpu.readmem(0x204) | (cpu.readmem(0x205) << 8)).toString(16), " label irq_handler =", lab.irq_handler.toString(16));
+console.log("$0172:", [...Array(20)].map((_, i) => cpu.readmem(0x172 + i).toString(16).padStart(2, "0")).join(" "));
+process.exit(0);

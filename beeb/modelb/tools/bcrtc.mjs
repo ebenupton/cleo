@@ -1,0 +1,21 @@
+import { findJsbeeb } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
+import { pathToFileURL } from "node:url";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
+const s = new MachineSession("B-DFS1.2");
+await s.initialise(); await s.boot(30);
+s.loadDisc(path.resolve("build/cleob.ssd"));
+const cpu = s._machine.processor, v = s._video;
+const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
+await s.runFor(4_000_000);            // let it settle into the loop
+let log = [], idx = 0;
+const pos = () => `r${v.vertCounter}.${v.scanlineCounter}.h${String(v.horizCounter).padStart(3)}`;
+const ow = v.crtc.write.bind(v.crtc);
+v.crtc.write = (addr, val) => { if (addr & 1) { if (log.length < 90) log.push(`${pos()} R${idx}=${val} secidx=${cpu.readmem(lab.SECIDX)}`); } else idx = val; ow(addr, val); };
+const oe = v.endOfFrame.bind(v); v.endOfFrame = () => { if (log.length < 90) log.push(`${pos()} --- restart R4=${v.regs[4]} R9=${v.regs[9]} R6=${v.regs[6]} R7=${v.regs[7]}`); oe(); };
+cpu.debugInstruction.add((pc) => { if (pc === lab.irq_handler && log.length < 90) log.push(`${pos()} IRQ`); return false; });
+await s.runFor(300000);
+console.log(log.join("\n"));
+process.exit(0);

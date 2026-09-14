@@ -1,0 +1,17 @@
+import { findJsbeeb } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
+import { pathToFileURL } from "node:url";
+import path from "node:path";
+const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
+const s = new MachineSession("B-DFS1.2");
+await s.initialise(); await s.boot(30);
+const cpu = s._machine.processor;
+const show = (tag) => { console.log(tag);
+  for (let b = 0; b < 16; b++) { cpu.writemem(0xfe30, b);
+    const t = [...Array(12)].map((_, i) => cpu.readmem(0x8000 + i));
+    const name = [...Array(9)].map((_, i) => cpu.readmem(0x8009 + i)).map(c => (c >= 32 && c < 127) ? String.fromCharCode(c) : ".").join("");
+    console.log(`  bank ${b.toString().padStart(2)}: ${t.map(x => x.toString(16).padStart(2, "0")).join(" ")}  "${name}"`); } };
+show("after boot:");
+s.loadDisc(path.resolve("build/cleob.ssd"));
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(6_000_000);
+show("after loading:");
+process.exit(0);

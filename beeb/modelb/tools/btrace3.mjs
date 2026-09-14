@@ -1,0 +1,18 @@
+import { findJsbeeb } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
+import { pathToFileURL } from "node:url";
+import path from "node:path";
+const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
+const s = new MachineSession("B-DFS1.2");
+await s.initialise(); await s.boot(30);
+s.loadDisc(path.resolve("build/cleob.ssd"));
+const cpu = s._machine.processor;
+const romsels = []; let inLoader = false, steps = [];
+const ow = cpu.writemem.bind(cpu);
+cpu.writemem = (a, v) => { if (a === 0xfe30) romsels.push(`${cpu.pc.toString(16)}:${v}`); return ow(a, v); };
+cpu.debugInstruction.add((pc) => { if (pc >= 0x1900 && pc < 0x19a0) { if (steps.length < 300) steps.push(pc.toString(16)); } return false; });
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
+await s.runFor(6_000_000);
+console.log("ROMSEL writes (pc:value):", romsels.slice(-24).join(" "));
+console.log("loader PCs:", steps.slice(0, 60).join(" "), "... total", steps.length);
+console.log("$2000:", [...Array(8)].map((_, i) => cpu.readmem(0x2000 + i).toString(16)).join(" "));
+process.exit(0);

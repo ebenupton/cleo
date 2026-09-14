@@ -1,0 +1,83 @@
+ca65 V2.18 - N/A
+Main file   : src/loader.s
+Current file: src/loader.s
+
+000000r 1               ; ============================================================================
+000000r 1               ; LOADER -- runs at $1900 from !BOOT, fills the four sideways banks and jumps
+000000r 1               ; into the game.  DFS will not load into a sideways bank (it pages itself in to
+000000r 1               ; do the transfer), so each image is staged at $2000 in main RAM and copied.
+000000r 1               ; ============================================================================
+000000r 1                       .setcpu "6502"
+000000r 1               OSFILE  = $FFDD
+000000r 1               OSWRCH  = $FFEE
+000000r 1               ROMSEL  = $FE30
+000000r 1               ROMSELC = $F4
+000000r 1               zsrc    = $70
+000000r 1               zdst    = $72
+000000r 1               
+000000r 1                       .segment "CODE"
+000000r 1               start:
+000000r 1  A5 F4                lda ROMSELC
+000002r 1  8D rr rr             sta oldbank
+000005r 1  A2 00                ldx #0
+000007r 1  8E rr rr     @bank:  stx idx
+00000Ar 1  8A                   txa
+00000Br 1  18                   clc
+00000Cr 1  69 34                adc #'4'                    ; BANK4 .. BANK7
+00000Er 1  8D rr rr             sta fname+4
+000011r 1  A9 FF                lda #$FF                    ; OSFILE 255: load, address from the block
+000013r 1  A2 rr                ldx #<block
+000015r 1  A0 rr                ldy #>block
+000017r 1  20 DD FF             jsr OSFILE
+00001Ar 1  A9 00                lda #0
+00001Cr 1  85 70                sta zsrc
+00001Er 1  85 72                sta zdst
+000020r 1  A9 20                lda #$20
+000022r 1  85 71                sta zsrc+1
+000024r 1  A9 80                lda #$80
+000026r 1  85 73                sta zdst+1
+000028r 1  AD rr rr             lda idx
+00002Br 1  18                   clc
+00002Cr 1  69 04                adc #4
+00002Er 1  78                   sei                         ; both copies: an interrupt that pages a ROM in
+00002Fr 1  85 F4                sta ROMSELC                 ; restores from $F4, and would otherwise take ours out
+000031r 1  8D 30 FE             sta ROMSEL
+000034r 1  A2 40                ldx #64                     ; 64 pages = 16K
+000036r 1  A0 00                ldy #0
+000038r 1  B1 70        @cp:    lda (zsrc),y
+00003Ar 1  91 72                sta (zdst),y
+00003Cr 1  C8                   iny
+00003Dr 1  D0 F9                bne @cp
+00003Fr 1  E6 71                inc zsrc+1
+000041r 1  E6 73                inc zdst+1
+000043r 1  CA                   dex
+000044r 1  D0 F2                bne @cp
+000046r 1  AD rr rr             lda oldbank
+000049r 1  85 F4                sta ROMSELC
+00004Br 1  8D 30 FE             sta ROMSEL
+00004Er 1  58                   cli
+00004Fr 1  AE rr rr             ldx idx
+000052r 1  E8                   inx
+000053r 1  E0 04                cpx #4
+000055r 1  D0 B0                bne @bank
+000057r 1  A9 16                lda #22                     ; MODE 1: the OS sets the ULA and the screen size
+000059r 1  20 EE FF             jsr OSWRCH                  ; latch; the game reprograms only the CRTC
+00005Cr 1  A9 01                lda #1
+00005Er 1  20 EE FF             jsr OSWRCH
+000061r 1  78                   sei
+000062r 1  A9 07                lda #7
+000064r 1  85 F4                sta ROMSELC
+000066r 1  8D 30 FE             sta ROMSEL
+000069r 1  4C 00 80             jmp $8000                   ; bank 7's entry vector
+00006Cr 1               
+00006Cr 1  00           idx:      .byte 0
+00006Dr 1  00           oldbank:  .byte 0
+00006Er 1  42 41 4E 4B  fname:    .byte "BANK4", 13
+000072r 1  34 0D        
+000074r 1  rr rr        block:    .word fname
+000076r 1  00 20 FF FF            .dword $FFFF2000          ; load address: the $FFFF names the I/O
+00007Ar 1                                                   ; processor, and DFS wants it even with no tube
+00007Ar 1  00 00 00 00            .dword $00000000          ; exec address: 0 here means "use the one above"
+00007Er 1  00 00 00 00            .dword $00000000
+000082r 1  00 00 00 00            .dword $00000000
+000082r 1               

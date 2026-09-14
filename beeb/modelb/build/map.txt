@@ -1,0 +1,48 @@
+Modules list:
+-------------
+main.o:
+    ZEROPAGE          Offs=000000  Size=000097  Align=00001  Fill=0000
+    LOWCODE           Offs=000000  Size=0000BE  Align=00001  Fill=0000
+    LOWBSS            Offs=000000  Size=000084  Align=00001  Fill=0000
+    LGCCODE           Offs=000000  Size=00059E  Align=00001  Fill=0000
+    LGCBSS            Offs=000000  Size=000130  Align=00001  Fill=0000
+    SPRCODE           Offs=000000  Size=000001  Align=00001  Fill=0000
+    TILCODE           Offs=000000  Size=000001  Align=00001  Fill=0000
+    MAPCODE           Offs=000000  Size=000001  Align=00001  Fill=0000
+
+
+Segment list:
+-------------
+Name                   Start     End    Size  Align
+----------------------------------------------------
+ZEROPAGE              000000  000096  000097  00001
+LOWBSS                000140  0001C3  000084  00001
+LOWCODE               000206  0002C3  0000BE  00001
+LGCCODE               008000  00859D  00059E  00001
+MAPCODE               008000  008000  000001  00001
+SPRCODE               008000  008000  000001  00001
+TILCODE               008000  008000  000001  00001
+LGCBSS                00865C  00878B  000130  00001
+
+
+Exports list by name:
+---------------------
+__LOWCODE_LOAD__          00859E RLA    __LOWCODE_RUN__           000206 RLA    
+__LOWCODE_SIZE__          0000BE REA    
+
+
+Exports list by value:
+----------------------
+__LOWCODE_SIZE__          0000BE REA    __LOWCODE_RUN__           000206 RLA    
+__LOWCODE_LOAD__          00859E RLA    
+
+
+Imports list:
+-------------
+__LOWCODE_LOAD__ ([linker generated]):
+    main.o                    src/main.s(5)
+__LOWCODE_RUN__ ([linker generated]):
+    main.o                    src/main.s(5)
+__LOWCODE_SIZE__ ([linker generated]):
+    main.o                    src/main.s(6)
+

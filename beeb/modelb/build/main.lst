@@ -1,0 +1,1147 @@
+ca65 V2.18 - N/A
+Main file   : src/main.s
+Current file: src/main.s
+
+000000r 1               ; Cleo, Model B target.  One assembly, four bank images: see DESIGN.md.
+000000r 1                       .include "defs.inc"
+000000r 2               ; ============================================================================
+000000r 2               ; Cleo, Model B target: the memory map is the design.
+000000r 2               ;
+000000r 2               ;   $0000-$00FF  zero page, shared by all four banks
+000000r 2               ;   $0100-$013F  stack
+000000r 2               ;   $0140-$02FF  ISR, section table, thunks, the map strip buffer
+000000r 2               ;   $0300-$07FF  status bar, 2 rows, single buffered, scanned where it is drawn
+000000r 2               ;   $0800-$0A7F  mirror A     a copy of ring A's last row
+000000r 2               ;   $0A80-$43FF  ring A       23 slots of 640 bytes
+000000r 2               ;   $4400-$467F  mirror B
+000000r 2               ;   $4680-$7FFF  ring B
+000000r 2               ; ============================================================================
+000000r 2               ROWCHARS  = 80
+000000r 2               ROWBYTES  = ROWCHARS*8
+000000r 2               RINGROWS  = 23                      ; slots in a ring
+000000r 2               VISROWS   = 21                      ; visible char rows: 168 lines = 84 game px
+000000r 2               BUFROWS   = VISROWS + 1             ; held: the visible rows plus the bottom partial's source
+000000r 2               RINGCHARS = ROWCHARS*RINGROWS
+000000r 2               RINGBYTES = ROWBYTES*RINGROWS       ; 14720: NOT a whole number of pages, so the fold
+000000r 2                                                   ; body is 16 bit -- but both ring ENDS are page
+000000r 2                                                   ; aligned, so the fold test stays 8 bit
+000000r 2               MAXDWY    = 8
+000000r 2               
+000000r 2               BARADDR   = $0300
+000000r 2               BARROWS   = 2
+000000r 2               BARCRTC   = BARADDR / 8
+000000r 2               
+000000r 2               RING_A    = $0A80
+000000r 2               RING_B    = $4680
+000000r 2               MIRR_A    = RING_A - ROWBYTES       ; $0800
+000000r 2               MIRR_B    = RING_B - ROWBYTES       ; $4400
+000000r 2               RINGEND_A = RING_A + RINGBYTES      ; $4400
+000000r 2               RINGEND_B = RING_B + RINGBYTES      ; $8000
+000000r 2               CRTCB_A   = RING_A / 8
+000000r 2               CRTCB_B   = RING_B / 8
+000000r 2               
+000000r 2               ; 39 rows of 8 lines = 312.  2 bar + 21 playfield + 16 blanking, vsync at Q row 8, so
+000000r 2               ; the picture starts 64 lines after the vsync: 4 lines below where a MODE 1 screen sits.
+000000r 2               QROWS     = 39 - VISROWS - BARROWS
+000000r 2               QVSYNC    = 8
+000000r 2               LINE      = 64                      ; T1 ticks in one scanline
+000000r 2               ; CA1 fires at the end of the 2-line vsync pulse.  -35 would put each step ~5 us INTO
+000000r 2               ; its section; the further -36 puts it ~30 us BEFORE the restart instead, so the shape
+000000r 2               ; registers land early in the section's first scanline.
+000000r 2               VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36
+000000r 2               
+000000r 2               ; ---------------------------------------------------------------- hardware
+000000r 2               CRTC_IDX  = $FE00
+000000r 2               CRTC_DAT  = $FE01
+000000r 2               ULA_CTRL  = $FE20
+000000r 2               ULA_PAL   = $FE21
+000000r 2               VIA_T1CL  = $FE44
+000000r 2               VIA_T1CH  = $FE45
+000000r 2               VIA_T1LL  = $FE46
+000000r 2               VIA_T1LH  = $FE47
+000000r 2               VIA_ACR   = $FE4B
+000000r 2               VIA_IFR   = $FE4D
+000000r 2               VIA_IER   = $FE4E
+000000r 2               UVIA_IER  = $FE6E
+000000r 2               IRQ1V     = $0204
+000000r 2               OSWRCH    = $FFEE
+000000r 2               
+000000r 2               MAXSPR    = 24
+000000r 2               MAXREC    = 16
+000000r 2               
+000000r 2               ; ---------------------------------------------------------------- far calls
+000000r 2               ; The index of a (bank, address) entry in FARTAB.  Everything that crosses a bank
+000000r 2               ; boundary goes through one of these, and the list is meant to stay short: the traffic
+000000r 2               ; is per frame or per rectangle, never per tile.
+000000r 2               F_VSYNC    = 0*3
+000000r 2               F_SCANKEYS = 1*3
+000000r 2               F_SNDTICK  = 2*3
+000000r 2               F_MAPSTRIP = 3*3
+000000r 2               F_DRAWRECT = 4*3
+000000r 2               F_SCROLLV  = 5*3
+000000r 2               F_DRAWDIRT = 6*3
+000000r 2               F_DRAWSPR  = 7*3
+000000r 2               F_ERASE    = 8*3
+000000r 2               F_PARTIAL  = 9*3
+000000r 2               F_BARFLUSH = 10*3
+000000r 2               F_ADDSPR   = 11*3
+000000r 2               NFAR       = 12
+000000r 2               
+000000r 1                       .include "cpu.inc"
+000000r 2               ; ============================================================================
+000000r 2               ; The Model B is a plain 6502: the 65C02 instructions the engine is written in
+000000r 2               ; become macros here.  Same spellings as the Master build so the sources stay
+000000r 2               ; comparable -- stza is the form that keeps A, stz the one that may clobber it.
+000000r 2               ; ============================================================================
+000000r 2                       .setcpu "6502"
+000000r 2               .macro stz arg, ix                  ; A dead: the caller has said so by using stz
+000000r 2                       lda #0
+000000r 2               .if .paramcount = 2
+000000r 2                       sta arg,ix
+000000r 2               .else
+000000r 2                       sta arg
+000000r 2               .endif
+000000r 2               .endmacro
+000000r 2               .macro stza arg, ix                 ; A live across the store
+000000r 2                       pha
+000000r 2                       lda #0
+000000r 2               .if .paramcount = 2
+000000r 2                       sta arg,ix
+000000r 2               .else
+000000r 2                       sta arg
+000000r 2               .endif
+000000r 2                       pla
+000000r 2               .endmacro
+000000r 2               .macro bra arg
+000000r 2                       jmp arg
+000000r 2               .endmacro
+000000r 2               .macro inca
+000000r 2                       clc
+000000r 2                       adc #1
+000000r 2               .endmacro
+000000r 2               .macro deca
+000000r 2                       sec
+000000r 2                       sbc #1
+000000r 2               .endmacro
+000000r 2               .macro phx
+000000r 2                       txa
+000000r 2                       pha
+000000r 2               .endmacro
+000000r 2               .macro plx
+000000r 2                       pla
+000000r 2                       tax
+000000r 2               .endmacro
+000000r 2               .macro phy
+000000r 2                       tya
+000000r 2                       pha
+000000r 2               .endmacro
+000000r 2               .macro ply
+000000r 2                       pla
+000000r 2                       tay
+000000r 2               .endmacro
+000000r 2               .macro jmpx tab                     ; jmp (abs,x): through a zero page vector
+000000r 2                       pha
+000000r 2                       lda tab,x
+000000r 2                       sta jv
+000000r 2                       lda tab+1,x
+000000r 2                       sta jv+1
+000000r 2                       pla
+000000r 2                       jmp (jv)
+000000r 2               .endmacro
+000000r 2               .macro ldaz zp                      ; (zp) with no index: Y is free at every site
+000000r 2                       ldy #0
+000000r 2                       lda (zp),y
+000000r 2               .endmacro
+000000r 2               .macro staz zp
+000000r 2                       ldy #0
+000000r 2                       sta (zp),y
+000000r 2               .endmacro
+000000r 2               .macro andz zp
+000000r 2                       ldy #0
+000000r 2                       and (zp),y
+000000r 2               .endmacro
+000000r 2               
+000000r 2               ; ---------------------------------------------------------------- banking
+000000r 2               ROMSEL    = $FE30
+000000r 2               ROMSEL_CPY = $F4                    ; the OS's copy: an interrupt that pages a ROM in
+000000r 2                                                   ; restores from here, so both are always written
+000000r 2               BANK_SPR  = 4                       ; sprite images + the sprite blitter
+000000r 2               BANK_TIL  = 5                       ; this level's tiles + the tile blitter
+000000r 2               BANK_MAP  = 6                       ; the map, objects, attributes
+000000r 2               BANK_LGC  = 7                       ; the game logic and the frame loop
+000000r 2               
+000000r 2               .macro setbank n                    ; A is clobbered
+000000r 2                       lda #n
+000000r 2                       sta ROMSEL_CPY
+000000r 2                       sta ROMSEL
+000000r 2               .endmacro
+000000r 2               
+000000r 2               ; A far call: X = the index of a (bank, address) entry in FARTAB.  farcall itself is
+000000r 2               ; in main RAM, which is why a bank may call one that replaces it.
+000000r 2               .macro farjsr idx
+000000r 2                       ldx #idx
+000000r 2                       jsr farcall
+000000r 2               .endmacro
+000000r 2               
+000000r 1                       .include "zp.inc"
+000000r 2                       .zeropage
+000000r 2  xx xx        jv:       .res 2                    ; jmpx vector (6502 has no jmp (abs,x))
+000002r 2  xx xx        ptr:      .res 2
+000004r 2  xx xx        tp:       .res 2
+000006r 2  xx xx        sp:       .res 2
+000008r 2  xx           tmp:      .res 1
+000009r 2  xx           tmp2:     .res 1
+00000Ar 2  xx           tmp3:     .res 1
+00000Br 2  xx           tmp4:     .res 1
+00000Cr 2  xx           cnt:      .res 1
+00000Dr 2  xx xx        w16:      .res 2
+00000Fr 2  xx xx        w16b:     .res 2
+000011r 2               
+000011r 2  xx xx        wx:       .res 2                    ; window origin in map pixels
+000013r 2  xx xx        wy:       .res 2
+000015r 2  xx xx        wcx:      .res 2                    ; window origin in chars
+000017r 2  xx           wcy:      .res 1
+000018r 2  xx           wfine:    .res 1                    ; 0,2,4,6: scanlines into the top char row
+000019r 2  xx           curbuf:   .res 1                    ; the buffer being drawn
+00001Ar 2  xx xx        ringS:    .res 2                    ; window start, in ring chars
+00001Cr 2  xx           barq:     .res 1                    ; its slot
+00001Dr 2  xx xx        crtcb:    .res 2                    ; CRTC base of the buffer being drawn
+00001Fr 2  xx           ringehi:  .res 1                    ; its ring end, high byte (the fold test)
+000020r 2  xx xx        ringbase: .res 2                    ; and its base
+000022r 2               
+000022r 2  xx           irq_x:    .res 1
+000023r 2  xx           irq_y:    .res 1
+000024r 2  xx           vsyncs:   .res 1
+000025r 2  xx           flipreq:  .res 1
+000026r 2  xx           flipvs:   .res 1
+000027r 2  xx           curR7:    .res 1
+000028r 2  xx           SECIDX:   .res 1
+000029r 2  xx           DISPSECT: .res 1
+00002Ar 2  xx           NEXTSECT: .res 1
+00002Br 2  xx           keys:     .res 1
+00002Cr 2  xx           frame:    .res 1
+00002Dr 2  xx xx        crtcbm:   .res 2                    ; crtcb - RINGCHARS: the mirror redirect
+00002Fr 2  xx xx xx xx  RINGLO:   .res RINGROWS             ; slot -> address, for the buffer being drawn
+000033r 2  xx xx xx xx  
+000037r 2  xx xx xx xx  
+000046r 2  xx xx xx xx  RINGHI:   .res RINGROWS
+00004Ar 2  xx xx xx xx  
+00004Er 2  xx xx xx xx  
+00005Dr 2  xx xx        VS2T:     .res 2                    ; vsync -> the bar's restart, in T1 ticks
+00005Fr 2  xx xx xx xx  BUF_SEC0: .res 4                    ; per buffer: the CRTC start of section 0
+000063r 2  xx xx xx xx  BUF_SEC0T1: .res 4                  ;   and how long it lasts
+000067r 2  xx xx xx xx  MAPBUF:   .res 48                   ; a strip of map, fetched from bank 6 in one call
+00006Br 2  xx xx xx xx  
+00006Fr 2  xx xx xx xx  
+000097r 2               
+000097r 1                       .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute
+000097r 1                       .import __LOWCODE_SIZE__: absolute
+000097r 1                       .include "low.s"
+000097r 2               ; ============================================================================
+000097r 2               ; Main RAM, $0140-$02FF.  Everything here is visible whatever bank is paged in:
+000097r 2               ; the interrupt handler, the section table it reads, the far-call thunk, and the
+000097r 2               ; buffer a bank copies a strip of its data into for another bank to read.
+000097r 2               ; ============================================================================
+000097r 2                       .segment "LOWCODE"
+000000r 2               
+000000r 2               ; ---------------------------------------------------------------- far calls
+000000r 2               ; X = the index of a (bank, address) entry.  The caller's bank comes back from the
+000000r 2               ; stack, so a bank may call one that replaces it, and a call may nest.
+000000r 2               farcall:
+000000r 2  A5 F4                lda ROMSEL_CPY
+000002r 2  48                   pha
+000003r 2  BD rr rr             lda FARTAB+1,x
+000006r 2  8D rr rr             sta @j+1
+000009r 2  BD rr rr             lda FARTAB+2,x
+00000Cr 2  8D rr rr             sta @j+2
+00000Fr 2  BD rr rr             lda FARTAB,x
+000012r 2  85 F4                sta ROMSEL_CPY
+000014r 2  8D 30 FE             sta ROMSEL
+000017r 2  20 FF FF     @j:     jsr $FFFF
+00001Ar 2  68                   pla                         ; whatever the callee left in A is the result:
+00001Br 2  85 F4                sta ROMSEL_CPY              ; the bank comes back from the stack, not from A
+00001Dr 2  8D 30 FE             sta ROMSEL
+000020r 2  60                   rts
+000021r 2               
+000021r 2               ; ---------------------------------------------------------------- map peek
+000021r 2               ; The logic reads single map bytes with this: ptr/Y address the map in bank 6 and
+000021r 2               ; the routine is in main RAM, so only the data is far away.  31 cycles.
+000021r 2               mapbyte:
+000021r 2  A9 06                lda #BANK_MAP
+000023r 2  85 F4                sta ROMSEL_CPY
+000025r 2  8D 30 FE             sta ROMSEL
+000028r 2  B1 rr                lda (w16b),y
+00002Ar 2  A2 07                ldx #BANK_LGC
+00002Cr 2  86 F4                stx ROMSEL_CPY
+00002Er 2  8E 30 FE             stx ROMSEL
+000031r 2  60                   rts
+000032r 2               
+000032r 2               ; ---------------------------------------------------------------- interrupts
+000032r 2               irq_handler:
+000032r 2  86 rr                stx irq_x
+000034r 2  84 rr                sty irq_y
+000036r 2  2C 4D FE             bit VIA_IFR
+000039r 2  70 03                bvs @t1arm
+00003Br 2  4C rr rr             jmp @notT1
+00003Er 2               @t1arm: ; A rupture step is a CRTC restart: R12/R13 were armed during the section
+00003Er 2                       ; before and latch at the boundary; R9 with R4 decide where the section ends
+00003Er 2                       ; and are compared at the start of its last scanline, and R6 from scanline 1
+00003Er 2                       ; on.  The chain is phased so the step fires ~60 cycles BEFORE the restart,
+00003Er 2                       ; and the hold below carries the first write past it.
+00003Er 2  A6 rr                ldx SECIDX
+000040r 2  A0 05                ldy #5
+000042r 2  88           @hold:  dey
+000043r 2  D0 FD                bne @hold
+000045r 2  A9 09                lda #9
+000047r 2  8D 00 FE             sta CRTC_IDX
+00004Ar 2  BD rr rr             lda SECTAB+3,x
+00004Dr 2  8D 01 FE             sta CRTC_DAT
+000050r 2  A9 04                lda #4
+000052r 2  8D 00 FE             sta CRTC_IDX
+000055r 2  BD rr rr             lda SECTAB+2,x
+000058r 2  8D 01 FE             sta CRTC_DAT
+00005Br 2  A9 06                lda #6
+00005Dr 2  8D 00 FE             sta CRTC_IDX
+000060r 2  BD rr rr             lda SECTAB+4,x
+000063r 2  8D 01 FE             sta CRTC_DAT
+000066r 2  A9 07                lda #7
+000068r 2  8D 00 FE             sta CRTC_IDX
+00006Br 2  BD rr rr             lda SECTAB+5,x
+00006Er 2  8D 01 FE             sta CRTC_DAT
+000071r 2  85 rr                sta curR7
+000073r 2  A9 0C                lda #12
+000075r 2  8D 00 FE             sta CRTC_IDX
+000078r 2  BD rr rr             lda SECTAB,x
+00007Br 2  8D 01 FE             sta CRTC_DAT
+00007Er 2  A9 0D                lda #13
+000080r 2  8D 00 FE             sta CRTC_IDX
+000083r 2  BD rr rr             lda SECTAB+1,x
+000086r 2  8D 01 FE             sta CRTC_DAT
+000089r 2  BD rr rr             lda SECTAB+6,x
+00008Cr 2  8D 46 FE             sta VIA_T1LL
+00008Fr 2  BD rr rr             lda SECTAB+7,x
+000092r 2  8D 47 FE             sta VIA_T1LH
+000095r 2  AD 44 FE             lda VIA_T1CL                ; clear the T1 flag
+000098r 2  A5 rr                lda curR7                   ; the chain stops at Q, the only section whose R7
+00009Ar 2  C9 08                cmp #QVSYNC                 ; is the vsync row: a late vsync must not walk it
+00009Cr 2  F0 06                beq @stay                   ; off the end of SECTAB
+00009Er 2  8A                   txa
+00009Fr 2  18                   clc
+0000A0r 2  69 08                adc #8
+0000A2r 2  85 rr                sta SECIDX
+0000A4r 2  A4 rr        @stay:  ldy irq_y
+0000A6r 2  A6 rr                ldx irq_x
+0000A8r 2  A5 FC                lda $FC
+0000AAr 2  40                   rti
+0000ABr 2               
+0000ABr 2               @notT1:
+0000ABr 2  AD 4D FE             lda VIA_IFR
+0000AEr 2  29 02                and #$02
+0000B0r 2  F0 05                beq @exit
+0000B2r 2                       ; ---- vsync.  The T1 re-phase, the flip and section 0 all have the 64 lines
+0000B2r 2                       ; between the vsync and the bar to happen in, so they live in bank 7 and this
+0000B2r 2                       ; pays 63 cycles to reach them -- main RAM is 448 bytes and the step above is
+0000B2r 2                       ; the only part of the chain that cannot afford to be anywhere else.
+0000B2r 2  A2 00 20 rr          farjsr F_VSYNC
+0000B6r 2  rr           
+0000B7r 2               @exit:
+0000B7r 2  A4 rr                ldy irq_y
+0000B9r 2  A6 rr                ldx irq_x
+0000BBr 2  A5 FC                lda $FC
+0000BDr 2  40                   rti
+0000BEr 2               
+0000BEr 2                       .segment "LOWBSS"
+000000r 2  xx xx xx xx  SECTAB:     .res 2*48               ; per buffer: 6 sections x 8 bytes
+000004r 2  xx xx xx xx  
+000008r 2  xx xx xx xx  
+000060r 2  xx xx xx xx  FARTAB:     .res 3*NFAR             ; (bank, lo, hi) per far entry point
+000064r 2  xx xx xx xx  
+000068r 2  xx xx xx xx  
+000084r 2               
+000084r 1                       .include "bank7.s"
+000084r 2               ; ============================================================================
+000084r 2               ; Bank 7: the game logic, the frame loop, and the chain the CRTC is driven by.
+000084r 2               ; Bank 7 is the one the loader leaves paged in, so $8000 is the entry vector.
+000084r 2               ; ============================================================================
+000084r 2                       .segment "LGCCODE"
+000000r 2  4C rr rr     entry:  jmp init
+000003r 2               
+000003r 2               ; ---------------------------------------------------------------- start up
+000003r 2               init:
+000003r 2  A2 3F                ldx #$3F                    ; the stack is 64 bytes: $0100-$013F
+000005r 2  9A                   txs
+000006r 2  A9 00                lda #0                      ; the OS left its own variables here; $F0-$FF is
+000008r 2  A2 EF                ldx #$EF                    ; left alone ($F4 is the bank the loader selected,
+00000Ar 2  95 00        :       sta $00,x                   ; and the OS IRQ still restores from it until
+00000Cr 2  CA                   dex                         ; take_over)
+00000Dr 2  10 FB                bpl :-
+00000Fr 2                       ; the main-RAM image travels in bank 7 and is copied down to $0140
+00000Fr 2  A9 rr                lda #<__LOWCODE_LOAD__
+000011r 2  85 rr                sta w16
+000013r 2  A9 rr                lda #>__LOWCODE_LOAD__
+000015r 2  85 rr                sta w16+1
+000017r 2  A9 rr                lda #<__LOWCODE_RUN__
+000019r 2  85 rr                sta w16b
+00001Br 2  A9 rr                lda #>__LOWCODE_RUN__
+00001Dr 2  85 rr                sta w16b+1
+00001Fr 2  A0 00                ldy #0
+000021r 2  A2 rr                ldx #>(__LOWCODE_SIZE__ + 255)
+000023r 2  B1 rr        @lc:    lda (w16),y
+000025r 2  91 rr                sta (w16b),y
+000027r 2  C8                   iny
+000028r 2  D0 F9                bne @lc
+00002Ar 2  E6 rr                inc w16+1
+00002Cr 2  E6 rr                inc w16b+1
+00002Er 2  CA                   dex
+00002Fr 2  D0 F2                bne @lc
+000031r 2  20 rr rr             jsr init_tables
+000034r 2  20 rr rr             jsr init_far
+000037r 2  20 rr rr             jsr clear_screen
+00003Ar 2  A9 00                lda #0
+00003Cr 2  85 rr                sta curbuf
+00003Er 2  20 rr rr             jsr select_backbuf
+000041r 2  20 rr rr             jsr test_pattern
+000044r 2  20 rr rr             jsr mirror_copy
+000047r 2  A9 01                lda #1
+000049r 2  85 rr                sta curbuf
+00004Br 2  20 rr rr             jsr select_backbuf
+00004Er 2  20 rr rr             jsr test_pattern
+000051r 2  20 rr rr             jsr mirror_copy
+000054r 2  20 rr rr             jsr bar_pattern
+000057r 2  A9 00                lda #0
+000059r 2  85 rr                sta curbuf
+00005Br 2  85 rr                sta DISPSECT
+00005Dr 2  85 rr                sta NEXTSECT
+00005Fr 2  85 rr                sta SECIDX                  ; the chain starts at the bar; the first vsync
+000061r 2  85 rr                sta wcx                     ; re-phases everything
+000063r 2  85 rr                sta wcx+1
+000065r 2  85 rr                sta wcy
+000067r 2  85 rr                sta wfine
+000069r 2  85 rr                sta frame
+00006Br 2  A9 39                lda #<VS2T_DEFAULT
+00006Dr 2  85 rr                sta VS2T
+00006Fr 2  A9 0F                lda #>VS2T_DEFAULT
+000071r 2  85 rr                sta VS2T+1
+000073r 2  20 rr rr             jsr select_backbuf
+000076r 2  20 rr rr             jsr calc_ring
+000079r 2  20 rr rr             jsr build_sections          ; buffer 0's chain, before anything can display it
+00007Cr 2  20 rr rr             jsr set_palette
+00007Fr 2  20 rr rr             jsr crtc_init
+000082r 2  20 rr rr             jsr take_over
+000085r 2                       ; ---------------------------------------------------------------- loop
+000085r 2               frame_top:
+000085r 2  E6 rr                inc frame
+000087r 2  A5 rr                lda frame                   ; walk the window: two frames a char row down,
+000089r 2  4A                   lsr                         ; and a char right every eight, which takes the
+00008Ar 2  85 rr                sta wcy                     ; straddling row through every column
+00008Cr 2  A5 rr                lda frame
+00008Er 2  4A                   lsr
+00008Fr 2  4A                   lsr
+000090r 2  4A                   lsr
+000091r 2  85 rr                sta wcx
+000093r 2  A9 00                lda #0
+000095r 2  85 rr                sta wcx+1
+000097r 2  A5 rr                lda frame
+000099r 2  29 03                and #3
+00009Br 2  0A                   asl
+00009Cr 2  85 rr                sta wfine
+00009Er 2  20 rr rr             jsr calc_ring
+0000A1r 2  20 rr rr             jsr build_sections
+0000A4r 2  A5 rr                lda curbuf
+0000A6r 2  F0 02                beq :+
+0000A8r 2  A9 30                lda #48
+0000AAr 2  85 rr        :       sta NEXTSECT
+0000ACr 2  A9 01                lda #1
+0000AEr 2  85 rr                sta flipreq
+0000B0r 2  A5 rr        :       lda flipreq
+0000B2r 2  D0 FC                bne :-
+0000B4r 2  A5 rr                lda curbuf
+0000B6r 2  49 01                eor #1
+0000B8r 2  85 rr                sta curbuf
+0000BAr 2  20 rr rr             jsr select_backbuf
+0000BDr 2  4C rr rr             jmp frame_top
+0000C0r 2               
+0000C0r 2               ; ---------------------------------------------------------------- vsync
+0000C0r 2               ; Reached from the interrupt handler in main RAM, 64 lines before the bar.
+0000C0r 2               vsync_tick:
+0000C0r 2  A5 rr                lda VS2T                    ; restart T1 first, for constant latency
+0000C2r 2  8D 46 FE             sta VIA_T1LL
+0000C5r 2  A5 rr                lda VS2T+1
+0000C7r 2  8D 45 FE             sta VIA_T1CH
+0000CAr 2  A9 02                lda #$02
+0000CCr 2  8D 4D FE             sta VIA_IFR
+0000CFr 2  A9 09                lda #9                      ; re-phase: end this frame curR7 + (QROWS-1-QVSYNC)
+0000D1r 2  8D 00 FE             sta CRTC_IDX                ; rows from the vsync, whatever the row counter did
+0000D4r 2  A9 07                lda #7
+0000D6r 2  8D 01 FE             sta CRTC_DAT
+0000D9r 2  A9 06                lda #6                      ; pre-arm the bar's R6 here in Q, where the display
+0000DBr 2  8D 00 FE             sta CRTC_IDX                ; is off and a new R6 cannot show
+0000DEr 2  A9 02                lda #BARROWS
+0000E0r 2  8D 01 FE             sta CRTC_DAT
+0000E3r 2  A9 04                lda #4
+0000E5r 2  8D 00 FE             sta CRTC_IDX
+0000E8r 2  A5 rr                lda curR7
+0000EAr 2  18                   clc
+0000EBr 2  69 07                adc #QROWS-1-QVSYNC
+0000EDr 2  29 7F                and #$7F
+0000EFr 2  8D 01 FE             sta CRTC_DAT
+0000F2r 2  E6 rr                inc vsyncs
+0000F4r 2  A5 rr                lda flipreq
+0000F6r 2  F0 15                beq @noflip
+0000F8r 2  A5 rr                lda vsyncs
+0000FAr 2  38                   sec
+0000FBr 2  E5 rr                sbc flipvs
+0000FDr 2  C9 02                cmp #2
+0000FFr 2  90 0C                bcc @noflip
+000101r 2  A5 rr                lda vsyncs
+000103r 2  85 rr                sta flipvs
+000105r 2  A5 rr                lda NEXTSECT
+000107r 2  85 rr                sta DISPSECT
+000109r 2  A9 00 85 rr          stz flipreq
+00010Dr 2               @noflip:
+00010Dr 2  A2 00                ldx #0                      ; section 0 is the bar: its address and length come
+00010Fr 2  A4 rr                ldy DISPSECT                ; from the buffer about to be displayed
+000111r 2  F0 02                beq :+
+000113r 2  A2 02                ldx #2
+000115r 2  B5 rr        :       lda BUF_SEC0T1,x
+000117r 2  8D 46 FE             sta VIA_T1LL
+00011Ar 2  B5 rr                lda BUF_SEC0T1+1,x
+00011Cr 2  8D 47 FE             sta VIA_T1LH
+00011Fr 2  A9 0C                lda #12
+000121r 2  8D 00 FE             sta CRTC_IDX
+000124r 2  B5 rr                lda BUF_SEC0,x
+000126r 2  8D 01 FE             sta CRTC_DAT
+000129r 2  A9 0D                lda #13
+00012Br 2  8D 00 FE             sta CRTC_IDX
+00012Er 2  B5 rr                lda BUF_SEC0+1,x
+000130r 2  8D 01 FE             sta CRTC_DAT
+000133r 2  A9 40                lda #$40
+000135r 2  8D 4D FE             sta VIA_IFR
+000138r 2  84 rr                sty SECIDX
+00013Ar 2  60                   rts
+00013Br 2               
+00013Br 2               ; the (bank, address) table the thunk in main RAM indexes
+00013Br 2               init_far:
+00013Br 2  A2 23                ldx #3*NFAR-1
+00013Dr 2  BD rr rr     :       lda @src,x
+000140r 2  9D rr rr             sta FARTAB,x
+000143r 2  CA                   dex
+000144r 2  10 F7                bpl :-
+000146r 2  60                   rts
+000147r 2  07 rr rr     @src:   .byte BANK_LGC, <vsync_tick, >vsync_tick
+00014Ar 2  07 rr rr             .byte BANK_LGC, <vsync_tick, >vsync_tick    ; F_SCANKEYS, not yet
+00014Dr 2  07 rr rr             .byte BANK_LGC, <vsync_tick, >vsync_tick    ; F_SNDTICK, not yet
+000150r 2  06 00 00             .byte BANK_MAP, 0, 0
+000153r 2  05 00 00             .byte BANK_TIL, 0, 0
+000156r 2  05 00 00             .byte BANK_TIL, 0, 0
+000159r 2  05 00 00             .byte BANK_TIL, 0, 0
+00015Cr 2  04 00 00             .byte BANK_SPR, 0, 0
+00015Fr 2  04 00 00             .byte BANK_SPR, 0, 0
+000162r 2  05 00 00             .byte BANK_TIL, 0, 0
+000165r 2  05 00 00             .byte BANK_TIL, 0, 0
+000168r 2  04 00 00             .byte BANK_SPR, 0, 0
+00016Br 2               
+00016Br 2               ; ---------------------------------------------------------------- tables
+00016Br 2               init_tables:
+00016Br 2  A2 00                ldx #0                      ; slot -> its first char, and -> its address later
+00016Dr 2  A9 00                lda #0
+00016Fr 2  85 rr                sta w16
+000171r 2  85 rr                sta w16+1
+000173r 2  A5 rr        @m:     lda w16
+000175r 2  9D rr rr             sta mulrowlo,x
+000178r 2  A5 rr                lda w16+1
+00017Ar 2  9D rr rr             sta mulrowhi,x
+00017Dr 2  A5 rr                lda w16
+00017Fr 2  18                   clc
+000180r 2  69 50                adc #ROWCHARS
+000182r 2  85 rr                sta w16
+000184r 2  90 02                bcc :+
+000186r 2  E6 rr                inc w16+1
+000188r 2  E8           :       inx
+000189r 2  E0 18                cpx #RINGROWS+1
+00018Br 2  D0 E6                bne @m
+00018Dr 2  A2 00                ldx #0                      ; row -> slot: the ring is not a power of two
+00018Fr 2  A9 00                lda #0
+000191r 2  9D rr rr     @r:     sta ringmodtab,x
+000194r 2  18                   clc
+000195r 2  69 01                adc #1
+000197r 2  C9 17                cmp #RINGROWS
+000199r 2  90 02                bcc :+
+00019Br 2  A9 00                lda #0
+00019Dr 2  E8           :       inx
+00019Er 2  D0 F1                bne @r
+0001A0r 2  60                   rts
+0001A1r 2               
+0001A1r 2               ; select_backbuf: point the ring tables, the fold and the CRTC base at curbuf
+0001A1r 2               select_backbuf:
+0001A1r 2  A5 rr                lda curbuf
+0001A3r 2  F0 17                beq @a
+0001A5r 2  A9 80                lda #<RING_B
+0001A7r 2  85 rr                sta ringbase
+0001A9r 2  A9 46                lda #>RING_B
+0001ABr 2  85 rr                sta ringbase+1
+0001ADr 2  A9 80                lda #>RINGEND_B
+0001AFr 2  85 rr                sta ringehi
+0001B1r 2  A9 D0                lda #<CRTCB_B
+0001B3r 2  85 rr                sta crtcb
+0001B5r 2  A9 08                lda #>CRTCB_B
+0001B7r 2  85 rr                sta crtcb+1
+0001B9r 2  4C rr rr             bra @tab
+0001BCr 2  A9 80        @a:     lda #<RING_A
+0001BEr 2  85 rr                sta ringbase
+0001C0r 2  A9 0A                lda #>RING_A
+0001C2r 2  85 rr                sta ringbase+1
+0001C4r 2  A9 44                lda #>RINGEND_A
+0001C6r 2  85 rr                sta ringehi
+0001C8r 2  A9 50                lda #<CRTCB_A
+0001CAr 2  85 rr                sta crtcb
+0001CCr 2  A9 01                lda #>CRTCB_A
+0001CEr 2  85 rr                sta crtcb+1
+0001D0r 2  A5 rr        @tab:   lda crtcb                   ; the mirror redirect is the same add with the ring
+0001D2r 2  38                   sec                         ; subtracted: crtcb - RINGCHARS
+0001D3r 2  E9 30                sbc #<RINGCHARS
+0001D5r 2  85 rr                sta crtcbm
+0001D7r 2  A5 rr                lda crtcb+1
+0001D9r 2  E9 07                sbc #>RINGCHARS
+0001DBr 2  85 rr                sta crtcbm+1
+0001DDr 2  A5 rr                lda ringbase
+0001DFr 2  85 rr                sta w16
+0001E1r 2  A5 rr                lda ringbase+1
+0001E3r 2  85 rr                sta w16+1
+0001E5r 2  A2 00                ldx #0
+0001E7r 2  A5 rr        @rt:    lda w16
+0001E9r 2  95 rr                sta RINGLO,x
+0001EBr 2  A5 rr                lda w16+1
+0001EDr 2  95 rr                sta RINGHI,x
+0001EFr 2  A5 rr                lda w16
+0001F1r 2  18                   clc
+0001F2r 2  69 80                adc #<ROWBYTES
+0001F4r 2  85 rr                sta w16
+0001F6r 2  A5 rr                lda w16+1
+0001F8r 2  69 02                adc #>ROWBYTES
+0001FAr 2  85 rr                sta w16+1
+0001FCr 2  E8                   inx
+0001FDr 2  E0 17                cpx #RINGROWS
+0001FFr 2  D0 E6                bne @rt
+000201r 2  60                   rts
+000202r 2               
+000202r 2               ; calc_ring: ringS = ((wcy mod RINGROWS) * 80 + wcx) mod RINGCHARS ; barq = ringS / 80
+000202r 2               calc_ring:
+000202r 2  A6 rr                ldx wcy
+000204r 2  BD rr rr             lda ringmodtab,x
+000207r 2  AA                   tax
+000208r 2  BD rr rr             lda mulrowlo,x
+00020Br 2  18                   clc
+00020Cr 2  65 rr                adc wcx
+00020Er 2  85 rr                sta ringS
+000210r 2  BD rr rr             lda mulrowhi,x
+000213r 2  65 rr                adc wcx+1
+000215r 2  85 rr                sta ringS+1
+000217r 2  C9 07                cmp #>RINGCHARS
+000219r 2  90 15                bcc :++
+00021Br 2  D0 06                bne :+
+00021Dr 2  A5 rr                lda ringS
+00021Fr 2  C9 30                cmp #<RINGCHARS
+000221r 2  90 0D                bcc :++
+000223r 2  A5 rr        :       lda ringS
+000225r 2  38                   sec
+000226r 2  E9 30                sbc #<RINGCHARS
+000228r 2  85 rr                sta ringS
+00022Ar 2  A5 rr                lda ringS+1
+00022Cr 2  E9 07                sbc #>RINGCHARS
+00022Er 2  85 rr                sta ringS+1
+000230r 2  A5 rr        :       lda ringS                   ; q = S / 80 by repeated subtraction: 23 at most
+000232r 2  A4 rr                ldy ringS+1
+000234r 2  A2 FF                ldx #$FF
+000236r 2  38                   sec
+000237r 2  E8           @div:   inx
+000238r 2  E9 50                sbc #ROWCHARS
+00023Ar 2  B0 FB                bcs @div
+00023Cr 2  38                   sec
+00023Dr 2  88                   dey
+00023Er 2  10 F7                bpl @div
+000240r 2  86 rr                stx barq
+000242r 2  60                   rts
+000243r 2               
+000243r 2               ; ---------------------------------------------------------------- the chain
+000243r 2               ; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi.  The shape is section i's; the
+000243r 2               ; address and duration are section i+1's, because R12/R13 latch at the next restart
+000243r 2               ; and the T1 latch takes effect one interrupt later.
+000243r 2               build_sections:
+000243r 2  A5 rr                lda curbuf
+000245r 2  0A                   asl
+000246r 2  AA                   tax
+000247r 2  A9 00                lda #>BARCRTC               ; section 0 is the bar: fixed address and length
+000249r 2  95 rr                sta BUF_SEC0,x
+00024Br 2  A9 60                lda #<BARCRTC
+00024Dr 2  95 rr                sta BUF_SEC0+1,x
+00024Fr 2  A9 FE                lda #<(BARROWS*8*LINE-2)
+000251r 2  95 rr                sta BUF_SEC0T1,x
+000253r 2  A9 03                lda #>(BARROWS*8*LINE-2)
+000255r 2  95 rr                sta BUF_SEC0T1+1,x
+000257r 2  A6 rr                ldx curbuf
+000259r 2  F0 02                beq :+
+00025Br 2  A2 30                ldx #48
+00025Dr 2  A9 01        :       lda #BARROWS-1
+00025Fr 2  9D rr rr             sta SECTAB+2,x
+000262r 2  A9 07                lda #7
+000264r 2  9D rr rr             sta SECTAB+3,x
+000267r 2  A9 02                lda #BARROWS
+000269r 2  9D rr rr             sta SECTAB+4,x
+00026Cr 2  A9 1E                lda #30
+00026Er 2  9D rr rr             sta SECTAB+5,x
+000271r 2  A5 rr                lda wfine
+000273r 2  F0 6C                beq @coarse
+000275r 2                       ; ---- f > 0: T -> A (the composed row) -> P.. -> P2 -> Q
+000275r 2  49 07                eor #7
+000277r 2  18 69 01             inca                        ; 8-f lines of it
+00027Ar 2  20 rr rr             jsr @dur
+00027Dr 2  9D rr rr             sta SECTAB+6,x
+000280r 2  A5 rr                lda tmp3
+000282r 2  9D rr rr             sta SECTAB+7,x
+000285r 2  A5 rr                lda ringS                   ; the composed row is the 80 chars above the window
+000287r 2  38                   sec
+000288r 2  E9 50                sbc #<ROWCHARS
+00028Ar 2  85 rr                sta w16
+00028Cr 2  A5 rr                lda ringS+1
+00028Er 2  E9 00                sbc #0
+000290r 2  85 rr                sta w16+1
+000292r 2  10 0D                bpl :+
+000294r 2  A5 rr                lda w16
+000296r 2  18                   clc
+000297r 2  69 30                adc #<RINGCHARS
+000299r 2  85 rr                sta w16
+00029Br 2  A5 rr                lda w16+1
+00029Dr 2  69 07                adc #>RINGCHARS
+00029Fr 2  85 rr                sta w16+1
+0002A1r 2  20 rr rr     :       jsr @addr
+0002A4r 2  8A                   txa
+0002A5r 2  18                   clc
+0002A6r 2  69 08                adc #8
+0002A8r 2  AA                   tax                         ; A's entry
+0002A9r 2  A9 00 9D rr          stz SECTAB+2,x
+0002ADr 2  rr           
+0002AEr 2  A5 rr                lda wfine
+0002B0r 2  49 07                eor #7                      ; 7 - f
+0002B2r 2  9D rr rr             sta SECTAB+3,x
+0002B5r 2  A9 02                lda #2
+0002B7r 2  9D rr rr             sta SECTAB+4,x
+0002BAr 2  A9 1E                lda #30
+0002BCr 2  9D rr rr             sta SECTAB+5,x
+0002BFr 2  A5 rr                lda ringS                   ; the run starts one row into the window
+0002C1r 2  18                   clc
+0002C2r 2  69 50                adc #<ROWCHARS
+0002C4r 2  85 rr                sta w16
+0002C6r 2  A5 rr                lda ringS+1
+0002C8r 2  69 00                adc #0
+0002CAr 2  85 rr                sta w16+1
+0002CCr 2  20 rr rr             jsr @wrap
+0002CFr 2  A9 14                lda #VISROWS-1
+0002D1r 2  85 rr                sta tmp4                    ; rows in the run
+0002D3r 2  A4 rr                ldy barq
+0002D5r 2  C8                   iny
+0002D6r 2  C0 17                cpy #RINGROWS
+0002D8r 2  90 02                bcc :+
+0002DAr 2  A0 00                ldy #0
+0002DCr 2  84 rr        :       sty tmp3
+0002DEr 2  4C rr rr             bra @run
+0002E1r 2               @coarse:                            ; ---- f = 0: T -> P.. -> Q
+0002E1r 2  A5 rr                lda ringS
+0002E3r 2  85 rr                sta w16
+0002E5r 2  A5 rr                lda ringS+1
+0002E7r 2  85 rr                sta w16+1
+0002E9r 2  A9 15                lda #VISROWS
+0002EBr 2  85 rr                sta tmp4
+0002EDr 2  A5 rr                lda barq
+0002EFr 2  85 rr                sta tmp3
+0002F1r 2               @run:   ; w16 = the run's ring offset, tmp4 = its rows, X = the entry before it
+0002F1r 2  20 rr rr             jsr @nfull                  ; rows that end before the ring end
+0002F4r 2  C5 rr                cmp tmp4
+0002F6r 2  B0 15                bcs @one                    ; the whole run fits
+0002F8r 2  C9 00                cmp #0
+0002FAr 2  F0 11                beq @one                    ; it starts inside the straddling row: all of it folds
+0002FCr 2  85 rr                sta tmp2
+0002FEr 2  20 rr rr             jsr @emit                   ; up to the ring end
+000301r 2  A5 rr                lda tmp2
+000303r 2  20 rr rr             jsr @advance
+000306r 2  A5 rr                lda tmp4
+000308r 2  38                   sec
+000309r 2  E5 rr                sbc tmp2
+00030Br 2  85 rr                sta tmp4
+00030Dr 2  A5 rr        @one:   lda tmp4
+00030Fr 2  85 rr                sta tmp2
+000311r 2  20 rr rr             jsr @emit
+000314r 2  A5 rr                lda tmp4
+000316r 2  20 rr rr             jsr @advance                ; now the row below the playfield
+000319r 2  A5 rr                lda wfine
+00031Br 2  F0 3D                beq @setq
+00031Dr 2                       ; --- P2: the top f lines of that row
+00031Dr 2  20 rr rr             jsr @addr
+000320r 2  A5 rr                lda wfine
+000322r 2  20 rr rr             jsr @dur
+000325r 2  9D rr rr             sta SECTAB+6,x
+000328r 2  A5 rr                lda tmp3
+00032Ar 2  9D rr rr             sta SECTAB+7,x
+00032Dr 2  8A                   txa
+00032Er 2  18                   clc
+00032Fr 2  69 08                adc #8
+000331r 2  AA                   tax
+000332r 2  48 A9 00 9D          stza SECTAB+2, x
+000336r 2  rr rr 68     
+000339r 2  A5 rr                lda wfine
+00033Br 2  38 E9 01             deca
+00033Er 2  9D rr rr             sta SECTAB+3,x
+000341r 2  A9 15                lda #VISROWS
+000343r 2  9D rr rr             sta SECTAB+4,x
+000346r 2  A9 1E                lda #30
+000348r 2  9D rr rr             sta SECTAB+5,x
+00034Br 2  BD rr rr             lda SECTAB-8,x              ; w16 has not moved: the address the P2 @addr left
+00034Er 2  9D rr rr             sta SECTAB,x                ; in the previous entry is this one's too
+000351r 2  BD rr rr             lda SECTAB-8+1,x
+000354r 2  9D rr rr             sta SECTAB+1,x
+000357r 2  4C rr rr             bra @sq2
+00035Ar 2  20 rr rr     @setq:  jsr @addr                   ; Q starts on the row below the playfield
+00035Dr 2  A9 FE        @sq2:   lda #<(40*LINE-2)
+00035Fr 2  9D rr rr             sta SECTAB+6,x
+000362r 2  A9 09                lda #>(40*LINE-2)
+000364r 2  9D rr rr             sta SECTAB+7,x
+000367r 2  8A                   txa
+000368r 2  18                   clc
+000369r 2  69 08                adc #8
+00036Br 2  AA                   tax
+00036Cr 2  A9 00                lda #>BARCRTC               ; and hands the chain back to the bar
+00036Er 2  9D rr rr             sta SECTAB,x
+000371r 2  A9 60                lda #<BARCRTC
+000373r 2  9D rr rr             sta SECTAB+1,x
+000376r 2  A9 0F                lda #QROWS-1
+000378r 2  9D rr rr             sta SECTAB+2,x
+00037Br 2  A9 07                lda #7
+00037Dr 2  9D rr rr             sta SECTAB+3,x
+000380r 2  48 A9 00 9D          stza SECTAB+4, x
+000384r 2  rr rr 68     
+000387r 2  A9 08                lda #QVSYNC
+000389r 2  9D rr rr             sta SECTAB+5, x
+00038Cr 2  A9 FE                lda #<(40*LINE-2)
+00038Er 2  9D rr rr             sta SECTAB+6, x
+000391r 2  A9 09                lda #>(40*LINE-2)
+000393r 2  9D rr rr             sta SECTAB+7, x
+000396r 2  60                   rts
+000397r 2               ; --- emit a run of tmp2 rows starting at ring offset w16, following entry X
+000397r 2  20 rr rr     @emit:  jsr @addr
+00039Ar 2  A5 rr                lda tmp2
+00039Cr 2  20 rr rr             jsr @lines
+00039Fr 2  9D rr rr             sta SECTAB+6,x
+0003A2r 2  A5 rr                lda tmp3
+0003A4r 2  9D rr rr             sta SECTAB+7,x
+0003A7r 2  8A                   txa
+0003A8r 2  18                   clc
+0003A9r 2  69 08                adc #8
+0003ABr 2  AA                   tax
+0003ACr 2  A5 rr                lda tmp2
+0003AEr 2  38 E9 01             deca
+0003B1r 2  9D rr rr             sta SECTAB+2,x
+0003B4r 2  A9 07                lda #7
+0003B6r 2  9D rr rr             sta SECTAB+3,x
+0003B9r 2  A9 1E                lda #30
+0003BBr 2  9D rr rr             sta SECTAB+4,x
+0003BEr 2  9D rr rr             sta SECTAB+5,x
+0003C1r 2  60                   rts
+0003C2r 2               ; --- SECTAB+0/1,x = the CRTC address of the row at ring offset w16.  A row starting
+0003C2r 2               ; past RINGCHARS-80 straddles the ring end and is read from the mirror below the base,
+0003C2r 2               ; which is exactly the address w16 - RINGCHARS names.
+0003C2r 2  A5 rr        @addr:  lda w16
+0003C4r 2  A4 rr                ldy w16+1
+0003C6r 2  C0 06                cpy #>(RINGCHARS-ROWCHARS+1)
+0003C8r 2  90 13                bcc :++
+0003CAr 2  D0 04                bne :+
+0003CCr 2  C9 E1                cmp #<(RINGCHARS-ROWCHARS+1)
+0003CEr 2  90 0D                bcc :++
+0003D0r 2  18           :       clc
+0003D1r 2  65 rr                adc crtcbm
+0003D3r 2  9D rr rr             sta SECTAB+1,x
+0003D6r 2  98                   tya
+0003D7r 2  65 rr                adc crtcbm+1
+0003D9r 2  9D rr rr             sta SECTAB,x
+0003DCr 2  60                   rts
+0003DDr 2  18           :       clc
+0003DEr 2  65 rr                adc crtcb
+0003E0r 2  9D rr rr             sta SECTAB+1,x
+0003E3r 2  98                   tya
+0003E4r 2  65 rr                adc crtcb+1
+0003E6r 2  9D rr rr             sta SECTAB,x
+0003E9r 2  60                   rts
+0003EAr 2                       ; --- A = rows -> A/tmp3 = that many rows of lines, as a T1 count
+0003EAr 2  0A           @lines: asl
+0003EBr 2  0A                   asl
+0003ECr 2  0A                   asl
+0003EDr 2  4C rr rr             jmp @dur
+0003F0r 2                       ; --- A = rows: advance w16 by that many rows, folding into 0..RINGCHARS
+0003F0r 2               @advance:
+0003F0r 2  A8                   tay
+0003F1r 2  18                   clc
+0003F2r 2  A5 rr                lda w16
+0003F4r 2  79 rr rr             adc mulrowlo,y
+0003F7r 2  85 rr                sta w16
+0003F9r 2  A5 rr                lda w16+1
+0003FBr 2  79 rr rr             adc mulrowhi,y
+0003FEr 2  85 rr                sta w16+1
+000400r 2  A5 rr        @wrap:  lda w16+1
+000402r 2  C9 07                cmp #>RINGCHARS
+000404r 2  90 15                bcc :++
+000406r 2  D0 06                bne :+
+000408r 2  A5 rr                lda w16
+00040Ar 2  C9 30                cmp #<RINGCHARS
+00040Cr 2  90 0D                bcc :++
+00040Er 2  A5 rr        :       lda w16
+000410r 2  38                   sec
+000411r 2  E9 30                sbc #<RINGCHARS
+000413r 2  85 rr                sta w16
+000415r 2  A5 rr                lda w16+1
+000417r 2  E9 07                sbc #>RINGCHARS
+000419r 2  85 rr                sta w16+1
+00041Br 2  60           :       rts
+00041Cr 2                       ; --- rows of the run that finish before the ring end.  The run starts on ring
+00041Cr 2                       ; row tmp3; when r = ringS mod 80 is non-zero the last ring row straddles and
+00041Cr 2                       ; @addr sends it to the mirror, so RINGROWS-1-tmp3 rows come first.
+00041Cr 2  A4 rr        @nfull: ldy barq
+00041Er 2  A5 rr                lda ringS
+000420r 2  38                   sec
+000421r 2  F9 rr rr             sbc mulrowlo,y              ; r
+000424r 2  C9 01                cmp #1                      ; C = 1 iff r > 0
+000426r 2  A9 16                lda #RINGROWS-1
+000428r 2  B0 04                bcs :+
+00042Ar 2  69 00                adc #0                      ; r == 0: C is clear here, so this adds 1
+00042Cr 2  69 01                adc #1
+00042Er 2  38           :       sec
+00042Fr 2  E5 rr                sbc tmp3
+000431r 2  60                   rts
+000432r 2                       ; --- A = lines -> A/tmp3 = the T1 count that lasts that long
+000432r 2  85 rr        @dur:   sta tmp3                    ; n*64 == (n*256)>>2
+000434r 2  A9 00                lda #0
+000436r 2  46 rr                lsr tmp3
+000438r 2  6A                   ror
+000439r 2  46 rr                lsr tmp3
+00043Br 2  6A                   ror
+00043Cr 2  E9 01                sbc #1                      ; C = 0 out of the ror pair: A - 2
+00043Er 2  B0 02                bcs :+
+000440r 2  C6 rr                dec tmp3
+000442r 2  60           :       rts
+000443r 2               
+000443r 2               ; ---------------------------------------------------------------- display
+000443r 2               set_palette:                        ; MODE 1: logical 0..3 = black, cyan, magenta, yellow
+000443r 2  A2 0F                ldx #15                     ; a pixel's two bits land in index bits 3 and 1
+000445r 2  8A           :       txa
+000446r 2  29 08                and #8
+000448r 2  4A                   lsr
+000449r 2  4A                   lsr
+00044Ar 2  85 rr                sta tmp
+00044Cr 2  8A                   txa
+00044Dr 2  29 02                and #2
+00044Fr 2  4A                   lsr
+000450r 2  05 rr                ora tmp
+000452r 2  A8                   tay
+000453r 2  B9 rr rr             lda @cmyk,y
+000456r 2  85 rr                sta tmp
+000458r 2  8A                   txa
+000459r 2  0A                   asl
+00045Ar 2  0A                   asl
+00045Br 2  0A                   asl
+00045Cr 2  0A                   asl
+00045Dr 2  05 rr                ora tmp
+00045Fr 2  8D 21 FE             sta ULA_PAL
+000462r 2  CA                   dex
+000463r 2  10 E0                bpl :-
+000465r 2  60                   rts
+000466r 2  07 01 02 04  @cmyk:  .byte 0^7, 6^7, 5^7, 3^7    ; physical black, cyan, magenta, yellow, inverted
+00046Ar 2               
+00046Ar 2               crtc_init:                          ; start the chain at the bar and let vsync re-phase
+00046Ar 2  A2 09                ldx #9
+00046Cr 2  A9 07                lda #7
+00046Er 2  20 rr rr             jsr @w
+000471r 2  A2 04                ldx #4
+000473r 2  A9 01                lda #BARROWS-1
+000475r 2  20 rr rr             jsr @w
+000478r 2  A2 06                ldx #6
+00047Ar 2  A9 02                lda #BARROWS
+00047Cr 2  20 rr rr             jsr @w
+00047Fr 2  A2 07                ldx #7
+000481r 2  A9 1E                lda #30
+000483r 2  20 rr rr             jsr @w
+000486r 2  A2 0C                ldx #12
+000488r 2  A9 00                lda #>BARCRTC
+00048Ar 2  20 rr rr             jsr @w
+00048Dr 2  A2 0D                ldx #13
+00048Fr 2  A9 60                lda #<BARCRTC
+000491r 2  8E 00 FE     @w:     stx CRTC_IDX
+000494r 2  8D 01 FE             sta CRTC_DAT
+000497r 2  60                   rts
+000498r 2               
+000498r 2               take_over:
+000498r 2  78                   sei
+000499r 2  A9 rr                lda #<irq_handler
+00049Br 2  8D 04 02             sta IRQ1V
+00049Er 2  A9 rr                lda #>irq_handler
+0004A0r 2  8D 05 02             sta IRQ1V+1
+0004A3r 2  A9 7F                lda #$7F
+0004A5r 2  8D 4E FE             sta VIA_IER
+0004A8r 2  8D 6E FE             sta UVIA_IER
+0004ABr 2  AD 4B FE             lda VIA_ACR
+0004AEr 2  29 3F                and #$3F
+0004B0r 2  09 40                ora #$40                    ; T1 continuous
+0004B2r 2  8D 4B FE             sta VIA_ACR
+0004B5r 2  A9 00                lda #<(40*LINE)
+0004B7r 2  8D 46 FE             sta VIA_T1LL
+0004BAr 2  A9 0A                lda #>(40*LINE)
+0004BCr 2  8D 45 FE             sta VIA_T1CH
+0004BFr 2  A9 C2                lda #$C2                    ; CA1 (vsync) + T1
+0004C1r 2  8D 4E FE             sta VIA_IER
+0004C4r 2  A9 7F                lda #$7F
+0004C6r 2  8D 4D FE             sta VIA_IFR
+0004C9r 2  A9 1E                lda #30                     ; the chain stops when curR7 is Q's; start it at a
+0004CBr 2  85 rr                sta curR7                   ; value that is not
+0004CDr 2  A9 00 85 rr          stz flipreq
+0004D1r 2  A9 00 85 rr          stz vsyncs
+0004D5r 2  A9 00 85 rr          stz flipvs
+0004D9r 2  58                   cli
+0004DAr 2  60                   rts
+0004DBr 2               
+0004DBr 2               ; ---------------------------------------------------------------- scaffolding
+0004DBr 2               clear_screen:                       ; $0300-$7FFF: the bar, both mirrors and both rings
+0004DBr 2  A9 00                lda #0
+0004DDr 2  85 rr                sta w16
+0004DFr 2  A9 03                lda #>BARADDR
+0004E1r 2  85 rr                sta w16+1
+0004E3r 2  A0 00                ldy #0
+0004E5r 2  A2 7D                ldx #$7D                    ; pages $03..$7F
+0004E7r 2  91 rr        :       sta (w16),y
+0004E9r 2  C8                   iny
+0004EAr 2  D0 FB                bne :-
+0004ECr 2  E6 rr                inc w16+1
+0004EEr 2  CA                   dex
+0004EFr 2  D0 F6                bne :-
+0004F1r 2  60                   rts
+0004F2r 2               
+0004F2r 2               ; A pattern that makes the geometry readable: each ring row is a band of one colour
+0004F2r 2               ; with its slot number written as a run of black chars at the left, so the order of
+0004F2r 2               ; the rows on screen, the wrap and the mirror can all be counted off.
+0004F2r 2               test_pattern:
+0004F2r 2  A2 00                ldx #0                      ; slot
+0004F4r 2  86 rr        @slot:  stx tmp2
+0004F6r 2  8A                   txa
+0004F7r 2  18                   clc
+0004F8r 2  69 01                adc #1
+0004FAr 2  85 rr                sta tmp                     ; colour 1..3 by slot
+0004FCr 2  C9 04        @c1:    cmp #4
+0004FEr 2  90 05                bcc :+
+000500r 2  E9 03                sbc #3
+000502r 2  4C rr rr             bra @c1
+000505r 2  A8           :       tay
+000506r 2  B9 rr rr             lda @cols,y
+000509r 2  85 rr                sta tmp3                    ; the band's byte
+00050Br 2  A6 rr                ldx tmp2
+00050Dr 2  B5 rr                lda RINGLO,x
+00050Fr 2  85 rr                sta w16
+000511r 2  B5 rr                lda RINGHI,x
+000513r 2  85 rr                sta w16+1
+000515r 2  A0 00                ldy #0
+000517r 2  A9 00                lda #0
+000519r 2  85 rr                sta cnt                     ; char within the row
+00051Br 2  A5 rr        @char:  lda cnt
+00051Dr 2  C5 rr                cmp tmp2                    ; the first (slot+1) chars are black
+00051Fr 2  90 07                bcc @black
+000521r 2  F0 05                beq @black
+000523r 2  A5 rr                lda tmp3
+000525r 2  4C rr rr             bra @put
+000528r 2  A9 00        @black: lda #0
+00052Ar 2  A2 08        @put:   ldx #8
+00052Cr 2  91 rr        @st:    sta (w16),y
+00052Er 2  C8                   iny
+00052Fr 2  D0 02                bne :+
+000531r 2  E6 rr                inc w16+1
+000533r 2  CA           :       dex
+000534r 2  D0 F6                bne @st
+000536r 2  E6 rr                inc cnt
+000538r 2  A5 rr                lda cnt
+00053Ar 2  C9 50                cmp #ROWCHARS
+00053Cr 2  D0 DD                bne @char
+00053Er 2  A6 rr                ldx tmp2
+000540r 2  E8                   inx
+000541r 2  E0 17                cpx #RINGROWS
+000543r 2  D0 AF                bne @slot
+000545r 2  60                   rts
+000546r 2  00 0F F0 FF  @cols:  .byte $00, $0F, $F0, $FF
+00054Ar 2               
+00054Ar 2               bar_pattern:                        ; yellow with a black tick every eight chars
+00054Ar 2  A9 00                lda #<BARADDR
+00054Cr 2  85 rr                sta w16
+00054Er 2  A9 03                lda #>BARADDR
+000550r 2  85 rr                sta w16+1
+000552r 2  A0 00                ldy #0
+000554r 2  A2 00                ldx #0
+000556r 2  98           @b:     tya
+000557r 2  29 38                and #$38
+000559r 2  C9 38                cmp #$38
+00055Br 2  D0 05                bne :+
+00055Dr 2  A9 00                lda #0
+00055Fr 2  4C rr rr             bra :++
+000562r 2  A9 FF        :       lda #$FF
+000564r 2  91 rr        :       sta (w16),y
+000566r 2  C8                   iny
+000567r 2  D0 ED                bne @b
+000569r 2  E6 rr                inc w16+1
+00056Br 2  E8                   inx
+00056Cr 2  E0 05                cpx #5
+00056Er 2  D0 E6                bne @b
+000570r 2  60                   rts
+000571r 2               
+000571r 2               ; the mirror is a copy of the ring's last row, so a straddling row reads as one run
+000571r 2               mirror_copy:
+000571r 2  A2 16                ldx #RINGROWS-1
+000573r 2  B5 rr                lda RINGLO,x
+000575r 2  85 rr                sta w16
+000577r 2  B5 rr                lda RINGHI,x
+000579r 2  85 rr                sta w16+1
+00057Br 2  A5 rr                lda ringbase
+00057Dr 2  38                   sec
+00057Er 2  E9 80                sbc #<ROWBYTES
+000580r 2  85 rr                sta w16b
+000582r 2  A5 rr                lda ringbase+1
+000584r 2  E9 02                sbc #>ROWBYTES
+000586r 2  85 rr                sta w16b+1
+000588r 2  A0 00                ldy #0
+00058Ar 2  A2 02                ldx #>ROWBYTES
+00058Cr 2  B1 rr        :       lda (w16),y
+00058Er 2  91 rr                sta (w16b),y
+000590r 2  C8                   iny
+000591r 2  D0 F9                bne :-
+000593r 2  E6 rr                inc w16+1
+000595r 2  E6 rr                inc w16b+1
+000597r 2  CA                   dex
+000598r 2  D0 F2                bne :-
+00059Ar 2  A2 80                ldx #<ROWBYTES              ; the odd half page
+00059Cr 2  B1 rr        :       lda (w16),y
+00059Er 2  91 rr                sta (w16b),y
+0005A0r 2  C8                   iny
+0005A1r 2  CA                   dex
+0005A2r 2  D0 F8                bne :-
+0005A4r 2  60                   rts
+0005A5r 2               
+0005A5r 2                       .segment "LGCBSS"
+000000r 2  xx xx xx xx  mulrowlo:   .res RINGROWS+1
+000004r 2  xx xx xx xx  
+000008r 2  xx xx xx xx  
+000018r 2  xx xx xx xx  mulrowhi:   .res RINGROWS+1
+00001Cr 2  xx xx xx xx  
+000020r 2  xx xx xx xx  
+000030r 2  xx xx xx xx  ringmodtab: .res 256
+000034r 2  xx xx xx xx  
+000038r 2  xx xx xx xx  
+000130r 2               
+000130r 1               
+000130r 1                       .segment "SPRCODE"
+000000r 1  00                   .byte 0
+000001r 1                       .segment "TILCODE"
+000000r 1  00                   .byte 0
+000001r 1                       .segment "MAPCODE"
+000000r 1  00                   .byte 0
+000000r 1               
