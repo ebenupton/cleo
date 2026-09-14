@@ -80,9 +80,15 @@ def main():
             op = code[q]; nm = OPS.get(op, 'op%d' % op); arg = ''
             if op == 170:   # tableswitch
                 a = (q + 4) & ~3; dflt, lo, hi = struct.unpack('>iii', code[a:a+12]); cnt = hi - lo + 1
-                arg = 'default->%d lo=%d hi=%d' % (q + dflt, lo, hi); q = a + 12 + 4 * cnt; print('   %4d %s %s' % (q, nm, arg)); continue
+                tgts = [q + struct.unpack('>i', code[a+12+4*k:a+16+4*k])[0] for k in range(cnt)]
+                arg = 'default->%d lo=%d hi=%d  ' % (q + dflt, lo, hi) + ' '.join(
+                    '%d->%d' % (lo + k, t) for k, t in enumerate(tgts))
+                print('   %4d %s %s' % (q, nm, arg)); q = a + 12 + 4 * cnt; continue
             if op == 171:
-                a = (q + 4) & ~3; dflt, np_ = struct.unpack('>ii', code[a:a+8]); arg = 'default->%d n=%d' % (q + dflt, np_); q = a + 8 + 8 * np_; print('   %4d %s %s' % (q, nm, arg)); continue
+                a = (q + 4) & ~3; dflt, np_ = struct.unpack('>ii', code[a:a+8])
+                prs = [struct.unpack('>ii', code[a+8+8*k:a+16+8*k]) for k in range(np_)]
+                arg = 'default->%d n=%d  ' % (q + dflt, np_) + ' '.join('%d->%d' % (m, q + t) for m, t in prs)
+                print('   %4d %s %s' % (q, nm, arg)); q = a + 8 + 8 * np_; continue
             if op in N1:
                 v = code[q+1]
                 arg = str(struct.unpack('>b', code[q+1:q+2])[0]) if op == 16 else (s(v) if op == 18 else (ATYPES.get(v, str(v)) if op == 188 else str(v)))

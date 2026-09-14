@@ -2664,27 +2664,24 @@ ob_walker:
 
 ; ---------------------------------------------------------------- SPIKE (7)
 ob_spike:
+        ; A is a dormancy counter running -127..24 (CleoApp.run case 7: A++, and at 24
+        ; A = -(rnd&63)-64).  That fits a signed byte exactly, so the byte IS the value
+        ; and the high half was only ever its sign extension.
         inc fa
-        bne :+
-        inc fa+1
-:       lda fa
+        lda fa
         cmp #24
-        bne @nowrap
-        lda fa+1
         bne @nowrap
         jsr m_rnd
         and #63
-        clc
-        adc #64
-        eor #$FF
-        inca
-        sx16 fa
+        eor #63                     ; 63-r, then +129, is 192-r: the byte form of
+        clc                         ; -(r&63)-64, i.e. -64 down to -127
+        adc #129
+        sta fa
 @nowrap:
         lda health
         beq @draw
-        lda fa+1
-        bne @draw
         lda fa
+        bmi @draw                   ; still dormant
         cmp #8
         bcs @draw
         ; rx > -8 && rx < (A+1)*2 && ry > -24 && ry < 8
@@ -2700,8 +2697,8 @@ ob_spike:
         bne @draw
         mov16 hx, rx
         jsr player_hit
-@draw:  bmi16 fa, @done
-        lda fa
+@draw:  lda fa
+        bmi @done
         cmp #8
         bcc :+
         lda #23
