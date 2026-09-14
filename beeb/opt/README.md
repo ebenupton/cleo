@@ -30,3 +30,17 @@ statediff alone is not enough: it compares object state, and a wrong sprite fram
 mis-drawn tile leaves that identical. pixdiff alone is not enough either, for anything
 on a path the scripted run does not reach -- and HARNESS_ALLOW_DAMAGE=1 exists because
 the default run holds Cleo invulnerable and never enters a knockback state at all.
+
+## proposals.json / CATALOGUE.md
+
+`tools/proposals.py` merges `build/windows/out_*.json` (the agent farm's replies) into
+`opt/proposals.json` -- every field the agent returned, plus the window it answered, the
+executions per frame from the profile, and the overlap set.  `opt/CATALOGUE.md` is the
+readable index of the same data.
+
+Ranking is in cycles per frame, not raw saving: a 250-cycle win in `calc_ring` is worth
+less than a 2-cycle win inside `drawrect`'s row loop.  The weighting is capped at the
+cycles the profile attributes to the window, because agents mixed units -- some costed a
+whole loop as one execution.  Entries over that cap carry `overclaim`.
+
+None of it is verified.  Apply one proposal at a time, gated on statediff + pixdiff.
