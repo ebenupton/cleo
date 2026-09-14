@@ -177,6 +177,7 @@ if MODE == 1:
     dither = dither_cmyk
 CYAN_COL = 6 if MODE == 2 else 5          # a col entry that is all cyan
 strip = (lambda c: c & 7) if MODE == 2 else (lambda c: c)   # drop MODE 2's opaque-black 8
+OPAQUE_BLACK = 8 if MODE == 2 else 0      # what a col entry of forced black is (8 is M over K in MODE 1)
 
 
 def pack_mode2(col):
@@ -388,9 +389,9 @@ for cid, orig in enumerate(compact):
     frac = float(np.mean(wall_pal[src][bg[::2]]))
     rep = col.copy()
     if orig in PIXEL_TILES:
-        rep[bg & np.repeat(wall_pal[src], 2, axis=0)] = 8
+        rep[bg & np.repeat(wall_pal[src], 2, axis=0)] = OPAQUE_BLACK
     elif frac >= DARK_BG or orig in WALL_TILES:
-        rep[bg] = 8
+        rep[bg] = OPAQUE_BLACK
     else:
         continue
     blackened[cid] = rep
