@@ -2062,6 +2062,8 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
 ; extra section whenever the window straddles.
 ; ============================================================================
 LINE = 64
+BARLEAD = 30                        ; us the bar's T1 fires early, so ACCCON D can be
+                                    ; switched in the blanking of the bar's last line
 BARCRTC  = BARADDR / 8
         .code
         .segment "LOGIC"            ; back to the bank
@@ -2073,9 +2075,9 @@ build_sections:
         sta BUF_SEC0,x
         lda #<BARCRTC
         sta BUF_SEC0+1,x
-        lda #<(BARROWS*8*LINE-2)
+        lda #<(BARROWS*8*LINE-2-BARLEAD)   ; the bar's step fires early: see the ISR
         sta BUF_SEC0T1,x
-        lda #>(BARROWS*8*LINE-2)
+        lda #>(BARROWS*8*LINE-2-BARLEAD)
         sta BUF_SEC0T1+1,x
         ldx curbuf
         beq :+
@@ -2086,31 +2088,6 @@ build_sections:
         sta SECTAB+3,x
         lda #2
         sta SECTAB+4,x
-        lda #30
-        sta SECTAB+5,x
-        ; X: one blank row between the bar and the playfield.  The ISR switches ACCCON D
-        ; on the step that starts it, and it takes ~60 cycles to get there, so whatever
-        ; line the switch lands in has its first third fetched from the other buffer's
-        ; RAM.  With a blank row in between, that line is one nobody sees.  A full row
-        ; rather than a single line because on the title screen the following step can
-        ; arrive late (IRQs masked), and an 8-line black row stretching is invisible
-        ; where a 1-line one showed the playfield compressed 8:1 for the delay.
-        lda #<(XROWS*8*LINE-2)      ; entry 0 carries X's address and duration
-        sta SECTAB+6,x
-        lda #>(XROWS*8*LINE-2)
-        sta SECTAB+7,x
-        lda #>BARCRTC               ; any address: R6 = 0, nothing is fetched for show
-        sta SECTAB,x
-        lda #<BARCRTC
-        sta SECTAB+1,x
-        txa
-        clc
-        adc #8
-        tax                         ; entry 1: X's own shape -- one 8-line row, blank
-        stz SECTAB+2,x
-        lda #7                      ; a full row, not one line: if this step's successor
-        sta SECTAB+3,x              ; is late (the menu masks IRQs), what shows meanwhile
-        stz SECTAB+4,x              ; is black, not the playfield in 1-line rows
         lda #30
         sta SECTAB+5,x
         lda wfine
@@ -2229,7 +2206,18 @@ build_sections:
         sta SECTAB+6, x
         lda #>(40*LINE-2)
         sta SECTAB+7, x
-        rts
+        ; the bar's step fired BARLEAD early, so the section after the bar -- whose
+        ; duration entry 0 carries -- runs BARLEAD longer to end where it should
+        ldx curbuf
+        beq @e0
+        ldx #48
+@e0:    lda SECTAB+6,x
+        clc
+        adc #BARLEAD
+        sta SECTAB+6,x
+        bcc @e1
+        inc SECTAB+7,x
+@e1:    rts
 ; --- emit a run of tmp2 rows starting at w16 (a ring offset), following entry X
 @emit:  jsr @addr
         lda tmp2
@@ -2334,12 +2322,10 @@ build_sections:
         .code
 
 BARROWS = 2                        ; the status bar
-XROWS   = 1                        ; the blank row after it: the ACCCON D switch lands here
-QROWS  = 39 - VISROWS - BARROWS - XROWS    ; blank rows after the display: 312 lines in all
-QVSYNC = 2                         ; vsync at Q row 2 of 7: five rows (40 lines) between the
+QROWS  = 39 - VISROWS - BARROWS    ; blank rows after the display: 312 lines in all
+QVSYNC = 3                         ; vsync at Q row 3 of 8: five rows (40 lines) between the
                                    ; vsync and the bar, which is where the bar is drawn.
-                                   ; It was six, and the picture sat a row low.  The frame
-                                   ; is 16 + 8 + 232 + 16 + 40 = 312 lines.
+                                   ; It was six, and the picture sat a row low.
 
 ; ============================================================================
 ; Frame control
@@ -2752,21 +2738,40 @@ irq_handler:
         stx irq_x
         sty irq_y
         bit VIA_IFR
-        bvc @notT1
-        ; ---- rupture chain step (time critical: R9, R4, R6 within the section's first line)
+        bvs @t1arm                  ; the T1 arm grew past bvc's reach: one cycle each way
+        jmp @notT1
+@t1arm: ; ---- rupture chain step.  This is a CRTC restart: the next section's address
+        ; was armed during the previous one and is latched at the boundary, and the
+        ; registers written below are compared at row or line ends, so nothing the CRTC
+        ; needs for the first line's pixels depends on when they are written -- as long
+        ; as they land AFTER the boundary (R9 or R4 written before the bar's last row-end
+        ; would stop that row ending: the bottom of the bar repeats, then blank).  ACCCON
+        ; D is the exception: it is the memory map, sampled by every fetch, so it must
+        ; be in place BEFORE the boundary.  The bar's T1 therefore fires BARLEAD us early
+        ; and D goes first, landing in the horizontal blanking of the bar's last line;
+        ; the hold after it keeps the register writes on the far side of the restart.
         ldx SECIDX
-        lda #9
+        cpx DISPSECT                ; the first step is the start of the bar itself, which
+        beq @noD                    ; is only main RAM to the CRTC while D = 0: leave it
+        lda ACCCON
+        and #$FE
+        ora dispD
+        sta ACCCON
+@noD:   ldy #2
+@hold:  dey
+        bne @hold
+        lda #9                      ; R9 and R6 are both compared at the START of the
+        sta CRTC_IDX                ; section's second scanline, so they go first; R4 is
+        lda SECTAB+3,x              ; compared at row ends, a whole row away, and goes
+        sta CRTC_DAT                ; after them.  (R4 second put R6 past that line
+        lda #6                      ; start: the bar showed one scanline and went dark.)
         sta CRTC_IDX
-        lda SECTAB+3,x
-        sta CRTC_DAT
+        ldy SECTAB+4,x
+        sty CRTC_DAT
         lda #4
         sta CRTC_IDX
         lda SECTAB+2,x
         sta CRTC_DAT
-        lda #6
-        sta CRTC_IDX
-        ldy SECTAB+4,x              ; R6: the end-of-chain test below wants it again
-        sty CRTC_DAT
         lda #7
         sta CRTC_IDX
         lda SECTAB+5,x
@@ -2785,17 +2790,9 @@ irq_handler:
         lda SECTAB+7,x
         sta VIA_T1LH
         lda VIA_T1CL                ; clear T1 flag
-        cpx DISPSECT                ; the FIRST step fires at the start of the bar, and
-        beq @keepD                  ; the bar is only main RAM to the CRTC while D = 0:
-        lda ACCCON                  ; leave the vsync handler's D = 0 alone there.  Every
-        and #$FE                    ; later step is inside the playfield, which scans
-        ora dispD                   ; from the displayed buffer.  (Re-applying it on every
-        sta ACCCON                  ; step is what made the bar scramble on shadow frames.)
-@keepD:
-        ; next entry; the chain stops at Q, the only entry whose R7 is the vsync row
-        ; (X has R6 = 0 as well, so R6 no longer marks it): a late vsync must not walk
-        ; the chain off the end of SECTAB.  Every other section's R7 is 30, so C = 1
-        ; on the way past exactly as cpy #0 left it.
+        ; next entry; the chain stops at Q, the only entry whose R7 is the vsync row: a
+        ; late vsync must not walk the chain off the end of SECTAB.  Every other
+        ; section's R7 is 30, so C = 1 on the way past, as the adc below needs.
         lda curR7                   ; R7, just written
         cmp #QVSYNC
         beq @stay
@@ -2828,6 +2825,10 @@ irq_handler:
         sta CRTC_IDX
         lda #7
         sta CRTC_DAT
+        lda #6                      ; pre-arm the bar's R6 now, in Q, where the display
+        sta CRTC_IDX                ; is already off and a new R6 cannot show: the step
+        lda #BARROWS                ; ISR at the bar's start is too close to the second
+        sta CRTC_DAT                ; scanline to be trusted with it
         lda #4
         sta CRTC_IDX
         lda curR7

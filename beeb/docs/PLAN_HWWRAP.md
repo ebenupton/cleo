@@ -164,21 +164,33 @@ harness at a frame boundary, so what is looked at is what was measured), and the
 
 **Two more, found after the first 29-row build was up.**
 
-*The first playfield scanline tore on jumps.* The ISR writes ACCCON D after the six CRTC
-registers, ~60 cycles into the first scanline of the section it programs, so the CRTC
-fetched the first third of that line from the other buffer's RAM. Invisible while both
-rings held the same row; garbage as soon as the camera moved. The fix is structural: a
-blank section X between the bar and the playfield, so the D switch lands in a line
-nothing displays. It costs one T1 step and one row; Q gives the row back and the frame
-stays 312. It was tried as a single scanline first (R9=0): on the title screen the step
-that follows X can arrive late, and while it is late the CRTC runs with X's shape --
-with 1-line rows that painted the playfield compressed 8:1 as a ghost above the logo;
-with a full 8-line row all that can show is more black. It also made "R6 = 0" ambiguous as the chain terminator, which is now "R7 is the
-vsync row" -- `lda curR7 / cmp #QVSYNC`, which leaves C set on the way past exactly as
-the `cpy #0` it replaced did, and the `adc #7` after it depends on that.
+*The first playfield scanline tore on jumps -- and the fix that was wrong.* A rupture
+step is a CRTC restart: the next section's address is armed during the previous one and
+latched at the boundary, and R4/R6/R7 are compared at row ends and R9 at line ends, so
+nothing the CRTC needs for a section's first pixels depends on when the step ISR writes
+them, provided they land after the restart. ACCCON D is the exception: it is the memory
+map, sampled by every fetch, so it has to be in place *before* the restart. The ISR was
+writing it ~60 cycles after, and the first third of the playfield's first line came from
+the other buffer. The first "fix" was a blank row between bar and playfield so the late
+switch fell in a line nobody saw -- a hack, and one that broke the title screen (a
+late step painted the playfield 8:1 through the blank section's registers). The real
+fix: the bar's T1 fires BARLEAD (30 us) early, the ISR writes D first -- landing in the
+horizontal blanking of the bar's last line -- then holds ~11 cycles so the register
+writes stay on the far side of the boundary, and the following section's duration is
+lengthened by BARLEAD to end where it should.
 
-*Recentred.* `QVSYNC = 2` of Q's 7 rows: five rows between the vsync and the bar instead of six, so
-the whole picture is one row higher and the bar-drawing window is 40 lines (2560 cycles).
+*Register order and pre-arming.* R9 and R6 are both compared at the START of a section's
+second scanline, so the step ISR has about a line to land them; R4, second in the old
+order, pushed R6 past that point once the D block was in front of it, and the bar showed
+one scanline and went dark (Q's R6 = 0 was still in force). R4 is compared at row ends,
+a whole row away, so it is now written after R6. And the bar's R6 is pre-armed in the
+vsync handler, during Q, where the display is already off and a new R6 cannot show:
+that is the register-then-restart discipline applied to the one section whose step has
+no lead.
+
+*Recentred.* `QVSYNC = 3` of Q's 8 rows: five rows between the vsync and the bar instead of
+six, so the whole picture is one row higher and the bar-drawing window is 40 lines (2560
+cycles).
 `titlediff` reports most samples differing after this, because the painted frame moved;
 `titlephase` still finds the frames identical to zero pixels at a phase offset only for
 the samples taken before the game's chain is running. Check the title by eye.
