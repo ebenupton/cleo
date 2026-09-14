@@ -85,8 +85,11 @@ LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 ; ring at $3000 with 27 rows visible and the status bar above.
 ROWCHARS  = 80
 RINGROWS  = 32                    ; the whole 20K: the hardware fold IS the ring wrap
-VISROWS   = 27                    ; visible char rows (216 lines = 108 game px)
-BUFROWS   = 28                    ; rows held (visible + partial top row source)
+VISROWS   = 29                    ; visible char rows: 232 lines = 116 game px.  The
+                                  ; original is 108 (a 128-line phone screen less a
+                                  ; 20-line HUD); the ring at $3000 has room for more.
+                                  ; NOT 30: see PARTROW.
+BUFROWS   = VISROWS + 1           ; rows held: the visible ones plus the bottom partial's
 ; The camera follows Cleo one for one, so her fall speed is also how far the window
 ; moves in a frame.  A char row is four map pixels.  Main and shadow are separate,
 ; so nothing in the layout forces a limit; this one is a play decision.
@@ -113,13 +116,21 @@ RINGEND   = RINGBASE + RINGBYTES
 ; The window occupies VISROWS+1 of the 32 slots; partq picks one of the few left over,
 ; far enough from both edges that the camera's 2-rows-a-frame cannot reach it before
 ; scroll_validate would redraw it anyway.
-PARTROW   = 29                    ; slots ahead of the window's own row
+PARTROW   = RINGROWS - 1          ; the composed top row's slot, relative to the window's.
+; The ring is char granular, so a slot is NOT window aligned: the window occupies ring
+; chars [ringS, ringS + BUFROWS*80) and slot barq+31 starts at ringS - r + 2480, where
+; r = ringS mod 80.  With BUFROWS = 30 the free run is 160 chars and the slot always fits
+; (r <= 79).  With BUFROWS = 31 it fits only when r = 0: otherwise the composed row's
+; first r chars land on the window's last row, and once that row scrolls up into view
+; they show as sky-coloured fragments (8-wfine) lines tall.  That is why VISROWS is 29.
+; 30 would need the composed row at ring char ringS + 2480 exactly -- window aligned,
+; not slot aligned -- and a copy that folds at $8000 mid-run.
 ; The bar is BELOW the screen, in main RAM, and there is only one of it.  The CRTC's
 ; start address is just RAM/8, so it can scan from anywhere under $8000 -- but with
 ; shadow selected for display (ACCCON D = 1) everything under $3000 reads HAZEL/ANDY
 ; instead of main RAM, so the bar's section runs with D = 0 and the playfield's with
 ; D = the buffer being shown.  Single buffered: it is drawn where it is displayed,
-; inside the 48 lines between vsync and the first scanned bar line.
+; inside the 40 lines between vsync and the first scanned bar line.
 BARADDR   = $2B00
 CRTCBASE  = RINGBASE / 8          ; the CRTC counts characters, so the ring starts here
 WINPX     = ROWCHARS*2            ; window width in pixels
@@ -2077,6 +2088,31 @@ build_sections:
         sta SECTAB+4,x
         lda #30
         sta SECTAB+5,x
+        ; X: one blank row between the bar and the playfield.  The ISR switches ACCCON D
+        ; on the step that starts it, and it takes ~60 cycles to get there, so whatever
+        ; line the switch lands in has its first third fetched from the other buffer's
+        ; RAM.  With a blank row in between, that line is one nobody sees.  A full row
+        ; rather than a single line because on the title screen the following step can
+        ; arrive late (IRQs masked), and an 8-line black row stretching is invisible
+        ; where a 1-line one showed the playfield compressed 8:1 for the delay.
+        lda #<(XROWS*8*LINE-2)      ; entry 0 carries X's address and duration
+        sta SECTAB+6,x
+        lda #>(XROWS*8*LINE-2)
+        sta SECTAB+7,x
+        lda #>BARCRTC               ; any address: R6 = 0, nothing is fetched for show
+        sta SECTAB,x
+        lda #<BARCRTC
+        sta SECTAB+1,x
+        txa
+        clc
+        adc #8
+        tax                         ; entry 1: X's own shape -- one 8-line row, blank
+        stz SECTAB+2,x
+        lda #7                      ; a full row, not one line: if this step's successor
+        sta SECTAB+3,x              ; is late (the menu masks IRQs), what shows meanwhile
+        stz SECTAB+4,x              ; is black, not the playfield in 1-line rows
+        lda #30
+        sta SECTAB+5,x
         lda wfine
         beq @coarse
         ; ---- f > 0 : T -> A (the partial row) -> P.. -> P2 -> Q
@@ -2298,8 +2334,12 @@ build_sections:
         .code
 
 BARROWS = 2                        ; the status bar
-QROWS  = 39 - VISROWS - BARROWS    ; blank rows after the display: 312 lines in all
-QVSYNC = 4                         ; vsync at Q row 4 -> section 0 starts QROWS-4 later
+XROWS   = 1                        ; the blank row after it: the ACCCON D switch lands here
+QROWS  = 39 - VISROWS - BARROWS - XROWS    ; blank rows after the display: 312 lines in all
+QVSYNC = 2                         ; vsync at Q row 2 of 7: five rows (40 lines) between the
+                                   ; vsync and the bar, which is where the bar is drawn.
+                                   ; It was six, and the picture sat a row low.  The frame
+                                   ; is 16 + 8 + 232 + 16 + 40 = 312 lines.
 
 ; ============================================================================
 ; Frame control
@@ -2333,8 +2373,8 @@ render_frame:
         jsr wait_flip               ; the previous frame's flip must land before we
         jsr select_backbuf          ; draw into the buffer it is leaving
         ; ---- the bar first.  It is single buffered and drawn where it is displayed,
-        ; so it has to be finished before the CRTC reaches it: T starts 48 lines after
-        ; the vsync wait_flip just returned from, which is 3072 cycles.  A full
+        ; so it has to be finished before the CRTC reaches it: T starts 40 lines after
+        ; the vsync wait_flip just returned from, which is 2560 cycles.  A full
         ; template blit does not fit and does not need to -- it runs twice a level.
         lda BARBG
         beq :+
@@ -2745,13 +2785,19 @@ irq_handler:
         lda SECTAB+7,x
         sta VIA_T1LH
         lda VIA_T1CL                ; clear T1 flag
-        lda ACCCON                  ; past the bar now: the playfield scans from the
-        and #$FE                    ; displayed buffer.  Re-applied on every step, which
-        ora dispD                   ; costs 13 cycles and needs no "is this the first"
-        sta ACCCON                  ; test in the time-critical arm
-        ; next entry; the chain stops at Q (the only entry with R6 = 0): a late vsync
-        ; must not walk the chain off the end of SECTAB
-        cpy #0                      ; R6 is still in Y from the write above
+        cpx DISPSECT                ; the FIRST step fires at the start of the bar, and
+        beq @keepD                  ; the bar is only main RAM to the CRTC while D = 0:
+        lda ACCCON                  ; leave the vsync handler's D = 0 alone there.  Every
+        and #$FE                    ; later step is inside the playfield, which scans
+        ora dispD                   ; from the displayed buffer.  (Re-applying it on every
+        sta ACCCON                  ; step is what made the bar scramble on shadow frames.)
+@keepD:
+        ; next entry; the chain stops at Q, the only entry whose R7 is the vsync row
+        ; (X has R6 = 0 as well, so R6 no longer marks it): a late vsync must not walk
+        ; the chain off the end of SECTAB.  Every other section's R7 is 30, so C = 1
+        ; on the way past exactly as cpy #0 left it.
+        lda curR7                   ; R7, just written
+        cmp #QVSYNC
         beq @stay
         txa
         adc #7                      ; cpy #0 always leaves C set, so this adds 8
@@ -2776,7 +2822,7 @@ irq_handler:
         lda #$02
         sta VIA_IFR
         ; re-phase: the vsync fired at row curR7, so end this frame at row curR7+5 with
-        ; 8-line rows -> T starts exactly 48 lines after the vsync even if the CRTC row
+        ; 8-line rows -> T starts exactly 40 lines after the vsync even if the CRTC row
         ; counter had run past its vertical total (which otherwise never recovers)
         lda #9
         sta CRTC_IDX

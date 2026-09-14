@@ -114,3 +114,71 @@ Horizontal-scroll frames draw a column of 30 chars instead of 27 (+11% on that p
 everything else is cheaper: one fewer IRQ, no mirror upkeep (~0.6% of frame work), no
 bar double-draw, no P2 arithmetic. Expect a small net win on L6 and roughly neutral
 elsewhere, plus 12 more pixels of playfield.
+
+## What happened when it was built (14 Sep 2026)
+
+Built on branch `hwwrap` as four commits: sprite directory to bank 7; bar to `$2B00`;
+hardware-wrapped 32-row ring with the mirror deleted; 29 visible rows.
+
+**29 rows, not 30.** The ring is char granular, so a ring *slot* is not window aligned.
+The window occupies ring chars `[ringS, ringS + BUFROWS*80)`; the slot chosen for the
+composed top row, `barq+31`, starts at `ringS - r + 2480` where `r = ringS mod 80`. With
+30 held rows the free run is 160 chars and the slot always fits. With 31 it fits only
+when `r = 0`; otherwise the composed row's first `r` chars land on the window's last
+row, and when that row scrolls up into view they show as sky-coloured fragments
+`8-wfine` lines tall and one dirty-column range wide. Found by stepping the first bad
+frame through render_frame's phases and seeing the cells were already wrong before the
+frame began -- they had scrolled in from rows a 27-row build never draws. 30 rows would
+need the composed row at ring char `ringS + 2480` exactly, and a copy that folds at
+`$8000` in the middle of its run (or splits into two).
+
+**The first chain step must not touch D.** The T1 ISR re-applied `D = dispD` on every
+step, and the first step fires at the *start* of the bar section. On shadow frames that
+switched the CRTC to HAZEL as the bar began scanning. It showed earlier as "the bar band
+differs on 104 of 200 frames", which was misread as single-buffer HUD timing; the tell was
+that it was half the frames. Fixed with `cpx DISPSECT / beq` before the write.
+
+**The original view is 108 px.** `CleoCanvas` creates a 120x128 image and reserves 20
+lines of it for the HUD. So 27 rows was faithful, and 29 shows 8 px more than the phone
+did. `maxwy` and the in-range distance both derive from `VISLINES`, so the world changes
+with the view and object state no longer matches the pre-change builds; that is by
+design, and one-line reversible (pin the two `VISLINES/2` uses to 216).
+
+**Measured, same world, against the bar-move build:**
+
+| | hardware ring at 27 rows | 27 -> 29 rows | net |
+|---|---:|---:|---:|
+| L0 jump / run | -3169 / -3793 | +2565 / +2284 | -604 / -1509 |
+| L3 jump / run | -850 / -547 | +2719 / +3110 | +1869 / +2563 |
+| L6 jump / run | -1190 / -2688 | +74 / +682 | -1116 / -2006 |
+
+The ring change is a clear win everywhere. The two extra rows cost 7% more column
+drawing, which is most of a frame's work on a level that scrolls sideways (L3) and
+almost nothing on one that does not (L6).
+
+**Tools that came out of it:** `tools/ringdiff.mjs` (compare what the window shows
+across builds whose ring geometry differs; valid only for hardware-wrapped builds -- the
+mirror build's ring tail is not what it displays), `tools/shot.mjs` (a PNG from the
+harness at a frame boundary, so what is looked at is what was measured), and the
+`PIXDIFF_MASK` env for retiring a region of screen RAM.
+
+**Two more, found after the first 29-row build was up.**
+
+*The first playfield scanline tore on jumps.* The ISR writes ACCCON D after the six CRTC
+registers, ~60 cycles into the first scanline of the section it programs, so the CRTC
+fetched the first third of that line from the other buffer's RAM. Invisible while both
+rings held the same row; garbage as soon as the camera moved. The fix is structural: a
+blank section X between the bar and the playfield, so the D switch lands in a line
+nothing displays. It costs one T1 step and one row; Q gives the row back and the frame
+stays 312. It was tried as a single scanline first (R9=0): on the title screen the step
+that follows X can arrive late, and while it is late the CRTC runs with X's shape --
+with 1-line rows that painted the playfield compressed 8:1 as a ghost above the logo;
+with a full 8-line row all that can show is more black. It also made "R6 = 0" ambiguous as the chain terminator, which is now "R7 is the
+vsync row" -- `lda curR7 / cmp #QVSYNC`, which leaves C set on the way past exactly as
+the `cpy #0` it replaced did, and the `adc #7` after it depends on that.
+
+*Recentred.* `QVSYNC = 2` of Q's 7 rows: five rows between the vsync and the bar instead of six, so
+the whole picture is one row higher and the bar-drawing window is 40 lines (2560 cycles).
+`titlediff` reports most samples differing after this, because the painted frame moved;
+`titlephase` still finds the frames identical to zero pixels at a phase offset only for
+the samples taken before the game's chain is running. Check the title by eye.
