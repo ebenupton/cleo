@@ -2062,8 +2062,9 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
 ; extra section whenever the window straddles.
 ; ============================================================================
 LINE = 64
-BARLEAD = 30                        ; us the bar's T1 fires early, so ACCCON D can be
-                                    ; switched in the blanking of the bar's last line
+BARLEAD = 10                        ; us the bar's T1 fires early, beyond the lead every
+                                    ; step has, so ACCCON D can be switched in the
+                                    ; blanking of the bar's last line
 BARCRTC  = BARADDR / 8
         .code
         .segment "LOGIC"            ; back to the bank
@@ -2741,15 +2742,21 @@ irq_handler:
         bvs @t1arm                  ; the T1 arm grew past bvc's reach: one cycle each way
         jmp @notT1
 @t1arm: ; ---- rupture chain step.  This is a CRTC restart: the next section's address
-        ; was armed during the previous one and is latched at the boundary, and the
-        ; registers written below are compared at row or line ends, so nothing the CRTC
-        ; needs for the first line's pixels depends on when they are written -- as long
-        ; as they land AFTER the boundary (R9 or R4 written before the bar's last row-end
-        ; would stop that row ending: the bottom of the bar repeats, then blank).  ACCCON
-        ; D is the exception: it is the memory map, sampled by every fetch, so it must
-        ; be in place BEFORE the boundary.  The bar's T1 therefore fires BARLEAD us early
-        ; and D goes first, landing in the horizontal blanking of the bar's last line;
-        ; the hold after it keeps the register writes on the far side of the restart.
+        ; was armed during the previous one and is latched at the boundary.  What the
+        ; new section needs quickly is its shape.  R9 and R4 together decide where the
+        ; section ENDS: the CRTC latches end-of-frame at the start of the scanline
+        ; where row = R4 and line = R9, so for a 2-line section (a partial with
+        ; R9 = 1) both must be in place before the start of scanline 1 -- 128 cycles
+        ; after the restart.  R6 is compared from scanline 1 on, so Q's R6 = 0 has
+        ; the same deadline.  Everything else has a row or more to spare.  The chain is
+        ; phased (VS2T_DEFAULT) so the step fires ~50 cycles BEFORE the restart, the
+        ; hold below carries the first write past it, and the three deadline registers
+        ; then land about 40, 60 and 80 cycles in, with the rest behind them.  Writing
+        ; R4 third put it at ~140 for a 2-line P2: that section never ended, Q's R6
+        ; hit never came, and both borders lit up on every scroll frame.
+        ; ACCCON D is different again: it is the memory map, sampled by every fetch,
+        ; so it must be in place BEFORE the boundary -- the bar's T1 fires a further
+        ; BARLEAD us early so D lands in the horizontal blanking of the bar's last line.
         ldx SECIDX
         cpx DISPSECT                ; the first step is the start of the bar itself, which
         beq @noD                    ; is only main RAM to the CRTC while D = 0: leave it
@@ -2757,21 +2764,21 @@ irq_handler:
         and #$FE
         ora dispD
         sta ACCCON
-@noD:   ldy #2
-@hold:  dey
+@noD:   ldy #5                      ; ~26 cycles: the first CRTC write must follow the
+@hold:  dey                         ; restart, and the step fires ahead of it
         bne @hold
-        lda #9                      ; R9 and R6 are both compared at the START of the
-        sta CRTC_IDX                ; section's second scanline, so they go first; R4 is
-        lda SECTAB+3,x              ; compared at row ends, a whole row away, and goes
-        sta CRTC_DAT                ; after them.  (R4 second put R6 past that line
-        lda #6                      ; start: the bar showed one scanline and went dark.)
+        lda #9
         sta CRTC_IDX
-        ldy SECTAB+4,x
-        sty CRTC_DAT
+        lda SECTAB+3,x
+        sta CRTC_DAT
         lda #4
         sta CRTC_IDX
         lda SECTAB+2,x
         sta CRTC_DAT
+        lda #6
+        sta CRTC_IDX
+        ldy SECTAB+4,x
+        sty CRTC_DAT
         lda #7
         sta CRTC_IDX
         lda SECTAB+5,x
@@ -2884,7 +2891,10 @@ irq_handler:
         lda $FC
         rti
 
-VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35   ; CA1 IRQ fires at end of the 2-line vsync pulse; T1 lands ~5us into T
+; CA1 fires at the end of the 2-line vsync pulse.  -35 put every step ~5 us INTO its
+; section; the further -36 puts it ~30 us before the restart, so that the shape
+; registers land early in the first scanline -- see the chain step in irq_handler.
+VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36
 
 ; ---------------------------------------------------------------- keyboard
 scan_keys:

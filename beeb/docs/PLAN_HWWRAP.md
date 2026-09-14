@@ -174,19 +174,43 @@ writing it ~60 cycles after, and the first third of the playfield's first line c
 the other buffer. The first "fix" was a blank row between bar and playfield so the late
 switch fell in a line nobody saw -- a hack, and one that broke the title screen (a
 late step painted the playfield 8:1 through the blank section's registers). The real
-fix: the bar's T1 fires BARLEAD (30 us) early, the ISR writes D first -- landing in the
-horizontal blanking of the bar's last line -- then holds ~11 cycles so the register
-writes stay on the far side of the boundary, and the following section's duration is
-lengthened by BARLEAD to end where it should.
+fix: the bar's T1 fires BARLEAD early, the ISR writes D first -- landing in the
+horizontal blanking of the bar's last line -- then holds so the register writes stay on
+the far side of the boundary, and the following section's duration is lengthened by
+BARLEAD to end where it should. (The numbers in that sentence changed once the timing
+was actually measured: next paragraph.)
 
-*Register order and pre-arming.* R9 and R6 are both compared at the START of a section's
-second scanline, so the step ISR has about a line to land them; R4, second in the old
-order, pushed R6 past that point once the D block was in front of it, and the bar showed
-one scanline and went dark (Q's R6 = 0 was still in force). R4 is compared at row ends,
-a whole row away, so it is now written after R6. And the bar's R6 is pre-armed in the
-vsync handler, during Q, where the display is already off and a new R6 cannot show:
-that is the register-then-restart discipline applied to the one section whose step has
-no lead.
+*Register order, and where the step fires -- measured, this time.* The first
+version of the paragraph that stood here said R4 was "compared at row ends, a whole row
+away" and could go last. jsbeeb's 6845 (and the Hitachi it models) latches end-of-frame
+at C0 = 1 of the scanline where row = R4 AND line = R9 -- the *start of the section's
+last scanline*. For a 2-line partial (R9 = 1) that is 129 cycles after the restart, the
+same deadline as Q's R6 = 0. Logged with a CRTC-write tracer (`tools`-style probe over
+`session._video.crtc.write`), the chain steps were firing ~10 cycles *after* the restart
+(the old "T1 lands ~5 us into T" phase), IRQ entry through the MOS added 20-36 more, and
+the ISR's own preamble put the first data write at ~105 cycles in: R9 at 105, R6 at 123
+(five cycles to spare -- the flicker that was chased earlier), R4 at 141. So a 2-line P2
+never ended: the Q step then wrote R6 = 0 with the CRTC already on row 1, the R6 hit
+never came, and the display stayed on through all of Q -- cyan in both borders on every
+frame with vertical scroll ("failing to turn off the display at the end of the frame",
+as the user put it, exactly).
+
+Three changes: order R9, R4, R6, R7, R12, R13 (the three with a deadline first);
+`VS2T_DEFAULT` a further 36 us earlier so every step fires ~60 cycles before its
+restart; the hold after the D block lengthened to ~26 cycles so the first CRTC write
+still follows the restart. Measured after: R9 lands 28-54 cycles into the first
+scanline, R4 46-72, R6 64-90, with the first index write never earlier than +14. BARLEAD
+drops to 10 us: it is now only the extra lead the bar's step needs over the others, so D
+still lands in the bar's last-line blanking (h80-h127, t = -48..-1; measured ~ -31).
+The bar's R6 stays pre-armed in the vsync handler, which costs nothing.
+
+One thing this does not fix, and never did: a 6845 with R6 = 0 still displays the first
+scanline of the frame, so Q's first line (scanline 288) shows raster 0 of whatever
+Q's address points at -- the P2 row. It is one line at the bottom edge, present in every
+build since the fixed bar. Blanking it would need something armed *before* the P2 -> Q
+restart (R8 display-off in P2's last-line blanking), and for a 2-line P2 the previous
+step's ISR is still running then; or an address whose raster-0 bytes are all zero, which
+the layout does not have.
 
 *Recentred.* `QVSYNC = 3` of Q's 8 rows: five rows between the vsync and the bar instead of
 six, so the whole picture is one row higher and the bar-drawing window is 40 lines (2560
