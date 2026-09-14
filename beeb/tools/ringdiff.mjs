@@ -21,7 +21,7 @@ for(let f=0;f<N;f++){
       for(let y=0;y<8;y++) if(A.rd(ga.base+ca*8+y)!==B.rd(gb.base+cb*8+y)) dd++;
       if(dd){ d+=dd; if(run&&run.c1===c-1) run.c1=c; else { run={r,c0:c,c1:c}; runs.push(run);} } } }
   if(d){ bad++; if(shown<3){ shown++;
-    console.log(`frame ${f}: ${d} bytes differ; wfine A=${A.rd(A.A.wfine)} B=${B.rd(B.A.wfine)} barq A=${A.rd(A.A.barq)} B=${B.rd(B.A.barq)} partq B=${B.rd(B.A.partq)}`);
+    console.log(`frame ${f}: ${d} bytes differ; wfine A=${A.rd(A.A.wfine)} B=${B.rd(B.A.wfine)} barq A=${A.rd(A.A.barq)} B=${B.rd(B.A.barq)}`);
     for(const q of runs.slice(0,8)) console.log(`   row ${q.r} cols ${q.c0}-${q.c1}`); } }
 }
 console.log(bad?`L${lv}: WINDOW DIFFERS on ${bad}/${N} frames`:`L${lv}: window contents identical over ${N} frames (${ROWS} rows)`);

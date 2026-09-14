@@ -85,10 +85,10 @@ LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 ; ring at $3000 with 27 rows visible and the status bar above.
 ROWCHARS  = 80
 RINGROWS  = 32                    ; the whole 20K: the hardware fold IS the ring wrap
-VISROWS   = 29                    ; visible char rows: 232 lines = 116 game px.  The
+VISROWS   = 30                    ; visible char rows: 240 lines = 120 game px.  The
                                   ; original is 108 (a 128-line phone screen less a
                                   ; 20-line HUD); the ring at $3000 has room for more.
-                                  ; NOT 30: see PARTROW.
+                                  ; 30 fills the ring exactly: 31 held + the composed row.
 BUFROWS   = VISROWS + 1           ; rows held: the visible ones plus the bottom partial's
 ; The camera follows Cleo one for one, so her fall speed is also how far the window
 ; moves in a frame.  A char row is four map pixels.  Main and shadow are separate,
@@ -97,6 +97,7 @@ MAXDWY    = 8
 BUF0      = $3000
 ROWBYTES  = ROWCHARS*8
 RINGCHARS = ROWCHARS*RINGROWS
+.assert (RINGCHARS & $FF) = 0, error, "the ring folds on a high-byte compare"
 RINGBYTES = RINGCHARS*8
 ; Three rows come out of the ring so the status bar can stop chasing it:
 ;   $3000  the row copy_partial fills with the window's top slice
@@ -112,17 +113,14 @@ RINGBASE  = BUF0
 RINGEND   = RINGBASE + RINGBYTES
 ; The composed top row has to be INSIDE the screen: it is per buffer, and anything below
 ; $3000 is only main RAM to the CRTC (the bar gets away with it by being single buffered
-; and scanned with D = 0).  So it lives in a ring slot -- one the window is not using.
-; The window occupies VISROWS+1 of the 32 slots; partq picks one of the few left over,
-; far enough from both edges that the camera's 2-rows-a-frame cannot reach it before
-; scroll_validate would redraw it anyway.
-PARTROW   = RINGROWS - 1          ; the composed top row's slot, relative to the window's.
-; The ring is char granular, so a slot is NOT window aligned: the window occupies ring
-; chars [ringS, ringS + BUFROWS*80) and slot barq+31 starts at ringS - r + 2480, where
-; r = ringS mod 80.  With BUFROWS = 30 the free run is 160 chars and the slot always fits
-; (r <= 79).  With BUFROWS = 31 it fits only when r = 0: otherwise the composed row's
-; first r chars land on the window's last row, and once that row scrolls up into view
-; they show as sky-coloured fragments (8-wfine) lines tall.  That is why VISROWS is 29.
+; and scanned with D = 0).  It lives in the one ring row the window does not hold: the
+; row ABOVE it, ring chars [ringS + BUFROWS*80, ringS + RINGCHARS) = [ringS - 80, ringS).
+; The window start is char granular (ringS = wcy*80 + wcx), so that row is not a slot in
+; the row tables: its column c is ring char (ringS + c + RINGCHARS - 80) mod RINGCHARS,
+; a constant offset from its source, which makes it a ring row like any other -- a
+; horizontal scroll leaves it valid and only the newly drawn columns need recomposing.
+; (It was a row-aligned slot once, partq = barq + 31, which overlapped the window's last
+; row by ringS mod 80 chars whenever BUFROWS was 31: that is why VISROWS sat at 29.)
 ; 30 would need the composed row at ring char ringS + 2480 exactly -- window aligned,
 ; not slot aligned -- and a copy that folds at $8000 mid-run.
 ; The bar is BELOW the screen, in main RAM, and there is only one of it.  The CRTC's
@@ -226,7 +224,6 @@ lcnt:     .res 1
 lidx:     .res 1
 ringS:    .res 2                  ; window start char S (0..2559)
 barq:     .res 1                  ; row slot q = S/80
-partq:    .res 1                  ; the ring slot holding the composed top row
 
 ; level geometry
 maplw:    .res 1                  ; log2 map width in tiles
@@ -272,8 +269,6 @@ BUF_CY:    .res 2
 BUF_VALID: .res 2
 PART_CY:   .res 2                 ; per buffer: row/fine the partial (A) row was last copied for
 PART_F:    .res 2
-PART_CXL:  .res 2                 ; per buffer: the window column it was last copied for (16 bit):
-PART_CXH:  .res 2                 ;   a horizontal scroll shifts every column, not just dirty ones
 PART_LO:   .res 2                 ; per buffer: window columns of row wcy drawn since that copy
 PART_HI:   .res 2                 ;   (LO > HI = none)
 BUF_BARQ:  .res 2
@@ -1851,8 +1846,8 @@ pd:
         SPRHALF sprHM, 1
 
 ; ============================================================================
-; copy_partial: copy lines wfine..7 of ring row wcy into lines 0..(7-wfine)
-; of ring row wcy-1, for all 80 chars (the "A" section source).
+; copy_partial: copy lines wfine..7 of ring row wcy into lines 0..(7-wfine) of the
+; ring row above the window (the "A" section source), for the columns drawn since.
 ; ============================================================================
 copy_partial:
         lda wfine
@@ -1864,13 +1859,9 @@ copy_partial:
         lda wcy
         cmp PART_CY,x
         bne @all
-        lda wcx                     ; a horizontal scroll re-sources every column of the
-        cmp PART_CXL,x              ; A row (it maps to ring row wcy shifted by wcx), so the
-        bne @all                    ; dirty-column shortcut is only valid when wcx is unchanged
-        lda wcx+1
-        cmp PART_CXH,x
-        bne @all
-        ; same source row, lines and column as last time: only the columns drawn since
+        ; same source row and lines as last time: only the columns drawn since.  A
+        ; horizontal scroll does not matter: the composed row is a ring row at a fixed
+        ; offset from its source, so it moves with the ring and stays valid
         lda PART_HI,x
         cmp #ROWCHARS
         bcc :+
@@ -1887,10 +1878,6 @@ copy_partial:
         sta PART_F,x
         lda wcy
         sta PART_CY,x
-        lda wcx
-        sta PART_CXL,x
-        lda wcx+1
-        sta PART_CXH,x
         lda #ROWCHARS
         sta cnt
         lda #0
@@ -1906,63 +1893,71 @@ copy_partial:
         stza PART_HI, x
         lda wcy
         jsr ringaddr                ; sp = source start (row wcy, first dirty column)
-        ; dest = the same column of the fixed partial row, which is all section A of
-        ; the rupture chain ever displays
-        ldx partq                   ; dest = the same column of the composed row, which
-        lda tmp4                    ; is a ring slot, so its base is in RINGLO/RINGHI.
-        lsr                         ; Build the high half FIRST: the lsr chain sets carry
-        lsr                         ; from the bits it shifts out, so it cannot sit
-        lsr                         ; between the low add and the high add.
-        lsr
-        lsr                         ; tmp4>>5 = high half of tmp4*8
+        ; source: sp is the char, and the copy starts wfine lines into it.  Offsetting
+        ; sp by wfine (under 8, and a char is 8-aligned) keeps its page crossings on
+        ; the real char boundaries, so spnext's fold still lands where it should
+        lda sp
         clc
-        adc RINGHI,x
-        sta ptr+1
+        adc wfine
+        sta sp
+        ; dest: the same column of the composed row, ring char (ringS + col + 2480)
+        ; mod 2560 -- the row above the window -- as a real address from RINGBASE
         lda tmp4
-        asl
-        asl
-        asl                         ; low half of tmp4*8
         clc
-        adc RINGLO,x
+        adc ringS
         sta ptr
-        bcc @pnc
-        inc ptr+1
-@pnc:   ; dest pointer adjusted by -wfine so that the same Y indexes both
+        lda ringS+1
+        adc #0
+        sta ptr+1
         lda ptr
-        sec
-        sbc wfine
+        clc
+        adc #<(RINGCHARS-ROWCHARS)
         sta ptr
-        bcs @pnb
-        dec ptr+1
-@pnb:   ; start at line wfine: patched jmp into the unrolled 6-line copy
+        lda ptr+1
+        adc #>(RINGCHARS-ROWCHARS)
+        cmp #>RINGCHARS             ; RINGCHARS is whole pages, so the fold is a
+        bcc @pnf                    ; high-byte compare
+        sbc #>RINGCHARS
+@pnf:   sta ptr+1
+        asl ptr                     ; char -> byte address, + RINGBASE (the rols leave
+        rol ptr+1                   ; C clear: the offset is under $5000)
+        asl ptr
+        rol ptr+1
+        asl ptr
+        rol ptr+1
+        lda ptr+1
+        adc #>RINGBASE
+        sta ptr+1
+        ; Y is the dest line, 0..7-wfine, and the source line is Y + wfine through the
+        ; offset sp: enter the unrolled copy at the pair for this wfine
         ldx wfine
         lda @ftab-2,x
         sta @fjmp+1
         lda @ftab-1,x
         sta @fjmp+2
         ldx cnt                     ; char counter in X: dex/beq is 3 cycles cheaper
-@fjmp:  jmp @g2
-@ftab:  .word @g2, @g4, @g6
-@g2:    ldy #2
+@fjmp:  jmp @g4
+@ftab:  .word @g4, @g2, @g0         ; wfine 2: six lines, 4: four, 6: two
+@g4:    ldy #5
         lda (sp),y
         sta (ptr),y
-        iny
+        dey
         lda (sp),y
         sta (ptr),y
-@g4:    ldy #4
+@g2:    ldy #3
         lda (sp),y
         sta (ptr),y
-        iny
+        dey
         lda (sp),y
         sta (ptr),y
-@g6:    ldy #6
+@g0:    ldy #1
         lda (sp),y
         sta (ptr),y
-        iny
+        dey
         lda (sp),y
         sta (ptr),y
-        ; next char: source with ring wrap; dest wraps on its REAL address (ptr + wfine),
-        ; which only needs the full check in the last page before $8000
+        ; next char, both with the ring fold on the page crossing: the composed row
+        ; can straddle the ring end like any other row
         spnext
         dex
         beq @done
@@ -1971,7 +1966,12 @@ copy_partial:
         adc #8
         sta ptr
         bcc @fjmp
-        inc ptr+1
+        lda ptr+1
+        inca
+        cmp #>RINGEND
+        bcc @pst
+        sbc #>RINGBYTES
+@pst:   sta ptr+1
 :       bra @fjmp                   ; placeholder ':' keeps the anonymous-label count
 @done:  rts
 
@@ -2100,15 +2100,16 @@ build_sections:
         sta SECTAB+6,x
         lda tmp3
         sta SECTAB+7,x
-        lda partq                   ; section A reads the composed row's ring slot
-        tay
-        lda mulrowlo,y
-        clc
-        adc #<CRTCBASE
-        sta SECTAB+1,x
-        lda mulrowhi,y
-        adc #>CRTCBASE
-        sta SECTAB,x
+        lda ringS                   ; section A shows the composed row: the ring row
+        sec                         ; above the window, ringS - 80 mod RINGCHARS
+        sbc #ROWCHARS
+        sta w16
+        lda ringS+1
+        sbc #0
+        bpl :+
+        adc #>RINGCHARS             ; went below 0: + RINGCHARS (whole pages; C clear)
+:       sta w16+1
+        jsr @addr
         txa
         clc
         adc #8
@@ -2324,9 +2325,9 @@ build_sections:
 
 BARROWS = 2                        ; the status bar
 QROWS  = 39 - VISROWS - BARROWS    ; blank rows after the display: 312 lines in all
-QVSYNC = 3                         ; vsync at Q row 3 of 8: five rows (40 lines) between the
-                                   ; vsync and the bar, which is where the bar is drawn.
-                                   ; It was six, and the picture sat a row low.
+QVSYNC = 2                         ; vsync at Q row 2 of 7: five rows (40 lines) between the
+                                   ; vsync and the bar, which is where the bar is drawn,
+                                   ; and two below the picture: the standard MODE 2 frame.
 
 ; ============================================================================
 ; Frame control
@@ -2533,11 +2534,6 @@ calc_ring:
         dey
         bpl @div                    ; borrow absorbed by the high byte
 @dd:    stx barq                    ; high byte went negative: X is the quotient
-        txa                         ; and the slot the composed top row goes in: far
-        clc                         ; enough ahead of the window that the camera cannot
-        adc #PARTROW                ; reach it before it would be redrawn anyway
-        ringmod
-        sta partq
         rts
 
         .segment "LOW2"            ; MOS vector/VDU pages ($0206..$03FF), copied there after MODE 2:

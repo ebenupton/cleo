@@ -118,9 +118,10 @@ elsewhere, plus 12 more pixels of playfield.
 ## What happened when it was built (14 Sep 2026)
 
 Built on branch `hwwrap` as four commits: sprite directory to bank 7; bar to `$2B00`;
-hardware-wrapped 32-row ring with the mirror deleted; 29 visible rows.
+hardware-wrapped 32-row ring with the mirror deleted; 29 visible rows -- then 30, once
+the composed row was placed properly (below).
 
-**29 rows, not 30.** The ring is char granular, so a ring *slot* is not window aligned.
+**29 rows, not 30 -- as first built.** The ring is char granular, so a ring *slot* is not window aligned.
 The window occupies ring chars `[ringS, ringS + BUFROWS*80)`; the slot chosen for the
 composed top row, `barq+31`, starts at `ringS - r + 2480` where `r = ringS mod 80`. With
 30 held rows the free run is 160 chars and the slot always fits. With 31 it fits only
@@ -161,6 +162,30 @@ across builds whose ring geometry differs; valid only for hardware-wrapped build
 mirror build's ring tail is not what it displays), `tools/shot.mjs` (a PNG from the
 harness at a frame boundary, so what is looked at is what was measured), and the
 `PIXDIFF_MASK` env for retiring a region of screen RAM.
+
+**And then 30.** The user's count was right: 30 visible + 1 straddle + 1 composed = 32,
+exactly the ring, no slack needed because the composed row is rebuilt every frame. What
+did not fit was my placement of it on a row-aligned *slot* while the window start is
+char granular. The one free 80-char run at `BUFROWS = 31` is `[ringS + 2480, ringS +
+2560)` -- the row above the window -- and that is where the composed row now lives:
+column `c` at ring char `(ringS + c + 2480) mod 2560`, i.e. source + 2480, a constant
+offset. Consequences, all good: it is a ring row like any other, so a horizontal scroll
+leaves it valid and `copy_partial` only recomposes the dirty columns (it used to
+re-source all 80 on every horizontal-scroll frame with `wfine != 0`); section A's
+address is `ringS - 80`; `partq`, `PARTROW` and the `PART_CX` cache are gone. Costs:
+the copy's dest can straddle `$8000`, so it folds on the page crossing like the source
+-- which needed the *source* pointer to carry the `wfine` offset instead of the dest
+(an offset under 8 on an 8-aligned pointer keeps page crossings on the real char
+boundaries; a negative one does not), and the unrolled copy runs its line pairs in
+descending order so the entry point still selects by `wfine`. `QROWS = 7`, `QVSYNC = 2`:
+40 lines vsync-to-bar as before, 16 below -- the standard MODE 2 frame, 256 lines.
+
+Verified with the logic pinned to the 29-row world: object state identical on all 8
+levels, window contents identical over 30 rows (L0/L3/L6, `ringdiff`), borders dark,
+bar stable, composed row correct. Cost in the same world, 29 -> 30 rows: L0 +200 jump /
++2 run, L6 +11 / +562 (L3's bench scenes no longer match). Far less than the 27 -> 29
+step because the composed-row recomposition it removes was ~2000 cycles on every
+horizontal-scroll frame that had a fine offset.
 
 **Two more, found after the first 29-row build was up.**
 
