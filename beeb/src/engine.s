@@ -395,6 +395,7 @@ drawrect:
         sta PART_HI,x
 :       ; ---- per-rect invariants: tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
         lda rc_x+1
+        sta w16+1                   ; the ring address's copy, from this load too
         lsr
         sta tmp
         lda rc_x
@@ -403,23 +404,20 @@ drawrect:
         ror                         ; A = tx0 (map width <= 256 tiles)
         sta rc_tx0
         lda rc_x                    ; tiles-1 = tx1 - tx0 = ((rc_x & 3) + rc_w - 1) >> 2,
+        sta w16                     ; the copy the ring address needs, from the same load
         and #3                      ; so tx1 never needs building: max 3 + 80 - 1 = 82,
+        sta rc_sc0
         clc                         ; one byte, no 16-bit shift, no w16
         adc rc_w
         deca
         lsr
         lsr
         sta rc_nt
-        lda rc_x
-        sta w16                     ; the copy the ring address needs, from the same load
-        and #3
-        sta rc_sc0
+        lda rc_sc0
         asl
         asl
         asl
         sta rc_ro0
-        lda rc_x+1
-        sta w16+1
         lda rc_y
         jsr ringaddr
         sta rc_sp+1                 ; ringaddr returns A = sp+1 (its last store)
@@ -452,13 +450,21 @@ drawrect:
         setbank BANK_TILES          ; gather done (it read bank 6); the tiles all live in
         ; bank 5, so switch once here, not per tile in @run
         ; ---- draw this char row, and (without re-gathering) the odd row of the same tile row
+        lda rc_y                    ; only a rect's first tile row can start on an odd
+        and #1                      ; char row: after that @nextrow always lands even
+        bne @second
+        stz rc_sub
+        lda rc_ro0
+        sta rowoff
         jsr @drawrow
         inc rc_y
         dec rc_h
         beq @done
-        lda rc_sub
-        bne @nextrow
 @second:
+        lda #32
+        sta rc_sub
+        ora rc_ro0
+        sta rowoff
         jsr @drawrow
         inc rc_y
         dec rc_h
@@ -485,18 +491,13 @@ drawrect:
         lda #0
         rol
         sta rc_wrap
-        lda rc_y
-        and #1
-        beq :+
-        lda #32
-:       sta rc_sub
-        ora rc_ro0
-        sta rowoff
         lda rc_sc0
         sta rc_subc
         lda rc_w
         sta cnt
         stz rc_gi
+        sec                         ; C is set at every entry to @run (@runend's sbc leaves
+        ; it set on the loop back), so the sbc below needs no sec
 @run:
         ldx rc_gi
         lda GATHERH,x               ; bit 6: solid cyan/black tile, filled not copied
@@ -510,7 +511,6 @@ drawrect:
         sta tp
         ; chars in this run: min(4 - rc_subc, cnt) -> rc_n, X = 2*rc_n, tmp = 8*rc_n
         lda #4
-        sec
         sbc rc_subc
         cmp cnt
         bcc :+
@@ -604,10 +604,9 @@ drawrect:
         adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
         bcc :++
-        lda sp+1
-        inca
-        ringup
-        sta sp+1
+        inc sp+1                    ; no ringup: both entries to @advsp have already
+:                                   ; proved the run stays below RINGEND (rc_wrap).
+        ; KEPT, unreferenced, so the anonymous-label count through drawrect is unchanged
 :
 @runend:
         lda cnt
@@ -1135,7 +1134,10 @@ drawsprite:
 :       ; ---- horizontal: sx = spx - refx - wx ; c0 = sx >> 1
         ldy #4
         lda (ptr),y
-        jsr sext
+        and #$80                    ; sext inlined: the jsr/rts was 12 cycles of the 39
+        beq @sxp
+        lda #$FF
+@sxp:   sta tmp3
         lda spx
         sec
         sbc (ptr),y
@@ -1151,7 +1153,6 @@ drawsprite:
         sbc wx+1
         cmp #$80
         ror a                       ; sign into bit 7, old bit 0 out to C
-        sta w16+1
         ror w16                     ; arithmetic shift right 1 -> c0 (16 bit)
         cmp #0                      ; A still holds w16+1: just restore N,Z
         beq @cpos
@@ -1197,15 +1198,15 @@ drawsprite:
         tax
         lda spy+1
         sbc tmp3
-        sta w16+1
+        tay
         txa
         sec
         sbc wy
-        sta w16
-        lda w16+1
+        tax
+        tya
         sbc wy+1
         sta sp_lb0+1
-        lda w16
+        txa
         asl                         ; C = old bit 7, exactly what 'asl w16' left
         rol sp_lb0+1
         clc
@@ -1213,11 +1214,11 @@ drawsprite:
         sta sp_lb0
         bcc @nc
         inc sp_lb0+1                ; lb0 (16 bit signed)
+        clc                         ; only this arm arrives with C set
 @nc:
         ; lend = lb0 + ext - 1
         lda sp_ext
         deca
-        clc
         adc sp_lb0
         sta w16
         lda sp_lb0+1
@@ -1278,10 +1279,12 @@ drawsprite:
         lda wcx
         clc
         adc sp_c0
+        sta w16                     ; @rows needs this same sum: keep it, don't rebuild it
         sta (rp),y
         iny
         lda wcx+1
         adc #0
+        sta w16+1
         sta (rp),y
         iny
         lda wcy
@@ -1304,16 +1307,16 @@ drawsprite:
 :       sta (rp),y
         ; ---- column base pointer & step
         lda sp_flags
-        and #1
+        bit #1
         beq @nomirror
         ; mirror: image column = W-1-c (the column loop then steps backwards)
         clc
         lda sp_w
         sbc sp_c                    ; C=0 subtracts the extra 1: sp_w - sp_c - 1
         sta sp_c
+        lda sp_flags                ; only the mirror arm clobbers A
 @nomirror:
         ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
-        lda sp_flags
         bit #8                      ; bit3: copy blitter
         beq :+
         ldx #8
@@ -1343,13 +1346,7 @@ drawsprite:
         lda sp_r0
         sta sp_row
         ; screen base for (wcx + c0, wcy + r0): one ringaddr, then +80 chars per row
-        lda wcx
-        clc
-        adc sp_c0
-        sta w16
-        lda wcx+1
-        adc #0
-        sta w16+1
+        ; (w16 = wcx + sp_c0 was already built when the record rect was written)
         lda wcy
         clc
         adc sp_r0
@@ -1359,10 +1356,9 @@ drawsprite:
         lda sp+1
         sta sp_rb+1
         ; source row pointer = column base + r0*8 - lb0 (>>1 for half res); +8 (+4) per row
-        lda sp_r0
-        asl
-        asl
-        asl
+        ; source row pointer = column base + r0*8 - lb0 (>>1 for half res); +8 (+4) per row
+        lda tmp                     ; tmp is still lstart, and sp_r0 = lstart >> 3,
+        and #$F8                    ; so r0*8 is lstart & $F8: no reload and no shifts
         sec
         sbc sp_lb0
         sta w16
@@ -1915,6 +1911,7 @@ copy_partial:
         sta @fjmp+1
         lda @ftab-1,x
         sta @fjmp+2
+        ldx cnt                     ; char counter in X: dex/beq is 3 cycles cheaper
 @fjmp:  jmp @g2
 @ftab:  .word @g2, @g4, @g6
 @g2:    ldy #2
@@ -1938,7 +1935,7 @@ copy_partial:
         ; next char: source with ring wrap; dest wraps on its REAL address (ptr + wfine),
         ; which only needs the full check in the last page before $8000
         spnext
-        dec cnt
+        dex
         beq @done
         lda ptr
         clc
@@ -2145,16 +2142,15 @@ mirror_run:
         sta tmp4
 :       ldx tmp4
         beq @done
-        lda w16
-        sta w16b
+        lda w16                     ; run the offset in Y and page-align both pointers:
+        tay                         ; the low bytes stay equal, so the 8-byte step is the
+        stz w16                     ; iny the copy already needed and the pointers never
+        stz w16b                    ; have to be re-added
         lda w16+1
         sec
         sbc #>RINGBYTES             ; RINGBYTES is whole pages, so the low byte holds
         sta w16b+1
-@cp:    ldaz w16                    ; lda (w16)   -- line 0 needs no index
-        staz w16b                   ; sta (w16b)
-        ldy #1
-        lda (w16),y
+@cp:    lda (w16),y
         sta (w16b),y
         iny
         lda (w16),y
@@ -2172,14 +2168,13 @@ mirror_run:
         lda (w16),y
         sta (w16b),y
         iny
-        lda (w16),y                 ; y = 7
+        lda (w16),y
         sta (w16b),y
-        lda w16                     ; w16b tracks w16 in the low byte: one add serves both
-        clc
-        adc #8
-        sta w16
-        sta w16b
-        bcc :+
+        iny
+        lda (w16),y                 ; y = 8c+7
+        sta (w16b),y
+        iny
+        bne :+                      ; Y wrapped past the page: step both high bytes
         inc w16+1
         inc w16b+1
 :       dex
@@ -2310,8 +2305,13 @@ build_sections:
         sta SECTAB+4,x
         lda #30
         sta SECTAB+5,x
+        lda SECTAB-8,x              ; w16 has not moved since the P2 @addr above, so the
+        sta SECTAB,x                ; address it left in the previous entry is this one's
+        lda SECTAB-8+1,x
+        sta SECTAB+1,x
+        bra @sq2
 @setq:  jsr @addr                   ; Q starts on the row below the playfield
-        lda #<(40*LINE-2)
+@sq2:   lda #<(40*LINE-2)
         sta SECTAB+6,x
         lda #>(40*LINE-2)
         sta SECTAB+7,x
@@ -2358,28 +2358,24 @@ build_sections:
 ; --- SECTAB+0/1,x = the CRTC address for the row at ring offset w16.  A row starting
 ; past RINGCHARS-80 straddles the end and is read from the mirror below the base,
 ; which is exactly the address w16 - RINGCHARS names.
-@addr:  lda w16
-        sta w16b
-        lda w16+1
-        sta w16b+1
-        cmp #>(RINGCHARS-ROWCHARS+1)
+@addr:  lda w16                     ; low byte in A, high in Y: w16b was only a copy
+        ldy w16+1
+        cpy #>(RINGCHARS-ROWCHARS+1)
         bcc :++
         bne :+
-        lda w16b
         cmp #<(RINGCHARS-ROWCHARS+1)
         bcc :++
-:       lda w16b
-        sec
-        sbc #<RINGCHARS
-        sta w16b
-        lda w16b+1
-        sbc #>RINGCHARS
-        sta w16b+1
-:       lda w16b
-        clc
+:       clc                         ; the fold is w16 - RINGCHARS + CRTCBASE, so one
+        adc #<(CRTCBASE-RINGCHARS)  ; add of the folded constant does both
+        sta SECTAB+1,x
+        tya
+        adc #>(CRTCBASE-RINGCHARS)
+        sta SECTAB,x
+        rts
+:       clc
         adc #<CRTCBASE
         sta SECTAB+1,x
-        lda w16b+1
+        tya
         adc #>CRTCBASE
         sta SECTAB,x
         rts
@@ -2439,8 +2435,7 @@ build_sections:
         ror
         lsr tmp3
         ror
-        sec
-        sbc #2
+        sbc #1                      ; C = 0 out of the ror pair, so this is A - 2
         bcs :+
         dec tmp3
 :       rts
@@ -2620,8 +2615,12 @@ drawrect_clip:
         sta rc_x
         lda wcx+1
         sta rc_x+1
-        stz w16
-        stz w16+1
+        lda rc_w                    ; rel is now exactly 0, so the right clip is just
+        cmp #ROWCHARS+1             ; min(rc_w, ROWCHARS): no need to store it and read
+        bcc :+                      ; it back through the general test below
+        lda #ROWCHARS
+        sta rc_w
+:       jmp drawrect
 @right: lda w16+1
         bne @none                   ; rel >= 256 -> off right
         lda w16
@@ -2818,9 +2817,8 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
         asl
         asl
         asl
-        asl                         ; x*32
-        clc
-        adc tmp3
+        asl                         ; x*32 -- X is 0 or 1, so the fifth asl cannot
+        adc tmp3                    ; carry out and the clc is dead
         tay
         lda tmp
         sta DIRTYLIST,y
@@ -2891,8 +2889,8 @@ irq_handler:
         sta CRTC_DAT
         lda #6
         sta CRTC_IDX
-        lda SECTAB+4,x
-        sta CRTC_DAT
+        ldy SECTAB+4,x              ; R6: the end-of-chain test below wants it again
+        sty CRTC_DAT
         lda #7
         sta CRTC_IDX
         lda SECTAB+5,x
@@ -2913,13 +2911,15 @@ irq_handler:
         lda VIA_T1CL                ; clear T1 flag
         ; next entry; the chain stops at Q (the only entry with R6 = 0): a late vsync
         ; must not walk the chain off the end of SECTAB
-        lda SECTAB+4,x
+        cpy #0                      ; R6 is still in Y from the write above
         beq @stay
         txa
-        clc
-        adc #8
+        adc #7                      ; cpy #0 always leaves C set, so this adds 8
         sta SECIDX                  ; X is dead: @exit restores it from irq_x
-@stay:  jmp @exit                   ; X is still SECIDX here, so nothing to store
+@stay:  ldy irq_y                   ; @exit inlined: no jmp on the chain-step path
+        ldx irq_x                   ; (X is still SECIDX here, so nothing to store)
+        lda $FC
+        rti
 @notT1:
         lda VIA_IFR
         and #$02
@@ -2970,7 +2970,7 @@ irq_handler:
         ; everything section 0 needs comes from the buffer that is about to be
         ; displayed -- its start address, and (with no status bar) its length
         ldx #0
-        lda DISPSECT
+        ldy DISPSECT                ; held in Y: SECIDX wants the same byte below
         beq :+
         ldx #2
 :       lda BUF_SEC0T1,x
@@ -2987,8 +2987,7 @@ irq_handler:
         sta CRTC_DAT
         lda #$40
         sta VIA_IFR
-        lda DISPSECT
-        sta SECIDX
+        sty SECIDX
         jsr scan_keys
         jsr sound_tick
 @exit:

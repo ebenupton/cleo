@@ -616,6 +616,8 @@ level_init:
         jsr mod12
         sta O_AL,y
         inc stars
+        lda gy                      ; the prologue already left q2>>3 in gy
+        sta gy1
         lda q2
         beq :+
         deca
@@ -623,11 +625,6 @@ level_init:
         lsr
         lsr
         sta gy
-        lda q2
-        lsr
-        lsr
-        lsr
-        sta gy1
         jmp @box
 @t1:    lda O_XL,y
         clc
@@ -726,14 +723,15 @@ level_init:
         jsr m_rnd
         and #$0F
         sta t16+1
+        clc
         lda O_BL,y
+        adc #1
         sta t16b
         lda O_BH,y
+        adc #0
         sta t16b+1
-        inc t16b
-        bne :+
-        inc t16b+1
-:       jsr mod16
+:                                   ; placeholder - keeps the anonymous-label count
+        jsr mod16
         lda t16
         sta O_DL,y
         lda t16+1
@@ -787,8 +785,8 @@ level_init:
         bcc @nextobj
         lda gx0
         sta gx
-@bx:    ; cell = gx + (gy << gridsh)
-        lda gy
+@bx:    ; cell = gx + (gy << gridsh), built once per grid row: the gx loop below
+        lda gy                      ; steps the cell index with inx instead of reshifting
         ldx gridsh
         beq :++
 :       asl
@@ -797,7 +795,7 @@ level_init:
 :       clc
         adc gx
         tax
-        ldy bent
+@cell:  ldy bent
         lda obj
         sta LV_BOBJ,y
         lda LV_GRID,x
@@ -809,7 +807,8 @@ level_init:
         cmp gx1
         beq :+
         inc gx
-        bra @bx
+        inx
+        bra @cell
 :       inc gy
         lda gy1                     ; C clear <=> gy1 < gy <=> gy > gy1
         cmp gy
@@ -907,11 +906,16 @@ game_frame:
 @cam:
         setbank BANK_LVL
         ; ---- bucket range (16-bit >> 6)
-        lda wx
-        sta t16
-        lda wx+1
+        lda wx+1                    ; shr6 inlined: the t16 staging and the jsr/rts
+        asl                         ; were most of its cost, and wx/wy can be read
+        asl                         ; directly (t16 < 16384 still holds)
         sta t16+1
-        jsr shr6
+        lda wx
+        rol
+        rol
+        rol
+        and #3
+        ora t16+1
         sta gx0
         lda wx
         clc
@@ -919,14 +923,26 @@ game_frame:
         sta t16
         lda wx+1
         adc #0
+        asl
+        asl
         sta t16+1
-        jsr shr6
+        lda t16
+        rol
+        rol
+        rol
+        and #3
+        ora t16+1
         sta gx1
-        lda wy
-        sta t16
         lda wy+1
+        asl
+        asl
         sta t16+1
-        jsr shr6
+        lda wy
+        rol
+        rol
+        rol
+        and #3
+        ora t16+1
         sta gy
         lda wy
         clc
@@ -934,8 +950,15 @@ game_frame:
         sta t16
         lda wy+1
         adc #0
+        asl
+        asl
         sta t16+1
-        jsr shr6
+        lda t16
+        rol
+        rol
+        rol
+        and #3
+        ora t16+1
         sta gy1
         ; ---- the object list, cached between steps.
         ; LV_GRID/LV_BOBJ/LV_BNEXT and every O_TYPE are written only by level_init, so
@@ -1045,7 +1068,6 @@ game_frame:
         sta O_STAMP,y
         sty obj
         jsr po_star                 ; no type read, no table
-        setbank BANK_LVL
         inc BINI
         bra @rls
 @rlo:   stz BINI
@@ -1057,7 +1079,6 @@ game_frame:
         sta O_STAMP,y
         sty obj
         jsr process_object
-        setbank BANK_LVL
         inc BINI
         bra @rl2
 @rldone:
@@ -1217,15 +1238,11 @@ vy_step:
         sta dpx
         stz dpx+1
         rts
-@up:    cmp #$FF                    ; <= -256
-        bne @cup
-        lda dpx
-        cmp #<-MAXDWY
-        bcs @cdone
+@up:    lda dpx                     ; dpx+1 is $FF on this arm, so neither the
+        cmp #<-MAXDWY               ; <= -256 test nor the clamp's rewrite of the
+        bcs @cdone                  ; high byte can do anything
 @cup:   lda #<-MAXDWY
         sta dpx
-        lda #$FF
-        sta dpx+1
 @cdone: rts
 
 ; ============================================================================
@@ -1404,32 +1421,31 @@ player_update:
         sx16 t16
         add16 vx, t16
         bra @nofric
-@air:   ; vx = vx*5>>3
+@air:   ; vx = vx*5>>3 : vx + asr3(-3vx) == asr3(5vx), and 5vx still fits 16 bits
         lda vx
         asl
-        tax                         ; X = 2*vx low, C untouched by tax
-        lda vx+1
-        rol                         ; A = 2*vx high
-        sta t16+1
-        txa
-        clc
-        adc vx
         sta t16
+        lda vx+1
+        rol
+        sta t16+1                   ; t16 = 2vx
+        asl t16
+        rol t16+1                   ; t16 = 4vx
+        clc
+        lda t16
+        adc vx
+        sta vx                      ; 5vx low, straight into vx: no add16 at the end
         lda t16+1
-        adc vx+1
-        sta t16+1                   ; t16 = 3vx
-        neg16 t16                   ; leaves A = t16+1
+        adc vx+1                    ; A = 5vx high (vx+1 not written yet)
         cmp #$80                    ; asr16 x3, high byte held in A
         ror
-        ror t16
+        ror vx
         cmp #$80
         ror
-        ror t16
+        ror vx
         cmp #$80
         ror
-        ror t16
-        sta t16+1
-        add16 vx, t16
+        ror vx
+        sta vx+1
 @nofric:
         ; horizontal input
         lda control
@@ -1484,6 +1500,7 @@ player_update:
         beq :+
         lda #$FF
 :       sta dpx+1
+        bra @hstep                  ; qx = px and qy = py+16 already, set at @push
 @hl:    mov16 qx, px
         clc
         lda py
@@ -1493,7 +1510,7 @@ player_update:
         adc #0
         sta qy+1
         lda dpx+1
-        bmi @hneg
+@hstep: bmi @hneg
         inc qx
         bne @hget
         inc qx+1
@@ -1603,7 +1620,12 @@ player_update:
         sbc evframe+1
         bne @clrhurt                ; elapsed >= 256 -> clear
         cpx #65
-        bcc @afterhurt
+        bcs @clrhurt
+        lda control                 ; hurt stands, so the delta is still in X and its
+        bne @ctl                    ; high byte was zero: reuse it for the control
+        cpx #25                     ; timer instead of subtracting frame-evframe twice
+        bcc @noctl
+        bra @setctl
 @clrhurt:
         stz hurt
 @afterhurt:
@@ -1659,15 +1681,15 @@ player_update:
         bra @sprf
 @standing:
         lda anim
-        cmp #113
-        bcs @s10
-        cmp #109
-        bcs @s12
         cmp #93
-        bcs @s10
-        lda #8
-        bra @sprf
+        bcc @s8
+        cmp #109
+        bcc @s10
+        cmp #113
+        bcc @s12
 @s10:   lda #10
+        bra @sprf
+@s8:    lda #8
         bra @sprf
 @s12:   lda #12
         bra @sprf
@@ -1722,14 +1744,20 @@ player_update:
         jmp @bfly
 :
         ; bvx = bvx*61>>6 + rx*2 ; bx += (bvx+128)>>8
-        lda bvx
-        asl
+        sec                         ; t16 = -bvx: negate first, then double in place
+        lda #0
+        sbc bvx
         sta t16
-        lda bvx+1
-        rol
+        lda #0
+        sbc bvx+1
         sta t16+1
-        add16 t16, bvx
-        neg16 t16                   ; leaves A = t16+1
+        asl16 t16                   ; t16 = -2*bvx
+        sec
+        lda t16
+        sbc bvx
+        sta t16
+        lda t16+1
+        sbc bvx+1                   ; A = high byte of -3*bvx (t16+1 store is dead)
         ldx #6
 :       cmp #$80
         ror
@@ -1746,14 +1774,20 @@ player_update:
         adc #0                      ; A = high byte of bvx + 128
         sx16 t16
         add16 bx, t16
-        lda bvy
-        asl
+        sec                         ; t16 = -bvy, same shape as the bvx block above
+        lda #0
+        sbc bvy
         sta t16
-        lda bvy+1
-        rol
+        lda #0
+        sbc bvy+1
         sta t16+1
-        add16 t16, bvy
-        neg16 t16                   ; leaves A = t16+1
+        asl16 t16                   ; t16 = -2*bvy
+        sec
+        lda t16
+        sbc bvy
+        sta t16
+        lda t16+1
+        sbc bvy+1                   ; A = high byte of -3*bvy (t16+1 store is dead)
         ldx #6
 :       cmp #$80
         ror
@@ -1768,8 +1802,16 @@ player_update:
         cmp #128
         lda bvy+1
         adc #0
-        sx16 t16
-        add16 by, t16
+        ldx #0                      ; sign-extend the delta into X and add it straight
+        cmp #$80                    ; to by, instead of staging it through t16
+        bcc :+
+        dex
+:       clc
+        adc by
+        sta by
+        txa
+        adc by+1
+        sta by+1
         mov16 qx, bx
         mov16 qy, by
         jsr getaltitude
@@ -1795,24 +1837,26 @@ player_update:
         jsr m_addsprite
 @bdone:
         ; ---- exit reached?
-        blt16 px, exitx, @noexit
-        lda exitx
-        clc
-        adc #16
+        lda px                      ; inside the exit box is 0 <= px-exitx < 16 and
+        sec                         ; 0 <= py-exity < 24: one 16-bit subtract each,
+        sbc exitx                   ; high byte zero (so the difference is 0..255)
+        sta t16                     ; and low byte under the width
+        lda px+1
+        sbc exitx+1
+        bne @noexit
+        lda t16
+        cmp #16
+        bcs @noexit
+        lda py
+        sec
+        sbc exity
         sta t16
-        lda exitx+1
-        adc #0
-        sta t16+1
-        bge16 px, t16, @noexit
-        blt16 py, exity, @noexit
-        lda exity
-        clc
-        adc #24
-        sta t16
-        lda exity+1
-        adc #0
-        sta t16+1
-        bge16 py, t16, @noexit
+        lda py+1
+        sbc exity+1
+        bne @noexit
+        lda t16
+        cmp #24
+        bcs @noexit
         lda #1
         sta exiting
 @noexit:
@@ -2242,14 +2286,17 @@ ob_snake:
         stza fc
         bra @coll
 @c4:    ; if B < A + 128: B += 16
-        lda fa
-        clc
-        adc #<128
-        sta t16
-        lda fa+1
-        adc #>128
-        sta t16+1
-        bge16 fb, t16, @coll
+        sec                         ; B - A against the immediate 128, the way @c5
+        lda fb                      ; tests its own limit -- no A + 128 built in t16
+        sbc fa
+        tax
+        lda fb+1
+        sbc fa+1
+        eor #$80
+        cpx #<128
+        sbc #(>128 ^ $80)
+:                                   ; placeholder - keeps the anonymous-label count
+        bcs @coll
         add16i fb, 16
         bra @coll
 @c5:    ble16i fb, -128, @coll
@@ -2329,29 +2376,14 @@ ob_snake:
         lda fc
         cmp #2
         bcs @f6
-        lda fe
-        cmp #3
-        bcc @f0
-        cmp #6
-        bcc @f2
-        cmp #9
-        bcc @f4
-@f2:    lda fc
-        and #1
-        ora #46+2                   ; base is even, so ora == the old clc/adc
+        ldx fe                      ; fe is 0..11 whenever fc < 2; the 0..63 ladder @s23
+        and #1                      ; runs only while fc >= 2, and that takes @f6.  A is
+        ora @ftab,x                 ; still fc: cmp/bcs/ldx do not touch it
         jmp m_addsprite
-@f0:    lda fc
-        and #1
-        ora #46+0
-        jmp m_addsprite
-@f4:    lda fc
-        and #1
-        ora #46+4
-        jmp m_addsprite
-@f6:    lda fc
-        and #1
+@f6:    and #1                      ; base is even, so ora == the old clc/adc
         ora #46+6
         jmp m_addsprite
+@ftab:  .byte 46+0,46+0,46+0,46+2,46+2,46+2,46+4,46+4,46+4,46+2,46+2,46+2
 @done:  rts
 ; carry set if anim counter is one of the pause frames 0,3,6,9
 @pausef:
@@ -2501,8 +2533,13 @@ ob_rsnake:
         bra :++
 :       ldx #55
 :       stx q1
-        mov16 spy, oy
-        add16 spy, fc
+        clc                         ; spy = oy + fc in one pass, the way the ox + fd
+        lda oy                      ; code twelve lines below already does it
+        adc fc
+        sta spy
+        lda oy+1
+        adc fc+1
+        sta spy+1
         lda q1
         jsr m_addsprite
         clc
@@ -2520,21 +2557,20 @@ ob_rsnake:
 ; t16 = A * A (A unsigned 0..128)
 square: sta q1
         sta q1x
-        stza t16
-        stza t16+1
+        lda #0                      ; accumulator low byte lives in A
+        stza t16+1                  ; stz never touches A on a 65C02
         ldx #8
-@l:     asl t16
+@l:     asl
         rol t16+1
         asl q1
         bcc :+
-        lda t16
         clc
         adc q1x
-        sta t16
         bcc :+
         inc t16+1
 :       dex
         bne @l
+        sta t16
         rts
 ; ---------------------------------------------------------------- BAT (4)
 ob_bat:
@@ -2653,13 +2689,18 @@ ob_bat:
         and #15
         tax
         lda batoff,x
-        sx16 t16
-        add16 spx, t16
-        lda frame
+        bpl @wx1                    ; spx += a signed byte, without building the word:
+        dec spx+1                   ; pre-borrow the high byte when it is negative
+@wx1:   clc
+        adc spx
+        sta spx
+        bcc @wx2
+        inc spx+1
+@wx2:   lda frame
         asl
         asl                         ; A = 5*frame, low byte only: the high byte of
         clc                         ; 5*frame is dead (the >>2 below shifts the low
-        adc frame                   ; byte alone, and sx16 t16 rewrites both bytes)
+        adc frame                   ; byte alone, and only t16's low byte is used)
         lsr
         lsr
         sta t16
@@ -2674,9 +2715,14 @@ ob_bat:
         and #15
         tax
         lda batoff,x
-        sx16 t16
-        add16 spy, t16
-        lda q1
+        bpl @wy1
+        dec spy+1
+@wy1:   clc
+        adc spy
+        sta spy
+        bcc @wy2
+        inc spy+1
+@wy2:   lda q1
         jmp m_addsprite
 @kill:  lda #6
         jsr addscore
@@ -2726,12 +2772,11 @@ ob_bat:
         lda spy+1
         adc t16+1
         sta spy+1
-        ldx #65
         bgt16 spx, px, :+
+        lda #65
         bra :++
-:       ldx #66
-:       txa
-        jmp m_addsprite
+:       lda #66
+:       jmp m_addsprite
 @done:  rts
 batoff: .byte 0,1,1,2,2,2,1,1,0,<-1,<-1,<-2,<-2,<-2,<-1,<-1
 
@@ -2825,16 +2870,14 @@ ob_walker:
         bra @sp
 @f4:    lda #4
 @fr:    adc fc
-@sp:    sta q1
-        lda otype
-        cmp #5
+@sp:    ldx otype                   ; the frame stays in A: no round trip through q1
+        cpx #5
         bne :+
-        lda #67
+        adc #66                     ; C = 1 from the equal cpx, so this is A + 67
         bra :++
-:       lda #76
 :       clc
-        adc q1
-        jmp m_addsprite
+        adc #76
+:       jmp m_addsprite
 
 ; ---------------------------------------------------------------- SPIKE (7)
 ob_spike:

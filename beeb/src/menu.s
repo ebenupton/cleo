@@ -402,7 +402,6 @@ help_screen:
         sta ptr+1
         lda tmp3
         asl
-        clc
         adc tmp3                    ; i*3
         adc #5                      ; i*3+5
         asl
@@ -546,12 +545,12 @@ winlose:
         sta tmp2                    ; last drawn frame
         stz tmp3                    ; animation counter
 @loop:  ; big cleo frame
+        lda tmp3                    ; the shift count is the same on both arms
+        and #30
+        tax
         lda tmp4
         beq @lframe
         ; win: 4 + ((441 >> (n & 30)) & 3)
-        lda tmp3
-        and #30
-        tax
         lda #<441
         sta w16
         lda #>441
@@ -562,9 +561,6 @@ winlose:
         ora #4
         bra @drawc
 @lframe:
-        lda tmp3
-        and #30
-        tax
         lda #$79
         sta w16
         lda #$9E
