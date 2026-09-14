@@ -219,7 +219,11 @@ MUSPTR:   .res 2
         .segment "TABLES"
 MASKTAB:   .res 256               ; data byte -> AND mask
 SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
-IDENT:     .res 256               ; identity table: ora IDENT,x == ora X (no temp)
+IDENT:     .res 256               ; ora IDENT,x == ora X (no temp) -- EXCEPT at $41, $44
+                                   ; and $82, which init_tables zeroes on purpose: $41 is
+                                   ; the blank-run tag and must leave the screen byte
+                                   ; alone, $82 is its mirror, $44 forces a black left
+                                   ; pixel.  Substituting X for IDENT,x is therefore wrong.
 RINGLO:    .res RINGROWS          ; ring row r -> screen address
 RINGHI:    .res RINGROWS
 GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank (low nibble)

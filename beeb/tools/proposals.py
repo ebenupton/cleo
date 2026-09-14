@@ -43,11 +43,21 @@ for f in sorted(glob.glob('build/windows/out_*.json')):
         it['weighted'] = int(it.get('saving_cycles', 0)) * execs
         out.append(it)
 out.sort(key=lambda x: -x['weighted'])
+# Overlapping proposals: two agents rewriting the same lines.  They cannot both be
+# applied, and where one agent proposed a change another explicitly rejected, the
+# rejection is evidence -- batch 05 caught batch 00 costing copy_partial's dispatch as
+# one-time when it is the loop back-edge, which turns a 13-cycle win into a 240-cycle loss.
+for a in out:
+    a['conflicts'] = sorted({b['id'] for b in out if b is not a and b['file'] == a['file']
+                             and not (b['hi'] < a['lo'] or b['lo'] > a['hi'])})
+nconf = sum(1 for a in out if a['conflicts'])
 os.makedirs('opt', exist_ok=True)
 json.dump(out, open('opt/proposals.json', 'w'), indent=1)
-print(f'{len(out)} proposals from {len(glob.glob("build/windows/out_*.json"))} batches')
+print(f'{len(out)} proposals from {len(glob.glob("build/windows/out_*.json"))} batches; '
+      f'{nconf} overlap another proposal and cannot be applied blind')
 for b in bad: print('  PROBLEM', b)
 print(f'{"rank":>4} {"weighted":>10} {"cy":>4} {"execs":>8}  {"conf":6} where')
 for i, p in enumerate(out[:25]):
     print(f'{i:>4} {p["weighted"]:>10} {p.get("saving_cycles",0):>4} {p["execs"]:>8}  '
-          f'{p.get("confidence","?"):6} {p["file"]}:{p["lo"]}-{p["hi"]} {p["routine"]} [{p["id"]}]')
+          f'{p.get("confidence","?"):6} {p["file"]}:{p["lo"]}-{p["hi"]} {p["routine"]} [{p["id"]}]'
+          + (f'  CONFLICTS {",".join(p["conflicts"])}' if p['conflicts'] else ''))
