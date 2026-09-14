@@ -141,23 +141,21 @@ _CMYK = _cmyk_tables()
 def dither_cmyk(rgb_img, alpha, x0=0, y0=0, full=True):
     h, w, _ = rgb_img.shape
     v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
-    n = 4 if full else 2
-    crgb, seq = _CMYK[n]
-    d = ((v[:, :, None, :] - crgb[None, None, :, :]) ** 2).sum(axis=3)
-    dots = seq[d.argmin(axis=2)]                       # (h, w, n) inks in kernel order
+    crgb, seq = _CMYK[4]                               # always the 4-dot combinations:
+    d = ((v[:, :, None, :] - crgb[None, None, :, :]) ** 2).sum(axis=3)   # a 2-dot pick
+    dots = seq[d.argmin(axis=2)]                       # sent skin to M+Y (pink) on the
+    # kernel positions 0 (top left) 1 (bottom right) 2 (top right) 3 (bottom left):
+    # two inks of two make a checker, not stripes
+    l0 = (dots[:, :, 0] << 2) | dots[:, :, 2]          # bar's Cleo and the title pieces
+    l1 = (dots[:, :, 3] << 2) | dots[:, :, 1]
     if full:
-        # kernel positions 0 (top left) 1 (bottom right) 2 (top right) 3 (bottom left):
-        # two inks of two make a checker, not stripes
-        l0 = (dots[:, :, 0] << 2) | dots[:, :, 2]
-        l1 = (dots[:, :, 3] << 2) | dots[:, :, 1]
         col = np.empty((2 * h, w), np.uint8)
         col[0::2] = l0
         col[1::2] = l1
         alpha = np.repeat(alpha, 2, axis=0)
-    else:                                              # one line a pixel: two dots, the
-        yy = ((np.arange(h) + y0) & 1)[:, None]        # order alternating by row
-        col = np.where(yy == 0, (dots[:, :, 0] << 2) | dots[:, :, 1],
-                       (dots[:, :, 1] << 2) | dots[:, :, 0]).astype(np.uint8)
+    else:                                              # one line a pixel: a row shows the
+        yy = ((np.arange(h) + y0) & 1)[:, None]        # top or bottom half of its pattern
+        col = np.where(yy == 0, l0, l1).astype(np.uint8)
     return np.where(alpha, col, 0).astype(np.uint8)
 
 
