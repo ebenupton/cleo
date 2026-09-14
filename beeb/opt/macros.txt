@@ -1,0 +1,752 @@
+.macro CHARCPY...
+.if c = 0
+        ldaz tp                     ; line 0 non-indexed
+        bmi per
+        staz sp
+        ldy #1
+.else
+        ldy #8*c
+        lda (tp),y
+        bmi per
+        sta (sp),y
+        iny
+.endif
+        CPYN
+        CPYN
+        CPYN
+        CPYN
+        CPYN
+        CPYN
+        lda (tp),y                  ; line 7
+        sta (sp),y
+.endmacro
+
+.macro CHARPER...
+.if c = 0
+        staz sp
+.else
+        sta (sp),y
+.endif
+        ldy #8*c+4
+        sta (sp),y
+        ldy #8*c+1
+        lda (tp),y
+        sta (sp),y
+        ldy #8*c+5
+        sta (sp),y
+        ldy #8*c+2
+        lda (tp),y
+        sta (sp),y
+        ldy #8*c+6
+        sta (sp),y
+        ldy #8*c+3
+        lda (tp),y
+        sta (sp),y
+        ldy #8*c+7
+        sta (sp),y
+        jmp next
+.endmacro
+
+.macro CPYN...
+        lda (tp),y
+        sta (sp),y
+        iny
+.endmacro
+
+.macro FIL1...
+        ldy #k
+        sta (sp),y
+.endmacro
+
+.macro FILE...
+.if FTMODE = 0
+        .byte <(sec)
+.elseif FTMODE = 1
+        .byte >(sec)
+.elseif FTMODE = 2
+        .byte n
+.elseif FTMODE = 3
+        .byte bank
+.else
+        .byte >(dest)
+.endif
+.endmacro
+
+.macro FILE_LIST...
+        FILE F_SPR_SEC,   F_SPR_N,   BANK_SPR,  $8000
+        FILE F_TILESO_SEC, F_TILESO_N, BANK_TIL0, $8000
+        FILE F_TILESI_SEC, F_TILESI_N, BANK_TIL0, $8000
+        FILE F_LOGIC_SEC, <((__LOGIC_LAST__ - __LOGIC_START__ + 255) / 256), BANK_LVL, LOGIC_ADDR
+        FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
+        FILE F_MUSIC_SEC, F_MUSIC_N, BANK_TIL1, MUSIC_ADDR
+        FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTTAB
+        FILE F_TITLE_SEC, F_TITLE_N, BANK_MAP,  TITLE_ADDR
+        FILE F_L0A_SEC, LM_L0A, BANK_MAP, LV_MAP
+        FILE F_L0A_SEC + LM_L0A, F_L0A_N - LM_L0A, BANK_LVL, LV_HDR
+        FILE F_L0B_SEC, LM_L0B, BANK_MAP, LV_MAP
+        FILE F_L0B_SEC + LM_L0B, F_L0B_N - LM_L0B, BANK_LVL, LV_HDR
+        FILE F_L1A_SEC, LM_L1A, BANK_MAP, LV_MAP
+        FILE F_L1A_SEC + LM_L1A, F_L1A_N - LM_L1A, BANK_LVL, LV_HDR
+        FILE F_L1B_SEC, LM_L1B, BANK_MAP, LV_MAP
+        FILE F_L1B_SEC + LM_L1B, F_L1B_N - LM_L1B, BANK_LVL, LV_HDR
+        FILE F_L2A_SEC, LM_L2A, BANK_MAP, LV_MAP
+        FILE F_L2A_SEC + LM_L2A, F_L2A_N - LM_L2A, BANK_LVL, LV_HDR
+        FILE F_L2B_SEC, LM_L2B, BANK_MAP, LV_MAP
+        FILE F_L2B_SEC + LM_L2B, F_L2B_N - LM_L2B, BANK_LVL, LV_HDR
+        FILE F_L3A_SEC, LM_L3A, BANK_MAP, LV_MAP
+        FILE F_L3A_SEC + LM_L3A, F_L3A_N - LM_L3A, BANK_LVL, LV_HDR
+        FILE F_L3B_SEC, LM_L3B, BANK_MAP, LV_MAP
+        FILE F_L3B_SEC + LM_L3B, F_L3B_N - LM_L3B, BANK_LVL, LV_HDR
+        FILE F_L4A_SEC, LM_L4A, BANK_MAP, LV_MAP
+        FILE F_L4A_SEC + LM_L4A, F_L4A_N - LM_L4A, BANK_LVL, LV_HDR
+        FILE F_L4B_SEC, LM_L4B, BANK_MAP, LV_MAP
+        FILE F_L4B_SEC + LM_L4B, F_L4B_N - LM_L4B, BANK_LVL, LV_HDR
+        FILE F_L5A_SEC, LM_L5A, BANK_MAP, LV_MAP
+        FILE F_L5A_SEC + LM_L5A, F_L5A_N - LM_L5A, BANK_LVL, LV_HDR
+        FILE F_L5B_SEC, LM_L5B, BANK_MAP, LV_MAP
+        FILE F_L5B_SEC + LM_L5B, F_L5B_N - LM_L5B, BANK_LVL, LV_HDR
+        FILE F_L6A_SEC, LM_L6A, BANK_MAP, LV_MAP
+        FILE F_L6A_SEC + LM_L6A, F_L6A_N - LM_L6A, BANK_LVL, LV_HDR
+        FILE F_L6B_SEC, LM_L6B, BANK_MAP, LV_MAP
+        FILE F_L6B_SEC + LM_L6B, F_L6B_N - LM_L6B, BANK_LVL, LV_HDR
+        FILE F_L7A_SEC, LM_L7A, BANK_MAP, LV_MAP
+        FILE F_L7A_SEC + LM_L7A, F_L7A_N - LM_L7A, BANK_LVL, LV_HDR
+        FILE F_L7B_SEC, LM_L7B, BANK_MAP, LV_MAP
+        FILE F_L7B_SEC + LM_L7B, F_L7B_N - LM_L7B, BANK_LVL, LV_HDR
+        FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
+.endmacro
+
+.macro FILN...
+        dey
+        sta (sp),y
+.endmacro
+
+.macro SOLID1...
+        ldy #k
+        lda (ptr),y
+        sta (sp),y
+.endmacro
+
+.macro SOLIDM...
+.if k > 0
+        ldy #k
+        lda (ptr),y
+.endif
+        tax
+        lda SWAPTAB,x
+.if k = 0
+        staz sp
+.else
+        sta (sp),y
+.endif
+.endmacro
+
+.macro SPRFULL...
+        .local partial, et, l0, l1, l2, l3, l4, l5, l6, l7, pl, ps, po, pd, solid, blank
+.if .not copy
+solid:  ; byte 0 carried the RUN flag: the whole cell is opaque, straight copy
+.if mirror
+        SOLIDM 0
+        SOLIDM 1
+        SOLIDM 2
+        SOLIDM 3
+        SOLIDM 4
+        SOLIDM 5
+        SOLIDM 6
+        SOLIDM 7
+        jmp sprretM
+.else
+        staz sp                     ; A = byte 0
+        SOLID1 1
+        SOLID1 2
+        SOLID1 3
+        SOLID1 4
+        SOLID1 5
+        SOLID1 6
+        SOLID1 7
+        jmp sprretP
+.endif
+.endif
+name:
+        lda tmp2
+        cmp #7
+        bne @np
+        lda tmp
+        beq l0                      ; the whole cell: the overwhelmingly common case, and
+        asl                         ; it needs no table at all (was lda/asl/tax/jmpx, 21
+        tax                         ; cycles of dispatch to reach the same place)
+        jmpx et
+@np:    jmp partial
+et:     .word l0,l1,l2,l3,l4,l5,l6,l7
+.if .not copy
+blank:  ; byte 0 was $41: the whole cell is transparent, so there is nothing to do
+.if mirror
+        jmp sprretM
+.else
+        jmp sprretP
+.endif
+.endif
+l0:     SPRLINE 0, mirror, copy, solid, blank
+l1:     SPRLINE 1, mirror, copy, solid, blank
+l2:     SPRLINE 2, mirror, copy, solid, blank
+l3:     SPRLINE 3, mirror, copy, solid, blank
+l4:     SPRLINE 4, mirror, copy, solid, blank
+l5:     SPRLINE 5, mirror, copy, solid, blank
+l6:     SPRLINE 6, mirror, copy, solid, blank
+l7:     SPRLINE 7, mirror, copy, solid, blank
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
+partial:
+        ldy tmp
+.if copy
+pl:     lda (ptr),y
+        sta (sp),y
+.else
+pl:     lda (ptr),y
+        beq ps
+        bmi po                      ; both pixels opaque
+        cmp #$41                    ; blank-run tag mid cell: the rest of the cell is empty
+        beq pd
+        tax
+.if mirror
+        lda MASKTAB+$80,x
+        and (sp),y
+        ora IDENT+$80,x
+.else
+        lda MASKTAB,x
+        and (sp),y
+        ora IDENT,x
+.endif
+        sta (sp),y
+        bra ps
+po:
+.if mirror
+        tax
+        lda SWAPTAB,x
+.endif
+        sta (sp),y
+.endif
+ps:     cpy tmp2
+        beq pd
+        iny
+        bra pl
+pd:
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
+.endmacro
+
+.macro SPRHALF...
+        .local partial, et, l0, l1, l2, l3, pl, ps, po, pb, pq, pd
+name:
+        lda tmp2
+        cmp #7
+        bne @np
+        lda tmp                     ; even 0,2,4,6 -> entry 0..3
+        beq l0                      ; whole cell: no table needed (see SPRFULL)
+        tax
+        jmpx et
+@np:    jmp partial
+et:     .word l0,l1,l2,l3
+l0:     SPRLINE2 0, mirror
+l1:     SPRLINE2 1, mirror
+l2:     SPRLINE2 2, mirror
+l3:     SPRLINE2 3, mirror
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
+partial:
+        lda tmp
+        sta sp_lim                  ; current screen line (even)
+pl:     lda sp_lim
+        lsr
+        tay
+        lda (ptr),y
+        beq ps
+        bmi pb                      ; bit 7: both pixels opaque
+        tax
+.if mirror
+        lda MASKTAB+$80,x
+.else
+        lda MASKTAB,x
+.endif
+        beq po
+        sta tmp4
+.if mirror
+        lda IDENT+$80,x
+        sta tmp3
+.else
+        stx tmp3
+.endif
+        ldy sp_lim
+        lda (sp),y
+        and tmp4
+        ora tmp3
+        sta (sp),y
+        iny
+        lda (sp),y
+        and tmp4
+        ora tmp3
+        sta (sp),y
+        bra ps
+pb:
+.if mirror
+        tax
+        lda SWAPTAB,x
+.endif
+        bra pq
+po:
+.if mirror
+        lda SWAPTAB,x
+.else
+        txa
+.endif
+pq:     ldy sp_lim
+        sta (sp),y
+        iny
+        sta (sp),y
+ps:     lda sp_lim
+        inca
+        cmp tmp2
+        bcs pd
+        inc sp_lim
+        inc sp_lim
+        bra pl
+pd:
+        .if mirror
+        jmp sprretM
+        .else
+        jmp sprretP
+        .endif
+.endmacro
+
+.macro SPRLINE...
+        .local done, skip, opaque, masked
+.if k = 0
+        ldaz ptr                    ; line 0: Y is not needed here
+.else
+        ldy #k
+        lda (ptr),y
+.endif
+.if copy
+  .if k = 0
+        staz sp                     ; box sprite: every byte opaque, plain copy
+  .else
+        sta (sp),y
+  .endif
+.else
+  .if k = 0
+        beq done                    ; 0: both pixels transparent, no store
+        bpl masked                  ; (N from the load: cmp would set it from the subtraction)
+        cmp #$C0
+        bcc :+                      ; bit 7+6: this and the next 7 bytes all opaque
+        jmp solid
+:
+        bra opaque
+masked: cmp #$41                    ; and the mirror image of that: this and the next 7
+        beq blank                   ; all transparent, so the cell is left alone
+  .else
+        bmi opaque                  ; bit 7: both pixels opaque (see encode_sprite).  Tested
+        beq done                    ; before the transparent case because the sprite data is
+                                    ; 45.7% opaque against 24.1% transparent, and both read
+                                    ; the same load's flags -- $00 is never negative
+        cmp #$41                    ; a blank-run tag reached below line 0 (the packer marks
+        bne :+                      ; every line a run covers): the rest of this cell is all
+        jmp blank                   ; transparent, so skip it -- $41 else draws a red pixel
+:
+  .endif
+        tax
+  .if mirror
+        lda MASKTAB+$80,x           ; mask of the mirrored byte (MASKTAB[SWAPTAB[x]])
+  .else
+        lda MASKTAB,x
+  .endif
+  .if k = 0
+        andz sp
+  .else
+        and (sp),y
+  .endif
+  .if mirror
+        ora IDENT+$80,x             ; the mirrored byte's OR value (IDENT[SWAPTAB[x]])
+  .else
+        ora IDENT,x
+  .endif
+  .if mirror
+        bra skip                    ; only the mirrored form has anything at 'opaque' to
+  .endif                            ; jump over; unmirrored, this branched to the next
+opaque:                             ; instruction, 3 cycles on every masked byte
+  .if mirror
+        tax
+        lda SWAPTAB,x
+  .endif
+skip:
+  .if k = 0
+        staz sp
+  .else
+        sta (sp),y
+  .endif
+done:
+.endif
+.endmacro
+
+.macro SPRLINE2...
+        .local skip, opaque, both, store
+.if k = 0
+        ldaz ptr
+.else
+        ldy #k
+        lda (ptr),y
+.endif
+        beq skip
+        bmi both                    ; bit 7: both pixels opaque
+        tax
+.if mirror
+        lda MASKTAB+$80,x
+.else
+        lda MASKTAB,x
+.endif
+        beq opaque
+        sta tmp4
+.if mirror
+        lda IDENT+$80,x
+        sta tmp3
+.else
+        stx tmp3
+.endif
+.if k = 0
+        ldaz sp
+        and tmp4
+        ora tmp3
+        staz sp
+        ldy #1
+.else
+        ldy #2*k
+        lda (sp),y
+        and tmp4
+        ora tmp3
+        sta (sp),y
+        iny
+.endif
+        lda (sp),y
+        and tmp4
+        ora tmp3
+        sta (sp),y
+        bra skip
+both:
+.if mirror
+        tax
+        lda SWAPTAB,x
+.endif
+        bra store
+opaque:
+.if mirror
+        lda SWAPTAB,x
+.else
+        txa
+.endif
+store:
+.if k = 0
+        staz sp
+        ldy #1
+.else
+        ldy #2*k
+        sta (sp),y
+        iny
+.endif
+        sta (sp),y
+skip:
+.endmacro
+
+.macro TOBANK...
+.ident(.concat("t_", n)):
+        jsr pagelogic
+        jmp .ident(n)
+.endmacro
+
+.macro TOMAIN...
+.ident(.concat("m_", n)):
+        jsr .ident(n)
+        jmp pagelogic
+.endmacro
+
+.macro add16...
+        clc
+        lda dst
+        adc src
+        sta dst
+        lda dst+1
+        adc src+1
+        sta dst+1
+.endmacro
+
+.macro add16i...
+        clc
+        lda dst
+        adc #<(imm)
+        sta dst
+        lda dst+1
+        adc #>(imm)
+        sta dst+1
+.endmacro
+
+.macro andz...
+        and (zp)
+.endmacro
+
+.macro asl16...
+        asl var
+        rol var+1
+.endmacro
+
+.macro asr16...
+        lda var+1
+        cmp #$80
+        ror var+1
+        ror var
+.endmacro
+
+.macro beq16...
+        lda var
+        ora var+1
+        beq label
+.endmacro
+
+.macro bge16...
+        lda aa
+        cmp bb
+        lda aa+1
+        sbc bb+1
+        bvc :+
+        eor #$80
+:      bpl label
+.endmacro
+
+.macro bge16i...
+        lda var
+        cmp #<(imm)
+        lda var+1
+        sbc #>(imm)
+        bvc :+
+        eor #$80
+:      bpl label
+.endmacro
+
+.macro bgt16...
+        lda bb
+        cmp aa
+        lda bb+1
+        sbc aa+1
+        bvc :+
+        eor #$80
+:      bmi label
+.endmacro
+
+.macro bgt16i...
+        lda #<(imm)
+        cmp var
+        lda #>(imm)
+        sbc var+1
+        bvc :+
+        eor #$80
+:      bmi label
+.endmacro
+
+.macro ble16i...
+        lda #<(imm)
+        cmp var
+        lda #>(imm)
+        sbc var+1
+        bvc :+
+        eor #$80
+:      bpl label
+.endmacro
+
+.macro blt16...
+        lda aa
+        cmp bb
+        lda aa+1
+        sbc bb+1
+        bvc :+
+        eor #$80
+:      bmi label
+.endmacro
+
+.macro blt16i...
+        lda var
+        cmp #<(imm)
+        lda var+1
+        sbc #>(imm)
+        bvc :+
+        eor #$80
+:      bmi label
+.endmacro
+
+.macro bmi16...
+        bit var+1
+        bmi label
+.endmacro
+
+.macro bne16...
+        lda var
+        ora var+1
+        bne label
+.endmacro
+
+.macro bpl16...
+        bit var+1
+        bpl label
+.endmacro
+
+.macro crtc...
+        lda #reg
+        sta CRTC_IDX
+        lda val
+        sta CRTC_DAT
+.endmacro
+
+.macro deca...
+        dec a
+.endmacro
+
+.macro dif16...
+        sec
+        lda aa
+        sbc bb
+        sta dst
+        lda aa+1
+        sbc bb+1
+        sta dst+1
+.endmacro
+
+.macro inca...
+        inc a
+.endmacro
+
+.macro jmpx...
+        jmp (tab,x)
+.endmacro
+
+.macro ldaz...
+        lda (zp)
+.endmacro
+
+.macro mov16...
+        lda src
+        sta dst
+        lda src+1
+        sta dst+1
+.endmacro
+
+.macro mov16i...
+        lda #<(imm)
+        sta dst
+        lda #>(imm)
+        sta dst+1
+.endmacro
+
+.macro neg16...
+        sec
+        lda #0
+        sbc var
+        sta var
+        lda #0
+        sbc var+1
+        sta var+1
+.endmacro
+
+.macro ringdn...
+        cmp #>RINGBASE
+        bcs :+
+        adc #>RINGBYTES
+:
+.endmacro
+
+.macro ringmod...
+.if (RINGROWS & (RINGROWS - 1)) = 0
+        and #(RINGROWS-1)
+.else
+        tax
+        lda ringmodtab,x
+.endif
+.endmacro
+
+.macro ringup...
+        cmp #>RINGEND
+        bcc :+
+        sbc #>RINGBYTES
+:
+.endmacro
+
+.macro setbank...
+        lda #n                      ; the IRQ handler restores from -- nothing ever read
+        sta ROMSEL_CPY              ; the private copy this used to keep as well
+        sta ROMSEL
+.endmacro
+
+.macro spnext...
+        lda sp
+        clc
+        adc #8
+        sta sp
+        bcc :++                     ; past the fold's own anonymous label
+        lda sp+1
+        inca
+        ringup
+        sta sp+1
+:
+.endmacro
+
+.macro staz...
+        sta (zp)
+.endmacro
+
+.macro stza...
+.if .paramcount = 2
+        stz arg,ix
+.else
+        stz arg
+.endif
+.endmacro
+
+.macro sub16...
+        sec
+        lda dst
+        sbc src
+        sta dst
+        lda dst+1
+        sbc src+1
+        sta dst+1
+.endmacro
+
+.macro sub16i...
+        sec
+        lda dst
+        sbc #<(imm)
+        sta dst
+        lda dst+1
+        sbc #>(imm)
+        sta dst+1
+.endmacro
+
+.macro submin0...
+        cmp #n
+        bcs :+
+        lda #n
+:       sec
+        sbc #n
+.endmacro
+
+.macro sx16...
+        sta dst
+        and #$80
+        beq :+
+        lda #$FF
+:       sta dst+1
+.endmacro

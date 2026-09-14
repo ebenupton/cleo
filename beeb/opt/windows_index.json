@@ -1,0 +1,6050 @@
+[
+ {
+  "id": "engine_594",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 594,
+  "hi": 610,
+  "n": 16,
+  "cost": 3872438
+ },
+ {
+  "id": "engine_603",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 603,
+  "hi": 618,
+  "n": 16,
+  "cost": 3454708
+ },
+ {
+  "id": "engine_565",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 565,
+  "hi": 585,
+  "n": 16,
+  "cost": 2358032
+ },
+ {
+  "id": "engine_555",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 555,
+  "hi": 572,
+  "n": 16,
+  "cost": 2187445
+ },
+ {
+  "id": "engine_695",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 695,
+  "hi": 716,
+  "n": 16,
+  "cost": 2099075
+ },
+ {
+  "id": "engine_586",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 586,
+  "hi": 602,
+  "n": 16,
+  "cost": 2092942
+ },
+ {
+  "id": "engine_538",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 538,
+  "hi": 563,
+  "n": 16,
+  "cost": 2046411
+ },
+ {
+  "id": "engine_3530",
+  "file": "engine.s",
+  "routine": "ldr_rd",
+  "lo": 3530,
+  "hi": 3548,
+  "n": 16,
+  "cost": 1943738
+ },
+ {
+  "id": "engine_687",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 687,
+  "hi": 707,
+  "n": 16,
+  "cost": 1866079
+ },
+ {
+  "id": "engine_530",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 530,
+  "hi": 554,
+  "n": 16,
+  "cost": 1790691
+ },
+ {
+  "id": "engine_3521",
+  "file": "engine.s",
+  "routine": "ldr_rd",
+  "lo": 3521,
+  "hi": 3539,
+  "n": 16,
+  "cost": 1412978
+ },
+ {
+  "id": "engine_576",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 576,
+  "hi": 593,
+  "n": 16,
+  "cost": 1385106
+ },
+ {
+  "id": "engine_611",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 611,
+  "hi": 628,
+  "n": 16,
+  "cost": 1289985
+ },
+ {
+  "id": "engine_725",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 725,
+  "hi": 740,
+  "n": 16,
+  "cost": 1009530
+ },
+ {
+  "id": "engine_717",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 717,
+  "hi": 732,
+  "n": 16,
+  "cost": 894121
+ },
+ {
+  "id": "engine_1514",
+  "file": "engine.s",
+  "routine": "ds_done",
+  "lo": 1514,
+  "hi": 1531,
+  "n": 10,
+  "cost": 777453
+ },
+ {
+  "id": "engine_709",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 709,
+  "hi": 724,
+  "n": 16,
+  "cost": 744617
+ },
+ {
+  "id": "engine_1962",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1962,
+  "hi": 1979,
+  "n": 16,
+  "cost": 710490
+ },
+ {
+  "id": "engine_1698",
+  "file": "engine.s",
+  "routine": "pd",
+  "lo": 1698,
+  "hi": 1727,
+  "n": 16,
+  "cost": 706592
+ },
+ {
+  "id": "engine_511",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 511,
+  "hi": 529,
+  "n": 16,
+  "cost": 673376
+ },
+ {
+  "id": "engine_619",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 619,
+  "hi": 640,
+  "n": 16,
+  "cost": 587553
+ },
+ {
+  "id": "engine_501",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 501,
+  "hi": 519,
+  "n": 16,
+  "cost": 568314
+ },
+ {
+  "id": "engine_733",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 733,
+  "hi": 749,
+  "n": 16,
+  "cost": 557209
+ },
+ {
+  "id": "engine_3540",
+  "file": "engine.s",
+  "routine": "ldr_rd",
+  "lo": 3540,
+  "hi": 3553,
+  "n": 13,
+  "cost": 530947
+ },
+ {
+  "id": "engine_295",
+  "file": "engine.s",
+  "routine": "NEXTBUF",
+  "lo": 295,
+  "hi": 336,
+  "n": 16,
+  "cost": 506912
+ },
+ {
+  "id": "engine_1954",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1954,
+  "hi": 1969,
+  "n": 16,
+  "cost": 471492
+ },
+ {
+  "id": "engine_1970",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1970,
+  "hi": 1984,
+  "n": 12,
+  "cost": 468003
+ },
+ {
+  "id": "engine_445",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 445,
+  "hi": 461,
+  "n": 16,
+  "cost": 465455
+ },
+ {
+  "id": "engine_520",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 520,
+  "hi": 537,
+  "n": 16,
+  "cost": 460942
+ },
+ {
+  "id": "engine_1604",
+  "file": "engine.s",
+  "routine": "solid",
+  "lo": 1604,
+  "hi": 1620,
+  "n": 16,
+  "cost": 447261
+ },
+ {
+  "id": "engine_325",
+  "file": "engine.s",
+  "routine": "NEXTBUF",
+  "lo": 325,
+  "hi": 340,
+  "n": 12,
+  "cost": 442759
+ },
+ {
+  "id": "engine_454",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 454,
+  "hi": 471,
+  "n": 16,
+  "cost": 441044
+ },
+ {
+  "id": "engine_668",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 668,
+  "hi": 686,
+  "n": 16,
+  "cost": 350688
+ },
+ {
+  "id": "engine_1624",
+  "file": "engine.s",
+  "routine": "name",
+  "lo": 1624,
+  "hi": 1632,
+  "n": 9,
+  "cost": 308856
+ },
+ {
+  "id": "engine_659",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 659,
+  "hi": 677,
+  "n": 16,
+  "cost": 303812
+ },
+ {
+  "id": "engine_1613",
+  "file": "engine.s",
+  "routine": "solid",
+  "lo": 1613,
+  "hi": 1620,
+  "n": 8,
+  "cost": 294556
+ },
+ {
+  "id": "engine_1541",
+  "file": "engine.s",
+  "routine": "masked",
+  "lo": 1541,
+  "hi": 1561,
+  "n": 9,
+  "cost": 287975
+ },
+ {
+  "id": "engine_2199",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2199,
+  "hi": 2216,
+  "n": 16,
+  "cost": 284751
+ },
+ {
+  "id": "engine_492",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 492,
+  "hi": 509,
+  "n": 16,
+  "cost": 280472
+ },
+ {
+  "id": "engine_2969",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 2969,
+  "hi": 2986,
+  "n": 16,
+  "cost": 258495
+ },
+ {
+  "id": "engine_678",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 678,
+  "hi": 694,
+  "n": 16,
+  "cost": 252580
+ },
+ {
+  "id": "engine_2190",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2190,
+  "hi": 2207,
+  "n": 16,
+  "cost": 247026
+ },
+ {
+  "id": "engine_2961",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 2961,
+  "hi": 2976,
+  "n": 16,
+  "cost": 244924
+ },
+ {
+  "id": "engine_2953",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 2953,
+  "hi": 2968,
+  "n": 16,
+  "cost": 238167
+ },
+ {
+  "id": "engine_482",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 482,
+  "hi": 500,
+  "n": 16,
+  "cost": 235026
+ },
+ {
+  "id": "engine_629",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 629,
+  "hi": 648,
+  "n": 16,
+  "cost": 225109
+ },
+ {
+  "id": "engine_3733",
+  "file": "engine.s",
+  "routine": "pagelogic",
+  "lo": 3733,
+  "hi": 3754,
+  "n": 16,
+  "cost": 206418
+ },
+ {
+  "id": "engine_473",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 473,
+  "hi": 491,
+  "n": 16,
+  "cost": 195681
+ },
+ {
+  "id": "engine_1945",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1945,
+  "hi": 1961,
+  "n": 16,
+  "cost": 193682
+ },
+ {
+  "id": "engine_2977",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 2977,
+  "hi": 2995,
+  "n": 16,
+  "cost": 192713
+ },
+ {
+  "id": "engine_464",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 464,
+  "hi": 481,
+  "n": 16,
+  "cost": 185608
+ },
+ {
+  "id": "engine_1585",
+  "file": "engine.s",
+  "routine": "done",
+  "lo": 1585,
+  "hi": 1593,
+  "n": 6,
+  "cost": 168652
+ },
+ {
+  "id": "engine_650",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 650,
+  "hi": 667,
+  "n": 16,
+  "cost": 162016
+ },
+ {
+  "id": "engine_3084",
+  "file": "engine.s",
+  "routine": "scan_keys",
+  "lo": 3084,
+  "hi": 3095,
+  "n": 11,
+  "cost": 162001
+ },
+ {
+  "id": "logic_7",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 7,
+  "hi": 28,
+  "n": 16,
+  "cost": 144127
+ },
+ {
+  "id": "engine_433",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 433,
+  "hi": 453,
+  "n": 16,
+  "cost": 136643
+ },
+ {
+  "id": "logic_19",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 19,
+  "hi": 38,
+  "n": 16,
+  "cost": 125251
+ },
+ {
+  "id": "logic_324",
+  "file": "logic.s",
+  "routine": "tilexy",
+  "lo": 324,
+  "hi": 339,
+  "n": 16,
+  "cost": 122656
+ },
+ {
+  "id": "logic_316",
+  "file": "logic.s",
+  "routine": "tilexy",
+  "lo": 316,
+  "hi": 331,
+  "n": 16,
+  "cost": 122621
+ },
+ {
+  "id": "logic_308",
+  "file": "logic.s",
+  "routine": "tilexy",
+  "lo": 308,
+  "hi": 323,
+  "n": 16,
+  "cost": 122618
+ },
+ {
+  "id": "engine_1431",
+  "file": "engine.s",
+  "routine": "ds_rowloop",
+  "lo": 1431,
+  "hi": 1448,
+  "n": 16,
+  "cost": 108339
+ },
+ {
+  "id": "logic_1031",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 1031,
+  "hi": 1046,
+  "n": 16,
+  "cost": 106415
+ },
+ {
+  "id": "engine_3055",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 3055,
+  "hi": 3071,
+  "n": 16,
+  "cost": 96081
+ },
+ {
+  "id": "logic_1039",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 1039,
+  "hi": 1056,
+  "n": 16,
+  "cost": 88916
+ },
+ {
+  "id": "logic_1801",
+  "file": "logic.s",
+  "routine": "po_star",
+  "lo": 1801,
+  "hi": 1816,
+  "n": 16,
+  "cost": 85829
+ },
+ {
+  "id": "engine_3564",
+  "file": "engine.s",
+  "routine": "maprow",
+  "lo": 3564,
+  "hi": 3570,
+  "n": 7,
+  "cost": 83966
+ },
+ {
+  "id": "engine_1025",
+  "file": "engine.s",
+  "routine": "draw_sprites",
+  "lo": 1025,
+  "hi": 1040,
+  "n": 16,
+  "cost": 83461
+ },
+ {
+  "id": "engine_2427",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2427,
+  "hi": 2447,
+  "n": 16,
+  "cost": 81644
+ },
+ {
+  "id": "engine_1003",
+  "file": "engine.s",
+  "routine": "addsprite",
+  "lo": 1003,
+  "hi": 1011,
+  "n": 9,
+  "cost": 81400
+ },
+ {
+  "id": "engine_352",
+  "file": "engine.s",
+  "routine": "ringaddr",
+  "lo": 352,
+  "hi": 366,
+  "n": 15,
+  "cost": 81016
+ },
+ {
+  "id": "logic_1809",
+  "file": "logic.s",
+  "routine": "po_star",
+  "lo": 1809,
+  "hi": 1822,
+  "n": 14,
+  "cost": 79112
+ },
+ {
+  "id": "engine_3063",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 3063,
+  "hi": 3073,
+  "n": 9,
+  "cost": 74482
+ },
+ {
+  "id": "engine_2987",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 2987,
+  "hi": 3007,
+  "n": 16,
+  "cost": 73894
+ },
+ {
+  "id": "engine_2436",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2436,
+  "hi": 2458,
+  "n": 16,
+  "cost": 72397
+ },
+ {
+  "id": "logic_29",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 29,
+  "hi": 48,
+  "n": 16,
+  "cost": 71421
+ },
+ {
+  "id": "logic_354",
+  "file": "logic.s",
+  "routine": "getinfo",
+  "lo": 354,
+  "hi": 362,
+  "n": 9,
+  "cost": 68799
+ },
+ {
+  "id": "engine_1490",
+  "file": "engine.s",
+  "routine": "ds_rowdone",
+  "lo": 1490,
+  "hi": 1504,
+  "n": 14,
+  "cost": 67518
+ },
+ {
+  "id": "logic_1832",
+  "file": "logic.s",
+  "routine": "inrange",
+  "lo": 1832,
+  "hi": 1847,
+  "n": 16,
+  "cost": 67413
+ },
+ {
+  "id": "engine_1057",
+  "file": "engine.s",
+  "routine": "draw_sprites",
+  "lo": 1057,
+  "hi": 1072,
+  "n": 16,
+  "cost": 67012
+ },
+ {
+  "id": "engine_2735",
+  "file": "engine.s",
+  "routine": "calc_ring",
+  "lo": 2735,
+  "hi": 2747,
+  "n": 13,
+  "cost": 65627
+ },
+ {
+  "id": "engine_1440",
+  "file": "engine.s",
+  "routine": "ds_rowloop",
+  "lo": 1440,
+  "hi": 1452,
+  "n": 11,
+  "cost": 65345
+ },
+ {
+  "id": "logic_332",
+  "file": "logic.s",
+  "routine": "tilexy",
+  "lo": 332,
+  "hi": 340,
+  "n": 9,
+  "cost": 64579
+ },
+ {
+  "id": "engine_1481",
+  "file": "engine.s",
+  "routine": "ds_rowdone",
+  "lo": 1481,
+  "hi": 1498,
+  "n": 16,
+  "cost": 63396
+ },
+ {
+  "id": "engine_1065",
+  "file": "engine.s",
+  "routine": "draw_sprites",
+  "lo": 1065,
+  "hi": 1082,
+  "n": 16,
+  "cost": 62414
+ },
+ {
+  "id": "engine_2208",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2208,
+  "hi": 2225,
+  "n": 16,
+  "cost": 62032
+ },
+ {
+  "id": "logic_1016",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 1016,
+  "hi": 1038,
+  "n": 16,
+  "cost": 61890
+ },
+ {
+  "id": "engine_1049",
+  "file": "engine.s",
+  "routine": "draw_sprites",
+  "lo": 1049,
+  "hi": 1064,
+  "n": 16,
+  "cost": 60956
+ },
+ {
+  "id": "engine_641",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 641,
+  "hi": 658,
+  "n": 16,
+  "cost": 60815
+ },
+ {
+  "id": "logic_373",
+  "file": "logic.s",
+  "routine": "getaltitude",
+  "lo": 373,
+  "hi": 388,
+  "n": 16,
+  "cost": 60316
+ },
+ {
+  "id": "logic_49",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 49,
+  "hi": 71,
+  "n": 16,
+  "cost": 59973
+ },
+ {
+  "id": "logic_1390",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1390,
+  "hi": 1409,
+  "n": 16,
+  "cost": 59743
+ },
+ {
+  "id": "logic_60",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 60,
+  "hi": 81,
+  "n": 16,
+  "cost": 58521
+ },
+ {
+  "id": "logic_1400",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1400,
+  "hi": 1418,
+  "n": 16,
+  "cost": 56813
+ },
+ {
+  "id": "logic_381",
+  "file": "logic.s",
+  "routine": "getaltitude",
+  "lo": 381,
+  "hi": 397,
+  "n": 16,
+  "cost": 54379
+ },
+ {
+  "id": "engine_1661",
+  "file": "engine.s",
+  "routine": "pl",
+  "lo": 1661,
+  "hi": 1677,
+  "n": 14,
+  "cost": 54346
+ },
+ {
+  "id": "engine_1164",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1164,
+  "hi": 1179,
+  "n": 16,
+  "cost": 53772
+ },
+ {
+  "id": "logic_1047",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 1047,
+  "hi": 1066,
+  "n": 16,
+  "cost": 51828
+ },
+ {
+  "id": "engine_1155",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1155,
+  "hi": 1171,
+  "n": 16,
+  "cost": 51808
+ },
+ {
+  "id": "logic_3016",
+  "file": "logic.s",
+  "routine": "div10_16",
+  "lo": 3016,
+  "hi": 3037,
+  "n": 16,
+  "cost": 50433
+ },
+ {
+  "id": "engine_1100",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1100,
+  "hi": 1116,
+  "n": 16,
+  "cost": 48742
+ },
+ {
+  "id": "engine_2726",
+  "file": "engine.s",
+  "routine": "calc_ring",
+  "lo": 2726,
+  "hi": 2742,
+  "n": 16,
+  "cost": 48473
+ },
+ {
+  "id": "engine_1936",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1936,
+  "hi": 1953,
+  "n": 16,
+  "cost": 45004
+ },
+ {
+  "id": "engine_1146",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1146,
+  "hi": 1163,
+  "n": 16,
+  "cost": 44722
+ },
+ {
+  "id": "engine_3046",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 3046,
+  "hi": 3062,
+  "n": 16,
+  "cost": 44407
+ },
+ {
+  "id": "engine_893",
+  "file": "engine.s",
+  "routine": "match_sprites",
+  "lo": 893,
+  "hi": 911,
+  "n": 16,
+  "cost": 44078
+ },
+ {
+  "id": "logic_1914",
+  "file": "logic.s",
+  "routine": "ob_star",
+  "lo": 1914,
+  "hi": 1931,
+  "n": 16,
+  "cost": 42222
+ },
+ {
+  "id": "engine_1172",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1172,
+  "hi": 1188,
+  "n": 16,
+  "cost": 42148
+ },
+ {
+  "id": "engine_360",
+  "file": "engine.s",
+  "routine": "ringaddr",
+  "lo": 360,
+  "hi": 366,
+  "n": 7,
+  "cost": 42028
+ },
+ {
+  "id": "logic_2926",
+  "file": "logic.s",
+  "routine": "bar_digit",
+  "lo": 2926,
+  "hi": 2942,
+  "n": 15,
+  "cost": 41176
+ },
+ {
+  "id": "engine_2996",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 2996,
+  "hi": 3018,
+  "n": 16,
+  "cost": 40247
+ },
+ {
+  "id": "engine_1108",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1108,
+  "hi": 1125,
+  "n": 16,
+  "cost": 39753
+ },
+ {
+  "id": "logic_1774",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1774,
+  "hi": 1789,
+  "n": 16,
+  "cost": 39469
+ },
+ {
+  "id": "engine_1033",
+  "file": "engine.s",
+  "routine": "draw_sprites",
+  "lo": 1033,
+  "hi": 1048,
+  "n": 16,
+  "cost": 39154
+ },
+ {
+  "id": "engine_3008",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 3008,
+  "hi": 3026,
+  "n": 16,
+  "cost": 39088
+ },
+ {
+  "id": "engine_1041",
+  "file": "engine.s",
+  "routine": "draw_sprites",
+  "lo": 1041,
+  "hi": 1056,
+  "n": 16,
+  "cost": 38713
+ },
+ {
+  "id": "engine_1215",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1215,
+  "hi": 1232,
+  "n": 16,
+  "cost": 38493
+ },
+ {
+  "id": "engine_425",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 425,
+  "hi": 444,
+  "n": 16,
+  "cost": 37407
+ },
+ {
+  "id": "logic_1728",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1728,
+  "hi": 1744,
+  "n": 16,
+  "cost": 37318
+ },
+ {
+  "id": "engine_1225",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1225,
+  "hi": 1240,
+  "n": 16,
+  "cost": 37249
+ },
+ {
+  "id": "logic_1782",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1782,
+  "hi": 1796,
+  "n": 15,
+  "cost": 37107
+ },
+ {
+  "id": "engine_1233",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1233,
+  "hi": 1249,
+  "n": 16,
+  "cost": 36477
+ },
+ {
+  "id": "logic_1761",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1761,
+  "hi": 1781,
+  "n": 16,
+  "cost": 34960
+ },
+ {
+  "id": "engine_1499",
+  "file": "engine.s",
+  "routine": "ds_rowdone",
+  "lo": 1499,
+  "hi": 1504,
+  "n": 6,
+  "cost": 34623
+ },
+ {
+  "id": "engine_1313",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1313,
+  "hi": 1328,
+  "n": 16,
+  "cost": 34171
+ },
+ {
+  "id": "logic_1720",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1720,
+  "hi": 1735,
+  "n": 16,
+  "cost": 33914
+ },
+ {
+  "id": "logic_1817",
+  "file": "logic.s",
+  "routine": "po_star",
+  "lo": 1817,
+  "hi": 1822,
+  "n": 6,
+  "cost": 33655
+ },
+ {
+  "id": "engine_1206",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1206,
+  "hi": 1224,
+  "n": 16,
+  "cost": 33462
+ },
+ {
+  "id": "engine_1321",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1321,
+  "hi": 1336,
+  "n": 16,
+  "cost": 32701
+ },
+ {
+  "id": "engine_1378",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1378,
+  "hi": 1395,
+  "n": 16,
+  "cost": 32685
+ },
+ {
+  "id": "engine_400",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 400,
+  "hi": 415,
+  "n": 16,
+  "cost": 32668
+ },
+ {
+  "id": "logic_1923",
+  "file": "logic.s",
+  "routine": "ob_star",
+  "lo": 1923,
+  "hi": 1940,
+  "n": 16,
+  "cost": 32544
+ },
+ {
+  "id": "logic_1958",
+  "file": "logic.s",
+  "routine": "ob_star",
+  "lo": 1958,
+  "hi": 1973,
+  "n": 16,
+  "cost": 32218
+ },
+ {
+  "id": "engine_972",
+  "file": "engine.s",
+  "routine": "erase_old",
+  "lo": 972,
+  "hi": 988,
+  "n": 16,
+  "cost": 32041
+ },
+ {
+  "id": "engine_416",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 416,
+  "hi": 432,
+  "n": 16,
+  "cost": 31960
+ },
+ {
+  "id": "engine_3035",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 3035,
+  "hi": 3054,
+  "n": 16,
+  "cost": 31466
+ },
+ {
+  "id": "engine_1137",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1137,
+  "hi": 1153,
+  "n": 16,
+  "cost": 31462
+ },
+ {
+  "id": "engine_741",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 741,
+  "hi": 752,
+  "n": 11,
+  "cost": 31443
+ },
+ {
+  "id": "engine_1359",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1359,
+  "hi": 1376,
+  "n": 16,
+  "cost": 31227
+ },
+ {
+  "id": "logic_1840",
+  "file": "logic.s",
+  "routine": "inrange",
+  "lo": 1840,
+  "hi": 1855,
+  "n": 16,
+  "cost": 30979
+ },
+ {
+  "id": "engine_1388",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1388,
+  "hi": 1404,
+  "n": 16,
+  "cost": 30805
+ },
+ {
+  "id": "engine_884",
+  "file": "engine.s",
+  "routine": "match_sprites",
+  "lo": 884,
+  "hi": 900,
+  "n": 16,
+  "cost": 30739
+ },
+ {
+  "id": "engine_1241",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1241,
+  "hi": 1259,
+  "n": 16,
+  "cost": 30630
+ },
+ {
+  "id": "engine_2484",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2484,
+  "hi": 2500,
+  "n": 16,
+  "cost": 30381
+ },
+ {
+  "id": "engine_391",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 391,
+  "hi": 407,
+  "n": 16,
+  "cost": 30273
+ },
+ {
+  "id": "engine_928",
+  "file": "engine.s",
+  "routine": "match_sprites",
+  "lo": 928,
+  "hi": 944,
+  "n": 16,
+  "cost": 30230
+ },
+ {
+  "id": "engine_3746",
+  "file": "engine.s",
+  "routine": "pagelogic",
+  "lo": 3746,
+  "hi": 3762,
+  "n": 16,
+  "cost": 29933
+ },
+ {
+  "id": "engine_1117",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1117,
+  "hi": 1136,
+  "n": 16,
+  "cost": 29848
+ },
+ {
+  "id": "engine_408",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 408,
+  "hi": 423,
+  "n": 16,
+  "cost": 29261
+ },
+ {
+  "id": "engine_1369",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1369,
+  "hi": 1387,
+  "n": 16,
+  "cost": 29236
+ },
+ {
+  "id": "logic_1439",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1439,
+  "hi": 1460,
+  "n": 16,
+  "cost": 29072
+ },
+ {
+  "id": "logic_1344",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1344,
+  "hi": 1362,
+  "n": 16,
+  "cost": 28986
+ },
+ {
+  "id": "engine_1073",
+  "file": "engine.s",
+  "routine": "draw_sprites",
+  "lo": 1073,
+  "hi": 1086,
+  "n": 11,
+  "cost": 28497
+ },
+ {
+  "id": "engine_956",
+  "file": "engine.s",
+  "routine": "erase_old",
+  "lo": 956,
+  "hi": 971,
+  "n": 16,
+  "cost": 28429
+ },
+ {
+  "id": "engine_2011",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2011,
+  "hi": 2026,
+  "n": 16,
+  "cost": 28338
+ },
+ {
+  "id": "engine_1396",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1396,
+  "hi": 1412,
+  "n": 16,
+  "cost": 28073
+ },
+ {
+  "id": "logic_1334",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1334,
+  "hi": 1352,
+  "n": 16,
+  "cost": 26633
+ },
+ {
+  "id": "logic_1428",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1428,
+  "hi": 1447,
+  "n": 16,
+  "cost": 26378
+ },
+ {
+  "id": "logic_1410",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1410,
+  "hi": 1427,
+  "n": 16,
+  "cost": 26144
+ },
+ {
+  "id": "logic_1753",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1753,
+  "hi": 1773,
+  "n": 16,
+  "cost": 26070
+ },
+ {
+  "id": "engine_1277",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1277,
+  "hi": 1293,
+  "n": 16,
+  "cost": 26057
+ },
+ {
+  "id": "engine_1348",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1348,
+  "hi": 1368,
+  "n": 16,
+  "cost": 25955
+ },
+ {
+  "id": "engine_2218",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2218,
+  "hi": 2227,
+  "n": 10,
+  "cost": 25597
+ },
+ {
+  "id": "engine_2131",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2131,
+  "hi": 2147,
+  "n": 16,
+  "cost": 24953
+ },
+ {
+  "id": "engine_1250",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1250,
+  "hi": 1267,
+  "n": 16,
+  "cost": 24812
+ },
+ {
+  "id": "logic_1950",
+  "file": "logic.s",
+  "routine": "ob_star",
+  "lo": 1950,
+  "hi": 1965,
+  "n": 16,
+  "cost": 24612
+ },
+ {
+  "id": "logic_1287",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1287,
+  "hi": 1302,
+  "n": 16,
+  "cost": 24505
+ },
+ {
+  "id": "engine_980",
+  "file": "engine.s",
+  "routine": "erase_old",
+  "lo": 980,
+  "hi": 990,
+  "n": 10,
+  "cost": 24500
+ },
+ {
+  "id": "logic_1736",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1736,
+  "hi": 1752,
+  "n": 16,
+  "cost": 24422
+ },
+ {
+  "id": "engine_901",
+  "file": "engine.s",
+  "routine": "match_sprites",
+  "lo": 901,
+  "hi": 919,
+  "n": 16,
+  "cost": 24149
+ },
+ {
+  "id": "engine_920",
+  "file": "engine.s",
+  "routine": "match_sprites",
+  "lo": 920,
+  "hi": 935,
+  "n": 16,
+  "cost": 24093
+ },
+ {
+  "id": "engine_3755",
+  "file": "engine.s",
+  "routine": "pagelogic",
+  "lo": 3755,
+  "hi": 3772,
+  "n": 16,
+  "cost": 24065
+ },
+ {
+  "id": "logic_1088",
+  "file": "logic.s",
+  "routine": "shr6",
+  "lo": 1088,
+  "hi": 1093,
+  "n": 6,
+  "cost": 23584
+ },
+ {
+  "id": "engine_2418",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2418,
+  "hi": 2435,
+  "n": 16,
+  "cost": 23549
+ },
+ {
+  "id": "engine_1302",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1302,
+  "hi": 1320,
+  "n": 16,
+  "cost": 23530
+ },
+ {
+  "id": "engine_1286",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1286,
+  "hi": 1301,
+  "n": 16,
+  "cost": 23404
+ },
+ {
+  "id": "logic_1295",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1295,
+  "hi": 1312,
+  "n": 16,
+  "cost": 23404
+ },
+ {
+  "id": "engine_1329",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1329,
+  "hi": 1347,
+  "n": 16,
+  "cost": 23269
+ },
+ {
+  "id": "logic_1382",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1382,
+  "hi": 1399,
+  "n": 16,
+  "cost": 22709
+ },
+ {
+  "id": "logic_1419",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1419,
+  "hi": 1438,
+  "n": 16,
+  "cost": 22588
+ },
+ {
+  "id": "logic_389",
+  "file": "logic.s",
+  "routine": "getaltitude",
+  "lo": 389,
+  "hi": 405,
+  "n": 16,
+  "cost": 22484
+ },
+ {
+  "id": "engine_964",
+  "file": "engine.s",
+  "routine": "erase_old",
+  "lo": 964,
+  "hi": 979,
+  "n": 16,
+  "cost": 22440
+ },
+ {
+  "id": "logic_1848",
+  "file": "logic.s",
+  "routine": "inrange",
+  "lo": 1848,
+  "hi": 1862,
+  "n": 15,
+  "cost": 22047
+ },
+ {
+  "id": "logic_1745",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1745,
+  "hi": 1760,
+  "n": 16,
+  "cost": 21696
+ },
+ {
+  "id": "engine_1268",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1268,
+  "hi": 1285,
+  "n": 16,
+  "cost": 21557
+ },
+ {
+  "id": "logic_2935",
+  "file": "logic.s",
+  "routine": "bar_digit",
+  "lo": 2935,
+  "hi": 2942,
+  "n": 7,
+  "cost": 21499
+ },
+ {
+  "id": "engine_1413",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1413,
+  "hi": 1429,
+  "n": 16,
+  "cost": 21215
+ },
+ {
+  "id": "logic_2918",
+  "file": "logic.s",
+  "routine": "bar_digit",
+  "lo": 2918,
+  "hi": 2934,
+  "n": 16,
+  "cost": 21027
+ },
+ {
+  "id": "engine_2390",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2390,
+  "hi": 2408,
+  "n": 16,
+  "cost": 21005
+ },
+ {
+  "id": "logic_1704",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1704,
+  "hi": 1719,
+  "n": 16,
+  "cost": 20856
+ },
+ {
+  "id": "engine_2002",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2002,
+  "hi": 2018,
+  "n": 16,
+  "cost": 20772
+ },
+ {
+  "id": "engine_3019",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 3019,
+  "hi": 3034,
+  "n": 16,
+  "cost": 20423
+ },
+ {
+  "id": "logic_975",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 975,
+  "hi": 990,
+  "n": 16,
+  "cost": 20344
+ },
+ {
+  "id": "logic_39",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 39,
+  "hi": 59,
+  "n": 16,
+  "cost": 20319
+ },
+ {
+  "id": "logic_1215",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1215,
+  "hi": 1231,
+  "n": 16,
+  "cost": 20159
+ },
+ {
+  "id": "engine_1180",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1180,
+  "hi": 1196,
+  "n": 16,
+  "cost": 20070
+ },
+ {
+  "id": "engine_2139",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2139,
+  "hi": 2155,
+  "n": 16,
+  "cost": 19927
+ },
+ {
+  "id": "engine_1405",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1405,
+  "hi": 1421,
+  "n": 16,
+  "cost": 19842
+ },
+ {
+  "id": "engine_1260",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1260,
+  "hi": 1276,
+  "n": 16,
+  "cost": 19724
+ },
+ {
+  "id": "logic_1712",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1712,
+  "hi": 1727,
+  "n": 16,
+  "cost": 19676
+ },
+ {
+  "id": "engine_936",
+  "file": "engine.s",
+  "routine": "match_sprites",
+  "lo": 936,
+  "hi": 945,
+  "n": 9,
+  "cost": 19560
+ },
+ {
+  "id": "engine_912",
+  "file": "engine.s",
+  "routine": "match_sprites",
+  "lo": 912,
+  "hi": 927,
+  "n": 16,
+  "cost": 19256
+ },
+ {
+  "id": "logic_891",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 891,
+  "hi": 908,
+  "n": 16,
+  "cost": 19250
+ },
+ {
+  "id": "engine_1198",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1198,
+  "hi": 1214,
+  "n": 16,
+  "cost": 19197
+ },
+ {
+  "id": "engine_2398",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2398,
+  "hi": 2417,
+  "n": 16,
+  "cost": 19069
+ },
+ {
+  "id": "engine_2475",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2475,
+  "hi": 2492,
+  "n": 16,
+  "cost": 18901
+ },
+ {
+  "id": "logic_2591",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2591,
+  "hi": 2607,
+  "n": 16,
+  "cost": 18627
+ },
+ {
+  "id": "engine_2493",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2493,
+  "hi": 2510,
+  "n": 16,
+  "cost": 18582
+ },
+ {
+  "id": "engine_1126",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1126,
+  "hi": 1145,
+  "n": 16,
+  "cost": 18522
+ },
+ {
+  "id": "logic_1856",
+  "file": "logic.s",
+  "routine": "inrange",
+  "lo": 1856,
+  "hi": 1862,
+  "n": 7,
+  "cost": 18477
+ },
+ {
+  "id": "logic_1269",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1269,
+  "hi": 1286,
+  "n": 16,
+  "cost": 18428
+ },
+ {
+  "id": "engine_2381",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2381,
+  "hi": 2397,
+  "n": 16,
+  "cost": 18357
+ },
+ {
+  "id": "engine_383",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 383,
+  "hi": 399,
+  "n": 16,
+  "cost": 18020
+ },
+ {
+  "id": "logic_917",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 917,
+  "hi": 939,
+  "n": 16,
+  "cost": 17702
+ },
+ {
+  "id": "logic_909",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 909,
+  "hi": 924,
+  "n": 16,
+  "cost": 17695
+ },
+ {
+  "id": "logic_901",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 901,
+  "hi": 916,
+  "n": 16,
+  "cost": 17653
+ },
+ {
+  "id": "logic_1277",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1277,
+  "hi": 1294,
+  "n": 16,
+  "cost": 17493
+ },
+ {
+  "id": "logic_1057",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 1057,
+  "hi": 1077,
+  "n": 16,
+  "cost": 17436
+ },
+ {
+  "id": "logic_883",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 883,
+  "hi": 900,
+  "n": 16,
+  "cost": 17422
+ },
+ {
+  "id": "logic_1790",
+  "file": "logic.s",
+  "routine": "process_object",
+  "lo": 1790,
+  "hi": 1796,
+  "n": 7,
+  "cost": 17376
+ },
+ {
+  "id": "engine_2148",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2148,
+  "hi": 2163,
+  "n": 16,
+  "cost": 17123
+ },
+ {
+  "id": "logic_925",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 925,
+  "hi": 947,
+  "n": 16,
+  "cost": 17034
+ },
+ {
+  "id": "logic_1170",
+  "file": "logic.s",
+  "routine": "gravity",
+  "lo": 1170,
+  "hi": 1176,
+  "n": 6,
+  "cost": 16737
+ },
+ {
+  "id": "logic_983",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 983,
+  "hi": 998,
+  "n": 16,
+  "cost": 16355
+ },
+ {
+  "id": "logic_2047",
+  "file": "logic.s",
+  "routine": "ob_tramp",
+  "lo": 2047,
+  "hi": 2061,
+  "n": 15,
+  "cost": 16081
+ },
+ {
+  "id": "logic_1353",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1353,
+  "hi": 1371,
+  "n": 16,
+  "cost": 15887
+ },
+ {
+  "id": "engine_2373",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2373,
+  "hi": 2389,
+  "n": 16,
+  "cost": 15745
+ },
+ {
+  "id": "engine_1422",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1422,
+  "hi": 1429,
+  "n": 8,
+  "cost": 15744
+ },
+ {
+  "id": "logic_965",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 965,
+  "hi": 982,
+  "n": 16,
+  "cost": 15742
+ },
+ {
+  "id": "logic_72",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 72,
+  "hi": 96,
+  "n": 16,
+  "cost": 15059
+ },
+ {
+  "id": "logic_1325",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1325,
+  "hi": 1343,
+  "n": 16,
+  "cost": 14831
+ },
+ {
+  "id": "engine_1294",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1294,
+  "hi": 1312,
+  "n": 16,
+  "cost": 14819
+ },
+ {
+  "id": "engine_1337",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1337,
+  "hi": 1358,
+  "n": 16,
+  "cost": 14673
+ },
+ {
+  "id": "logic_1589",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1589,
+  "hi": 1605,
+  "n": 16,
+  "cost": 14639
+ },
+ {
+  "id": "logic_1966",
+  "file": "logic.s",
+  "routine": "ob_star",
+  "lo": 1966,
+  "hi": 1973,
+  "n": 8,
+  "cost": 14621
+ },
+ {
+  "id": "logic_1313",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1313,
+  "hi": 1333,
+  "n": 16,
+  "cost": 14272
+ },
+ {
+  "id": "logic_2039",
+  "file": "logic.s",
+  "routine": "ob_tramp",
+  "lo": 2039,
+  "hi": 2054,
+  "n": 16,
+  "cost": 13968
+ },
+ {
+  "id": "logic_1372",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1372,
+  "hi": 1389,
+  "n": 16,
+  "cost": 13851
+ },
+ {
+  "id": "logic_137",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 137,
+  "hi": 161,
+  "n": 16,
+  "cost": 13833
+ },
+ {
+  "id": "logic_1983",
+  "file": "logic.s",
+  "routine": "star_safe",
+  "lo": 1983,
+  "hi": 1998,
+  "n": 16,
+  "cost": 13806
+ },
+ {
+  "id": "engine_2409",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2409,
+  "hi": 2426,
+  "n": 16,
+  "cost": 13799
+ },
+ {
+  "id": "logic_2600",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2600,
+  "hi": 2615,
+  "n": 16,
+  "cost": 13744
+ },
+ {
+  "id": "logic_1303",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1303,
+  "hi": 1324,
+  "n": 16,
+  "cost": 13351
+ },
+ {
+  "id": "engine_374",
+  "file": "engine.s",
+  "routine": "drawrect",
+  "lo": 374,
+  "hi": 390,
+  "n": 16,
+  "cost": 12954
+ },
+ {
+  "id": "logic_1448",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1448,
+  "hi": 1469,
+  "n": 16,
+  "cost": 12864
+ },
+ {
+  "id": "logic_457",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 457,
+  "hi": 474,
+  "n": 16,
+  "cost": 12852
+ },
+ {
+  "id": "logic_1932",
+  "file": "logic.s",
+  "routine": "ob_star",
+  "lo": 1932,
+  "hi": 1949,
+  "n": 16,
+  "cost": 12709
+ },
+ {
+  "id": "engine_3027",
+  "file": "engine.s",
+  "routine": "irq_handler",
+  "lo": 3027,
+  "hi": 3045,
+  "n": 16,
+  "cost": 12637
+ },
+ {
+  "id": "logic_1007",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 1007,
+  "hi": 1030,
+  "n": 16,
+  "cost": 12472
+ },
+ {
+  "id": "logic_2030",
+  "file": "logic.s",
+  "routine": "ob_tramp",
+  "lo": 2030,
+  "hi": 2046,
+  "n": 16,
+  "cost": 12450
+ },
+ {
+  "id": "engine_1670",
+  "file": "engine.s",
+  "routine": "pl",
+  "lo": 1670,
+  "hi": 1677,
+  "n": 6,
+  "cost": 12424
+ },
+ {
+  "id": "logic_1260",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1260,
+  "hi": 1276,
+  "n": 16,
+  "cost": 12269
+ },
+ {
+  "id": "logic_940",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 940,
+  "hi": 956,
+  "n": 16,
+  "cost": 11981
+ },
+ {
+  "id": "logic_125",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 125,
+  "hi": 147,
+  "n": 16,
+  "cost": 11894
+ },
+ {
+  "id": "engine_2578",
+  "file": "engine.s",
+  "routine": "render_frame",
+  "lo": 2578,
+  "hi": 2593,
+  "n": 16,
+  "cost": 11846
+ },
+ {
+  "id": "engine_3615",
+  "file": "engine.s",
+  "routine": "init_maprows",
+  "lo": 3615,
+  "hi": 3629,
+  "n": 14,
+  "cost": 11779
+ },
+ {
+  "id": "engine_2653",
+  "file": "engine.s",
+  "routine": "drawrect_clip",
+  "lo": 2653,
+  "hi": 2669,
+  "n": 16,
+  "cost": 11506
+ },
+ {
+  "id": "engine_2156",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2156,
+  "hi": 2171,
+  "n": 16,
+  "cost": 11359
+ },
+ {
+  "id": "engine_2586",
+  "file": "engine.s",
+  "routine": "render_frame",
+  "lo": 2586,
+  "hi": 2602,
+  "n": 16,
+  "cost": 11350
+ },
+ {
+  "id": "logic_1251",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1251,
+  "hi": 1268,
+  "n": 16,
+  "cost": 11284
+ },
+ {
+  "id": "logic_1363",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1363,
+  "hi": 1381,
+  "n": 16,
+  "cost": 11123
+ },
+ {
+  "id": "logic_1597",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1597,
+  "hi": 1615,
+  "n": 16,
+  "cost": 10511
+ },
+ {
+  "id": "logic_1581",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1581,
+  "hi": 1596,
+  "n": 16,
+  "cost": 10304
+ },
+ {
+  "id": "main_278",
+  "file": "main.s",
+  "routine": "clamp_window",
+  "lo": 278,
+  "hi": 293,
+  "n": 16,
+  "cost": 10184
+ },
+ {
+  "id": "logic_417",
+  "file": "logic.s",
+  "routine": "gettileattr",
+  "lo": 417,
+  "hi": 423,
+  "n": 6,
+  "cost": 10177
+ },
+ {
+  "id": "logic_467",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 467,
+  "hi": 484,
+  "n": 16,
+  "cost": 9881
+ },
+ {
+  "id": "engine_2450",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2450,
+  "hi": 2474,
+  "n": 16,
+  "cost": 9822
+ },
+ {
+  "id": "engine_2365",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2365,
+  "hi": 2380,
+  "n": 16,
+  "cost": 9772
+ },
+ {
+  "id": "logic_999",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 999,
+  "hi": 1015,
+  "n": 16,
+  "cost": 9682
+ },
+ {
+  "id": "main_286",
+  "file": "main.s",
+  "routine": "clamp_window",
+  "lo": 286,
+  "hi": 301,
+  "n": 16,
+  "cost": 9597
+ },
+ {
+  "id": "engine_2661",
+  "file": "engine.s",
+  "routine": "drawrect_clip",
+  "lo": 2661,
+  "hi": 2680,
+  "n": 16,
+  "cost": 9424
+ },
+ {
+  "id": "logic_2582",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2582,
+  "hi": 2599,
+  "n": 16,
+  "cost": 9424
+ },
+ {
+  "id": "engine_2236",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2236,
+  "hi": 2253,
+  "n": 16,
+  "cost": 9330
+ },
+ {
+  "id": "engine_2019",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2019,
+  "hi": 2034,
+  "n": 16,
+  "cost": 9259
+ },
+ {
+  "id": "logic_991",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 991,
+  "hi": 1006,
+  "n": 16,
+  "cost": 9204
+ },
+ {
+  "id": "logic_2651",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2651,
+  "hi": 2665,
+  "n": 13,
+  "cost": 9023
+ },
+ {
+  "id": "engine_3150",
+  "file": "engine.s",
+  "routine": "sndwrite",
+  "lo": 3150,
+  "hi": 3165,
+  "n": 16,
+  "cost": 8900
+ },
+ {
+  "id": "logic_151",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 151,
+  "hi": 178,
+  "n": 16,
+  "cost": 8800
+ },
+ {
+  "id": "engine_2090",
+  "file": "engine.s",
+  "routine": "mirror_seek",
+  "lo": 2090,
+  "hi": 2105,
+  "n": 16,
+  "cost": 8707
+ },
+ {
+  "id": "engine_2357",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2357,
+  "hi": 2372,
+  "n": 16,
+  "cost": 8707
+ },
+ {
+  "id": "logic_1499",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1499,
+  "hi": 1518,
+  "n": 16,
+  "cost": 8692
+ },
+ {
+  "id": "engine_2182",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2182,
+  "hi": 2198,
+  "n": 16,
+  "cost": 8682
+ },
+ {
+  "id": "logic_113",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 113,
+  "hi": 136,
+  "n": 16,
+  "cost": 8602
+ },
+ {
+  "id": "logic_781",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 781,
+  "hi": 798,
+  "n": 16,
+  "cost": 8575
+ },
+ {
+  "id": "engine_2570",
+  "file": "engine.s",
+  "routine": "render_frame",
+  "lo": 2570,
+  "hi": 2585,
+  "n": 16,
+  "cost": 8526
+ },
+ {
+  "id": "main_270",
+  "file": "main.s",
+  "routine": "clamp_window",
+  "lo": 270,
+  "hi": 285,
+  "n": 16,
+  "cost": 8496
+ },
+ {
+  "id": "logic_1679",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1679,
+  "hi": 1693,
+  "n": 12,
+  "cost": 8482
+ },
+ {
+  "id": "engine_2246",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2246,
+  "hi": 2262,
+  "n": 16,
+  "cost": 8371
+ },
+ {
+  "id": "engine_2332",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2332,
+  "hi": 2348,
+  "n": 16,
+  "cost": 8367
+ },
+ {
+  "id": "engine_1189",
+  "file": "engine.s",
+  "routine": "drawsprite",
+  "lo": 1189,
+  "hi": 1205,
+  "n": 16,
+  "cost": 8353
+ },
+ {
+  "id": "engine_2324",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2324,
+  "hi": 2340,
+  "n": 16,
+  "cost": 8239
+ },
+ {
+  "id": "engine_2681",
+  "file": "engine.s",
+  "routine": "drawrect_clip",
+  "lo": 2681,
+  "hi": 2696,
+  "n": 16,
+  "cost": 8173
+ },
+ {
+  "id": "engine_2689",
+  "file": "engine.s",
+  "routine": "drawrect_clip",
+  "lo": 2689,
+  "hi": 2701,
+  "n": 12,
+  "cost": 8168
+ },
+ {
+  "id": "engine_2349",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2349,
+  "hi": 2364,
+  "n": 16,
+  "cost": 8157
+ },
+ {
+  "id": "engine_2172",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2172,
+  "hi": 2189,
+  "n": 16,
+  "cost": 8029
+ },
+ {
+  "id": "engine_862",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 862,
+  "hi": 874,
+  "n": 13,
+  "cost": 8011
+ },
+ {
+  "id": "logic_1243",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1243,
+  "hi": 1258,
+  "n": 16,
+  "cost": 7892
+ },
+ {
+  "id": "logic_3024",
+  "file": "logic.s",
+  "routine": "div10_16",
+  "lo": 3024,
+  "hi": 3040,
+  "n": 11,
+  "cost": 7834
+ },
+ {
+  "id": "engine_2043",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2043,
+  "hi": 2059,
+  "n": 16,
+  "cost": 7790
+ },
+ {
+  "id": "logic_1488",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1488,
+  "hi": 1508,
+  "n": 16,
+  "cost": 7782
+ },
+ {
+  "id": "logic_2627",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2627,
+  "hi": 2642,
+  "n": 16,
+  "cost": 7767
+ },
+ {
+  "id": "logic_1182",
+  "file": "logic.s",
+  "routine": "vy_step",
+  "lo": 1182,
+  "hi": 1200,
+  "n": 16,
+  "cost": 7652
+ },
+ {
+  "id": "logic_1991",
+  "file": "logic.s",
+  "routine": "star_safe",
+  "lo": 1991,
+  "hi": 2000,
+  "n": 10,
+  "cost": 7585
+ },
+ {
+  "id": "engine_763",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 763,
+  "hi": 782,
+  "n": 16,
+  "cost": 7480
+ },
+ {
+  "id": "engine_2341",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2341,
+  "hi": 2356,
+  "n": 16,
+  "cost": 7457
+ },
+ {
+  "id": "engine_1893",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1893,
+  "hi": 1908,
+  "n": 16,
+  "cost": 7415
+ },
+ {
+  "id": "logic_2635",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2635,
+  "hi": 2650,
+  "n": 16,
+  "cost": 7352
+ },
+ {
+  "id": "logic_503",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 503,
+  "hi": 518,
+  "n": 16,
+  "cost": 7305
+ },
+ {
+  "id": "engine_2594",
+  "file": "engine.s",
+  "routine": "render_frame",
+  "lo": 2594,
+  "hi": 2612,
+  "n": 16,
+  "cost": 7292
+ },
+ {
+  "id": "engine_2316",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2316,
+  "hi": 2331,
+  "n": 16,
+  "cost": 7290
+ },
+ {
+  "id": "engine_2459",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2459,
+  "hi": 2483,
+  "n": 16,
+  "cost": 7234
+ },
+ {
+  "id": "engine_3605",
+  "file": "engine.s",
+  "routine": "init_maprows",
+  "lo": 3605,
+  "hi": 3623,
+  "n": 16,
+  "cost": 7186
+ },
+ {
+  "id": "engine_2254",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2254,
+  "hi": 2270,
+  "n": 16,
+  "cost": 7164
+ },
+ {
+  "id": "logic_2574",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2574,
+  "hi": 2590,
+  "n": 16,
+  "cost": 7147
+ },
+ {
+  "id": "logic_398",
+  "file": "logic.s",
+  "routine": "getaltitude",
+  "lo": 398,
+  "hi": 412,
+  "n": 15,
+  "cost": 7108
+ },
+ {
+  "id": "engine_2098",
+  "file": "engine.s",
+  "routine": "mirror_seek",
+  "lo": 2098,
+  "hi": 2113,
+  "n": 16,
+  "cost": 7098
+ },
+ {
+  "id": "logic_1941",
+  "file": "logic.s",
+  "routine": "ob_star",
+  "lo": 1941,
+  "hi": 1957,
+  "n": 16,
+  "cost": 7096
+ },
+ {
+  "id": "logic_2643",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2643,
+  "hi": 2658,
+  "n": 16,
+  "cost": 7063
+ },
+ {
+  "id": "engine_2305",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2305,
+  "hi": 2323,
+  "n": 16,
+  "cost": 6957
+ },
+ {
+  "id": "engine_1917",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1917,
+  "hi": 1935,
+  "n": 16,
+  "cost": 6943
+ },
+ {
+  "id": "main_386",
+  "file": "main.s",
+  "routine": "frame_top",
+  "lo": 386,
+  "hi": 395,
+  "n": 10,
+  "cost": 6887
+ },
+ {
+  "id": "logic_957",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 957,
+  "hi": 974,
+  "n": 16,
+  "cost": 6852
+ },
+ {
+  "id": "engine_2263",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2263,
+  "hi": 2278,
+  "n": 16,
+  "cost": 6800
+ },
+ {
+  "id": "engine_1909",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1909,
+  "hi": 1926,
+  "n": 16,
+  "cost": 6671
+ },
+ {
+  "id": "engine_3108",
+  "file": "engine.s",
+  "routine": "sound_tick",
+  "lo": 3108,
+  "hi": 3123,
+  "n": 16,
+  "cost": 6586
+ },
+ {
+  "id": "engine_2271",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2271,
+  "hi": 2286,
+  "n": 16,
+  "cost": 6528
+ },
+ {
+  "id": "engine_2279",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2279,
+  "hi": 2294,
+  "n": 16,
+  "cost": 6528
+ },
+ {
+  "id": "engine_2106",
+  "file": "engine.s",
+  "routine": "mirror_seek",
+  "lo": 2106,
+  "hi": 2120,
+  "n": 15,
+  "cost": 6480
+ },
+ {
+  "id": "logic_495",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 495,
+  "hi": 510,
+  "n": 16,
+  "cost": 6478
+ },
+ {
+  "id": "logic_1670",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1670,
+  "hi": 1688,
+  "n": 16,
+  "cost": 6441
+ },
+ {
+  "id": "logic_1067",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 1067,
+  "hi": 1080,
+  "n": 11,
+  "cost": 6158
+ },
+ {
+  "id": "engine_1927",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1927,
+  "hi": 1944,
+  "n": 16,
+  "cost": 6126
+ },
+ {
+  "id": "engine_1901",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1901,
+  "hi": 1916,
+  "n": 16,
+  "cost": 6117
+ },
+ {
+  "id": "logic_770",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 770,
+  "hi": 790,
+  "n": 16,
+  "cost": 6106
+ },
+ {
+  "id": "engine_3158",
+  "file": "engine.s",
+  "routine": "sndwrite",
+  "lo": 3158,
+  "hi": 3177,
+  "n": 14,
+  "cost": 6052
+ },
+ {
+  "id": "engine_2035",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2035,
+  "hi": 2051,
+  "n": 16,
+  "cost": 5928
+ },
+ {
+  "id": "logic_519",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 519,
+  "hi": 535,
+  "n": 16,
+  "cost": 5822
+ },
+ {
+  "id": "logic_528",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 528,
+  "hi": 543,
+  "n": 16,
+  "cost": 5748
+ },
+ {
+  "id": "logic_1224",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1224,
+  "hi": 1242,
+  "n": 16,
+  "cost": 5480
+ },
+ {
+  "id": "logic_791",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 791,
+  "hi": 808,
+  "n": 16,
+  "cost": 5358
+ },
+ {
+  "id": "engine_810",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 810,
+  "hi": 826,
+  "n": 16,
+  "cost": 5307
+ },
+ {
+  "id": "engine_2603",
+  "file": "engine.s",
+  "routine": "render_frame",
+  "lo": 2603,
+  "hi": 2617,
+  "n": 12,
+  "cost": 5265
+ },
+ {
+  "id": "logic_837",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 837,
+  "hi": 848,
+  "n": 12,
+  "cost": 5208
+ },
+ {
+  "id": "logic_1232",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1232,
+  "hi": 1250,
+  "n": 16,
+  "cost": 5176
+ },
+ {
+  "id": "logic_1573",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1573,
+  "hi": 1588,
+  "n": 16,
+  "cost": 5159
+ },
+ {
+  "id": "logic_948",
+  "file": "logic.s",
+  "routine": "game_frame",
+  "lo": 948,
+  "hi": 964,
+  "n": 16,
+  "cost": 5140
+ },
+ {
+  "id": "logic_2055",
+  "file": "logic.s",
+  "routine": "ob_tramp",
+  "lo": 2055,
+  "hi": 2061,
+  "n": 7,
+  "cost": 5117
+ },
+ {
+  "id": "main_369",
+  "file": "main.s",
+  "routine": "fl_nopause",
+  "lo": 369,
+  "hi": 381,
+  "n": 8,
+  "cost": 5105
+ },
+ {
+  "id": "logic_511",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 511,
+  "hi": 527,
+  "n": 16,
+  "cost": 5091
+ },
+ {
+  "id": "logic_406",
+  "file": "logic.s",
+  "routine": "getaltitude",
+  "lo": 406,
+  "hi": 412,
+  "n": 7,
+  "cost": 4991
+ },
+ {
+  "id": "logic_1509",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1509,
+  "hi": 1526,
+  "n": 16,
+  "cost": 4984
+ },
+ {
+  "id": "engine_2164",
+  "file": "engine.s",
+  "routine": "mirror_run",
+  "lo": 2164,
+  "hi": 2181,
+  "n": 16,
+  "cost": 4936
+ },
+ {
+  "id": "logic_1554",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1554,
+  "hi": 1572,
+  "n": 16,
+  "cost": 4917
+ },
+ {
+  "id": "logic_536",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 536,
+  "hi": 552,
+  "n": 16,
+  "cost": 4765
+ },
+ {
+  "id": "logic_1478",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1478,
+  "hi": 1496,
+  "n": 16,
+  "cost": 4719
+ },
+ {
+  "id": "engine_2287",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2287,
+  "hi": 2304,
+  "n": 16,
+  "cost": 4677
+ },
+ {
+  "id": "engine_3624",
+  "file": "engine.s",
+  "routine": "init_maprows",
+  "lo": 3624,
+  "hi": 3629,
+  "n": 6,
+  "cost": 4609
+ },
+ {
+  "id": "engine_1883",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1883,
+  "hi": 1900,
+  "n": 16,
+  "cost": 4597
+ },
+ {
+  "id": "engine_802",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 802,
+  "hi": 818,
+  "n": 16,
+  "cost": 4504
+ },
+ {
+  "id": "logic_2989",
+  "file": "logic.s",
+  "routine": "draw_score",
+  "lo": 2989,
+  "hi": 3005,
+  "n": 16,
+  "cost": 4462
+ },
+ {
+  "id": "logic_1527",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1527,
+  "hi": 1545,
+  "n": 16,
+  "cost": 4451
+ },
+ {
+  "id": "logic_1193",
+  "file": "logic.s",
+  "routine": "vy_step",
+  "lo": 1193,
+  "hi": 1208,
+  "n": 16,
+  "cost": 4366
+ },
+ {
+  "id": "engine_2710",
+  "file": "engine.s",
+  "routine": "calc_ring",
+  "lo": 2710,
+  "hi": 2725,
+  "n": 16,
+  "cost": 4353
+ },
+ {
+  "id": "engine_773",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 773,
+  "hi": 792,
+  "n": 16,
+  "cost": 4312
+ },
+ {
+  "id": "engine_2549",
+  "file": "engine.s",
+  "routine": "select_backbuf",
+  "lo": 2549,
+  "hi": 2561,
+  "n": 13,
+  "cost": 4277
+ },
+ {
+  "id": "logic_2998",
+  "file": "logic.s",
+  "routine": "draw_score",
+  "lo": 2998,
+  "hi": 3012,
+  "n": 15,
+  "cost": 4255
+ },
+ {
+  "id": "engine_853",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 853,
+  "hi": 869,
+  "n": 16,
+  "cost": 4226
+ },
+ {
+  "id": "engine_2295",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2295,
+  "hi": 2315,
+  "n": 16,
+  "cost": 4216
+ },
+ {
+  "id": "engine_2644",
+  "file": "engine.s",
+  "routine": "drawrect_clip",
+  "lo": 2644,
+  "hi": 2660,
+  "n": 16,
+  "cost": 4216
+ },
+ {
+  "id": "engine_3116",
+  "file": "engine.s",
+  "routine": "sound_tick",
+  "lo": 3116,
+  "hi": 3131,
+  "n": 16,
+  "cost": 4172
+ },
+ {
+  "id": "logic_164",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 164,
+  "hi": 192,
+  "n": 16,
+  "cost": 4107
+ },
+ {
+  "id": "engine_819",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 819,
+  "hi": 834,
+  "n": 16,
+  "cost": 4078
+ },
+ {
+  "id": "engine_835",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 835,
+  "hi": 852,
+  "n": 16,
+  "cost": 4048
+ },
+ {
+  "id": "engine_3209",
+  "file": "engine.s",
+  "routine": "music_tick",
+  "lo": 3209,
+  "hi": 3220,
+  "n": 11,
+  "cost": 3996
+ },
+ {
+  "id": "logic_2894",
+  "file": "logic.s",
+  "routine": "bar_digit",
+  "lo": 2894,
+  "hi": 2909,
+  "n": 16,
+  "cost": 3987
+ },
+ {
+  "id": "logic_544",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 544,
+  "hi": 560,
+  "n": 16,
+  "cost": 3937
+ },
+ {
+  "id": "logic_448",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 448,
+  "hi": 466,
+  "n": 16,
+  "cost": 3906
+ },
+ {
+  "id": "engine_793",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 793,
+  "hi": 809,
+  "n": 16,
+  "cost": 3848
+ },
+ {
+  "id": "logic_1519",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1519,
+  "hi": 1537,
+  "n": 16,
+  "cost": 3677
+ },
+ {
+  "id": "engine_2501",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2501,
+  "hi": 2520,
+  "n": 16,
+  "cost": 3618
+ },
+ {
+  "id": "engine_3763",
+  "file": "engine.s",
+  "routine": "pagelogic",
+  "lo": 3763,
+  "hi": 3777,
+  "n": 13,
+  "cost": 3582
+ },
+ {
+  "id": "engine_2114",
+  "file": "engine.s",
+  "routine": "mirror_seek",
+  "lo": 2114,
+  "hi": 2120,
+  "n": 7,
+  "cost": 3558
+ },
+ {
+  "id": "logic_1546",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1546,
+  "hi": 1563,
+  "n": 16,
+  "cost": 3391
+ },
+ {
+  "id": "engine_2052",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2052,
+  "hi": 2079,
+  "n": 14,
+  "cost": 3378
+ },
+ {
+  "id": "logic_598",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 598,
+  "hi": 614,
+  "n": 16,
+  "cost": 3323
+ },
+ {
+  "id": "logic_828",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 828,
+  "hi": 844,
+  "n": 16,
+  "cost": 3219
+ },
+ {
+  "id": "engine_827",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 827,
+  "hi": 843,
+  "n": 16,
+  "cost": 3158
+ },
+ {
+  "id": "logic_553",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 553,
+  "hi": 568,
+  "n": 16,
+  "cost": 3116
+ },
+ {
+  "id": "logic_607",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 607,
+  "hi": 622,
+  "n": 16,
+  "cost": 3107
+ },
+ {
+  "id": "logic_179",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 179,
+  "hi": 200,
+  "n": 16,
+  "cost": 3038
+ },
+ {
+  "id": "engine_2027",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2027,
+  "hi": 2042,
+  "n": 16,
+  "cost": 2945
+ },
+ {
+  "id": "engine_3132",
+  "file": "engine.s",
+  "routine": "sound_tick",
+  "lo": 3132,
+  "hi": 3144,
+  "n": 13,
+  "cost": 2914
+ },
+ {
+  "id": "engine_2718",
+  "file": "engine.s",
+  "routine": "calc_ring",
+  "lo": 2718,
+  "hi": 2734,
+  "n": 16,
+  "cost": 2884
+ },
+ {
+  "id": "logic_485",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 485,
+  "hi": 502,
+  "n": 16,
+  "cost": 2873
+ },
+ {
+  "id": "logic_97",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 97,
+  "hi": 124,
+  "n": 16,
+  "cost": 2810
+ },
+ {
+  "id": "logic_2608",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2608,
+  "hi": 2626,
+  "n": 16,
+  "cost": 2790
+ },
+ {
+  "id": "logic_1201",
+  "file": "logic.s",
+  "routine": "vy_step",
+  "lo": 1201,
+  "hi": 1208,
+  "n": 8,
+  "cost": 2716
+ },
+ {
+  "id": "engine_783",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 783,
+  "hi": 800,
+  "n": 16,
+  "cost": 2667
+ },
+ {
+  "id": "engine_1865",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1865,
+  "hi": 1882,
+  "n": 16,
+  "cost": 2632
+ },
+ {
+  "id": "logic_561",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 561,
+  "hi": 576,
+  "n": 16,
+  "cost": 2604
+ },
+ {
+  "id": "logic_2178",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2178,
+  "hi": 2193,
+  "n": 16,
+  "cost": 2566
+ },
+ {
+  "id": "engine_3166",
+  "file": "engine.s",
+  "routine": "sndwrite",
+  "lo": 3166,
+  "hi": 3177,
+  "n": 6,
+  "cost": 2492
+ },
+ {
+  "id": "logic_2616",
+  "file": "logic.s",
+  "routine": "ob_walker",
+  "lo": 2616,
+  "hi": 2634,
+  "n": 16,
+  "cost": 2447
+ },
+ {
+  "id": "engine_3124",
+  "file": "engine.s",
+  "routine": "sound_tick",
+  "lo": 3124,
+  "hi": 3139,
+  "n": 16,
+  "cost": 2442
+ },
+ {
+  "id": "logic_2910",
+  "file": "logic.s",
+  "routine": "bar_digit",
+  "lo": 2910,
+  "hi": 2925,
+  "n": 16,
+  "cost": 2430
+ },
+ {
+  "id": "logic_3006",
+  "file": "logic.s",
+  "routine": "draw_score",
+  "lo": 3006,
+  "hi": 3012,
+  "n": 7,
+  "cost": 2415
+ },
+ {
+  "id": "logic_2902",
+  "file": "logic.s",
+  "routine": "bar_digit",
+  "lo": 2902,
+  "hi": 2917,
+  "n": 16,
+  "cost": 2268
+ },
+ {
+  "id": "logic_799",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 799,
+  "hi": 819,
+  "n": 16,
+  "cost": 2242
+ },
+ {
+  "id": "main_294",
+  "file": "main.s",
+  "routine": "clamp_window",
+  "lo": 294,
+  "hi": 301,
+  "n": 8,
+  "cost": 2132
+ },
+ {
+  "id": "engine_844",
+  "file": "engine.s",
+  "routine": "scroll_validate",
+  "lo": 844,
+  "hi": 860,
+  "n": 16,
+  "cost": 2074
+ },
+ {
+  "id": "main_351",
+  "file": "main.s",
+  "routine": "frame_loop",
+  "lo": 351,
+  "hi": 364,
+  "n": 13,
+  "cost": 2072
+ },
+ {
+  "id": "logic_475",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 475,
+  "hi": 494,
+  "n": 16,
+  "cost": 2066
+ },
+ {
+  "id": "logic_1461",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1461,
+  "hi": 1477,
+  "n": 16,
+  "cost": 2034
+ },
+ {
+  "id": "engine_3192",
+  "file": "engine.s",
+  "routine": "music_tick",
+  "lo": 3192,
+  "hi": 3208,
+  "n": 16,
+  "cost": 1998
+ },
+ {
+  "id": "logic_85",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 85,
+  "hi": 108,
+  "n": 16,
+  "cost": 1992
+ },
+ {
+  "id": "logic_1538",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1538,
+  "hi": 1553,
+  "n": 16,
+  "cost": 1887
+ },
+ {
+  "id": "logic_2118",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2118,
+  "hi": 2133,
+  "n": 16,
+  "cost": 1848
+ },
+ {
+  "id": "logic_1470",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1470,
+  "hi": 1487,
+  "n": 16,
+  "cost": 1758
+ },
+ {
+  "id": "logic_1564",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1564,
+  "hi": 1580,
+  "n": 16,
+  "cost": 1526
+ },
+ {
+  "id": "logic_2169",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2169,
+  "hi": 2185,
+  "n": 16,
+  "cost": 1485
+ },
+ {
+  "id": "engine_2670",
+  "file": "engine.s",
+  "routine": "drawrect_clip",
+  "lo": 2670,
+  "hi": 2688,
+  "n": 16,
+  "cost": 1415
+ },
+ {
+  "id": "logic_615",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 615,
+  "hi": 630,
+  "n": 16,
+  "cost": 1354
+ },
+ {
+  "id": "logic_2186",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2186,
+  "hi": 2201,
+  "n": 16,
+  "cost": 1351
+ },
+ {
+  "id": "logic_762",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 762,
+  "hi": 780,
+  "n": 16,
+  "cost": 1346
+ },
+ {
+  "id": "logic_587",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 587,
+  "hi": 606,
+  "n": 16,
+  "cost": 1334
+ },
+ {
+  "id": "logic_2108",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2108,
+  "hi": 2125,
+  "n": 16,
+  "cost": 1320
+ },
+ {
+  "id": "logic_569",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 569,
+  "hi": 586,
+  "n": 16,
+  "cost": 1239
+ },
+ {
+  "id": "engine_2929",
+  "file": "engine.s",
+  "routine": "draw_dirty",
+  "lo": 2929,
+  "hi": 2940,
+  "n": 12,
+  "cost": 1044
+ },
+ {
+  "id": "logic_2202",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2202,
+  "hi": 2219,
+  "n": 16,
+  "cost": 1037
+ },
+ {
+  "id": "logic_1606",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1606,
+  "hi": 1626,
+  "n": 16,
+  "cost": 1017
+ },
+ {
+  "id": "logic_2210",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2210,
+  "hi": 2226,
+  "n": 15,
+  "cost": 974
+ },
+ {
+  "id": "logic_2082",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2082,
+  "hi": 2099,
+  "n": 16,
+  "cost": 759
+ },
+ {
+  "id": "logic_2194",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2194,
+  "hi": 2209,
+  "n": 16,
+  "cost": 759
+ },
+ {
+  "id": "logic_809",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 809,
+  "hi": 827,
+  "n": 16,
+  "cost": 731
+ },
+ {
+  "id": "engine_1874",
+  "file": "engine.s",
+  "routine": "copy_partial",
+  "lo": 1874,
+  "hi": 1892,
+  "n": 16,
+  "cost": 715
+ },
+ {
+  "id": "logic_2969",
+  "file": "logic.s",
+  "routine": "draw_stars",
+  "lo": 2969,
+  "hi": 2977,
+  "n": 9,
+  "cost": 667
+ },
+ {
+  "id": "logic_2090",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2090,
+  "hi": 2107,
+  "n": 16,
+  "cost": 649
+ },
+ {
+  "id": "logic_2066",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2066,
+  "hi": 2081,
+  "n": 16,
+  "cost": 571
+ },
+ {
+  "id": "logic_2126",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2126,
+  "hi": 2142,
+  "n": 16,
+  "cost": 528
+ },
+ {
+  "id": "logic_647",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 647,
+  "hi": 662,
+  "n": 16,
+  "cost": 462
+ },
+ {
+  "id": "logic_2220",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2220,
+  "hi": 2226,
+  "n": 7,
+  "cost": 426
+ },
+ {
+  "id": "logic_639",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 639,
+  "hi": 654,
+  "n": 16,
+  "cost": 409
+ },
+ {
+  "id": "engine_3361",
+  "file": "engine.s",
+  "routine": "set_palette",
+  "lo": 3361,
+  "hi": 3371,
+  "n": 11,
+  "cost": 405
+ },
+ {
+  "id": "logic_623",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 623,
+  "hi": 638,
+  "n": 16,
+  "cost": 404
+ },
+ {
+  "id": "logic_1124",
+  "file": "logic.s",
+  "routine": "player_dead",
+  "lo": 1124,
+  "hi": 1141,
+  "n": 16,
+  "cost": 385
+ },
+ {
+  "id": "logic_631",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 631,
+  "hi": 646,
+  "n": 16,
+  "cost": 333
+ },
+ {
+  "id": "logic_655",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 655,
+  "hi": 670,
+  "n": 16,
+  "cost": 323
+ },
+ {
+  "id": "logic_2153",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2153,
+  "hi": 2168,
+  "n": 16,
+  "cost": 297
+ },
+ {
+  "id": "logic_1150",
+  "file": "logic.s",
+  "routine": "player_dead",
+  "lo": 1150,
+  "hi": 1164,
+  "n": 14,
+  "cost": 203
+ },
+ {
+  "id": "logic_1159",
+  "file": "logic.s",
+  "routine": "player_dead",
+  "lo": 1159,
+  "hi": 1164,
+  "n": 6,
+  "cost": 203
+ },
+ {
+  "id": "logic_2074",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2074,
+  "hi": 2089,
+  "n": 16,
+  "cost": 198
+ },
+ {
+  "id": "logic_2143",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2143,
+  "hi": 2160,
+  "n": 16,
+  "cost": 198
+ },
+ {
+  "id": "main_149",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 149,
+  "hi": 165,
+  "n": 16,
+  "cost": 154
+ },
+ {
+  "id": "main_139",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 139,
+  "hi": 157,
+  "n": 16,
+  "cost": 140
+ },
+ {
+  "id": "logic_577",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 577,
+  "hi": 597,
+  "n": 16,
+  "cost": 135
+ },
+ {
+  "id": "logic_1101",
+  "file": "logic.s",
+  "routine": "player_hit",
+  "lo": 1101,
+  "hi": 1116,
+  "n": 15,
+  "cost": 124
+ },
+ {
+  "id": "logic_2161",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2161,
+  "hi": 2176,
+  "n": 16,
+  "cost": 99
+ },
+ {
+  "id": "logic_2100",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2100,
+  "hi": 2117,
+  "n": 16,
+  "cost": 88
+ },
+ {
+  "id": "logic_1133",
+  "file": "logic.s",
+  "routine": "player_dead",
+  "lo": 1133,
+  "hi": 1149,
+  "n": 16,
+  "cost": 84
+ },
+ {
+  "id": "logic_663",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 663,
+  "hi": 678,
+  "n": 16,
+  "cost": 81
+ },
+ {
+  "id": "logic_1109",
+  "file": "logic.s",
+  "routine": "player_hit",
+  "lo": 1109,
+  "hi": 1116,
+  "n": 7,
+  "cost": 74
+ },
+ {
+  "id": "main_332",
+  "file": "main.s",
+  "routine": "level_loop",
+  "lo": 332,
+  "hi": 348,
+  "n": 16,
+  "cost": 71
+ },
+ {
+  "id": "logic_432",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 432,
+  "hi": 447,
+  "n": 16,
+  "cost": 64
+ },
+ {
+  "id": "main_158",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 158,
+  "hi": 173,
+  "n": 16,
+  "cost": 60
+ },
+ {
+  "id": "logic_820",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 820,
+  "hi": 835,
+  "n": 16,
+  "cost": 59
+ },
+ {
+  "id": "main_166",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 166,
+  "hi": 181,
+  "n": 16,
+  "cost": 55
+ },
+ {
+  "id": "logic_440",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 440,
+  "hi": 455,
+  "n": 16,
+  "cost": 52
+ },
+ {
+  "id": "engine_3596",
+  "file": "engine.s",
+  "routine": "init_maprows",
+  "lo": 3596,
+  "hi": 3614,
+  "n": 16,
+  "cost": 36
+ },
+ {
+  "id": "main_341",
+  "file": "main.s",
+  "routine": "level_loop",
+  "lo": 341,
+  "hi": 348,
+  "n": 8,
+  "cost": 35
+ },
+ {
+  "id": "main_130",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 130,
+  "hi": 147,
+  "n": 16,
+  "cost": 34
+ },
+ {
+  "id": "main_174",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 174,
+  "hi": 207,
+  "n": 16,
+  "cost": 34
+ },
+ {
+  "id": "engine_2060",
+  "file": "engine.s",
+  "routine": "bar_bg",
+  "lo": 2060,
+  "hi": 2079,
+  "n": 6,
+  "cost": 28
+ },
+ {
+  "id": "engine_11",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 11,
+  "hi": 26,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_19",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 19,
+  "hi": 35,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_27",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 27,
+  "hi": 45,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_36",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 36,
+  "hi": 69,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_46",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 46,
+  "hi": 80,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_70",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 70,
+  "hi": 95,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_81",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 81,
+  "hi": 109,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_96",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 96,
+  "hi": 121,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_110",
+  "file": "engine.s",
+  "routine": "(file start)",
+  "lo": 110,
+  "hi": 124,
+  "n": 11,
+  "cost": 0
+ },
+ {
+  "id": "engine_1714",
+  "file": "engine.s",
+  "routine": "pd",
+  "lo": 1714,
+  "hi": 1736,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_1728",
+  "file": "engine.s",
+  "routine": "pd",
+  "lo": 1728,
+  "hi": 1744,
+  "n": 15,
+  "cost": 0
+ },
+ {
+  "id": "engine_1737",
+  "file": "engine.s",
+  "routine": "pd",
+  "lo": 1737,
+  "hi": 1744,
+  "n": 7,
+  "cost": 0
+ },
+ {
+  "id": "engine_1800",
+  "file": "engine.s",
+  "routine": "pl",
+  "lo": 1800,
+  "hi": 1821,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_1814",
+  "file": "engine.s",
+  "routine": "pl",
+  "lo": 1814,
+  "hi": 1824,
+  "n": 11,
+  "cost": 0
+ },
+ {
+  "id": "engine_2512",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2512,
+  "hi": 2529,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2521",
+  "file": "engine.s",
+  "routine": "build_sections",
+  "lo": 2521,
+  "hi": 2536,
+  "n": 11,
+  "cost": 0
+ },
+ {
+  "id": "engine_2760",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2760,
+  "hi": 2779,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2770",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2770,
+  "hi": 2789,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2780",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2780,
+  "hi": 2797,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2790",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2790,
+  "hi": 2808,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2798",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2798,
+  "hi": 2817,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2809",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2809,
+  "hi": 2826,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2818",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2818,
+  "hi": 2834,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2827",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2827,
+  "hi": 2842,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2835",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2835,
+  "hi": 2850,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2843",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2843,
+  "hi": 2858,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2851",
+  "file": "engine.s",
+  "routine": "init_tables",
+  "lo": 2851,
+  "hi": 2861,
+  "n": 11,
+  "cost": 0
+ },
+ {
+  "id": "engine_2879",
+  "file": "engine.s",
+  "routine": "mark_dirty",
+  "lo": 2879,
+  "hi": 2894,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2887",
+  "file": "engine.s",
+  "routine": "mark_dirty",
+  "lo": 2887,
+  "hi": 2902,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2895",
+  "file": "engine.s",
+  "routine": "mark_dirty",
+  "lo": 2895,
+  "hi": 2904,
+  "n": 10,
+  "cost": 0
+ },
+ {
+  "id": "engine_2913",
+  "file": "engine.s",
+  "routine": "draw_dirty",
+  "lo": 2913,
+  "hi": 2928,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_2921",
+  "file": "engine.s",
+  "routine": "draw_dirty",
+  "lo": 2921,
+  "hi": 2936,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3182",
+  "file": "engine.s",
+  "routine": "music_init",
+  "lo": 3182,
+  "hi": 3189,
+  "n": 7,
+  "cost": 0
+ },
+ {
+  "id": "engine_3200",
+  "file": "engine.s",
+  "routine": "music_tick",
+  "lo": 3200,
+  "hi": 3217,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3234",
+  "file": "engine.s",
+  "routine": "set_voice",
+  "lo": 3234,
+  "hi": 3249,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3242",
+  "file": "engine.s",
+  "routine": "set_voice",
+  "lo": 3242,
+  "hi": 3257,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3250",
+  "file": "engine.s",
+  "routine": "set_voice",
+  "lo": 3250,
+  "hi": 3265,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3258",
+  "file": "engine.s",
+  "routine": "set_voice",
+  "lo": 3258,
+  "hi": 3273,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3266",
+  "file": "engine.s",
+  "routine": "set_voice",
+  "lo": 3266,
+  "hi": 3277,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "engine_3285",
+  "file": "engine.s",
+  "routine": "music_start",
+  "lo": 3285,
+  "hi": 3291,
+  "n": 7,
+  "cost": 0
+ },
+ {
+  "id": "engine_3295",
+  "file": "engine.s",
+  "routine": "music_stop",
+  "lo": 3295,
+  "hi": 3302,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "engine_3306",
+  "file": "engine.s",
+  "routine": "take_over",
+  "lo": 3306,
+  "hi": 3321,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3314",
+  "file": "engine.s",
+  "routine": "take_over",
+  "lo": 3314,
+  "hi": 3329,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3322",
+  "file": "engine.s",
+  "routine": "take_over",
+  "lo": 3322,
+  "hi": 3333,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "engine_3466",
+  "file": "engine.s",
+  "routine": "loadfile",
+  "lo": 3466,
+  "hi": 3482,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3474",
+  "file": "engine.s",
+  "routine": "loadfile",
+  "lo": 3474,
+  "hi": 3482,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "engine_3486",
+  "file": "engine.s",
+  "routine": "ldread",
+  "lo": 3486,
+  "hi": 3503,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3495",
+  "file": "engine.s",
+  "routine": "ldread",
+  "lo": 3495,
+  "hi": 3506,
+  "n": 11,
+  "cost": 0
+ },
+ {
+  "id": "engine_3638",
+  "file": "engine.s",
+  "routine": "build_tileaddr",
+  "lo": 3638,
+  "hi": 3653,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3646",
+  "file": "engine.s",
+  "routine": "build_tileaddr",
+  "lo": 3646,
+  "hi": 3661,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3654",
+  "file": "engine.s",
+  "routine": "build_tileaddr",
+  "lo": 3654,
+  "hi": 3661,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "engine_3665",
+  "file": "engine.s",
+  "routine": "getglyph",
+  "lo": 3665,
+  "hi": 3673,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "engine_3679",
+  "file": "engine.s",
+  "routine": "build_ring",
+  "lo": 3679,
+  "hi": 3694,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "engine_3687",
+  "file": "engine.s",
+  "routine": "build_ring",
+  "lo": 3687,
+  "hi": 3697,
+  "n": 11,
+  "cost": 0
+ },
+ {
+  "id": "logic_193",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 193,
+  "hi": 208,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_201",
+  "file": "logic.s",
+  "routine": "(file start)",
+  "lo": 201,
+  "hi": 208,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "logic_251",
+  "file": "logic.s",
+  "routine": "gridsh",
+  "lo": 251,
+  "hi": 266,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_259",
+  "file": "logic.s",
+  "routine": "gridsh",
+  "lo": 259,
+  "hi": 274,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_267",
+  "file": "logic.s",
+  "routine": "gridsh",
+  "lo": 267,
+  "hi": 282,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_275",
+  "file": "logic.s",
+  "routine": "gridsh",
+  "lo": 275,
+  "hi": 286,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "logic_671",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 671,
+  "hi": 686,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_679",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 679,
+  "hi": 694,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_687",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 687,
+  "hi": 703,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_696",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 696,
+  "hi": 712,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_704",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 704,
+  "hi": 720,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_713",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 713,
+  "hi": 729,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_721",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 721,
+  "hi": 737,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_730",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 730,
+  "hi": 745,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_738",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 738,
+  "hi": 753,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_746",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 746,
+  "hi": 761,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_754",
+  "file": "logic.s",
+  "routine": "level_init",
+  "lo": 754,
+  "hi": 769,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_859",
+  "file": "logic.s",
+  "routine": "mod16",
+  "lo": 859,
+  "hi": 868,
+  "n": 10,
+  "cost": 0
+ },
+ {
+  "id": "logic_1142",
+  "file": "logic.s",
+  "routine": "player_dead",
+  "lo": 1142,
+  "hi": 1158,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_1616",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1616,
+  "hi": 1635,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_1627",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1627,
+  "hi": 1643,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_1636",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1636,
+  "hi": 1652,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_1644",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1644,
+  "hi": 1660,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_1653",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1653,
+  "hi": 1669,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_1661",
+  "file": "logic.s",
+  "routine": "player_update",
+  "lo": 1661,
+  "hi": 1678,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2011",
+  "file": "logic.s",
+  "routine": "tramp_safe",
+  "lo": 2011,
+  "hi": 2022,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "logic_2134",
+  "file": "logic.s",
+  "routine": "ob_snake",
+  "lo": 2134,
+  "hi": 2151,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2231",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2231,
+  "hi": 2255,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2242",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2242,
+  "hi": 2264,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2256",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2256,
+  "hi": 2272,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2265",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2265,
+  "hi": 2281,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2273",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2273,
+  "hi": 2289,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2282",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2282,
+  "hi": 2299,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2291",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2291,
+  "hi": 2307,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2300",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2300,
+  "hi": 2315,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2308",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2308,
+  "hi": 2323,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2316",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2316,
+  "hi": 2333,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2324",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2324,
+  "hi": 2344,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2335",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2335,
+  "hi": 2356,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2345",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2345,
+  "hi": 2364,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2357",
+  "file": "logic.s",
+  "routine": "ob_rsnake",
+  "lo": 2357,
+  "hi": 2364,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "logic_2367",
+  "file": "logic.s",
+  "routine": "square",
+  "lo": 2367,
+  "hi": 2383,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2375",
+  "file": "logic.s",
+  "routine": "square",
+  "lo": 2375,
+  "hi": 2384,
+  "n": 9,
+  "cost": 0
+ },
+ {
+  "id": "logic_2395",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2395,
+  "hi": 2413,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2404",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2404,
+  "hi": 2422,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2414",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2414,
+  "hi": 2431,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2423",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2423,
+  "hi": 2440,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2432",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2432,
+  "hi": 2448,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2441",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2441,
+  "hi": 2457,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2449",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2449,
+  "hi": 2465,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2458",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2458,
+  "hi": 2474,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2467",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2467,
+  "hi": 2482,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2475",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2475,
+  "hi": 2490,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2483",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2483,
+  "hi": 2500,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2493",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2493,
+  "hi": 2508,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2501",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2501,
+  "hi": 2516,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2509",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2509,
+  "hi": 2524,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2517",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2517,
+  "hi": 2532,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2525",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2525,
+  "hi": 2541,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2533",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2533,
+  "hi": 2550,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2542",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2542,
+  "hi": 2558,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2551",
+  "file": "logic.s",
+  "routine": "ob_bat",
+  "lo": 2551,
+  "hi": 2562,
+  "n": 10,
+  "cost": 0
+ },
+ {
+  "id": "logic_2675",
+  "file": "logic.s",
+  "routine": "ob_spike",
+  "lo": 2675,
+  "hi": 2692,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2684",
+  "file": "logic.s",
+  "routine": "ob_spike",
+  "lo": 2684,
+  "hi": 2700,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2693",
+  "file": "logic.s",
+  "routine": "ob_spike",
+  "lo": 2693,
+  "hi": 2708,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2701",
+  "file": "logic.s",
+  "routine": "ob_spike",
+  "lo": 2701,
+  "hi": 2713,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "logic_2721",
+  "file": "logic.s",
+  "routine": "ob_flame",
+  "lo": 2721,
+  "hi": 2727,
+  "n": 6,
+  "cost": 0
+ },
+ {
+  "id": "logic_2733",
+  "file": "logic.s",
+  "routine": "ob_powerup",
+  "lo": 2733,
+  "hi": 2748,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2741",
+  "file": "logic.s",
+  "routine": "ob_powerup",
+  "lo": 2741,
+  "hi": 2756,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2749",
+  "file": "logic.s",
+  "routine": "ob_powerup",
+  "lo": 2749,
+  "hi": 2758,
+  "n": 10,
+  "cost": 0
+ },
+ {
+  "id": "logic_2769",
+  "file": "logic.s",
+  "routine": "ob_vanish",
+  "lo": 2769,
+  "hi": 2785,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2777",
+  "file": "logic.s",
+  "routine": "ob_vanish",
+  "lo": 2777,
+  "hi": 2794,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2786",
+  "file": "logic.s",
+  "routine": "ob_vanish",
+  "lo": 2786,
+  "hi": 2802,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2795",
+  "file": "logic.s",
+  "routine": "ob_vanish",
+  "lo": 2795,
+  "hi": 2810,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2803",
+  "file": "logic.s",
+  "routine": "ob_vanish",
+  "lo": 2803,
+  "hi": 2818,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2811",
+  "file": "logic.s",
+  "routine": "ob_vanish",
+  "lo": 2811,
+  "hi": 2822,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "logic_2830",
+  "file": "logic.s",
+  "routine": "ob_switch",
+  "lo": 2830,
+  "hi": 2846,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2839",
+  "file": "logic.s",
+  "routine": "ob_switch",
+  "lo": 2839,
+  "hi": 2854,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2847",
+  "file": "logic.s",
+  "routine": "ob_switch",
+  "lo": 2847,
+  "hi": 2862,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2855",
+  "file": "logic.s",
+  "routine": "ob_switch",
+  "lo": 2855,
+  "hi": 2870,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "logic_2863",
+  "file": "logic.s",
+  "routine": "ob_switch",
+  "lo": 2863,
+  "hi": 2872,
+  "n": 10,
+  "cost": 0
+ },
+ {
+  "id": "main_26",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 26,
+  "hi": 45,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_35",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 35,
+  "hi": 54,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_46",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 46,
+  "hi": 63,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_55",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 55,
+  "hi": 75,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_64",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 64,
+  "hi": 83,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_76",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 76,
+  "hi": 91,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_84",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 84,
+  "hi": 99,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_92",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 92,
+  "hi": 107,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_100",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 100,
+  "hi": 115,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_108",
+  "file": "main.s",
+  "routine": "start",
+  "lo": 108,
+  "hi": 119,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "main_186",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 186,
+  "hi": 215,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_208",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 208,
+  "hi": 223,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_216",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 216,
+  "hi": 231,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_224",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 224,
+  "hi": 239,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "main_232",
+  "file": "main.s",
+  "routine": "load_level",
+  "lo": 232,
+  "hi": 243,
+  "n": 11,
+  "cost": 0
+ },
+ {
+  "id": "main_258",
+  "file": "main.s",
+  "routine": "ft_dest",
+  "lo": 258,
+  "hi": 263,
+  "n": 6,
+  "cost": 0
+ },
+ {
+  "id": "main_406",
+  "file": "main.s",
+  "routine": "fl_over",
+  "lo": 406,
+  "hi": 418,
+  "n": 13,
+  "cost": 0
+ },
+ {
+  "id": "menu_18",
+  "file": "menu.s",
+  "routine": "drawtext",
+  "lo": 18,
+  "hi": 34,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_26",
+  "file": "menu.s",
+  "routine": "drawtext",
+  "lo": 26,
+  "hi": 39,
+  "n": 13,
+  "cost": 0
+ },
+ {
+  "id": "menu_46",
+  "file": "menu.s",
+  "routine": "glyph_index",
+  "lo": 46,
+  "hi": 65,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_56",
+  "file": "menu.s",
+  "routine": "glyph_index",
+  "lo": 56,
+  "hi": 71,
+  "n": 13,
+  "cost": 0
+ },
+ {
+  "id": "menu_78",
+  "file": "menu.s",
+  "routine": "draw_glyph",
+  "lo": 78,
+  "hi": 86,
+  "n": 9,
+  "cost": 0
+ },
+ {
+  "id": "menu_95",
+  "file": "menu.s",
+  "routine": "draw_glyph_rows",
+  "lo": 95,
+  "hi": 111,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_103",
+  "file": "menu.s",
+  "routine": "draw_glyph_rows",
+  "lo": 103,
+  "hi": 119,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_112",
+  "file": "menu.s",
+  "routine": "draw_glyph_rows",
+  "lo": 112,
+  "hi": 127,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_120",
+  "file": "menu.s",
+  "routine": "draw_glyph_rows",
+  "lo": 120,
+  "hi": 135,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_128",
+  "file": "menu.s",
+  "routine": "draw_glyph_rows",
+  "lo": 128,
+  "hi": 143,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_136",
+  "file": "menu.s",
+  "routine": "draw_glyph_rows",
+  "lo": 136,
+  "hi": 143,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "menu_149",
+  "file": "menu.s",
+  "routine": "clear_ring",
+  "lo": 149,
+  "hi": 161,
+  "n": 13,
+  "cost": 0
+ },
+ {
+  "id": "menu_182",
+  "file": "menu.s",
+  "routine": "menu_begin",
+  "lo": 182,
+  "hi": 197,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_190",
+  "file": "menu.s",
+  "routine": "menu_begin",
+  "lo": 190,
+  "hi": 198,
+  "n": 9,
+  "cost": 0
+ },
+ {
+  "id": "menu_246",
+  "file": "menu.s",
+  "routine": "text_centred",
+  "lo": 246,
+  "hi": 254,
+  "n": 9,
+  "cost": 0
+ },
+ {
+  "id": "menu_268",
+  "file": "menu.s",
+  "routine": "menu_list",
+  "lo": 268,
+  "hi": 283,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_276",
+  "file": "menu.s",
+  "routine": "menu_list",
+  "lo": 276,
+  "hi": 291,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_284",
+  "file": "menu.s",
+  "routine": "menu_list",
+  "lo": 284,
+  "hi": 300,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_292",
+  "file": "menu.s",
+  "routine": "menu_list",
+  "lo": 292,
+  "hi": 309,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_301",
+  "file": "menu.s",
+  "routine": "menu_list",
+  "lo": 301,
+  "hi": 320,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_312",
+  "file": "menu.s",
+  "routine": "menu_list",
+  "lo": 312,
+  "hi": 329,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_321",
+  "file": "menu.s",
+  "routine": "menu_list",
+  "lo": 321,
+  "hi": 329,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "menu_330",
+  "file": "menu.s",
+  "routine": "item_y",
+  "lo": 330,
+  "hi": 337,
+  "n": 7,
+  "cost": 0
+ },
+ {
+  "id": "menu_345",
+  "file": "menu.s",
+  "routine": "clear_items",
+  "lo": 345,
+  "hi": 363,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_354",
+  "file": "menu.s",
+  "routine": "clear_items",
+  "lo": 354,
+  "hi": 372,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_364",
+  "file": "menu.s",
+  "routine": "clear_items",
+  "lo": 364,
+  "hi": 373,
+  "n": 9,
+  "cost": 0
+ },
+ {
+  "id": "menu_386",
+  "file": "menu.s",
+  "routine": "title_menu",
+  "lo": 386,
+  "hi": 397,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "menu_404",
+  "file": "menu.s",
+  "routine": "help_screen",
+  "lo": 404,
+  "hi": 419,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_412",
+  "file": "menu.s",
+  "routine": "help_screen",
+  "lo": 412,
+  "hi": 428,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_420",
+  "file": "menu.s",
+  "routine": "help_screen",
+  "lo": 420,
+  "hi": 430,
+  "n": 10,
+  "cost": 0
+ },
+ {
+  "id": "menu_440",
+  "file": "menu.s",
+  "routine": "level_select",
+  "lo": 440,
+  "hi": 456,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_449",
+  "file": "menu.s",
+  "routine": "level_select",
+  "lo": 449,
+  "hi": 463,
+  "n": 15,
+  "cost": 0
+ },
+ {
+  "id": "menu_457",
+  "file": "menu.s",
+  "routine": "level_select",
+  "lo": 457,
+  "hi": 463,
+  "n": 7,
+  "cost": 0
+ },
+ {
+  "id": "menu_468",
+  "file": "menu.s",
+  "routine": "pause_menu",
+  "lo": 468,
+  "hi": 484,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_476",
+  "file": "menu.s",
+  "routine": "pause_menu",
+  "lo": 476,
+  "hi": 488,
+  "n": 12,
+  "cost": 0
+ },
+ {
+  "id": "menu_496",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 496,
+  "hi": 511,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_504",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 504,
+  "hi": 520,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_512",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 512,
+  "hi": 528,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_521",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 521,
+  "hi": 536,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_529",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 529,
+  "hi": 545,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_537",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 537,
+  "hi": 554,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_547",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 547,
+  "hi": 563,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_555",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 555,
+  "hi": 571,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_564",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 564,
+  "hi": 579,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_572",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 572,
+  "hi": 587,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_580",
+  "file": "menu.s",
+  "routine": "winlose",
+  "lo": 580,
+  "hi": 587,
+  "n": 8,
+  "cost": 0
+ },
+ {
+  "id": "menu_616",
+  "file": "menu.s",
+  "routine": "draw_number",
+  "lo": 616,
+  "hi": 634,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_626",
+  "file": "menu.s",
+  "routine": "draw_number",
+  "lo": 626,
+  "hi": 642,
+  "n": 16,
+  "cost": 0
+ },
+ {
+  "id": "menu_635",
+  "file": "menu.s",
+  "routine": "draw_number",
+  "lo": 635,
+  "hi": 643,
+  "n": 9,
+  "cost": 0
+ }
+]
