@@ -120,14 +120,15 @@
         bcs label
 .endmacro
 ; branch if var <= imm
+        ; branch if var <= imm
 .macro ble16i var, imm, label
-        lda #<(imm)
-        cmp var
-        lda #>(imm)
-        sbc var+1
-        bvc :+
+        lda var                     ; var <= imm is var < imm+1, so this is blt16i's
+        cmp #<((imm)+1)             ; bias form: one instruction and no V fixup
+        lda var+1
         eor #$80
-:      bpl label
+        sbc #(>((imm)+1) ^ $80)
+:                                   ; placeholder - keeps the anonymous-label count
+        bcc label
 .endmacro
 ; branch if a > b (both 16-bit vars)
 .macro bgt16 aa, bb, label
@@ -392,13 +393,12 @@ getaltitude:
         lsr
         lsr
         clc
-        adc #8
-        sec
-        sbc q5
+        adc #9                      ; the extra 1 pays the borrow: A <= 24 so adc leaves
+        sbc q5                      ; C = 0, and (A+9) - q5 - 1 is the (A+8) - q5 wanted
         rts
 @notbelow:
         lda q4
-        bne @done
+        bne @d2
         lda qy
         sec
         sbc #8
@@ -415,11 +415,10 @@ getaltitude:
         lsr
         lsr
         lsr
-        sec
         sbc #8
         sta q4
 @done:  lda q4
-        sec
+@d2:    sec
         sbc q5
         rts
 
@@ -462,13 +461,7 @@ level_init:
         sec
         sbc #3
         sta gridsh
-        lda #1
-        ldx gridsh
-        beq :++
-:       asl
-        dex
-        bne :-
-:       ; clear object state, then grid  (this ':' is counted by the beq :++ above)
+        ; clear object state, then grid
         stz BINOK                   ; the cached object list belongs to the old level
         ldx #0
         lda #0
@@ -511,15 +504,17 @@ level_init:
         lda t16+1
         rol
         sta t16b+1
-        add16 t16, t16b
-        lda t16+1                   ; <LV_OBJS = 0: only the high byte moves
         clc
-        adc #>LV_OBJS
+        lda t16
+        adc t16b
+        sta t16
+        lda t16+1                   ; <LV_OBJS = 0: only the high byte moves
+        adc t16b+1
+        adc #>LV_OBJS               ; the high-byte add cannot carry: t16+1 <= 1, t16b+1 <= 3
         sta t16+1
         ldaz t16                    ; lda (t16)
         sta otype
-        ldx obj
-        sta O_TYPE,x
+        sta O_TYPE,y                ; Y is still obj (sty obj at @ol; nothing since has touched Y)
         ldy #1
         lda (t16),y
         sta q1                      ; x tiles
@@ -999,7 +994,7 @@ game_frame:
         tay
         lda frame
         cmp O_STAMP,y
-        beq @skip
+        beq @sk2                    ; already stamped: X is still bent, skip the reload
         sta O_STAMP,y
         lda O_TYPE,y
         bne @apo                    ; that, so a cached step and a rebuilt one take the
@@ -1022,7 +1017,7 @@ game_frame:
         jsr process_object
         setbank BANK_LVL
 @skip:  ldx bent
-        lda LV_BNEXT,x
+@sk2:   lda LV_BNEXT,x
         bra @walk
 @cellend:
         lda gx
@@ -1069,7 +1064,9 @@ game_frame:
         ; ---- after objects
         lda bounce
         beq :+
-        mov16i vy, -1280
+        stz vy
+        lda #>(-1280)
+        sta vy+1
 :       ; kill tile under player
         lda health
         bne :+
@@ -1130,7 +1127,9 @@ player_hit:
         bmi :+
         lda #>(-768)                ; -768 is $FD00: the HIGH byte is the non-zero one
         sta vx+1
-:       mov16i vy, -1280
+:       stz vy                      ; -1280 = $FB00: the low byte is zero
+        lda #>(-1280)
+        sta vy+1
         lda #SFX_HIT
         sta SFXREQ
         rts
@@ -1185,13 +1184,12 @@ player_dead:
 ; vy = (vy + 80) * 31 >> 5
 gravity:
         add16i vy, 80
-        mov16 t16, vy
         sec
         lda #0
-        sbc t16
+        sbc vy
         sta t16
         lda #0
-        sbc t16+1                   ; A = high byte of -t16, not yet stored
+        sbc vy+1                    ; A = high byte of -vy, not yet stored
         .repeat 5
         cmp #$80                    ; C = sign of the current high byte
         ror a                       ; arithmetic shift of the high byte, in A
@@ -1287,17 +1285,15 @@ player_update:
 @move:  jsr vy_step
         bmi16 dpx, @up
         ; down: dy = min(dy, alt)
-        lda dpx
-        cmp alt
-        bcc :+
         lda alt
+        cmp dpx
+        bcs :+
         sta dpx
         stz dpx+1
-:       add16 py, dpx
-        lda alt
-        sec
+:       sec
         sbc dpx
         sta alt
+        add16 py, dpx
         bra @vdone
 @up:    add16 py, dpx
 @upl:   mov16 qx, px
@@ -1323,8 +1319,7 @@ player_update:
         lda maph+1
         sbc #0
         sta t16+1
-        bgt16 py, t16, @fell
-        bra @push
+        bge16 t16, py, @push
 @fell:  mov16 evframe, frame
         stza health
         jsr bar_touch
@@ -1367,6 +1362,54 @@ player_update:
         tax                         ; X = 2*vx low, C untouched by tax
         lda vx+1
         rol                         ; A = 2*vx high
+        tay
+        txa
+        clc
+        adc vx
+        sta t16
+        tya
+        adc vx+1
+        sta t16+1                   ; t16 = 3vx
+        neg16 t16                   ; leaves A = t16+1
+:                                   ; placeholder - keeps the anonymous-label count
+        cmp #$80                    ; asr16 x6, high byte held in A
+        ror
+        ror t16
+        cmp #$80
+        ror
+        ror t16
+        cmp #$80
+        ror
+        ror t16
+        cmp #$80
+        ror
+        ror t16
+        cmp #$80
+        ror
+        ror t16
+        cmp #$80
+        ror
+        ror t16
+        sta t16+1
+        add16 vx, t16
+        ; * 24: |24*q6| <= 96, so it fits in 8 bits and needs one sign extension
+        lda q6
+        asl
+        asl
+        asl
+        sta t16                     ; 8p
+        asl                         ; 16p
+        clc
+        adc t16                     ; 24p
+        sx16 t16
+        add16 vx, t16
+        bra @nofric
+@air:   ; vx = vx*5>>3
+        lda vx
+        asl
+        tax                         ; X = 2*vx low, C untouched by tax
+        lda vx+1
+        rol                         ; A = 2*vx high
         sta t16+1
         txa
         clc
@@ -1375,30 +1418,6 @@ player_update:
         lda t16+1
         adc vx+1
         sta t16+1                   ; t16 = 3vx
-        neg16 t16
-        ldx #6
-:       asr16 t16
-        dex
-        bne :-                      ; exits with X = 0
-        add16 vx, t16
-        lda q6
-        bpl :+
-        dex
-:       sta t16
-        stx t16+1
-        ; * 24
-        asl16 t16
-        asl16 t16
-        asl16 t16
-        mov16 t16b, t16
-        asl16 t16
-        add16 t16, t16b             ; 8p + 16p
-        add16 vx, t16
-        bra @nofric
-@air:   ; vx = vx*5>>3
-        mov16 t16, vx
-        asl16 t16
-        add16 t16, vx
         neg16 t16                   ; leaves A = t16+1
         cmp #$80                    ; asr16 x3, high byte held in A
         ror
@@ -1420,7 +1439,7 @@ player_update:
         beq @norun
         cmp #(K_LEFT|K_RIGHT)
         beq @norun
-        pha
+        tax
         lda running
         ora firing
         bne :+
@@ -1438,7 +1457,7 @@ player_update:
         bra @acc
 @acc288:
         mov16i t16, 288
-@acc:   pla
+@acc:   txa
         and #K_LEFT
         beq @right
         sub16 vx, t16
@@ -1454,22 +1473,25 @@ player_update:
 @hmove:
         ; steps = (vx + 128) >> 8 ; dir = sign
         lda vx
-        clc
-        adc #128
+        cmp #$80                    ; C = carry out of vx_lo + 128, without the clc
         lda vx+1
         adc #0                      ; A = high byte of vx + 128
         sta dpx
-        and #$80
+        bne :+
+        stz dpx+1                   ; dpx = 0, so its sign extension is 0 too
+        jmp @hdone
+:       and #$80
         beq :+
         lda #$FF
 :       sta dpx+1
-        ora dpx                     ; A is still dpx+1 from the sta above
-        bne :+
-        jmp @hdone
-:
 @hl:    mov16 qx, px
-        mov16 qy, py
-        add16i qy, 16
+        clc
+        lda py
+        adc #16
+        sta qy
+        lda py+1
+        adc #0
+        sta qy+1
         lda dpx+1
         bmi @hneg
         inc qx
@@ -1502,8 +1524,7 @@ player_update:
         bmi @stepn
         cmp #2
         bcs @alt
-        clc                         ; 0 or 1: high byte of the addend is 0
-        adc py
+        adc py                      ; C is clear from the cmp: 0 or 1, addend high byte 0
         sta py
         bcc :+
         inc py+1
@@ -1512,11 +1533,9 @@ player_update:
 @stepn: clc                         ; negative: high byte of the addend is $FF
         adc py
         sta py
-        lda py+1
-        adc #$FF
-        sta py+1
-        stza alt
-        bra @hnext
+        bcs :-                      ; no borrow (255 times in 256): py+1 is unchanged,
+        dec py+1                    ; so join the 0/1 case's tail instead of adding $FF
+        bra :-
 @alt:   sta alt
 @hnext: ; steps -= dir
         lda dpx+1
@@ -1593,12 +1612,11 @@ player_update:
         lda frame
         sec
         sbc evframe
-        sta t16
+        tax                         ; hold the low byte of the delta in X
         lda frame+1
         sbc evframe+1
         bne @setctl
-        lda t16
-        cmp #25
+        cpx #25
         bcc @noctl
 @setctl:
         lda #1
@@ -1660,8 +1678,7 @@ player_update:
 @j20:   lda #20
         bra @sprf
 @j24:   lda #24
-@sprf:  clc
-        adc facing
+@sprf:  ora facing
 @spr:   tax
         lda hurt
         beq @drawp
@@ -1678,14 +1695,20 @@ player_update:
         jmp @bdone
 :
         dif16 rx, px, bx            ; rx = px - bx
-        clc                         ; ry = py + 8, built straight from py
+        sec                         ; ry = (py - by) + 8: one carry chain, not two
         lda py
+        sbc by
+        tax
+        lda py+1
+        sbc by+1
+        sta ry+1
+        txa
+        clc
         adc #8
         sta ry
-        lda py+1
-        adc #0
-        sta ry+1
-        sub16 ry, by                ; ry = py + 8 - by  (unchanged)
+        bcc @ry8
+        inc ry+1
+@ry8:
         ; caught?
         ble16i rx, -8, @nocatch
         bge16i rx, 8, @nocatch
@@ -1706,11 +1729,14 @@ player_update:
         rol
         sta t16+1
         add16 t16, bvx
-        neg16 t16
+        neg16 t16                   ; leaves A = t16+1
         ldx #6
-:       asr16 t16
+:       cmp #$80
+        ror
+        ror t16
         dex
         bne :-
+        sta t16+1
         add16 bvx, t16
         asl16 rx
         add16 bvx, rx
@@ -1720,8 +1746,12 @@ player_update:
         adc #0                      ; A = high byte of bvx + 128
         sx16 t16
         add16 bx, t16
-        mov16 t16, bvy
-        asl16 t16
+        lda bvy
+        asl
+        sta t16
+        lda bvy+1
+        rol
+        sta t16+1
         add16 t16, bvy
         neg16 t16                   ; leaves A = t16+1
         ldx #6
@@ -1735,8 +1765,7 @@ player_update:
         asl16 ry
         add16 bvy, ry
         lda bvy                     ; only the high byte of bvy+128 is ever used
-        clc
-        adc #128
+        cmp #128
         lda bvy+1
         adc #0
         sx16 t16
@@ -1801,12 +1830,26 @@ process_object:
         jmp @lean
 @gen:   lda O_XL,y
         sta ox
+        sta spx
+        sec
+        sbc px
+        sta rx
         lda O_XH,y
         sta ox+1
+        sta spx+1
+        sbc px+1
+        sta rx+1
         lda O_YL,y
         sta oy
+        sta spy
+        sec
+        sbc py
+        sta ry
         lda O_YH,y
         sta oy+1
+        sta spy+1
+        sbc py+1
+        sta ry+1
         lda O_AL,y
         sta fa
         lda O_AH,y
@@ -1827,24 +1870,6 @@ process_object:
         sta fe
         lda O_EH,y
         sta fe+1
-        sec
-        lda ox
-        sta spx
-        sbc px
-        sta rx
-        lda ox+1
-        sta spx+1
-        sbc px+1
-        sta rx+1
-        sec
-        lda oy
-        sta spy
-        sbc py
-        sta ry
-        lda oy+1
-        sta spy+1
-        sbc py+1
-        sta ry+1
         lda otype
         asl
         tax
@@ -1879,7 +1904,8 @@ process_object:
         ; field and eight to put it back.  Every object field is 8-bit (tools/objaudit.py
         ; and tools/objfields.mjs are how that was established per handler).
         lda O_XL,y                  ; rx/ry = object relative to the player
-        sec
+        sta spx                     ; spx/spy = where it draws: sta touches no flags,
+        sec                         ; so the source byte can be banked on the way past
         sbc px
         sta rx
         lda O_XH,y
@@ -1892,12 +1918,9 @@ process_object:
         sbc py
         sta ry
         lda O_YH,y
+        sta spy+1
         sbc py+1
         sta ry+1
-        lda O_XL,y                  ; spx/spy = where it draws
-        sta spx
-        lda O_YH,y
-        sta spy+1
         lda otype
         asl
         tax
@@ -2098,9 +2121,8 @@ star_safe:
         ldx #36
         jsr inrange
         bcs @no
-@yes:   lda q1
-        clc
-        adc #BOXN
+@yes:   lda q1                      ; both ways in are a bcs that was not taken,
+        adc #BOXN                   ; so the carry is already clear
         sta q1
 @no:    rts
 
@@ -2120,9 +2142,8 @@ tramp_safe:
         ldx #76
         jsr inrange                 ; the boomerang overlaps it
         bcs @no
-@yes:   lda q1
-        clc
-        adc #BOXN
+@yes:   lda q1                      ; both ways in fall through a 'bcs @no' that was not
+        adc #BOXN                   ; taken, so C is already clear here
         sta q1
 @no:    rts
 
@@ -2221,8 +2242,13 @@ ob_snake:
         stza fc
         bra @coll
 @c4:    ; if B < A + 128: B += 16
-        mov16 t16, fa
-        add16i t16, 128
+        lda fa
+        clc
+        adc #<128
+        sta t16
+        lda fa+1
+        adc #>128
+        sta t16+1
         bge16 fb, t16, @coll
         add16i fb, 16
         bra @coll
@@ -2292,8 +2318,13 @@ ob_snake:
         lda #SFX_KILL
         sta SFXREQ
 @draw:  ble16i fb, -128, @done
-        mov16 t16, fa
-        add16i t16, 128
+        clc
+        lda fa
+        adc #128
+        sta t16
+        lda fa+1
+        adc #0
+        sta t16+1
         bge16 fb, t16, @done
         lda fc
         cmp #2
@@ -2305,18 +2336,21 @@ ob_snake:
         bcc @f2
         cmp #9
         bcc @f4
-@f2:    lda #46+2
-        bra @fr
-@f0:    lda #46+0
-        bra @fr
-@f4:    lda #46+4
-        bra @fr
-@f6:    lda #46+6
-@fr:    sta q1
-        lda fc
+@f2:    lda fc
         and #1
-        clc
-        adc q1
+        ora #46+2                   ; base is even, so ora == the old clc/adc
+        jmp m_addsprite
+@f0:    lda fc
+        and #1
+        ora #46+0
+        jmp m_addsprite
+@f4:    lda fc
+        and #1
+        ora #46+4
+        jmp m_addsprite
+@f6:    lda fc
+        and #1
+        ora #46+6
         jmp m_addsprite
 @done:  rts
 ; carry set if anim counter is one of the pause frames 0,3,6,9
@@ -2432,17 +2466,14 @@ ob_rsnake:
         jsr player_hit
 @draw:  lda q6
         beq @basket
-        ldx #0
+        ldx #54
         lda fa
         bmi @fr
-        ldx #2
+        ldx #56
         cmp #0                      ; A still holds fa; ldx did not touch it
         beq @fr
-        ldx #4
-@fr:    txa
-        clc
-        adc #54
-        sta q1
+        ldx #58
+@fr:    stx q1
         bge16 px, ox, :+
         inc q1
 :       mov16 spy, oy
@@ -2603,14 +2634,12 @@ ob_bat:
         bcc @f2
         cmp #6
         bcc @f0
-        lda #4
+        lda #65
         bra @fr
-@f0:    lda #0
+@f0:    lda #61
         bra @fr
-@f2:    lda #2
-@fr:    clc
-        adc #61
-        sta q1
+@f2:    lda #63
+@fr:    sta q1
         bgt16 spx, px, :+
         bra :++
 :       inc q1
@@ -2628,14 +2657,12 @@ ob_bat:
         add16 spx, t16
         lda frame
         asl
+        asl                         ; A = 5*frame, low byte only: the high byte of
+        clc                         ; 5*frame is dead (the >>2 below shifts the low
+        adc frame                   ; byte alone, and sx16 t16 rewrites both bytes)
+        lsr
+        lsr
         sta t16
-        lda frame+1
-        rol
-        sta t16+1                   ; t16 = 2*frame
-        asl16 t16                   ; t16 = 4*frame
-        add16 t16, frame            ; 5*frame
-        lsr t16
-        lsr t16
         lda obj
         asl
         asl
@@ -2788,7 +2815,8 @@ ob_walker:
         cmp #9
         bcc @f4
         lda #6
-        bra @fr
+        clc                         ; only this arm reaches @fr with C set (cmp #9
+        bra @fr                     ; fell through); @f2 and @f4 got here on a bcc
 @f0:    lda fc
         bra @sp
 @f2:    lda #2
@@ -2796,8 +2824,7 @@ ob_walker:
 @f8:    lda #8
         bra @sp
 @f4:    lda #4
-@fr:    clc
-        adc fc
+@fr:    adc fc
 @sp:    sta q1
         lda otype
         cmp #5
@@ -2851,8 +2878,8 @@ ob_spike:
         sec
         sbc fa
         lsr
-:       clc
-        adc #85
+        clc                         ; only the lsr can leave C set; bcc arrives with C=0
+:       adc #85
         jmp m_addsprite
 @done:  rts
 
@@ -3057,11 +3084,10 @@ bar_digit:
         rol ptr+1
         asl
         rol ptr+1
-        clc
         adc #<BARADDR               ; straight into the back buffer's bar row (no offscreen
         sta ptr                     ; buffer): bank 4 glyph at $8xxx, screen bar at $7Bxx
-        lda ptr+1
-        adc #>BARADDR
+        lda ptr+1                   ; C is already clear: ptr+1 was 0 or 1 before the second
+        adc #>BARADDR               ; rol, so that rol shifted a 0 out
         sta ptr+1
         ldy #31
 :       lda (w16),y
@@ -3069,14 +3095,22 @@ bar_digit:
         dey
         bpl :-
         lda w16
-        clc
-        adc #32
-        sta w16
+        adc #32                     ; C still clear: ptr+1 <= 3 and >BARADDR = $7B, so the
+        sta w16                     ; adc above cannot carry, and the copy loop leaves C
         bcc @nc
         inc w16+1
 @nc:    add16i ptr, 640
         ldy #31
 :       lda (w16),y
+        sta (ptr),y
+        dey
+        lda (w16),y
+        sta (ptr),y
+        dey
+        lda (w16),y
+        sta (ptr),y
+        dey
+        lda (w16),y
         sta (ptr),y
         dey
         bpl :-
@@ -3138,11 +3172,10 @@ draw_score:                         ; 5 digits at 108..140
         clc
         adc #4                      ; score digits are slots 4..8
         tay
-        txa
         asl
         asl
         asl
-        adc #108
+        adc #76                     ; (X+4)*8 + 76 = X*8 + 108
         tax
         lda q1
         jsr bar_digit

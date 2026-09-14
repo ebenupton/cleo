@@ -2,6 +2,8 @@
 """Cycles and executions per source line, per frame, from the current profile.
 
     python3 tools/linecost.py [file.s:lo-hi ...]     ranges, or the top 25 lines
+    python3 tools/linecost.py --write               -> build/linecost.json, which
+                                                       windows.py and proposals.py read
 
 Exists because the catalogue's per-window exec count is an upper bound, not the number
 that matters.  `pagelogic` executes 54 times a frame and only 3 of those are the TOBANK
@@ -34,7 +36,10 @@ def show(k):
     c, x = per.get(k, (0, 0))
     src = open('src/' + k.split(':')[0]).read().split('\n')[int(k.split(':')[1]) - 1]
     print(f'  {c/F:9.1f} cy/frm {x/F:8.2f} x/frm  {k:18} {src.strip()[:60]}')
-if len(sys.argv) > 1:
+if '--write' in sys.argv:
+    json.dump({k: c for k, (c, x) in per.items()}, open('build/linecost.json', 'w'))
+    print(f'build/linecost.json: {len(per)} lines, {F} rendered frames in the profile')
+elif len(sys.argv) > 1:
     for a in sys.argv[1:]:
         f, r = a.split(':'); lo, hi = (r.split('-') + [r.split('-')[0]])[:2]
         tc = sum(per.get(f'{f}:{i}', (0, 0))[0] for i in range(int(lo), int(hi) + 1))

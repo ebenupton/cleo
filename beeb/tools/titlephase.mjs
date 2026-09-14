@@ -28,6 +28,7 @@ await B.runFor(SAMPLE);
 const b0=snap(B);
 let best={d:cmp(a,b0),off:0,who:"-"};
 console.log(`at the same instant: ${best.d} pixels differ`);
+if(best.d===0){ console.log("nothing to explain: the frames are already identical"); process.exit(0); }
 // Search BOTH directions.  Either build may be the one that is ahead, and advancing only
 // the faster of the two can never close the gap -- which reads as "not phase" when it is.
 for(let k=1;k<=WIN;k++){

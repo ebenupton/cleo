@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Cut the sources into 16-instruction windows for review, ranked by measured cost.
+"""Cut the sources into N-instruction windows for review, ranked by measured cost.
 
-    python3 tools/windows.py            -> build/windows/*.md + build/windows/index.json
+    python3 tools/windows.py [WIN] [STRIDE] [outdir] [batchsize]
+                                        -> <outdir>/batch_NN.md, index.json, all.json
 
 A window never spans a routine: a run of instructions straddling two unrelated routines
 has no shared meaning and any "improvement" across the join would be nonsense.  Stride is
@@ -12,7 +13,11 @@ double-counts macro expansions, so treat it as a ranking not a measurement.
 """
 import json, os, re, glob
 
-WIN, STRIDE = 16, 8
+import sys
+WIN     = int(sys.argv[1]) if len(sys.argv) > 1 else 16
+STRIDE  = int(sys.argv[2]) if len(sys.argv) > 2 else WIN // 2
+OUT     = sys.argv[3] if len(sys.argv) > 3 else 'build/windows'
+PERBATCH= int(sys.argv[4]) if len(sys.argv) > 4 else 28
 DIRECTIVES = {'res','byte','word','segment','include','import','export','macro','endmacro',
  'ifdef','ifndef','endif','else','proc','endproc','code','assert','if','out','error','addr',
  'def','ident','repeat','endrep','local','elseif','feature','setcpu','org','align','bss',
@@ -35,7 +40,7 @@ def instructions(path):
     return out
 
 cost = json.load(open('build/linecost.json')) if os.path.exists('build/linecost.json') else {}
-os.makedirs('build/windows', exist_ok=True)
+os.makedirs(OUT, exist_ok=True)
 wins = []
 for path in sorted(glob.glob('src/*.s')):
     base, ins = os.path.basename(path), instructions(path)
@@ -55,6 +60,35 @@ for path in sorted(glob.glob('src/*.s')):
         i += STRIDE
 wins.sort(key=lambda w: -w['cost'])
 json.dump([{k: v for k, v in w.items() if k != 'text'} for w in wins],
-          open('build/windows/index.json', 'w'), indent=1)
-print(f'{len(wins)} windows; hottest {wins[0]["id"]} ({wins[0]["cost"]}), coldest {wins[-1]["cost"]}')
-json.dump(wins, open('build/windows/all.json', 'w'))
+          open(f'{OUT}/index.json', 'w'), indent=1)
+json.dump(wins, open(f'{OUT}/all.json', 'w'))
+
+# Deal the windows round-robin so every batch gets a mix of hot and cold: a batch of
+# nothing but cold code gets a bored agent, and a batch of nothing but the inner loops
+# gets one that has to reject almost everything.
+nb = (len(wins) + PERBATCH - 1) // PERBATCH
+batches = [wins[i::nb] for i in range(nb)]
+for n, b in enumerate(batches):
+    with open(f'{OUT}/batch_{n:02d}.md', 'w') as fh:
+        fh.write(f'# Batch {n:02d}: {len(b)} windows\n\n'
+                 f'Macro definitions used by the code below are in {OUT}/macros.txt.\n\n')
+        for w in b:
+            fh.write(f"\n## {w['id']}  ({w['file']} lines {w['lo']}-{w['hi']}, routine "
+                     f"`{w['routine']}`, {w['n']} instructions, cost rank {w['cost']})\n"
+                     f"```\n{w['text']}\n```\n")
+# macros.txt has to be regenerated with the windows: the macros themselves get edited
+# (CHARPER's jump became optional this round), and an agent reasoning from a stale copy
+# is costing instructions the code no longer has.
+with open(f'{OUT}/macros.txt', 'w') as fh:
+    for path in sorted(glob.glob('src/*.s')) + sorted(glob.glob('src/*.inc')):
+        keep, depth = [], 0
+        for l in open(path):
+            if re.match(r'\s*\.macro\b', l, re.I): depth += 1
+            if depth: keep.append(l.rstrip('\n'))
+            if re.match(r'\s*\.endmacro\b', l, re.I) and depth:
+                depth -= 1
+                if not depth: keep.append('')
+        if keep: fh.write(f'; ===== {os.path.basename(path)} =====\n' + '\n'.join(keep) + '\n')
+
+print(f'{len(wins)} windows of <={WIN} instructions, stride {STRIDE}, into {nb} batches '
+      f'in {OUT}; hottest {wins[0]["id"]} ({wins[0]["cost"]}), coldest {wins[-1]["cost"]}')

@@ -267,8 +267,7 @@ clamp_window:
         lda wx+1
         bmi @wx0
         lda wx
-        sec
-        sbc maxwx
+        cmp maxwx
         lda wx+1
         sbc maxwx+1
         bmi @wxok

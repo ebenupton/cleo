@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Merge the agent farm's findings into one ranked catalogue.
 
-    python3 tools/proposals.py   -> opt/proposals.json  (and a summary on stdout)
+    python3 tools/proposals.py [windows_dir] [out.json]
+                                 default build/windows -> opt/proposals.json
 
 A saving of N cycles is worth nothing if the sequence runs once a level, so each
 proposal is ranked by N x (executions per frame), taken from the profile's per-PC
@@ -9,6 +10,8 @@ counts through the .dbg line spans.  That ordering is what decides which ones ar
 the verification cost; the raw saving on its own is close to meaningless.
 """
 import json, os, sys, glob, re
+WDIR = sys.argv[1] if len(sys.argv) > 1 else 'build/windows'
+OUTJ = sys.argv[2] if len(sys.argv) > 2 else 'opt/proposals.json'
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from annotate_profile import parse_dbg, DBG
 
@@ -26,7 +29,7 @@ for fid, ln, sp in lines:
     k = f'{os.path.basename(files[fid])}:{ln}'
     per_line[k] = max(per_line.get(k, 0), c)
 
-wins = {w['id']: w for w in json.load(open('build/windows/all.json'))}
+wins = {w['id']: w for w in json.load(open(f'{WDIR}/all.json'))}
 # Rendered frames in the profile, so everything below is per frame -- the unit every
 # other measurement in this project uses.  Without it, code that runs twice per LEVEL
 # outranks the inner loop of drawrect, because the profile covers level loads too.
@@ -38,7 +41,7 @@ FRAMES = max(cnt.get(labels.get('render_frame', -1), 0), 1)
 # cycles measured in each window, also per frame: an upper bound on any saving
 lcost = json.load(open('build/linecost.json'))
 out, bad = [], []
-for f in sorted(glob.glob('build/windows/out_*.json')):
+for f in sorted(glob.glob(f'{WDIR}/out_*.json')):
     try: items = json.load(open(f))
     except Exception as e: bad.append(f'{f}: {e}'); continue
     for it in items:
@@ -68,8 +71,8 @@ for a in out:
                              and not (b['hi'] < a['lo'] or b['lo'] > a['hi'])})
 nconf = sum(1 for a in out if a['conflicts'])
 os.makedirs('opt', exist_ok=True)
-json.dump(out, open('opt/proposals.json', 'w'), indent=1)
-print(f'{len(out)} proposals from {len(glob.glob("build/windows/out_*.json"))} batches; '
+json.dump(out, open(OUTJ, 'w'), indent=1)
+print(f'{len(out)} proposals from {len(glob.glob(f"{WDIR}/out_*.json"))} batches; '
       f'{nconf} overlap another proposal and cannot be applied blind')
 for b in bad: print('  PROBLEM', b)
 print(f'profile covers {FRAMES} rendered frames; savings below are cycles per frame')
@@ -94,12 +97,13 @@ for a in out:
 cl = collections.defaultdict(list)
 for a in out: cl[_find(a['id'])].append(a)
 groups = sorted(cl.values(), key=lambda g: -max(y['weighted'] for y in g))
-raw = sum(len(json.load(open(f))) for f in sorted(glob.glob('build/windows/out_*.json')))
+raw = sum(len(json.load(open(f))) for f in sorted(glob.glob(f'{WDIR}/out_*.json')))
 
-with open('opt/CATALOGUE.md', 'w') as fh:
+with open(OUTJ.replace('proposals', 'CATALOGUE').replace('.json', '.md'), 'w') as fh:
     w = fh.write
+    W = max((x['hi'] - x['lo'] for x in out), default=16)
     w('# Peephole proposal catalogue\n\n')
-    w(f'{raw} windows of 16 instructions were put to a farm of agents; {len(out)} came '
+    w(f'{raw} windows were put to a farm of agents; {len(out)} came '
       f'back with a rewrite and {raw - len(out)} were judged already optimal '
       f'({100 * (raw - len(out)) // raw}% rejected).\n\n')
     w('Savings are **cycles per frame**, the unit the rest of this project measures in: '

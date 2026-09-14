@@ -47,8 +47,7 @@ glyph_index:
         bcc @notalpha
         cmp #'Z'+1
         bcs @notalpha
-        sec
-        sbc #'A'
+        sbc #('A'-1)                ; bcs not taken, so C = 0: subtracts 'A'-1+1 = 'A'
         rts
 @notalpha:
         cmp #'>'
@@ -68,9 +67,7 @@ glyph_index:
         lda #29
         rts
 :       sec
-        sbc #'0'
-        clc
-        adc #30
+        sbc #('0'-30)               ; -'0'+30 folded into one subtraction
         rts
 
 ; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows
@@ -244,12 +241,10 @@ text_centred:
         bra :-
 :       tya
         asl
-        asl
-        asl                         ; len*8
-        eor #$FF                    ; WINPX - A, without parking A in memory
+        asl                         ; len*4
+        eor #$FF                    ; WINPX/2 - A, without parking A in memory
         sec
-        adc #WINPX
-        lsr
+        adc #(WINPX/2)
         jmp drawtext
 
 ; ---------------------------------------------------------------- generic list menu
@@ -493,11 +488,17 @@ winlose:
         lda tmp4
         beq @lose
         mov16i spx, 36
-        mov16i spy, 4
+        lda #4
+        sta spy
+        stz spy+1
         lda #TP_YOU
         jsr draw_piece
-        mov16i spx, 82
-        mov16i spy, 4
+        lda #82
+        sta spx
+        stz spx+1
+        lda #4
+        sta spy
+        stz spy+1
         lda #TP_WIN
         jsr draw_piece
         bra @scores
@@ -542,9 +543,8 @@ winlose:
         jsr draw_number
         lda #$FF
         sta lastkeys
-        stz tmp3                    ; animation counter
-        lda #$FF
         sta tmp2                    ; last drawn frame
+        stz tmp3                    ; animation counter
 @loop:  ; big cleo frame
         lda tmp4
         beq @lframe
