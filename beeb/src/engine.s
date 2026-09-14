@@ -253,9 +253,19 @@ MUSPTR:   .res 2
 
 ; ---------------------------------------------------------------- tables (uninitialised RAM $0400-$0CFF)
         .segment "TABLES"
-MASKTAB:   .res 256               ; data byte -> AND mask (MODE 1: MASKTAB0, see SPRMSK)
+  .if MODE1
+MASKTAB0:  .res 1024              ; four contiguous pages, one per column phase (SPRMSK):
+                                  ; 1K aligned, so phase = page & 3.  SWAPTAB, SECTAB and
+                                  ; music_tab move to CODE to make the room.
+MASKTAB1 = MASKTAB0 + $100
+MASKTAB2 = MASKTAB0 + $200
+MASKTAB3 = MASKTAB0 + $300
+        .assert (MASKTAB0 & $3FF) = 0, error, "MASKTAB0 must be 1K aligned"
+  .else
+MASKTAB:   .res 256               ; data byte -> AND mask
 SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
 IDENT:     .res 256               ; ora IDENT,x == ora X (no temp) -- EXCEPT at $41, $44
+  .endif
                                    ; and $82, which init_tables zeroes on purpose: $41 is
                                    ; the blank-run tag and must leave the screen byte
                                    ; alone, $82 is its mirror, $44 forces a black left
@@ -264,7 +274,9 @@ RINGLO:    .res RINGROWS          ; ring row r -> screen address
 RINGHI:    .res RINGROWS
 GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank (low nibble)
 GATHERH:   .res 24                ;                       tile address hi
+  .if .not MODE1
 SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
+  .endif
 SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
 SPRREC:    .res 2*MAXREC*10       ; per buffer drawn-sprite records: id,xl,xh,yl,yh, cxl,cxh,cy,w,h
 GLYPHBUF:  .res 8                 ; one font glyph, copied out of bank 4 for the menus
@@ -309,7 +321,9 @@ SFXREQ:    .res 1
 SFXDUR:    .res 1
 MUSON:     .res 1
 MUSTMP:    .res 1                 ; musbyte scratch (ISR context: must not touch tmp)
+  .if .not MODE1
 music_tab: .res 144               ; SN76489 periods for MIDI 24..95, decoded at start-up
+  .endif
 MUSDUR:    .res 1
 MUSNOTE:   .res 3
 ISRT1:     .res 1
@@ -1412,6 +1426,10 @@ drawsprite:
 @mdone: sta sp_col
   .if MODE1
         stz mtab                    ; the MASKTAB pages are indexed by the mask byte
+        lda sp_c
+        and #3                      ; phase of the first column drawn, and its page:
+        ora #>MASKTAB0              ; MASKTAB0 is 1K aligned, so phase = page & 3
+        sta sp_mpg0
         ; mask column base = mask plane + (first image column / 4) * pixel rows
         lda sp_mbase
         sta sp_mrp
@@ -1503,11 +1521,7 @@ ds_rowloop:
         sta mptr
         lda sp_mrp+1
         sta mptr+1
-        lda sp_c
-        and #3
-        sta sp_mph
-        tax
-        lda mpage,x
+        lda sp_mpg0
         sta mtab+1
   .endif
         ; ra range for this row
@@ -1530,19 +1544,22 @@ ds_dispatch:
 sprdisp_tab: .word sprFN, sprFM, sprFN, sprFM, sprFC
   .if MODE1
 sprretMk:                           ; mask blitter, mirrored: the image column descends,
-        dec sp_mph                  ; so the phase does too, into the previous group
-        bpl @mk
-        lda #3
-        sta sp_mph
+        dec mtab+1                  ; so the phase (= page & 3) does too; below phase 0
+        lda mtab+1                  ; it is the previous group's phase 3
+        and #3
+        cmp #3
+        bne @mk
+        lda mtab+1
+        clc
+        adc #4
+        sta mtab+1
         lda mptr
         sec
         sbc sp_mh
         sta mptr
         bcs @mk
         dec mptr+1
-@mk:    ldx sp_mph
-        lda mpage,x
-        sta mtab+1
+@mk:
   .endif
 sprretM:                            ; next column, mirrored: source pointer - lines
         lda ptr
@@ -1553,21 +1570,22 @@ sprretM:                            ; next column, mirrored: source pointer - li
         dec ptr+1
         bra sprnext
   .if MODE1
-sprretPk:                           ; mask blitter: next phase, next group every four
-        inc sp_mph
-        lda sp_mph
-        cmp #4
+sprretPk:                           ; mask blitter: next phase is the next page; past
+        inc mtab+1                  ; phase 3 it is the next group's phase 0
+        lda mtab+1
+        and #3
         bne @pk
-        stz sp_mph
+        lda mtab+1
+        sec
+        sbc #4
+        sta mtab+1
         lda mptr
         clc
         adc sp_mh
         sta mptr
         bcc @pk
         inc mptr+1
-@pk:    ldx sp_mph
-        lda mpage,x
-        sta mtab+1
+@pk:
   .endif
 sprretP:                            ; next column: source pointer + lines
         lda ptr
@@ -1945,18 +1963,15 @@ pnext:  lda sp_lim
 .endmacro
         SPRMSK sprFN, 0
         SPRMSK sprFM, 1
-mpage:  .byte >MASKTAB0, >MASKTAB1, >MASKTAB2, >MASKTAB3
 mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit 0 = right):
                                     ; keep what is NOT opaque -- right only opaque keeps the left dots
-sp_mph:   .res 1                  ; column phase 0..3 within the mask byte
+sp_mpg0:  .res 1                  ; MASKTAB page of the sprite's first column: >MASKTAB0 | phase
 sp_mh:    .res 1                  ; pixel rows = mask bytes per column group
 sp_mrp:   .res 2                  ; mask pointer for the current row's first column
 sp_mbase: .res 2                  ; the sprite's mask plane
-MASKTAB0 = MASKTAB                  ; both page aligned in TABLES, both free in MODE 1
-MASKTAB1 = IDENT
-        .align 256
-MASKTAB2: .res 256
-MASKTAB3: .res 256
+SWAPTAB:   .res 256               ; four-dot reversal for mirroring (from TABLES in MODE 2)
+SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
+music_tab: .res 144               ; SN76489 periods for MIDI 24..95, decoded at start-up
   .else
         SPRFULL sprFN, 0, 0
         SPRFULL sprFM, 1, 0
@@ -2844,6 +2859,7 @@ init_tables:
 
 
 ; identity table for the sprite blitter (A | X without a temp store)
+  .if .not MODE1
 init_ident:
         ldx #0
 :       txa
@@ -2851,6 +2867,7 @@ init_ident:
         inx
         bne :-
         rts
+  .endif
         .segment "LOW2"             ; back to the render helpers
 
 
