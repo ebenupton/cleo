@@ -44,3 +44,18 @@ cycles the profile attributes to the window, because agents mixed units -- some 
 whole loop as one execution.  Entries over that cap carry `overclaim`.
 
 None of it is verified.  Apply one proposal at a time, gated on statediff + pixdiff.
+
+## Screening the corpus
+
+    python3 tools/screen.py             apply each alone: match, assemble, fit, no branch moved
+    python3 tools/review.py > r.txt     each proposal as a diff plus the agent's reasoning
+    python3 tools/apply_all.py          apply the survivors best-first onto the growing tree
+    tools/grind.sh                      ...then test, bisect the first failure, blacklist, repeat
+    tools/verify.sh full                8 levels x 300 frames, pixels, and the damage runs
+    node tools/titlediff.mjs A B        the attract loop, which no in-level test reaches
+    node tools/titlephase.mjs A B       ...and whether a difference there is phase or a bug
+    python3 tools/linecost.py f.s:a-b   what a line actually costs, per frame
+
+Read the proposals.  The screen answers three decidable questions and the tests answer
+what they can reach; neither reads a comment.  logic_1353 turned `pha` into `tax` and
+wrote the matching `pla` -> `txa` as a comment instead of as code.

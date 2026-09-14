@@ -181,3 +181,26 @@ was worth more.
 | `logic_1353` | 5.8 | `pha`->`tax` applied, but the matching `pla`->`txa` was written as a COMMENT, not code: the stack unbalances and the game hangs |
 | `logic_1124` | 0.2 | `sta t16`->`tax` in player_dead; diverges L1 respawn timing once composed with the rest |
 | `logic_1101` | 0.1 | `lda #<(-768)` where the high byte was wanted: -768 is $FD00, so it stores 0, not $FD |
+
+## Added after the main batch
+
+| id | what | measured |
+|:--|:--|:--|
+| `engine_1514` | `bcc :+ / jmp solid / : / bra opaque` -> `bcc opaque / jmp solid` | 103 cy/frame (catalogue said 252) |
+| `engine_1329` | `clc / lda / sbc` instead of `deca / sec / sbc` | 2 cy on the mirror path |
+| (hand) | `CHARPER`'s trailing `jmp` dropped at `@p0`, which falls into `@advsp` | 3 cy x 37.7/frame |
+| (hand) | copy_partial's second dead `iny` (its twin went in the main batch) | 2 cy x 13.1/frame |
+| (hand) | `t_game_frame` / `t_build_sections` inline the bank switch, moved to CODE | 36 cy/frame, LOW2 +12 bytes |
+| `logic_1101` | corrected: it wanted `#>(-768)`, not `#<(-768)` | -8 bytes |
+
+## Not applied, and why the catalogue's figure is wrong
+
+| id | catalogue | actual | reason |
+|:--|---:|---:|:--|
+| `engine_1945` | 802 | — | `@fjmp` IS the loop back-edge; `jmp (abs,x)` costs 6 where the patched `jmp` costs 3, so it adds 240 per call to save 16.  Batch 05 said so and the assembler agreed |
+| `engine_1698` | 493 | 0 | that arm of SPRLINE2 never executes in the benchmark |
+| `engine_3733` | 646 | 36 | only 3.1 of pagelogic's 54 executions a frame are TOBANK entries |
+| `engine_2726` | 278 | <39 | the whole of calc_ring costs 38.8 cy/frame |
+
+`python3 tools/linecost.py <file.s:lo-hi>` is how to check, and it should be run before
+any catalogued figure is believed.
