@@ -58,9 +58,10 @@ def dither(rgb_img, alpha, x0=0, y0=0, full=True):
         v = np.repeat(v, 2, axis=0)
         alpha = np.repeat(alpha, 2, axis=0)
     hh = v.shape[0]
-    yy = (np.arange(hh) + (2 * y0 if full else y0)) % 4
-    xx = (np.arange(w) + x0) % 2
-    thr = (BAYER[yy][:, xx] + 0.5) / 8.0
+    kh, kw = BAYER.shape
+    yy = (np.arange(hh) + (2 * y0 if full else y0)) % kh
+    xx = (np.arange(w) + x0) % kw
+    thr = (BAYER[yy][:, xx] + 0.5) / float(BAYER.max() + 1)   # levels, not cells: 2x2 is a checker of two
     bits = (v > thr[:, :, None]).astype(np.uint8)
     col = bits[:, :, 0] | (bits[:, :, 1] << 1) | (bits[:, :, 2] << 2)
     col = np.where(col == 0, 8, col).astype(np.uint8)
@@ -99,11 +100,20 @@ def dither_cpc(rgb_img, alpha, x0=0, y0=0, full=True):
     col = np.where(alpha, col, 0).astype(np.uint8)
     return col
 
-DITHER = os.environ.get('DITHER', 'bayer')   # bayer (2x4 ordered, the default) or cpc
+DITHER = os.environ.get('DITHER', 'bayer')   # bayer (ordered, the default) or cpc
 if DITHER == 'cpc':
     dither = dither_cpc
 elif DITHER != 'bayer':
     sys.exit('DITHER must be bayer or cpc')
+# KERNEL=1x2 / 2x2 / 2x4 (default): the ordered matrix.  1x2 is the CPC quantisation
+# with every half level on the same scanline (stripes); 2x2 alternates it with x.
+KERNEL = os.environ.get('KERNEL', '2x4')
+if KERNEL == '1x2':
+    BAYER = np.array([[0], [1]], dtype=np.float32)
+elif KERNEL == '2x2':
+    BAYER = np.array([[0, 1], [1, 0]], dtype=np.float32)
+elif KERNEL != '2x4':
+    sys.exit('KERNEL must be 1x2, 2x2 or 2x4')
 
 
 def pack_mode2(col):
