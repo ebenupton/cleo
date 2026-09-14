@@ -443,7 +443,12 @@ sfx_kill:  .byte $C0|0, 6, $D0, 2,  $C0|0, 9, $D1, 2,  $C0|0, 12, $D3, 3, $C0|0,
 sfx_power: .byte $C0|0, 6, $D0, 3,  $C0|0, 5, $D0, 3,  $C0|0, 4, $D0, 3,  $C0|0, 3, $D0, 6, $FF
 sfx_die:   .byte $C0|0, 12, $D0, 6, $C0|0, 16, $D1, 6, $C0|0, 22, $D2, 8, $C0|0, 30, $D4, 10, $C0|0, 40, $D7, 12, $FF
 
-; ---------------------------------------------------------------- sprite directory (main RAM)
-        .code
+; ---------------------------------------------------------------- sprite directory
+; It lived in main RAM so drawsprite could read it whatever bank was selected.  That
+; cost 944 bytes of the only RAM the CRTC can scan, and the status bar needs 1280 of
+; it below $3000.  In bank 7 instead: drawsprite selects BANK_LVL for the whole
+; prologue (nothing there reads sprite DATA) and selects the data bank afterwards.
+        .segment "LOGIC"
 SPR_TABLE:
         .incbin "build/SPRTAB"
+        .code

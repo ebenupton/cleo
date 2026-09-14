@@ -176,6 +176,8 @@ sp_w:     .res 1
 sp_lines: .res 1
 sp_ext:   .res 1                  ; height in scanlines (2*lines for half-res)
 sp_flags: .res 1
+sp_dbank: .res 1                  ; the bank the sprite's DATA is in: selected once the
+                                  ;   prologue has finished reading the directory
 sp_c0:    .res 1
 sp_c1:    .res 1
 sp_lb0:   .res 2
@@ -1080,6 +1082,9 @@ drawsprite:
         ldx spbank
         cpx #BANK_SPR
         bne @titledir
+        ldx #BANK_LVL           ; SPR_TABLE is in bank 7; the whole prologue reads
+        stx ROMSEL_CPY          ; the directory and none of it reads sprite data
+        stx ROMSEL
         clc
         adc #<SPR_TABLE
         sta ptr
@@ -1096,8 +1101,7 @@ drawsprite:
 :       bit #$10                ; A still holds the flags byte
         beq :+
         ldx #BANK_TIL1
-:       stx ROMSEL_CPY
-        stx ROMSEL
+:       stx sp_dbank            ; wanted later: the directory is still being read
         bra @entry2
 @titledir:
         ; ---- title piece: directory + data at TITLE_ADDR of bank(spbank)
@@ -1106,7 +1110,8 @@ drawsprite:
         clc
         adc #>TITLE_ADDR
         sta ptr+1
-        lda spbank
+        lda spbank              ; title pieces keep directory and data in one bank
+        sta sp_dbank
         sta ROMSEL_CPY
         sta ROMSEL
         ldy #6
@@ -1199,6 +1204,9 @@ drawsprite:
         lda spy+1
         sbc tmp3
         tay
+        lda sp_dbank            ; done with the directory: the blitter wants the data
+        sta ROMSEL_CPY
+        sta ROMSEL
         txa
         sec
         sbc wy
