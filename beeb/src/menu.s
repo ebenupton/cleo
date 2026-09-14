@@ -20,11 +20,14 @@ drawtext:
         beq @space
         cmp #'_'
         bne :+
-        ldy #7                      ; '_' = erase: draw an all-zero glyph
-        lda #0
-@z:     sta GLYPHBUF,y
-        dey
-        bpl @z
+        stz GLYPHBUF+0              ; '_' = erase: draw an all-zero glyph
+        stz GLYPHBUF+1
+        stz GLYPHBUF+2
+        stz GLYPHBUF+3
+        stz GLYPHBUF+4
+        stz GLYPHBUF+5
+        stz GLYPHBUF+6
+        stz GLYPHBUF+7
         jsr draw_glyph_rows
         bra @space
 :       jsr glyph_index
@@ -117,19 +120,17 @@ draw_glyph_rows:
         sta tp+1                    ; remember row start
         lda #4
         sta tmp4
-@pair:  lda tmp
+@pair:  lda #0                      ; shift the top two bits of tmp straight out of it
+        asl tmp
         rol
+        asl tmp
         rol
-        rol
-        and #3
         tay
         lda pairtab,y
         ldy tmp2
         sta (sp),y
         iny
         sta (sp),y
-        asl tmp
-        asl tmp
         spnext
         dec tmp4
         bne @pair
@@ -245,12 +246,10 @@ text_centred:
         asl
         asl
         asl                         ; len*8
-        sta tmp
-        lda #WINPX
+        eor #$FF                    ; WINPX - A, without parking A in memory
         sec
-        sbc tmp
+        adc #WINPX
         lsr
-        and #$FE
         jmp drawtext
 
 ; ---------------------------------------------------------------- generic list menu
@@ -327,9 +326,9 @@ menu_list:
         tax
         lda #8
         jmp drawtext
-item_y: sta tmp2
+item_y: tax
         lda mtop
-        ldx tmp2
+        cpx #0
         beq :++
 :       clc
         adc mstep
@@ -362,11 +361,10 @@ clear_items:
         iny
         bne :-
         inc w16+1
-        ldy #0
+        ldy #127
 :       sta (w16),y
-        iny
-        cpy #128
-        bne :-
+        dey
+        bpl :-
         inx
         cpx #28
         bne @r
@@ -409,12 +407,11 @@ help_screen:
         sta ptr+1
         lda tmp3
         asl
-        asl
-        sta tmp
-        asl
         clc
-        adc tmp                     ; i*12
-        adc #20
+        adc tmp3                    ; i*3
+        adc #5                      ; i*3+5
+        asl
+        asl                         ; (i*3+5)*4 = i*12+20
         tax
         jsr text_centred
         ldx tmp3
@@ -504,12 +501,20 @@ winlose:
         lda #TP_WIN
         jsr draw_piece
         bra @scores
-@lose:  mov16i spx, 34
-        mov16i spy, 4
+@lose:  lda #34
+        sta spx
+        stz spx+1
+        lda #4
+        sta spy
+        stz spy+1
         lda #TP_YOU
         jsr draw_piece
-        mov16i spx, 80
-        mov16i spy, 4
+        lda #80
+        sta spx
+        stz spx+1
+        lda #4
+        sta spy
+        stz spy+1
         lda #TP_LOSE
         jsr draw_piece
 @scores:
@@ -554,8 +559,7 @@ winlose:
         jsr shr16x
         lda w16
         and #3
-        clc
-        adc #4
+        ora #4
         bra @drawc
 @lframe:
         lda tmp3
@@ -575,10 +579,14 @@ winlose:
         cmp tmp2
         beq @same
         sta tmp2
-        mov16i spx, 66
-        mov16i spy, 28
+        lda #66
+        sta spx
+        stz spx+1
+        lda #28
+        sta spy
+        stz spy+1
         lda tmp2
-        jsr draw_piece              ; frames are opaque: no clearing needed
+        jsr draw_piece
 @same:  jsr menu_show
         inc tmp3
         jsr menu_keys
@@ -615,8 +623,7 @@ draw_number:
         jsr div10_16
         plx
         lda q1
-        clc
-        adc #'0'
+        ora #'0'
         sta numbuf,x
         dex
         bpl @d

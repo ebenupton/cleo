@@ -65,12 +65,11 @@ start:
         ; The tables are bss and nothing has zeroed them.  A Master happens to hand
         ; them over clear, but SECIDX picking up a stray value walks the rupture
         ; chain off the end of SECTAB, so they are cleared rather than trusted.
-        lda #<$0400
-        sta ptr
+        stz ptr                     ; <$0400 is 0
         lda #>$0400
         sta ptr+1
         lda #0
-:       sta (ptr),y                 ; (Y is 0 from the loop above and stays there)
+:       sta (ptr),y
         iny
         bne :-
         inc ptr+1
@@ -280,14 +279,12 @@ clamp_window:
         bra @wxok
 @wx0:   stz wx
         stz wx+1
-@wxok:  lda wx
-        and #$FE
-        sta wx
+@wxok:  lda #1
+        trb wx                      ; wx &= ~1 : the 65C02 does this in one RMW
         lda wy+1
         bmi @wy0
         lda wy
-        sec
-        sbc maxwy
+        cmp maxwy
         lda wy+1
         sbc maxwy+1
         bmi @wyok
@@ -405,8 +402,8 @@ fl_over:
         lda stars
         beq @next1
         lda level
-        and #1
-        bne @next1
+        lsr                         ; C = bit 0
+        bcs @next1
         inc level
 @next1: inc level
         lda level

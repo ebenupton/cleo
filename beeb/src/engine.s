@@ -414,20 +414,18 @@ drawrect:
         lsr tmp
         ror                         ; A = tx0 (map width <= 256 tiles)
         sta rc_tx0
-        lda w16
+        eor #$FF
         sec
-        sbc rc_tx0
-        sta rc_nt                   ; tiles-1
+        adc w16
+        sta rc_nt
         lda rc_x
+        sta w16                     ; the copy the ring address needs, from the same load
         and #3
         sta rc_sc0
         asl
         asl
         asl
         sta rc_ro0
-        ; screen address of the first row; later rows add 640 (ring wrap) in @drawrow
-        lda rc_x
-        sta w16
         lda rc_x+1
         sta w16+1
         lda rc_y
@@ -447,13 +445,14 @@ drawrect:
         lda LV_MAPROWLO,x
         clc
         adc rc_tx0
-        sta ptr                     ; ptr -> first tile of the row (so Y counts from 0)
+        sta ptr
         lda LV_MAPROWHI,x
         adc #0
         sta ptr+1
+        bra @rowy                   ; bank already BANK_MAP on the entry path
 @row:
         setbank BANK_MAP            ; @drawrow left the tile bank selected
-        ldy rc_nt
+@rowy:  ldy rc_nt
 @gl:    lda (ptr),y
         tax
         lda LV_PAGE0,x
@@ -471,8 +470,7 @@ drawrect:
         beq @done
         lda rc_y
         and #1
-        bne @second
-        bra @nextrow
+        beq @nextrow
 @second:
         jsr @drawrow
         inc rc_y
@@ -539,8 +537,7 @@ drawrect:
         beq :+                      ; row cannot cross the ring end: no per-run check
         adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
         lda sp+1
-        adc #0
-        cmp #>RINGEND
+        adc #(256 - (>RINGEND))     ; = adc #$85 ; C set iff sp+1+C >= >RINGEND
         bcc :+
         jmp @slow
 :       jmpx @jt-2
@@ -614,10 +611,9 @@ drawrect:
 @p1:    CHARPER 1, @b7
 @p0:    CHARPER 0, @advsp
 @advsp: lda sp
-        clc
-        adc tmp
+        adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
-        bcc :++                     ; past the fold's own anonymous label
+        bcc :++
         lda sp+1
         inca
         ringup
@@ -653,13 +649,12 @@ drawrect:
 :       spnext
         dec tmp2
         bne @sc
-        jmp @runend
+        bra @runend
 @rowdone:
-        lda rc_sp+1                 ; a row is 640 bytes: only one starting in the last
-        cmp #(>RINGEND - 5)         ; 1280 can reach the mirror's source row
+        ldy rc_sp+1
+        cpy #(>RINGEND - 5)
         bcc :+
         lda rc_sp
-        ldy rc_sp+1
         ldx rc_w
         jsr mirror_run
 :
@@ -690,15 +685,12 @@ drawrect:
         asl
         asl
         sta tmp
-        lda rc_wrap
+        ldy rc_wrap                 ; test without destroying A (= 8*rc_n)
         beq :+
-        lda tmp
-        adc sp
+        adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
         lda sp+1
-        adc #0
-        cmp #>RINGEND
-        bcc :+
-        jmp @fslow
+        adc #(256 - >RINGEND)
+        bcs @fslow
 :       lda tp
         jmpx @ft-2
 @ft:    .word @f7, @f15, @f23, @f31
@@ -747,9 +739,22 @@ drawrect:
         sta tmp2
 @fsc:   lda tp
         ldy #7
-:       sta (sp),y
+        sta (sp),y
         dey
-        bpl :-
+        sta (sp),y
+        dey
+        sta (sp),y
+        dey
+        sta (sp),y
+        dey
+        sta (sp),y
+        dey
+        sta (sp),y
+        dey
+        sta (sp),y
+        staz sp                     ; line 0 non-indexed
+:                                   ; KEPT, unreferenced, so the anonymous-label
+        ; count through drawrect is unchanged
         spnext
         dec tmp2
         bne @fsc
@@ -765,6 +770,11 @@ scroll_validate:
 :       txa
         asl
         tay
+        ; dy = wcy - BUF_CY
+        lda wcy
+        sec
+        sbc BUF_CY,x
+        sta w16b
         ; dx = wcx - BUF_CX
         lda wcx
         sec
@@ -773,14 +783,7 @@ scroll_validate:
         lda wcx+1
         sbc BUF_CX+1,y
         sta w16+1
-        ; dy = wcy - BUF_CY
-        lda wcy
-        sec
-        sbc BUF_CY,x
-        sta w16b
-
-        ; |dx| >= 80 -> full
-        lda w16+1
+        ; |dx| >= 80 -> full  (A still holds w16+1, flags still from the sbc)
         beq @dxpos
         cmp #$FF
         beq :+
@@ -804,18 +807,13 @@ scroll_validate:
         bcs @full                   ; not taken: C = 0 for the adc
         ; dx positive: cols (oldcx+80) .. wcx+79 = dx cols starting at wcx+80-dx
         sta rc_w
-        lda wcx
-        adc #ROWCHARS
+        eor #$FF                    ; A = 255 - rc_w, C still 0 from the cmp above
+        adc #ROWCHARS               ; A = ROWCHARS-1-rc_w, C = 1 (rc_w <= 79)
+        adc wcx                     ; + wcx + 1 -> wcx + ROWCHARS - rc_w
         sta rc_x
         lda wcx+1
         adc #0
         sta rc_x+1
-        lda rc_x
-        sec
-        sbc rc_w
-        sta rc_x
-        bcs @docols
-        dec rc_x+1
 @docols:
         lda wcy
         sta rc_y
@@ -888,8 +886,7 @@ match_sprites:
         bcc :+
         lda NSPR
 :       sta cnt                     ; n = min(RECCNT, NSPR)
-        ldx #0
-        stx tmp4                    ; i
+        stza tmp4                   ; i
         lda recp
         sta rp
         lda recp+1
@@ -901,11 +898,10 @@ match_sprites:
         cpx cnt
         bcs @next
         lda sprmul5,x
-        tax                         ; X = list offset, Y = offset into the record:
-        lda SPRLIST,x               ; (rp),y -- NOT (rp,x), which indexes the pointer
-        ldy #0                      ; itself and made every compare below read garbage
-        cmp (rp),y
-        beq @same                   ; same sprite, same place: it redraws its own pixels
+        tax
+        lda SPRLIST,x
+        cmp (rp)                    ; 65C02 (zp): offset 0 needs no index register
+        beq @same
         ; two box-star frames at the same place overwrite each other exactly -- every
         ; pixel opaque, and each box covers the art of the frame before it -- so a
         ; frame change there needs no erase either
@@ -1026,18 +1022,16 @@ draw_sprites:
         sta rp
         lda recp+1
         sta rp+1
-@l:     lda spi
-        cmp NSPR
+@l:     ldx spi
+        cpx NSPR
         bcs @endpass
-        ldx spi
         lda sprmul5,x
-        tax                         ; X = list offset
+        tax
         lda SPRLIST,x
-        cmp #BOXID0                 ; the box stars are the top of the id space
-        lda #0
-        rol                         ; 1 if this is one, 0 if not
-        cmp dpass
-        bne @next
+        cmp #BOXID0
+        lda dpass
+        adc #$FF
+        beq @next
         lda SPRLIST,x
         cmp #BOXID0+BOXN            ; a box star the logic says nothing can disturb, and
         bcc @write                  ; the same frame already in the same place: if
@@ -1048,10 +1042,9 @@ draw_sprites:
         ldy #9                      ; and it was not cut off at a window edge, so all
         lda (rp),y                  ; of it is on screen and still intact
         bpl @next
-@write: ldy #0
-        lda SPRLIST,x
-        sta (rp),y                  ; copy identity into record, clear rect
-        iny
+@write: lda SPRLIST,x
+        staz rp                     ; sta (rp) - offset 0 needs no index
+        ldy #1
         lda SPRLIST+1,x
         sta spx
         sta (rp),y
@@ -1107,11 +1100,9 @@ drawsprite:
         asl
         rol ptr+1
         sta ptr
-        lda spbank
-        cmp #BANK_SPR
+        ldx spbank
+        cpx #BANK_SPR
         bne @titledir
-        ; ---- game: directory in main RAM (always visible), data in bank4/ANDY
-        lda ptr
         clc
         adc #<SPR_TABLE
         sta ptr
@@ -1122,11 +1113,10 @@ drawsprite:
         lda (ptr),y
         sta sp_flags
         ldx #BANK_SPR
-        and #4                      ; bit2 -> data in ANDY
+        bit #4
         beq :+
         ldx #(BANK_SPR|$80)
-:       lda sp_flags
-        and #$10                    ; bit4 -> data above the tiles in bank 6 (box stars)
+:       bit #$10                ; A still holds the flags byte
         beq :+
         ldx #BANK_TIL1
 :       stx ROMSEL_CPY
@@ -1153,9 +1143,9 @@ drawsprite:
         iny
         lda (ptr),y
         sta sp_w
-        bne :+
-        jmp @out0                   ; (out of branch range on the 6502 build)
-:       ldy #7
+        beq @out0
+:                                   ; keep the bare label: it preserves the anonymous-label count
+        ldy #7
         lda (ptr),y
         sta sp_lines
         sta sp_ext
@@ -1180,23 +1170,23 @@ drawsprite:
         sta w16
         lda w16+1
         sbc wx+1
-        sta w16+1
         cmp #$80
-        ror w16+1
+        ror a                       ; sign into bit 7, old bit 0 out to C
+        sta w16+1
         ror w16                     ; arithmetic shift right 1 -> c0 (16 bit)
-        lda w16+1
+        cmp #0                      ; A still holds w16+1: just restore N,Z
         beq @cpos
         cmp #$FF
-        bne @out0                   ; way off left
+        bne @out0
         ; c0 negative (-128..-1): cstart = 0 ; visible if c0 + W > 0
         lda w16
         clc
         adc sp_w
         beq @out0
         bmi @out0
-        inc spclip                  ; cut off at the left edge
-        sta sp_c1                   ; c0+W (count of visible) -> c1 = that-1
-        dec sp_c1
+        inc spclip
+        deca
+        sta sp_c1
         stz sp_c0
         ; first visible column index = -c0
         lda w16
@@ -1226,20 +1216,20 @@ drawsprite:
         lda spy
         sec
         sbc (ptr),y
-        sta w16
+        tax
         lda spy+1
         sbc tmp3
         sta w16+1
-        lda w16
+        txa
         sec
         sbc wy
         sta w16
         lda w16+1
         sbc wy+1
         sta w16+1
-        asl w16
-        rol w16+1
         lda w16
+        asl                         ; C = old bit 7, exactly what 'asl w16' left
+        rol w16+1
         clc
         adc wfine
         sta sp_lb0
@@ -1247,17 +1237,14 @@ drawsprite:
         adc #0
         sta sp_lb0+1                ; lb0 (16 bit signed)
         ; lend = lb0 + ext - 1
-        lda sp_lb0
+        lda sp_ext
+        deca
         clc
-        adc sp_ext
+        adc sp_lb0
         sta w16
         lda sp_lb0+1
         adc #0
-        sta w16+1
-        lda w16
-        bne :+
-        dec w16+1
-:       dec w16                     ; w16 = lb1
+        sta w16+1                   ; w16 = lb1
         ; clip lstart = max(lb0,0) ; lend = min(lb1, 247)
         lda sp_lb0+1
         bmi @top
@@ -1282,14 +1269,6 @@ drawsprite:
 :       sta tmp2                    ; lend
         cmp tmp
         bcc @out0
-        lda tmp
-        and #7
-        sta sp_ra0
-        lda tmp
-        lsr
-        lsr
-        lsr
-        sta sp_r0
         lda tmp2
         and #7
         sta sp_ra1
@@ -1298,7 +1277,14 @@ drawsprite:
         lsr
         lsr
         sta sp_r1
-        lda sp_r0
+        lda tmp
+        and #7
+        sta sp_ra0
+        lda tmp
+        lsr
+        lsr
+        lsr
+        sta sp_r0                   ; sta sets no flags: Z still from the third lsr
         bne @nopart
         ldx curbuf                  ; touches the window's top row (see drawrect)
         lda sp_c0
@@ -1333,10 +1319,9 @@ drawsprite:
         sta (rp),y
         iny
         lda sp_r1
-        sec
-        sbc sp_r0
+        sbc sp_r0                   ; C still set by the width sbc above (sp_c1 >= sp_c0)
         inca
-        ldx spclip                  ; bit 7 = this one came off an edge, so more of it
+        ldx spclip
         beq :+                      ; may be visible next time and it has to be redrawn
         ora #$80
 :       sta (rp),y
@@ -1353,12 +1338,11 @@ drawsprite:
 @nomirror:
         ; ---- select the inner blitter once per sprite (patched jmp in the column loop)
         lda sp_flags
-        and #8
+        bit #8                      ; bit3: copy blitter
         beq :+
-        ldx #8                      ; bit3: copy blitter
+        ldx #8
         bne :++
-:       lda sp_flags
-        and #3
+:       and #3                      ; A is still sp_flags: bit #imm does not alter A
         asl
         tax
 :       lda sprdisp_tab,x
@@ -1366,20 +1350,18 @@ drawsprite:
         lda sprdisp_tab+1,x
         sta ds_dispatch+2
         ; sp_col = sp_ptr + sp_c * lines
-        lda sp_ptr
-        sta sp_col
         lda sp_ptr+1
         sta sp_col+1
-        lda sp_c
-        beq @rows
-@mul:   lda sp_col
-        clc
+        lda sp_ptr
+        ldx sp_c
+        beq @mdone
+@mul:   clc
         adc sp_lines
-        sta sp_col
         bcc :+
         inc sp_col+1
-:       dec sp_c
+:       dex
         bne @mul
+@mdone: sta sp_col
 @rows:
         lda sp_r0
         sta sp_row
@@ -1410,8 +1392,7 @@ drawsprite:
         lda #0
         sbc sp_lb0+1
         sta w16+1
-        lda #8
-        sta sp_rinc
+        ldx #8
         lda sp_flags
         and #2
         bne :+
@@ -1419,8 +1400,9 @@ drawsprite:
         cmp #$80
         ror w16+1
         ror w16
-        lsr sp_rinc
-:       lda sp_col
+        ldx #4
+:       stx sp_rinc
+        lda sp_col
         clc
         adc w16
         sta sp_rp
@@ -1441,13 +1423,13 @@ ds_rowloop:
         lda sp_rp+1
         sta ptr+1
         ; ra range for this row
-        ldx #0
+        stz tmp                     ; ra0' = 0 unless this is the first row
         lda sp_row
         cmp sp_r0
         bne :+
         ldx sp_ra0
-:       stx tmp                     ; ra0'
-        ldx #7
+        stx tmp
+:       ldx #7
         cmp sp_r1
         bne :+
         ldx sp_ra1
@@ -1497,8 +1479,8 @@ ds_rowdone:
         sta sp_rp
         bcc :+
         inc sp_rp+1
-:       lda sp_rb                   ; next char row: +640 with ring wrap
         clc
+:       lda sp_rb
         adc #<ROWBYTES
         sta sp_rb
         lda sp_rb+1
@@ -1614,13 +1596,27 @@ solid:  ; byte 0 carried the RUN flag: the whole cell is opaque, straight copy
         jmp sprretM
 .else
         staz sp                     ; A = byte 0
-        SOLID1 1
-        SOLID1 2
-        SOLID1 3
-        SOLID1 4
-        SOLID1 5
-        SOLID1 6
-        SOLID1 7
+        ldy #1
+        lda (ptr),y
+        sta (sp),y
+        iny
+        lda (ptr),y
+        sta (sp),y
+        iny
+        lda (ptr),y
+        sta (sp),y
+        iny
+        lda (ptr),y
+        sta (sp),y
+        iny
+        lda (ptr),y
+        sta (sp),y
+        iny
+        lda (ptr),y
+        sta (sp),y
+        iny
+        lda (ptr),y
+        sta (sp),y
         jmp sprretP
 .endif
 .endif
@@ -1663,9 +1659,11 @@ pl:     lda (ptr),y
         sta (sp),y
 .else
 pl:     lda (ptr),y
-        beq ps
-        bmi po                      ; both pixels opaque
-        cmp #$41                    ; blank-run tag mid cell: the rest of the cell is empty
+        bmi po                      ; bit 7: both pixels opaque.  Tested before the
+        beq ps                      ; transparent case for the same reason SPRLINE does
+        ; it -- 45.7% opaque against 24.1% transparent, and
+        ; both read this load's flags ($00 is never negative)
+        cmp #$41
         beq pd
         tax
 .if mirror
@@ -1905,12 +1903,10 @@ copy_partial:
         sta cnt
         lda #0
 @go:    sta tmp4                    ; first column to copy
-        tay                         ; range is clean once copied
-        lda #$FF
+        lda #$FF                    ; range is clean once copied
         sta PART_LO,x
-        lda #0
-        sta PART_HI,x
-        tya
+        stza PART_HI, x
+        lda tmp4
         clc
         adc wcx
         sta w16
@@ -1922,18 +1918,17 @@ copy_partial:
         ; dest = the same column of the fixed partial row, which is all section A of
         ; the rupture chain ever displays
         lda tmp4
-        stz ptr+1
         asl
-        rol ptr+1
         asl
-        rol ptr+1
         asl
-        rol ptr+1
-        clc
-        adc #<PARTADDR
-        sta ptr
-        lda ptr+1
-        adc #>PARTADDR
+        sta ptr                     ; low byte of tmp4*8
+        lda tmp4
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        ora #>PARTADDR              ; high byte is tmp4>>5, at most 7
         sta ptr+1
         ; dest pointer adjusted by -wfine so that same Y indexes both
         lda ptr
@@ -1943,16 +1938,12 @@ copy_partial:
         bcs :+
         dec ptr+1
 :       ; start at line wfine: patched jmp into the unrolled 6-line copy
-        lda wfine
-        lsr
-        deca                         ; 2,4,6 -> 0,1,2
-        asl
-        tax
-        lda @ftab,x
+        ldx wfine
+        lda @ftab-2,x
         sta @fjmp+1
-        lda @ftab+1,x
+        lda @ftab-1,x
         sta @fjmp+2
-@fjmp:  jmp @g2                     ; operand patched: @g2/@g4/@g6
+@fjmp:  jmp @g2
 @ftab:  .word @g2, @g4, @g6
 @g2:    ldy #2
         lda (sp),y
@@ -1967,7 +1958,6 @@ copy_partial:
         iny
         lda (sp),y
         sta (ptr),y
-        iny
 @g6:    ldy #6
         lda (sp),y
         sta (ptr),y
@@ -2011,20 +2001,16 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
                                     ; fill black and lay the spans (BARBUF is now the span
         sta ROMSEL_CPY              ; list: offset16, len, bytes... ending $FFFF).
         sta ROMSEL
-        lda #<BARADDR               ; --- fill the bar rows with opaque black ($C0)
-        sta w16b
-        lda #>BARADDR
-        sta w16b+1
-        lda #$C0
-        ldx #>(BARROWS*640)         ; 1280 bytes = 5 pages
-        ldy #0
-@bf:    sta (w16b),y
-        iny
+        lda #$C0                    ; BARADDR is a constant, so the fill needs no pointer:
+        ldx #0                      ; five abs,x stores cover the 5 pages in one pass
+@bf:    sta BARADDR+$000,x
+        sta BARADDR+$100,x
+        sta BARADDR+$200,x
+        sta BARADDR+$300,x
+        sta BARADDR+$400,x
+        inx
         bne @bf
-        inc w16b+1
-        dex
-        bne @bf
-        lda #<BARBUF                ; --- lay the icon spans
+        lda #<BARBUF
         sta w16
         lda #>BARBUF
         sta w16+1
@@ -2032,15 +2018,14 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
         lda (w16),y                 ; offset high ($FF = end)
         cmp #$FF
         beq @bsdone
-        pha
-        dey
-        lda (w16),y                 ; offset low
+        tax                         ; X is free: the @bf counter ran down to 0
+        lda (w16)                   ; offset low, 65C02 (zp): no dey needed
         clc
         adc #<BARADDR
         sta w16b
-        pla
+        txa
         adc #>BARADDR
-        sta w16b+1                  ; dest = BARADDR + offset
+        sta w16b+1
         ldy #2
         lda (w16),y
         sta tmp2                    ; len
@@ -2095,13 +2080,11 @@ mirror_seek:
         sbc mulrowlo,x              ; r
         sta tmp2
         stz w16+1
+        asl                         ; r < 128, so this shifts out a 0: nothing to roll in
         asl
         rol w16+1
         asl
-        rol w16+1
-        asl
-        rol w16+1                   ; 8r
-        clc
+        rol w16+1                   ; 8r  (C=0 out: bit15 of 4r is always clear)
         adc #<(RINGEND-ROWBYTES)
         sta MIRR_LO
         lda w16+1
@@ -2110,10 +2093,10 @@ mirror_seek:
         ldx curbuf
         lda tmp2
         cmp MIRR_R,x
-        bcs @ok                     ; not scrolled left: what was valid still is
-        lda MIRR_R,x
+        bcs @ok
+        eor #$FF                    ; A is still tmp2: ~tmp2 + MIRR_R + 1 = MIRR_R - tmp2
         sec
-        sbc tmp2
+        adc MIRR_R,x
         tax                         ; chars r..old-1 have become needed
         lda MIRR_LO
         ldy MIRR_LO+1
@@ -2131,22 +2114,18 @@ mirror_seek:
 ; w16/w16b are borrowed and put back: scroll_validate holds dx/dy in them across the
 ; drawrect calls this runs inside.
 mirror_run:
-        sta tmp3
         stx tmp4                    ; n
-        lda w16
-        pha
-        lda w16+1
-        pha
-        lda w16b
-        pha
-        lda w16b+1
-        pha
-        lda tmp3
-        sta w16
+        ldx w16
+        phx
+        ldx w16+1
+        phx
+        ldx w16b
+        phx
+        ldx w16b+1
+        phx
+        sta w16                     ; A still holds the caller's run-start low byte
         sty w16+1
-        ; the run starts below the needed fragment: skip (fragment - start) / 8 chars
-        lda w16+1
-        cmp MIRR_LO+1
+        cpy MIRR_LO+1
         bcc @below
         bne @inside
         lda w16
@@ -2164,12 +2143,11 @@ mirror_run:
         ror tmp3
         lsr
         ror tmp3                    ; (the gate keeps this under 1280 bytes: 160 chars)
-        lda tmp3
-        cmp tmp4
-        bcs @done                   ; it ends before the source row
         lda tmp4
         sec
         sbc tmp3
+        bcc @done                   ; it ends before the source row
+        beq @done
         sta tmp4
         lda MIRR_LO
         sta w16
@@ -2188,8 +2166,8 @@ mirror_run:
         lsr
         ror tmp3
         lsr
-        ror tmp3
         lda tmp3
+        ror a
         cmp tmp4
         bcs :+
         sta tmp4
@@ -2201,22 +2179,36 @@ mirror_run:
         sec
         sbc #>RINGBYTES             ; RINGBYTES is whole pages, so the low byte holds
         sta w16b+1
-@cp:    ldy #7
-:       lda (w16),y
+@cp:    ldaz w16                    ; lda (w16)   -- line 0 needs no index
+        staz w16b                   ; sta (w16b)
+        ldy #1
+        lda (w16),y
         sta (w16b),y
-        dey
-        bpl :-
-        lda w16
+        iny
+        lda (w16),y
+        sta (w16b),y
+        iny
+        lda (w16),y
+        sta (w16b),y
+        iny
+        lda (w16),y
+        sta (w16b),y
+        iny
+        lda (w16),y
+        sta (w16b),y
+        iny
+        lda (w16),y
+        sta (w16b),y
+        iny
+        lda (w16),y                 ; y = 7
+        sta (w16b),y
+        lda w16                     ; w16b tracks w16 in the low byte: one add serves both
         clc
         adc #8
         sta w16
-        bcc :+
-        inc w16+1
-:       lda w16b
-        clc
-        adc #8
         sta w16b
         bcc :+
+        inc w16+1
         inc w16b+1
 :       dex
         bne @cp
@@ -2242,12 +2234,10 @@ build_sections:
         sta BUF_SEC0T1,x
         lda #>(BARROWS*8*LINE-2)
         sta BUF_SEC0T1+1,x
-        lda curbuf
+        ldx curbuf
         beq :+
-        lda #48
-:       tax
-        ; --- T (the bar) : R4/R9/R6/R7 of its own, R12/R13 of whatever follows
-        lda #1
+        ldx #48
+:       lda #1
         sta SECTAB+2,x
         lda #7
         sta SECTAB+3,x
@@ -2258,26 +2248,23 @@ build_sections:
         lda wfine
         beq @coarse
         ; ---- f > 0 : T -> A (the partial row) -> P.. -> P2 -> Q
-        lda #>PARTCRTC
-        sta SECTAB,x
-        lda #<PARTCRTC
-        sta SECTAB+1,x
-        lda wfine
-        eor #7
+        eor #7                      ; wfine is still in A from the test above
         inca                        ; 8-f lines of it
         jsr @dur
         sta SECTAB+6,x
         lda tmp3
         sta SECTAB+7,x
+        lda #>PARTCRTC
+        sta SECTAB,x
+        lda #<PARTCRTC
+        sta SECTAB+1,x
         txa
         clc
         adc #8
         tax                         ; A's entry
-        lda #0
-        sta SECTAB+2,x
-        lda #7
-        sec
-        sbc wfine
+        stz SECTAB+2,x
+        lda wfine
+        eor #7                      ; 7 - wfine, wfine in 0..7
         sta SECTAB+3,x
         lda #2
         sta SECTAB+4,x
@@ -2293,14 +2280,13 @@ build_sections:
         jsr @wrap
         lda #VISROWS-1
         sta tmp4                    ; rows in the run
-        lda barq                    ; which starts one ring row after the window (X is
-        clc                         ; the live SECTAB entry index, so compute in A)
-        adc #1
+        lda barq
+        inca
         cmp #RINGROWS
         bcc :+
         lda #0
 :       sta tmp3
-        jmp @run
+        bra @run
 @coarse:                            ; ---- f = 0 : T -> P.. -> Q
         lda ringS
         sta w16
@@ -2326,9 +2312,8 @@ build_sections:
         sec
         sbc tmp2
         sta tmp4
-        lda tmp4
         sta tmp2
-        jsr @emit                   ; second part, read through the mirror
+        jsr @emit
         jmp @past
 @one:   lda tmp4
         sta tmp2
@@ -2348,8 +2333,7 @@ build_sections:
         clc
         adc #8
         tax
-        lda #0
-        sta SECTAB+2,x
+        stza SECTAB+2,x             ; stz abs,x
         lda wfine
         deca
         sta SECTAB+3,x
@@ -2374,14 +2358,13 @@ build_sections:
         sta SECTAB+2,x
         lda #7
         sta SECTAB+3,x
-        lda #0
-        sta SECTAB+4,x
+        stza SECTAB+4, x
         lda #QVSYNC
-        sta SECTAB+5,x
+        sta SECTAB+5, x
         lda #<(40*LINE-2)
-        sta SECTAB+6,x
+        sta SECTAB+6, x
         lda #>(40*LINE-2)
-        sta SECTAB+7,x
+        sta SECTAB+7, x
         rts
 ; --- emit a run of tmp2 rows starting at w16 (a ring offset), following entry X
 @emit:  jsr @addr
@@ -2426,11 +2409,11 @@ build_sections:
 :       lda w16b
         clc
         adc #<CRTCBASE
-        sta tmp
+        tay
         lda w16b+1
         adc #>CRTCBASE
         sta SECTAB,x
-        lda tmp
+        tya
         sta SECTAB+1,x
         rts
 ; --- A = rows -> A/tmp3 = that many rows of lines, as a T1 count
@@ -2441,16 +2424,15 @@ build_sections:
 ; --- A = rows: advance w16 by that many rows, folding into 0..RINGCHARS
 @advance:
         tay
-:       lda w16
-        clc
+        lda w16
+:       clc
         adc #ROWCHARS
-        sta w16
         bcc :+
         inc w16+1
 :       dey
         bne :--
+        sta w16
         ; fall through
-; --- fold w16 into 0..RINGCHARS-1
 @wrap:  lda w16+1
         cmp #>RINGCHARS
         bcc :++
@@ -2473,33 +2455,24 @@ build_sections:
 ; the ring itself, with the wrap falling after it -- so it belongs to this run, giving
 ; RINGROWS-tmp3.  Getting this wrong emits a section that reads off the ring end into the
 ; bar (a duplicate bar mid screen when scrolling to a column that is a multiple of 80).
-@nfull: stx tmp2                    ; X is the live SECTAB entry index: save it
-        ldx barq
+@nfull: ldy barq                    ; X is the live SECTAB entry index: index with Y instead
         lda ringS
         sec
-        sbc mulrowlo,x              ; r = ringS mod 80
-        ldx tmp2                    ; restore X (r survives in A)
-        cmp #1                      ; C = 0 iff r == 0
-        lda #RINGROWS
-        bcc :+                      ; r == 0: the last ring row is whole, keep it here
+        sbc mulrowlo,y              ; r = ringS mod 80
+        cmp #1                      ; C = 1 iff r > 0
         lda #RINGROWS-1             ; r  > 0: that row straddles, @addr sends it to the mirror
+        bcs :+
+        inc a                       ; r == 0: the last ring row is whole, keep it here
 :       sec
         sbc tmp3
         rts
 ; A = lines -> A/tmp3 = lines*64-2
-@dur:   stza tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
-        asl
-        rol tmp3
+@dur:   sta tmp3                    ; n*64 == (n*256)>>2: start from hi=n, lo=0 and
+        lda #0                      ; shift right twice instead of left six times
+        lsr tmp3
+        ror
+        lsr tmp3
+        ror
         sec
         sbc #2
         bcs :+
@@ -2514,9 +2487,7 @@ build_sections:
         dec w16+1
 :       lda w16+1
         cmp #6
-        bcs :+
-        lda w16+1
-        clc
+        bcs :+                      ; not taken: C = 0 for the adc
         adc #$0A
         sta w16+1
 :       rts
@@ -2550,20 +2521,18 @@ select_backbuf:
         beq :+
         ora #$04
 :       sta ACCCON
-        lda #<SPRREC
+        lda curbuf
+        beq :+
+        lda #<(SPRREC+MAXREC*10)
+        sta recp
+        lda #>(SPRREC+MAXREC*10)
+        sta recp+1
+        rts
+:       lda #<SPRREC
         sta recp
         lda #>SPRREC
         sta recp+1
-        lda curbuf
-        beq :+
-        lda recp
-        clc
-        adc #<(MAXREC*10)
-        sta recp
-        lda recp+1
-        adc #>(MAXREC*10)
-        sta recp+1
-:       rts
+        rts
 
 ; render everything queued for the current back buffer and request flip
 render_frame:
@@ -2573,8 +2542,8 @@ render_frame:
         lda wx
         sta wcx
         lda wx+1
+        lsr
         sta wcx+1
-        lsr wcx+1
         ror wcx
         lda wy
         and #3
@@ -2597,13 +2566,12 @@ render_frame:
         jsr draw_sprites
         jsr copy_partial
         ldx curbuf
-        lda BARBG,x                 ; first time this buffer is drawn: lay the template
+        lda BARBG,x
         beq :+
         jsr bar_bg
         ldx curbuf                  ; bar_bg pages banks -> X clobbered
         stza BARBG,x
-:       ldx curbuf
-        lda BARDIRTY,x              ; a value changed: draw the digits over it
+:       lda BARDIRTY,x
         beq :+
         jsr t_redraw_hud
         ldx curbuf                  ; redraw_hud clobbers X
@@ -2679,11 +2647,10 @@ drawrect_clip:
         clc
         adc rc_w
         sta rc_w
+        beq @none                   ; Z is still the low sum: sta sets no flags
         lda w16+1
-        adc #0
+        adc #0                      ; branches do not touch C
         bne @none
-        lda rc_w
-        beq @none
         lda wcx
         sta rc_x
         lda wcx+1
@@ -2731,23 +2698,16 @@ calc_ring:
         sbc #>RINGCHARS
         sta ringS+1
 :       ; q = S / 80
-        lda ringS
-        sta w16
-        lda ringS+1
-        sta w16+1
-        ldx #0
-@div:   lda w16
+        lda ringS                   ; running value: low in A, high in Y
+        ldy ringS+1
+        ldx #$FF                    ; quotient, pre-decremented
+@div:   inx
         sec
         sbc #ROWCHARS
-        tay
-        lda w16+1
-        sbc #0
-        bcc @dd
-        sta w16+1
-        sty w16
-        inx
-        bra @div
-@dd:    stx barq
+        bcs @div                    ; no borrow: high byte unchanged, value still >= 0
+        dey
+        bpl @div                    ; borrow absorbed by the high byte
+@dd:    stx barq                    ; high byte went negative: X is the quotient
         rts
 
         .segment "LOW2"            ; MOS vector/VDU pages ($0206..$03FF), copied there after MODE 2:
@@ -2815,11 +2775,10 @@ init_tables:
         stz w16
         stz w16+1
         ldx #0
-@m80:   lda w16
-        sta mulrowlo,x
-        lda w16+1
+@m80:   lda w16+1
         sta mulrowhi,x
         lda w16
+        sta mulrowlo,x
         clc
         adc #ROWCHARS
         sta w16
@@ -3060,10 +3019,9 @@ irq_handler:
         sta CRTC_IDX
         lda BUF_SEC0+1,x
         sta CRTC_DAT
-        lda #$40                    ; drop any T1 tick that fired while we were in
-        sta VIA_IFR                 ; here: it would step the chain on before the
-        lda #0                      ; frame has even started, and the next section's
-        sta SECIDX                  ; registers would land a frame early
+        lda #$40
+        sta VIA_IFR
+        stz SECIDX
         lda DISPSECT
         sta SECIDX
         jsr scan_keys
@@ -3088,9 +3046,8 @@ scan_keys:
         sta VIA_ORANH
         lda VIA_ORANH
         bpl :+
-        lda KEYSCAN
-        ora keybits,x
-        sta KEYSCAN
+        lda keybits,x
+        tsb KEYSCAN
 :       inx
         cpx #11
         bne @k
@@ -3119,12 +3076,11 @@ sound_tick:
         beq @music
         dec SFXDUR
         bne @music
-        ldy #0
-        lda (SFXPTR),y
+        lda (SFXPTR)                ; 65C02 (zp): the first byte needs no index
         cmp #$FF
         beq @end
         jsr sndwrite
-        iny
+        ldy #1
         lda (SFXPTR),y
         jsr sndwrite
         iny
@@ -3184,11 +3140,10 @@ music_init:
         lda #BANK_TIL1
         sta ROMSEL_CPY
         sta ROMSEL
-        ldx #0
-:       lda MUSIC_ADDR,x
-        sta music_tab,x
-        inx
-        cpx #144
+        ldx #144
+:       lda MUSIC_ADDR-1,x
+        sta music_tab-1,x
+        dex
         bne :-
         rts
 music_tick:
@@ -3244,14 +3199,14 @@ set_voice:
         asl
         asl
         sta ISRT1                   ; ch << 5
-        tya
+        cpy #0
         bne @note
-        lda ISRT1
-        ora #$9F
+        ora #$9F                    ; A is still ch<<5
         jsr sndwrite
         plx
         rts
-@note:  sec
+@note:  tya
+        sec
         sbc #24
         asl
         tay
@@ -3277,8 +3232,7 @@ set_voice:
         lda musvol,x
         ora ISRT1
         ora #$90
-        jsr sndwrite
-        rts
+        jmp sndwrite
 musvol: .byte 3, 8, 8
 
 music_start:
@@ -3312,7 +3266,6 @@ take_over:
         sta OLDIRQ
         lda IRQ1V+1
         sta OLDIRQ+1
-        lda VIA_ACR
         lda #<irq_handler
         sta IRQ1V
         lda #>irq_handler
@@ -3619,13 +3572,11 @@ init_maprows:
         ldx #0
 :       lda t16
         sta LV_MAPROWLO,x
-        lda t16+1
-        sta LV_MAPROWHI,x
-        lda t16
         clc
         adc t16b
         sta t16
         lda t16+1
+        sta LV_MAPROWHI,x
         adc t16b+1
         sta t16+1
         inx
@@ -3684,11 +3635,10 @@ build_ring:
         lda #>RINGBASE
         sta w16+1
         ldx #0
-@r:     lda w16
-        sta RINGLO,x
-        lda w16+1
+@r:     lda w16+1
         sta RINGHI,x
         lda w16
+        sta RINGLO,x
         clc
         adc #<ROWBYTES
         sta w16
