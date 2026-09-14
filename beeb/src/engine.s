@@ -84,7 +84,7 @@ LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 ; Each buffer gets its own 20K screen, main and shadow, so both are an 80-char
 ; ring at $3000 with 27 rows visible and the status bar above.
 ROWCHARS  = 80
-RINGROWS  = 28                    ; playfield rows only: the bar, the partial-row source
+RINGROWS  = 32                    ; the whole 20K: the hardware fold IS the ring wrap
 VISROWS   = 27                    ; visible char rows (216 lines = 108 game px)
 BUFROWS   = 28                    ; rows held (visible + partial top row source)
 ; The camera follows Cleo one for one, so her fall speed is also how far the window
@@ -101,10 +101,19 @@ RINGBYTES = RINGCHARS*8
 ;          that straddles the ring end can still be read as one run
 ;   $3500  the ring, 28 rows -- both ends page aligned, so ringup stays a byte compare
 ;   $7B00  the bar
-PARTADDR  = BUF0
-MIRROR    = PARTADDR + ROWBYTES
-RINGBASE  = MIRROR + ROWBYTES
+; The ring is the entire screen and the CRTC folds it for free: an address that runs
+; off $8000 comes back to $3000, which is the ring base, so a displayed row may straddle
+; the end and no mirror copy is needed.  That is the whole reason RINGROWS is 32 -- it
+; is not a choice, it is the size of the region the hardware wraps.
+RINGBASE  = BUF0
 RINGEND   = RINGBASE + RINGBYTES
+; The composed top row has to be INSIDE the screen: it is per buffer, and anything below
+; $3000 is only main RAM to the CRTC (the bar gets away with it by being single buffered
+; and scanned with D = 0).  So it lives in a ring slot -- one the window is not using.
+; The window occupies VISROWS+1 of the 32 slots; partq picks one of the few left over,
+; far enough from both edges that the camera's 2-rows-a-frame cannot reach it before
+; scroll_validate would redraw it anyway.
+PARTROW   = 29                    ; slots ahead of the window's own row
 ; The bar is BELOW the screen, in main RAM, and there is only one of it.  The CRTC's
 ; start address is just RAM/8, so it can scan from anywhere under $8000 -- but with
 ; shadow selected for display (ACCCON D = 1) everything under $3000 reads HAZEL/ANDY
@@ -182,6 +191,7 @@ sp_w:     .res 1
 sp_lines: .res 1
 sp_ext:   .res 1                  ; height in scanlines (2*lines for half-res)
 sp_flags: .res 1
+tmp4c8:   .res 1                  ; copy_partial: the column's byte offset within a row
 sp_dbank: .res 1                  ; the bank the sprite's DATA is in: selected once the
                                   ;   prologue has finished reading the directory
 sp_c0:    .res 1
@@ -205,6 +215,7 @@ lcnt:     .res 1
 lidx:     .res 1
 ringS:    .res 2                  ; window start char S (0..2559)
 barq:     .res 1                  ; row slot q = S/80
+partq:    .res 1                  ; the ring slot holding the composed top row
 
 ; level geometry
 maplw:    .res 1                  ; log2 map width in tiles
@@ -243,8 +254,6 @@ GLYPHBUF:  .res 8                 ; one font glyph, copied out of bank 4 for the
 RECCNT:    .res 2
 KEEP:      .res MAXREC
 dpass:     .res 1                 ; draw_sprites pass: 1 = box stars, 0 = the rest
-MIRR_R:    .res 2                 ; per buffer: the mirror is valid from this char on
-MIRR_LO:   .res 2                 ; the address of that char in the ring's last row
 spclip:    .res 1                 ; drawsprite: the last sprite came off a window edge
 NSPR:      .res 1
 BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
@@ -651,14 +660,7 @@ drawrect:
         bne @sc
         bra @runend
 @rowdone:
-        ldy rc_sp+1
-        cpy #(>RINGEND - 5)
-        bcc :+
-        lda rc_sp
-        ldx rc_w
-        jsr mirror_run
-        clc                         ; only this arm loses the cpy's cleared C
-:
+        clc
         lda rc_sp                   ; next char row: +640 with ring wrap
         adc #<ROWBYTES
         sta rc_sp
@@ -1450,15 +1452,6 @@ sprnext:
         dec sp_cnt
         bpl ds_colloop
 ds_rowdone:
-        lda sp_rb+1                 ; (see drawrect's @rowdone)
-        cmp #(>RINGEND - 5)
-        bcc :+
-        lda sp_rb
-        ldy sp_rb+1
-        ldx sp_ncol
-        inx
-        jsr mirror_run
-:
         lda sp_row
         cmp sp_r1
         beq ds_done
@@ -1904,25 +1897,33 @@ copy_partial:
         jsr ringaddr                ; sp = source start (row wcy, first dirty column)
         ; dest = the same column of the fixed partial row, which is all section A of
         ; the rupture chain ever displays
-        lda tmp4
+        ldx partq                   ; dest = the same column of the composed row, which
+        lda tmp4                    ; is a ring slot, so its base is in RINGLO/RINGHI.
+        lsr                         ; Build the high half FIRST: the lsr chain sets carry
+        lsr                         ; from the bits it shifts out, so it cannot sit
+        lsr                         ; between the low add and the high add.
         lsr
-        lsr
-        lsr
-        lsr
-        lsr
-        ora #>PARTADDR              ; high byte is tmp4>>5, at most 7
+        lsr                         ; tmp4>>5 = high half of tmp4*8
+        clc
+        adc RINGHI,x
         sta ptr+1
         lda tmp4
         asl
         asl
-        asl                         ; low byte of tmp4*8
-        ; dest pointer adjusted by -wfine so that same Y indexes both
+        asl                         ; low half of tmp4*8
+        clc
+        adc RINGLO,x
+        sta ptr
+        bcc @pnc
+        inc ptr+1
+@pnc:   ; dest pointer adjusted by -wfine so that the same Y indexes both
+        lda ptr
         sec
         sbc wfine
         sta ptr
-        bcs :+
+        bcs @pnb
         dec ptr+1
-:       ; start at line wfine: patched jmp into the unrolled 6-line copy
+@pnb:   ; start at line wfine: patched jmp into the unrolled 6-line copy
         ldx wfine
         lda @ftab-2,x
         sta @fjmp+1
@@ -2051,160 +2052,7 @@ bar_bg:                             ; runs only when a buffer needs its bar (twi
 ; ============================================================================
 LINE = 64
 BARCRTC  = BARADDR / 8
-PARTCRTC = PARTADDR / 8
         .code
-; The row that straddles the ring end is shown from the mirror below the ring base,
-; but only its chars from r = wcx mod 80 up: the ones before r are the part of that
-; row the CRTC reads from the ring itself.  So the mirror is kept right on [r, 80)
-; and no further -- writes below r are dropped by mirror_run -- and when the window
-; scrolls left and r falls, the chars that have just come into range are fetched
-; from the ring, which is always right.  Once per frame, before anything draws.
-mirror_seek:
-        ldx barq
-        lda ringS
-        sec
-        sbc mulrowlo,x              ; r
-        sta tmp2
-        stz w16+1
-        asl                         ; r < 128, so this shifts out a 0: nothing to roll in
-        asl
-        rol w16+1
-        asl
-        rol w16+1                   ; 8r  (C=0 out: bit15 of 4r is always clear)
-        adc #<(RINGEND-ROWBYTES)
-        sta MIRR_LO
-        lda w16+1
-        adc #>(RINGEND-ROWBYTES)
-        sta MIRR_LO+1
-        ldx curbuf
-        lda tmp2
-        cmp MIRR_R,x
-        bcs @ok
-        eor #$FF                    ; A is still tmp2: ~tmp2 + MIRR_R + 1 = MIRR_R - tmp2
-        sec
-        adc MIRR_R,x
-        tax                         ; chars r..old-1 have become needed
-        lda MIRR_LO
-        ldy MIRR_LO+1
-        jsr mirror_run
-        ldx curbuf
-        lda tmp2
-@ok:    sta MIRR_R,x
-        rts
-
-; Every write into the ring's last row from the fragment on is repeated RINGBYTES
-; lower, so the mirror keeps up with the drawing.  A/Y = the first
-; char of a run just drawn, X = how many chars; the callers only bother for rows that
-; start within reach of the last 640 bytes.  A run steps and folds like the drawing
-; did, so the chars that wrapped into ring row 0 fall below the source and are skipped.
-; w16/w16b are borrowed and put back: scroll_validate holds dx/dy in them across the
-; drawrect calls this runs inside.
-mirror_run:
-        stx tmp4                    ; n
-        ldx w16
-        phx
-        ldx w16+1
-        phx
-        ldx w16b
-        phx
-        ldx w16b+1
-        phx
-        sta w16                     ; A still holds the caller's run-start low byte
-        sty w16+1
-        cpy MIRR_LO+1
-        bcc @below
-        bne @inside
-        lda w16
-        cmp MIRR_LO
-        bcs @inside
-@below: lda MIRR_LO
-        sec
-        sbc w16
-        sta tmp3
-        lda MIRR_LO+1
-        sbc w16+1
-        lsr
-        ror tmp3
-        lsr
-        ror tmp3
-        lsr
-        ror tmp3                    ; (the gate keeps this under 1280 bytes: 160 chars)
-        lda tmp4
-        sec
-        sbc tmp3
-        bcc @done                   ; it ends before the source row
-        beq @done
-        sta tmp4
-        lda MIRR_LO
-        sta w16
-        lda MIRR_LO+1
-        sta w16+1
-@inside:
-        ; and it may run past the ring end (those chars wrapped into ring row 0)
-        lda #<RINGEND
-        sec
-        sbc w16
-        sta tmp3
-        lda #>RINGEND
-        sbc w16+1
-        lsr
-        ror tmp3
-        lsr
-        ror tmp3
-        lsr
-        lda tmp3
-        ror a
-        cmp tmp4
-        bcs :+
-        sta tmp4
-:       ldx tmp4
-        beq @done
-        lda w16                     ; run the offset in Y and page-align both pointers:
-        tay                         ; the low bytes stay equal, so the 8-byte step is the
-        stz w16                     ; iny the copy already needed and the pointers never
-        stz w16b                    ; have to be re-added
-        lda w16+1
-        sec
-        sbc #>RINGBYTES             ; RINGBYTES is whole pages, so the low byte holds
-        sta w16b+1
-@cp:    lda (w16),y
-        sta (w16b),y
-        iny
-        lda (w16),y
-        sta (w16b),y
-        iny
-        lda (w16),y
-        sta (w16b),y
-        iny
-        lda (w16),y
-        sta (w16b),y
-        iny
-        lda (w16),y
-        sta (w16b),y
-        iny
-        lda (w16),y
-        sta (w16b),y
-        iny
-        lda (w16),y
-        sta (w16b),y
-        iny
-        lda (w16),y                 ; y = 8c+7
-        sta (w16b),y
-        iny
-        bne :+                      ; Y wrapped past the page: step both high bytes
-        inc w16+1
-        inc w16b+1
-:       dex
-        bne @cp
-@done:  pla
-        sta w16b+1
-        pla
-        sta w16b
-        pla
-        sta w16+1
-        pla
-        sta w16
-        rts
         .segment "LOGIC"            ; back to the bank
 build_sections:
         lda curbuf
@@ -2238,10 +2086,15 @@ build_sections:
         sta SECTAB+6,x
         lda tmp3
         sta SECTAB+7,x
-        lda #>PARTCRTC
-        sta SECTAB,x
-        lda #<PARTCRTC
+        lda partq                   ; section A reads the composed row's ring slot
+        tay
+        lda mulrowlo,y
+        clc
+        adc #<CRTCBASE
         sta SECTAB+1,x
+        lda mulrowhi,y
+        adc #>CRTCBASE
+        sta SECTAB,x
         txa
         clc
         adc #8
@@ -2283,20 +2136,9 @@ build_sections:
 @run:   ; w16 = the run's ring offset, tmp4 = its rows, X = the entry of the section
         ; before it.  Entry i carries section i+1's address and duration, and section
         ; i's own R4/R9/R6/R7, so each section is written across two entries.
-        jsr @nfull                  ; rows that end before the ring end
-        cmp tmp4
-        bcs @one                    ; the whole run fits
-        cmp #0
-        beq @one                    ; it starts inside the last row: all of it folds
-        sta tmp2
-        jsr @emit                   ; first part: tmp2 rows, up to the ring end
-        lda tmp2
-        jsr @advance
+        ; The run is never split any more: a row that straddles the ring end is
+        ; folded by the CRTC, so the playfield is one section however the window sits.
         lda tmp4
-        sec
-        sbc tmp2
-        sta tmp4
-@one:   lda tmp4
         sta tmp2
         jsr @emit
 @past:  lda tmp4
@@ -2372,24 +2214,13 @@ build_sections:
         sta SECTAB+4,x
         sta SECTAB+5,x
         rts
-; --- SECTAB+0/1,x = the CRTC address for the row at ring offset w16.  A row starting
-; past RINGCHARS-80 straddles the end and is read from the mirror below the base,
-; which is exactly the address w16 - RINGCHARS names.
-@addr:  lda w16                     ; low byte in A, high in Y: w16b was only a copy
+; --- SECTAB+0/1,x = the CRTC address for the row at ring offset w16.  Ring offsets are
+; 0..RINGCHARS-1 and CRTCBASE is $600, so the sum is always under $1000 and MA12 is
+; clear: a section's START address never needs folding.  The fold happens mid-scan, in
+; hardware, which is the whole reason the ring begins at $3000.
+@addr:  lda w16
         ldy w16+1
-        cpy #>(RINGCHARS-ROWCHARS+1)
-        bcc :++
-        bne :+
-        cmp #<(RINGCHARS-ROWCHARS+1)
-        bcc :++
-:       clc                         ; the fold is w16 - RINGCHARS + CRTCBASE, so one
-        adc #<(CRTCBASE-RINGCHARS)  ; add of the folded constant does both
-        sta SECTAB+1,x
-        tya
-        adc #>(CRTCBASE-RINGCHARS)
-        sta SECTAB,x
-        rts
-:       clc
+        clc
         adc #<CRTCBASE
         sta SECTAB+1,x
         tya
@@ -2427,24 +2258,6 @@ build_sections:
         sbc #>RINGCHARS
         sta w16+1
 :       rts
-; --- rows of the run that finish before the ring end.  The run starts on ring row
-; tmp3.  When the window has a char offset r = ringS mod 80, ring row RINGROWS-1 is the
-; straddling row (@addr redirects it to the mirror), so RINGROWS-1-tmp3 rows come first.
-; But when r == 0 the window is row aligned: that last ring row is whole and shown from
-; the ring itself, with the wrap falling after it -- so it belongs to this run, giving
-; RINGROWS-tmp3.  Getting this wrong emits a section that reads off the ring end into the
-; bar (a duplicate bar mid screen when scrolling to a column that is a multiple of 80).
-@nfull: ldy barq                    ; X is the live SECTAB entry index: index with Y instead
-        lda ringS
-        sec
-        sbc mulrowlo,y              ; r = ringS mod 80
-        cmp #1                      ; C = 1 iff r > 0
-        lda #RINGROWS-1             ; r  > 0: that row straddles, @addr sends it to the mirror
-        bcs :+
-        inc a                       ; r == 0: the last ring row is whole, keep it here
-        sec                         ; C is already 1 on the bcs path (from cmp #1)
-:       sbc tmp3
-        rts
 ; A = lines -> A/tmp3 = lines*64-2
 @dur:   sta tmp3                    ; n*64 == (n*256)>>2: start from hi=n, lo=0 and
         lda #0                      ; shift right twice instead of left six times
@@ -2552,7 +2365,6 @@ render_frame:
         ror
         sta wcy
         jsr calc_ring
-        jsr mirror_seek
         jsr match_sprites
         jsr erase_old
         jsr scroll_validate
@@ -2694,6 +2506,11 @@ calc_ring:
         dey
         bpl @div                    ; borrow absorbed by the high byte
 @dd:    stx barq                    ; high byte went negative: X is the quotient
+        txa                         ; and the slot the composed top row goes in: far
+        clc                         ; enough ahead of the window that the camera cannot
+        adc #PARTROW                ; reach it before it would be redrawn anyway
+        ringmod
+        sta partq
         rts
 
         .segment "LOW2"            ; MOS vector/VDU pages ($0206..$03FF), copied there after MODE 2:
@@ -3292,10 +3109,12 @@ crtc_init:
         sta curR7
         rts
 crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
-ringmodtab:
-.repeat 256, i
-        .byte i .mod RINGROWS
+.if (RINGROWS & (RINGROWS - 1)) <> 0
+ringmodtab:                         ; only a non-power-of-two ring needs the table; at
+.repeat 256, i                      ; RINGROWS = 32 ringmod is `and #31` and this is 256
+        .byte i .mod RINGROWS       ; bytes of main RAM that the bar now uses instead
 .endrepeat
+.endif
 
 set_palette:
         ldx #15
