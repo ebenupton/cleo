@@ -134,21 +134,24 @@ between `frame_top` and the flip is:
 
 | | cycles |
 |---|---|
-| median | 128000 |
-| 90th percentile | 143000 |
-| worst | 150000 |
+| median | 136000 |
+| 90th percentile | 156000 |
+| worst | 162000 |
 
 Three vsyncs is 120000 cycles, so `VSPEG` is 4: a steady 12.5 frames a second, with
 the world stepping 25 times a second against the Master's 33.  Where it goes:
 
 | Phase | Cycles |
 |---|---|
-| draw the sprites | 40000 |
-| erase their old places | 27000 |
-| the scroll strips | 19000 |
-| the two logic steps | 16000 |
-| the composed row | 9000 |
+| draw the sprites | 40000-51000 |
+| erase their old places | 27000-30000 |
+| the scroll strips | 20000 |
+| the two logic steps | 17000 |
+| the composed row | 5000-11000 |
 | the mirror | 3000 |
+
+Four vsyncs is 160000, so a heavy frame occasionally takes five: about one in
+seventeen while running and jumping with a dozen objects on screen.
 
 The Master fits the same game in three vsyncs because its MODE 2 sprites carry
 transparency in the senior bit of each byte: its inner loop is a load, a branch and a
