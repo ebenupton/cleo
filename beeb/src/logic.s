@@ -255,6 +255,7 @@ lastkeys: .res 1
 logicvs:  .res 1
 lsteps:   .res 1
 gridsh:   .res 1                  ; log2 of the collision grid width
+camoff:   .res 1                  ; window bias: px - camoff = window left (eased 40..120)
 
 ; transient temps (not preserved across disc loads)
 ox      = $A8
@@ -467,6 +468,8 @@ level_init:
         sec
         sbc #3
         sta gridsh
+        lda #80                     ; the camera starts centred; the lookahead eases in
+        sta camoff
         ; clear object state, then grid
         stz BINOK                   ; the cached object list belongs to the old level
         ldx #0
@@ -894,9 +897,23 @@ game_frame:
         ; ---- camera
         lda health
         beq @cam
-        lda px
+        ; horizontal lookahead: ease the window's bias toward 40 (facing right, so
+        ; Cleo sits 1/4 from the left and sees ahead) or 120 (facing left, 3/4) by one
+        ; pixel a logic step -- one character a rendered frame -- so she drifts to 3/4
+        ; of the way to her side of the screen without a visible snap.
+        ldx #40
+        lda facing                  ; 1 = left
+        beq :+
+        ldx #120
+:       cpx camoff
+        beq @offok
+        bcs @offup                  ; target > camoff (cpx: C set when X >= camoff)
+        dec camoff
+        bra @offok
+@offup: inc camoff
+@offok: lda px
         sec
-        sbc #80
+        sbc camoff
         sta wx
         lda px+1
         sbc #0

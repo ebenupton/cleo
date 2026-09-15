@@ -729,6 +729,29 @@ for g in (0, 1):
     open(os.path.join(OUT, 'TILES' + SETNAME[g]), 'wb').write(
         b''.join(tiles_mode2[c] for c in tileset[g]))
 
+# Isolated black tiles read as holes punched in the foreground: a cell that dithers to
+# solid black but is orthogonally surrounded by textured tiles (two of L1B's are brick
+# walls whose dark brown falls to black in the four inks; the rest are shadow tiles).
+# Fill each with its commonest textured neighbour so it blends into the wall or floor.
+# Keyed on this mode's solid-black set, so MODE 2 -- which shows these as brick -- is
+# left alone.
+for (lv, sub), cm in maps.items():
+    rm = remap[tileset_of(lv, sub)]
+    sb = lambda c: rm.get(int(c)) == SOLID_BLACK
+    tex = lambda c: rm.get(int(c), 0) < SOLID_CYAN
+    h, w = cm.shape
+    fills = []
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            if sb(cm[y, x]):
+                t = [int(c) for c in (cm[y, x-1], cm[y, x+1], cm[y-1, x], cm[y+1, x]) if tex(c)]
+                if len(t) >= 3:
+                    fills.append((x, y, max(set(t), key=t.count)))
+    for (x, y, c) in fills:
+        cm[y, x] = c
+    if fills:
+        print('%s: filled %d isolated black foreground cells' % (name_of(lv, sub), len(fills)))
+
 for (lv, sub), L in levels.items():
     cm = maps[(lv, sub)]
     gset = tileset_of(lv, sub)
