@@ -1,0 +1,30 @@
+// Screenshot: _completeFb8 is RGBA, 1024x625, one byte a channel.
+import { findJsbeeb } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
+import { pathToFileURL } from "node:url";
+import { writeFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
+import path from "node:path";
+const cycles = parseInt(process.argv[2] ?? "14000000");
+const out = process.argv[3] ?? "build/shot.png";
+const X0 = parseInt(process.argv[4] ?? "180"), X1 = parseInt(process.argv[5] ?? "860");
+const Y0 = parseInt(process.argv[6] ?? "0"), Y1 = parseInt(process.argv[7] ?? "625");
+const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
+const s = new MachineSession("B-DFS1.2");
+await s.initialise(); await s.boot(30);
+s.loadDisc(path.resolve("build/cleob.ssd"));
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
+await s.runFor(cycles);
+const cpu = s._machine.processor;
+console.log(`pc=$${cpu.pc.toString(16)} romsel=$${cpu.readmem(0xf4).toString(16)}`);
+const fb = s._completeFb8, W = 1024, w = X1 - X0, h = Y1 - Y0;
+const raw = Buffer.alloc((w * 3 + 1) * h);
+for (let y = 0; y < h; y++) { raw[y * (w * 3 + 1)] = 0;
+  for (let x = 0; x < w; x++) { const i = ((Y0 + y) * W + X0 + x) * 4, o = y * (w * 3 + 1) + 1 + x * 3;
+    raw[o] = fb[i]; raw[o + 1] = fb[i + 1]; raw[o + 2] = fb[i + 2]; } }
+const crc = (b) => { let c = ~0; for (const x of b) { c ^= x; for (let i = 0; i < 8; i++) c = (c >>> 1) ^ (0xEDB88320 & -(c & 1)); } return ~c >>> 0; };
+const chunk = (t, d) => { const b = Buffer.alloc(8 + d.length + 4); b.writeUInt32BE(d.length, 0); b.write(t, 4); d.copy(b, 8);
+  b.writeUInt32BE(crc(Buffer.concat([Buffer.from(t), d])), 8 + d.length); return b; };
+const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+writeFileSync(out, Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
+console.log("wrote", out);
+process.exit(0);
