@@ -4015,7 +4015,7 @@ ldr_end:  rts
 ; ============================================================================
 ; A = tile row -> mapptr = address of that map row
   .if MODELB
-        .assert MAPLW = 7, error, "maprow assumes 128-tile rows"
+    .if MAPLW = 7
 maprow: lsr                         ; row * 128: the row's low bit is the low byte's top
         sta mapptr+1
         lda #0
@@ -4026,6 +4026,16 @@ maprow: lsr                         ; row * 128: the row's low bit is the low by
         adc #>LV_MAP
         sta mapptr+1
         rts
+    .elseif MAPLW = 8
+maprow: clc                         ; row * 256: the row is the high byte
+        adc #>LV_MAP
+        sta mapptr+1
+        lda #0
+        sta mapptr
+        rts
+    .else
+        .error "maprow: a map is 128 or 256 tiles wide"
+    .endif
   .else
 maprow: tay
         lda #BANK_MAP

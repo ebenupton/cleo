@@ -77,7 +77,7 @@ to7:    lda #BANK_LVL
 ; (MAPSTRIDE is a constant here, so there are no row tables) and the strip copy is
 ; the one bank switch a tile row costs.
 maprow5:                            ; A = tile row -> ptr = LV_MAP + row*MAPSTRIDE + rc_tx0
-        .assert MAPLW = 7, error, "maprow5 assumes 128-tile rows"
+  .if MAPLW = 7
         lsr                         ; row * 128: the row's low bit is the low byte's top
         sta ptr+1
         lda #0
@@ -90,6 +90,16 @@ maprow5:                            ; A = tile row -> ptr = LV_MAP + row*MAPSTRI
         adc #>LV_MAP
         sta ptr+1
         rts
+  .elseif MAPLW = 8
+        clc                         ; row * 256: the row is the high byte
+        adc #>LV_MAP
+        sta ptr+1
+        lda rc_tx0
+        sta ptr
+        rts
+  .else
+        .error "maprow5: a map is 128 or 256 tiles wide"
+  .endif
 
 mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF
         lda #BANK_MAP

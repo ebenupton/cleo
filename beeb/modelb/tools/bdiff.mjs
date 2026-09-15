@@ -10,7 +10,8 @@ const BEEB = "/Users/ebenupton/cleo/beeb";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 
 // ---- the Master
-const M = await openMaster({ disc: `${BEEB}/build/ref_mode1_21/cleo.ssd`, labels: `${BEEB}/build/ref_mode1_21/labels.txt`, level: 2 });
+const LEVEL = parseInt(/LEVEL_IDX = (\d+)/.exec((await import("node:fs")).readFileSync("build/assets.inc", "utf8"))[1]);
+const M = await openMaster({ disc: `${BEEB}/build/ref_mode1_21/cleo.ssd`, labels: `${BEEB}/build/ref_mode1_21/labels.txt`, level: LEVEL });
 const MA = M.A, mcpu = M.cpu;
 if (MA.LV_OBJST === undefined) MA.LV_OBJST = 0xb000;   // a constant on the Master (engine.s)
 // ---- the Model B
@@ -31,7 +32,7 @@ bank(bcpu, 7, () => bcpu.writemem(BA.scan_keys, 0x60));
 await runToB(BA.frame_top, 7);
 
 // ---- the state each side exposes: (name, reader) -- one number or an array
-const OBJN_M = 149, OBJN_B = 126, NOBJ = 126;
+const OBJN_M = 149, OBJN_B = 126, NOBJ = parseInt(/NOBJS = (\d+)/.exec((await import("node:fs")).readFileSync("build/assets.inc", "utf8"))[1]);
 const zp = ["px","py","vx","vy","anim","evframe","facing","running","firing","hurt","control","bx","by","bvx","bvy","bcnt","bactive","bounce","stars","exiting","lives","health","score","frame","wx","wy","lastkeys","gridsh"];
 const sizes = { px:2,py:2,vx:2,vy:2,evframe:2,bx:2,by:2,bvx:2,bvy:2,score:2,frame:2,wx:2,wy:2 };
 function state(cpu, A, objn) {

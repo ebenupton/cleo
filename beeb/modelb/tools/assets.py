@@ -49,19 +49,27 @@ SOLID_CYAN, SOLID_BLACK = 254, 255
 specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
 inset = set(m.remap[gset])                  # the compact ids the level's tile set has
 live = set(int(c) for c in np.unique(cm)) | (set(specials) & inset)
+# The Master folds a set's near-duplicate tiles into one another to fit 254 ids
+# (convert.py: folded[g] maps a compact id to the one that stands in for it), so the
+# tile drawn for c is the representative's; the same here, or the pixels differ.
+rep = m.folded[gset]
+def rep_of(c): return rep.get(c, c)
 local = {}                                  # compact id -> tile id
 for c in sorted(live):
     if c in m.tile_solid:
         local[c] = SOLID_CYAN if m.tile_solid[c] == 1 else SOLID_BLACK
+byrep = {}                                  # representative -> tile id
 for c in sorted(live):
     if c not in m.tile_solid:
-        local[c] = len([1 for v in local.values() if v < 254])
-NTILES = len([1 for v in local.values() if v < 254])
+        r = rep_of(c)
+        if r not in byrep:
+            byrep[r] = len(byrep)
+        local[c] = byrep[r]
+NTILES = len(byrep)
 assert NTILES <= 254, NTILES
 tiles = bytearray()
-for c in sorted(live):
-    if local[c] < 254:
-        tiles += m.tiles_mode2[c]
+for r, t in sorted(byrep.items(), key=lambda kv: kv[1]):
+    tiles += m.tiles_mode2[r]
 assert len(tiles) == 64 * NTILES
 out('tiles.bin', tiles)
 
@@ -263,6 +271,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('HUD_BANK = 6\n')
     f.write('SPR_BAR = 0\nSPR_DIGITS = digits_art\n')   # (no bar art: the loader puts the bar in place)
     f.write('NOBJS = %d\n' % len(L['objs']))
+    f.write('LEVEL_IDX = %d\n' % (lv * 2 + sub))   # game.s: file = FI_L0A + (i eor 1) * 2
     f.write('SPR6_MIRROR = 0\n')      # bank 6 holds no image that is drawn mirrored
     f.write('SPR4_COPY = 0\n')        # and bank 4 nothing the copy blitter draws
     f.write('STARTX = %d\nSTARTY = %d\n' % L['start'])

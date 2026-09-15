@@ -14,8 +14,7 @@
 ;   7  the logic, the game loop, the level's tables, the display driver, the
 ;      interrupt's work, the sound and the music, the HUD
 ; ============================================================================
-LEVEL_IDX = 2                       ; the level on the disc: index 2 is L1B, the main
-                                    ; level of world 1 (see game.s: file = FI_L0A+(i^1)*2)
+; LEVEL_IDX is in assets.inc: the level tools/assets.py packed (build.sh LEVEL="lv sub")
 VSPEG     = 3                       ; vsyncs a rendered frame, as the Master: the median
                                     ; frame is 70k cycles, the 90th percentile 111k
 MAPSTRIDE = 1 << MAPLW              ; bytes per map row: a constant here, so the row

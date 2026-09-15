@@ -108,6 +108,17 @@ every site: `stz` needs A dead (44 sites; the two with A live are `stza`), `inca
 - `tools/bshot2.mjs`, `bstate3.mjs`, `bspr3.mjs`, `bbrk.mjs`: screenshots, state,
   the sprite list, and a trace to the first BRK.
 
+## Other levels
+
+`LEVEL="lv sub" sh build.sh` packs another level (the default is `1 0`, L1B).  The
+packer folds near-duplicate tiles exactly as the Master's convert.py does for the
+set, so a level's tiles are the Master's.  L0B (the first outdoor level, 256x32,
+82 objects) builds and passes the same checks with 81 bytes to spare in bank 5 and
+17 in bank 6; its frame cost is higher (median 76k, worst 268k: wide open scenes
+scroll more of the ring), with 8 far calls a frame.  A 256-wide map's row address
+is the row itself (`maprow`, `maprow5` take MAPLW 7 or 8).  The other outdoor main
+levels need 13-14K of tiles and do not fit bank 5 as it stands.
+
 ## Known differences from the Master
 
 21 visible rows against 30 (84 game px: the world's in-range decisions follow

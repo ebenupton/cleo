@@ -207,8 +207,7 @@ Current file: src/main.s
 000000r 2               ;   7  the logic, the game loop, the level's tables, the display driver, the
 000000r 2               ;      interrupt's work, the sound and the music, the HUD
 000000r 2               ; ============================================================================
-000000r 2               LEVEL_IDX = 2                       ; the level on the disc: index 2 is L1B, the main
-000000r 2                                                   ; level of world 1 (see game.s: file = FI_L0A+(i^1)*2)
+000000r 2               ; LEVEL_IDX is in assets.inc: the level tools/assets.py packed (build.sh LEVEL="lv sub")
 000000r 2               VSPEG     = 3                       ; vsyncs a rendered frame, as the Master: the median
 000000r 2                                                   ; frame is 70k cycles, the 90th percentile 111k
 000000r 2               MAPSTRIDE = 1 << MAPLW              ; bytes per map row: a constant here, so the row
@@ -295,6 +294,7 @@ Current file: src/main.s
 000000r 3               SPR_BAR = 0
 000000r 3               SPR_DIGITS = digits_art
 000000r 3               NOBJS = 126
+000000r 3               LEVEL_IDX = 2
 000000r 3               SPR6_MIRROR = 0
 000000r 3               SPR4_COPY = 0
 000000r 3               STARTX = 29
@@ -4400,7 +4400,7 @@ Current file: src/main.s
 000000r 2               ; ============================================================================
 000000r 2               ; A = tile row -> mapptr = address of that map row
 000000r 2                 .if MODELB
-000000r 2                       .assert MAPLW = 7, error, "maprow assumes 128-tile rows"
+000000r 2                   .if MAPLW = 7
 000000r 2  4A           maprow: lsr                         ; row * 128: the row's low bit is the low byte's top
 000001r 2  8D DA 00             sta mapptr+1
 000004r 2  A9 00                lda #0
@@ -4411,6 +4411,16 @@ Current file: src/main.s
 00000Er 2  69 rr                adc #>LV_MAP
 000010r 2  8D DA 00             sta mapptr+1
 000013r 2  60                   rts
+000014r 2                   .elseif MAPLW = 8
+000014r 2               maprow: clc                         ; row * 256: the row is the high byte
+000014r 2                       adc #>LV_MAP
+000014r 2                       sta mapptr+1
+000014r 2                       lda #0
+000014r 2                       sta mapptr
+000014r 2                       rts
+000014r 2                   .else
+000014r 2                       .error "maprow: a map is 128 or 256 tiles wide"
+000014r 2                   .endif
 000014r 2                 .else
 000014r 2               maprow: tay
 000014r 2                       lda #BANK_MAP
@@ -8705,7 +8715,7 @@ Current file: src/main.s
 000089r 2               ; (MAPSTRIDE is a constant here, so there are no row tables) and the strip copy is
 000089r 2               ; the one bank switch a tile row costs.
 000089r 2               maprow5:                            ; A = tile row -> ptr = LV_MAP + row*MAPSTRIDE + rc_tx0
-000089r 2                       .assert MAPLW = 7, error, "maprow5 assumes 128-tile rows"
+000089r 2                 .if MAPLW = 7
 000089r 2  4A                   lsr                         ; row * 128: the row's low bit is the low byte's top
 00008Ar 2  85 rr                sta ptr+1
 00008Cr 2  A9 00                lda #0
@@ -8718,6 +8728,16 @@ Current file: src/main.s
 000097r 2  69 rr                adc #>LV_MAP
 000099r 2  85 rr                sta ptr+1
 00009Br 2  60                   rts
+00009Cr 2                 .elseif MAPLW = 8
+00009Cr 2                       clc                         ; row * 256: the row is the high byte
+00009Cr 2                       adc #>LV_MAP
+00009Cr 2                       sta ptr+1
+00009Cr 2                       lda rc_tx0
+00009Cr 2                       sta ptr
+00009Cr 2                       rts
+00009Cr 2                 .else
+00009Cr 2                       .error "maprow5: a map is 128 or 256 tiles wide"
+00009Cr 2                 .endif
 00009Cr 2               
 00009Cr 2               mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF
 00009Cr 2  A9 06                lda #BANK_MAP
