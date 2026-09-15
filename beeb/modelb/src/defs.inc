@@ -35,10 +35,12 @@ BANKCODE  = $8100                   ; bank 7's entry vector, where the loader ju
 ; ---------------------------------------------------------------- zero page
 ; The Master's zero page: engine.s's .zeropage ends at $A1, the logic's temps are
 ; $A8-$DE.  These fill the gaps.  $F4 is the MOS's ROMSEL copy: nothing past $EF.
-NSPR     = $A2                      ; (main RAM tables on the Master: low RAM is short)
-BARDIRTY = $A3
-BARBG    = $A4
-SFXREQ   = $A5
+; just above the logic's persistent zero page (ca65 allocates it up to camoff); the
+; guard in main.s checks the logic has not grown into these
+NSPR     = $A3                      ; (main RAM tables on the Master: low RAM is short)
+BARDIRTY = $A4
+BARBG    = $A5
+SFXREQ   = $A6
 mtmp     = $DF                      ; cpu.inc's scratch (inca/deca/bitimm/ldazy)
 ringbhi  = $E0                      ; the buffer being drawn: ring base high byte,
 ringehi  = $E1                      ;   ring end high byte (ringup's fold test),

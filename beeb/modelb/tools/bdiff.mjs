@@ -41,7 +41,6 @@ function state(cpu, A, objn) {
   for (const n of zp) st[n] = sizes[n] === 2 ? r16(A[n]) : cpu.readmem(A[n]);
   bank(cpu, 7, () => {
     for (let k = 0; k < 16; k++) { const arr = []; for (let i = 0; i < NOBJ; i++) arr.push(cpu.readmem(A.LV_OBJST + k * objn + i)); st["O" + k] = arr.join(","); }
-    st.NSPR = cpu.readmem(A.NSPR !== undefined ? A.NSPR : 0xa2);
   });
   return st;
 }

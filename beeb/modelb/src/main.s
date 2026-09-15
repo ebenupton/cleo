@@ -14,3 +14,5 @@
         .include "display.s"
         .include "banks.s"
         .include "init.s"
+
+.assert camoff < NSPR, error, "logic zp grew into the Model B engine equates: raise NSPR/BARDIRTY/BARBG/SFXREQ in defs.inc"
