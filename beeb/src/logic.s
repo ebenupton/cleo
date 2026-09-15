@@ -2047,9 +2047,6 @@ RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, eac
         .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
         .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
         .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
-        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
-        .byte 105, 147, 113, 152        ; 32: Cleo      <-23, 19, <-15, 24
-        .byte 111, 144, 118, 143        ; 36: boomerang <-17, 16, <-10, 15
         .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
         .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
         .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
@@ -2058,6 +2055,12 @@ RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, eac
         .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
         .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
         .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
+        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
+        ; (These sat at 32/36 for a while, which pushed every quad after them along by
+        ; eight without moving their callers: the bat read Cleo's band, the vanishing
+        ; platforms never saw her feet, and the spike and powerup boxes were wrong.)
+        .byte 105, 147, 113, 152        ; 64: Cleo      <-23, 19, <-15, 24
+        .byte 111, 144, 118, 143        ; 68: boomerang <-17, 16, <-10, 15
         ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
         ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
         .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
@@ -2160,7 +2163,7 @@ boxbase: .byte 103, 109
 star_safe:
         lda O_EH,y
         bne @no
-        ldx #32
+        ldx #64
         jsr inrange
         bcs @no
         lda bactive
@@ -2168,7 +2171,7 @@ star_safe:
         jsr boomrel
         mov16 rx, sx
         mov16 ry, sy
-        ldx #36
+        ldx #68
         jsr inrange
         bcs @no
 @yes:   lda q1                      ; both ways in are a bcs that was not taken,
@@ -2433,8 +2436,9 @@ ob_rsnake:
         ; and costs 18 frames of 300 on L7.
         lda fa
         eor #$80                    ; bias the signed byte so the compare can be unsigned
-        cmp #112                    ; -16 -> 112
-        bcc @nowarm
+        cmp #113                    ; -15 -> 113: at -16 the rise is +4 and the tall
+        bcc @nowarm                 ; frame's tail shows 4 px under the basket; at -15
+                                    ; it is 0 and the snake is flush with its bottom
 @calc:  lda fa
         bpl :+
         eor #$FF

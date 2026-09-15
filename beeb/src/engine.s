@@ -2436,16 +2436,12 @@ copy_partial:
 ; bar_bg: blit the static bar template (icons, labels, blank digit slots) from bank 4
 ; into the current back buffer's fixed bar rows.  Source art, not a maintained buffer.
         PLACE "CODE", "LGCCODE"     ; Model B: the bar is loaded into place by the loader
-bar_bg:                             ; and never redrawn: only the digit cache is reset                             ; runs only when a buffer needs its bar (twice per
-        ldx curbuf                  ; level).  The template buries the digits, so the
-        beq :+                      ; cached "already drawn" values for this buffer are
-        ldx #16                     ; no longer true
-:       lda #$FF
-        ldy #9
-@bci:   sta BARCACHE,x
-        inx
-        dey
-        bne @bci
+bar_bg:                             ; and never redrawn: only the digit cache is reset
+        ldx #8                      ; level).  The template buries the digits, so the
+        lda #$FF                    ; cached "already drawn" values are no longer true.
+@bci:   sta BARCACHE,x              ; (One bar, one cache: this used to index it by
+        dex                         ; curbuf and, at a level start with curbuf = 1,
+        bpl @bci                    ; reset the wrong 16 bytes and left the digits stale)
   .if MODELB
         rts
   .else
