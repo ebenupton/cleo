@@ -5,7 +5,7 @@ main.o:
     TILBSS            Offs=000000  Size=0004AF  Align=00001  Fill=0000
     LGCBSS            Offs=000000  Size=000B05  Align=00001  Fill=0000
     LOWBSS            Offs=000000  Size=0000A9  Align=00001  Fill=0000
-    TILCODE           Offs=000000  Size=000CC8  Align=00001  Fill=0000
+    TILCODE           Offs=000000  Size=000CF0  Align=00001  Fill=0000
     LGCLO             Offs=000000  Size=00007B  Align=00001  Fill=0000
     SPR4CODE          Offs=000000  Size=000407  Align=00001  Fill=0000
     SPR6CODE          Offs=000000  Size=000290  Align=00001  Fill=0000
@@ -44,7 +44,7 @@ COMMON7               008000  0080FF  000100  00001
 MAPLO                 008020  008056  000037  00001
 SPR4HOLE              008020  0082FF  0002E0  00001
 LGCENT                008100  008117  000018  00001
-TILCODE               008100  008DC7  000CC8  00001
+TILCODE               008100  008DEF  000CF0  00001
 LGCLO                 008120  00819A  00007B  00001
 SPR6HOLE              008150  0082FB  0001AC  00001
 LGCDATA               008200  0091D3  000FD4  00001

@@ -2379,19 +2379,35 @@ copy_partial:
   .endif
         sta ptr+1
         ; Y is the dest line, 0..7-wfine, and the source line is Y + wfine through the
-        ; offset sp.  (This was an unrolled copy entered at the pair for this wfine;
-        ; the loop is 40 bytes smaller and costs ~20 cycles a char on the frames that
-        ; recompose the whole row.)
-        lda #7
-        sec
-        sbc wfine
-        sta tmp3                    ; the last dest line
+        ; offset sp: enter the unrolled copy at the pair for this wfine.  (A loop here
+        ; is 40 bytes smaller and ~1% of a frame slower: every frame with vertical
+        ; movement recomposes all 80 columns.)
+        ldx wfine
+        lda @ftab-2,x
+        sta @fjmp+1
+        lda @ftab-1,x
+        sta @fjmp+2
         ldx cnt                     ; char counter in X: dex/beq is 3 cycles cheaper
-@fchar: ldy tmp3
-@fline: lda (sp),y
+@fjmp:  jmp @g4
+@ftab:  .word @g4, @g2, @g0         ; wfine 2: six lines, 4: four, 6: two
+@g4:    ldy #5
+        lda (sp),y
         sta (ptr),y
         dey
-        bpl @fline
+        lda (sp),y
+        sta (ptr),y
+@g2:    ldy #3
+        lda (sp),y
+        sta (ptr),y
+        dey
+        lda (sp),y
+        sta (ptr),y
+@g0:    ldy #1
+        lda (sp),y
+        sta (ptr),y
+        dey
+        lda (sp),y
+        sta (ptr),y
         ; next char, both with the ring fold on the page crossing: the composed row
         ; can straddle the ring end like any other row
         spnext
@@ -2401,12 +2417,12 @@ copy_partial:
         clc
         adc #8
         sta ptr
-        bcc @fchar
+        bcc @fjmp
         lda ptr+1
         inca
         ringup ptr
         sta ptr+1
-        bra @fchar
+        bra @fjmp
 @done:  rts
 
 ; ============================================================================
