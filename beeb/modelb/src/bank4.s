@@ -510,17 +510,9 @@ drawsprite:
         lsr
         lsr
         sta sp_r0                   ; sta sets no flags: Z still from the third lsr
-        bne @nopart
-        ldx curbuf                  ; touches the window's top row (see drawrect)
-        lda sp_c0
-        cmp PART_LO,x
-        bcs :+
-        sta PART_LO,x
-:       lda sp_c1
-        cmp PART_HI,x
-        bcc @nopart
-        sta PART_HI,x
-@nopart:
+        bne @nopart                 ; (the Master tracks which columns of the window's
+@nopart:                            ; top row a sprite touched, to recompose only those;
+                                    ; here copy_partial redoes the row either way)
         ; ---- record rect in current sprite record
         ldy #5
         lda wcx

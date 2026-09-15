@@ -32,7 +32,6 @@ SECIDX:   .res 1
 DISPSECT: .res 1
 NEXTSECT: .res 1
 keys:     .res 1
-frame:    .res 1
 fc_a:     .res 1                    ; A across a far call
 
 crtcbm:   .res 2                    ; crtcb - RINGCHARS: the mirror redirect
@@ -46,6 +45,12 @@ MAPBUF:   .res 40                   ; a strip of map, fetched from bank 6 in one
 tp2:      .res 2                    ; the tile's second char row, when both are drawn
 jv:       .res 2                    ; jmpx vector (6502 has no jmp (abs,x))
 mrow:     .res 1                    ; the map char row in the ring's last slot row
+; ---- the renderer's scratch, and the logic's temps on top of it ----------------
+; None of this is live between frames: the tile blitter's rectangle, the sprite
+; blitter's state and the two destination pointers are all set up and consumed
+; inside one call.  The logic runs before any of it, so its transient temps (the
+; $A8..$DE block in the Master) are laid over the same bytes.
+LTMP0:
 dt_cx:    .res 1                    ; draw_maprect: chars across, char rows down
 dt_ncx:   .res 1
 dt_cy:    .res 1
@@ -99,23 +104,44 @@ mptr:     .res 2
 mtab:     .res 2
 rp:       .res 2
 spi:      .res 1
-PART_LO:  .res 2
-PART_HI:  .res 2
+LTMP1:
+        .assert LTMP1 - LTMP0 >= 56, error, "the logic's temps do not fit over the renderer's scratch"
 
-; the player and the camera
-px:       .res 2
-py:       .res 2
-vy:       .res 2
-dx:       .res 1
-dy:       .res 1
-facing:   .res 1
-onground: .res 1
-anim:     .res 1
-t16:      .res 2
-ga_x:     .res 1                    ; ground_at's working values
-ga_tx:    .res 1
-ga_ty:    .res 1
-ga_row:   .res 1
-ga_k:     .res 1
-ga_py:    .res 1                    ; the y ground_at starts looking from
-floor:    .res 1
+; ---- the logic's transient temps, over the scratch above (see logicm.s) --------
+ox      = LTMP0+0  
+oy      = LTMP0+2  
+fa      = LTMP0+4  
+fb      = LTMP0+6  
+fc      = LTMP0+8  
+fd      = LTMP0+10 
+fe      = LTMP0+12 
+rx      = LTMP0+14 
+ry      = LTMP0+16 
+sx      = LTMP0+18 
+sy      = LTMP0+20 
+qx      = LTMP0+22 
+qy      = LTMP0+24 
+alt     = LTMP0+26 
+q1      = LTMP0+27 
+q2      = LTMP0+28 
+q3      = LTMP0+29 
+q4      = LTMP0+30 
+q5      = LTMP0+31 
+q6      = LTMP0+32 
+obj     = LTMP0+33 
+gx      = LTMP0+34 
+gy      = LTMP0+35 
+grow    = LTMP0+54                    ; bucket walk: gy << gridsh
+gx0     = LTMP0+36 
+gx1     = LTMP0+37 
+gy1     = LTMP0+38 
+bent    = LTMP0+39 
+otype   = LTMP0+40 
+t16     = LTMP0+41                      ; 2 bytes
+t16b    = LTMP0+43                      ; 2 bytes
+dpx     = LTMP0+45                      ; 2 bytes: player step count etc
+hx      = LTMP0+47                      ; 2 bytes: rx used for hit direction
+mapptr  = LTMP0+49                      ; 2 bytes
+q1x     = LTMP0+51 
+rise    = LTMP0+52                      ; 2 bytes
+

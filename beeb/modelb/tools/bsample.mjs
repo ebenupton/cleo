@@ -34,7 +34,7 @@ const labOf = (pc, bank) => {
   let best = null; for (const [a, n] of list) if (a <= pc && (!best || a > best[0])) best = [a, n];
   return (pc < 0x8000 ? "low:" : "b" + bank + ":") + (best ? best[1] : pc.toString(16));
 };
-s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(13_000_000);
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(24_000_000);
 { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60); cpu.writemem(0xfe30, was); }
 const hist = {};
 let n = 0;

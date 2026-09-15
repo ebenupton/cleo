@@ -10,7 +10,7 @@ await s.initialise(); await s.boot(30);
 s.loadDisc(path.resolve("build/cleob.ssd"));
 const cpu = s._machine.processor;
 const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
-s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(13_000_000);
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(24_000_000);
 { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60); cpu.writemem(0xfe30, was); }
 const tiles = readFileSync("build/tiles.bin"), mp = readFileSync("build/map.bin");
 const r16 = (a) => cpu.readmem(a) | (cpu.readmem(a + 1) << 8);
@@ -34,10 +34,12 @@ cpu.debugInstruction.add((p) => p === stopAt && cpu.readmem(0xf4) === 7);
 // the ring is checked at pre_spr, where it is pure map, and the mirror at wait_flip.
 const checkMirror = () => { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7);
   const base = cpu.readmem(lab.curbuf) ? 0x4680 : 0x0a80, wcx = r16(lab.wcx);
-  let mbad = 0; const mb = base - 640, last = base + 1760 * 8;
+  if (wcx === 0) { cpu.writemem(0xfe30, was); return 0; }   // no row straddles: the
+  let mbad = 0, mc = []; const mb = base - 640, last = base + 1760 * 8;  // mirror is not read
   for (let c = wcx; c < 80; c++) for (let k = 0; k < 8; k++)
-    if (cpu.readmem(mb + c * 8 + k) !== cpu.readmem(last + c * 8 + k)) { mbad++; break; }
-  cpu.writemem(0xfe30, was); return mbad; };
+    if (cpu.readmem(mb + c * 8 + k) !== cpu.readmem(last + c * 8 + k)) { mbad++; mc.push(c); break; }
+  cpu.writemem(0xfe30, was); lastmc = mc; return mbad; };
+let lastmc = [];
 // a repeatable pseudo-random walk, so a long run visits positions a fixed sequence
 // never reaches; the seed is argv[3]
 let rng = (parseInt(process.argv[3] ?? "1") >>> 0) || 1;
@@ -62,7 +64,7 @@ for (let f = 0; f < frames; f++) {
     stopAt = lab.wait_flip;
     for (let i = 0; i < 400; i++) { await s.runFor(2000); if (cpu.pc === stopAt && cpu.readmem(0xf4) === 7) break; }
     r.mbad = checkMirror();
-    if (r.bad || r.mbad) { fails++; console.log(`frame ${f}: ${JSON.stringify(r)}`); }
+    if (r.bad || r.mbad) { fails++; console.log(`frame ${f}: ${JSON.stringify(r)} mchars=${lastmc.slice(0,10)} wcx=${r.wcx} buf=${r.curbuf}`); }
   }
 }
 console.log(fails ? `${fails} checks failed` : `clean over ${frames} frames`);

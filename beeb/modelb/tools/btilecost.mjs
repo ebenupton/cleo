@@ -8,7 +8,7 @@ await s.initialise(); await s.boot(30);
 s.loadDisc(path.resolve("build/cleob.ssd"));
 const cpu = s._machine.processor;
 const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
-s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(13_000_000);
+s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(24_000_000);
 { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60); cpu.writemem(0xfe30, was); }
 const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
 let tiles = 0, tcyc = 0, tstart = -1, frames = 0, sprites = 0, scyc = 0, sstart = -1, strips = 0;

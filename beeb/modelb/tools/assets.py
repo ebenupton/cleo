@@ -65,7 +65,7 @@ hdr = bytearray([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L
 for cid in [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]:
     o = m.compact[cid] if cid < len(m.compact) else -1
     hdr.append(local.get(o, EMPTY))
-hdr = hdr.ljust(32, b'\0')
+hdr = hdr.ljust(256, b'\0')     # the logic indexes LV_OBJS with <LV_OBJS = 0
 
 objs = bytearray()
 for (t, x, y, extra) in L['objs']:
@@ -79,19 +79,25 @@ for (t, x, y, extra) in L['objs']:
     objs += bytes([t, x, y] + e)
 objs = objs.ljust(256, b'\0')
 
+# The altitude class is the original's, whatever the tile looks like: tile_solid in
+# convert.py means "one flat colour, fill it instead of copying it", which is a
+# rendering fact and says nothing about what Cleo can stand on.  Reading it as
+# "solid ground" walled her in and left black indoor floors to fall through.
+NOGROUND = next(i for r, i in m.classes.items() if bytes(r) == b'\x80' * 8)
 attr = bytearray(256)
-acls = bytearray(256)
+acls = bytearray([NOGROUND]) * 256
 for o, i in local.items():
     c = m.orig2compact[o]
     a = 3
     if c in m.push_tiles: a = m.push_tiles[c] + 3
     if c in m.kill_tiles: a |= 0x80
     attr[i] = a
-    acls[i] = 0 if c in m.tile_solid else m.alt_class[c]
+    acls[i] = m.alt_class[c]
 attr[EMPTY] = 3
-acls[EMPTY] = 0
+acls[EMPTY] = NOGROUND
 open(os.path.join(OUT, 'level.bin'), 'wb').write(bytes(hdr + objs + attr + acls))
 open(os.path.join(OUT, 'alt.bin'), 'wb').write(bytes(m.altfile))
+open(os.path.join(OUT, 'digits.bin'), 'wb').write(bytes(m.digits))   # the HUD's 0..9
 
 # ---------------------------------------------------------------- sprites
 TYPE_IDS = m.TYPE_IDS

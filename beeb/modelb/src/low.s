@@ -67,14 +67,26 @@ mirdirty:
 :       rts
 @out:   rts
 
-; ---------------------------------------------------------------- map peek
-; The logic reads single map bytes with this: ptr/Y address the map in bank 6 and
-; the routine is in main RAM, so only the data is far away.  31 cycles.
-mapbyte:
+; ---------------------------------------------------------------- the map
+; The logic is in bank 7 and the map in bank 6, so these three live in main RAM and
+; leave bank 7 selected, exactly as the Master's do.  maprow needs no table here: the
+; map is 32 tiles wide and page aligned, so the row address is two shifts.
+mapbyte:                            ; A = (mapptr),y ; Y preserved
         lda #BANK_MAP
         sta ROMSEL_CPY
         sta ROMSEL
-        lda (w16b),y
+        lda (mapptr),y
+        jmp pagelogic
+
+mapput:                             ; store A at (mapptr),y ; Y preserved
+        pha
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
+        pla
+        sta (mapptr),y
+        ; fall through
+pagelogic:                          ; put the logic's bank back, A and Y untouched
         ldx #BANK_LGC
         stx ROMSEL_CPY
         stx ROMSEL

@@ -56,22 +56,39 @@ init:
         sta bptx+1
         sta bpty
         sta bpty+1
-        sta onground
-        sta facing
-        sta anim
-        sta vy
-        sta vy+1
-        jsr fetch_objs
-        lda #<(STARTX*8)            ; Cleo starts where the level says
-        sta px
-        lda #>(STARTX*8)
-        sta px+1
-        lda #<(STARTY*8)
-        sta py
-        lda #>(STARTY*8)
-        sta py+1
-        jsr camera
-        jsr win_px
+        sta NDIRT
+        sta BINOK
+        sta score
+        sta score+1
+        sta hiscore
+        sta hiscore+1
+        sta exiting
+        sta pausing
+        lda #$2B                    ; the random seed the Master starts with
+        sta seed
+        lda #$1F
+        sta seed+1
+        lda #3                      ; a new game: three lives and full health
+        sta lives
+        sta health
+        lda #LEVEL
+        sta level
+        jsr level_init              ; the objects, the collision grid and the player
+        lda px                      ; and the window on her, as game_frame will
+        sec
+        sbc #80
+        sta wx
+        lda px+1
+        sbc #0
+        sta wx+1
+        lda py
+        sec
+        sbc #VISLINES/4
+        sta wy
+        lda py+1
+        sbc #0
+        sta wy+1
+        jsr m_clamp_window
         jsr calc_ring
         lda #0
         sta curbuf
@@ -84,6 +101,8 @@ init:
         jsr scroll_validate
         jsr mirror_copy
         farjsr F_BARFLUSH
+        lda #1
+        sta BARDIRTY
         lda #0
         sta curbuf
         sta DISPSECT
@@ -106,15 +125,17 @@ init:
         jsr take_over
         ; ---------------------------------------------------------------- loop
 frame_top:
-        inc frame
-        jsr player_step
-        jsr camera
-        jsr win_px
-        jsr calc_ring
-        jsr scroll_validate
+        jsr scan_keys
+        jsr game_frame              ; the whole game: the camera, every object, Cleo,
+        jsr calc_ring               ; and the sprite list for this frame
+        lda BARDIRTY                ; the HUD, when a digit in it has changed
+        beq :+
+        jsr redraw_hud
+        stz BARDIRTY
+:       jsr scroll_validate
+        jsr dirt_flush              ; tiles the logic changed under the sprites
 pre_erase:
         farjsr F_ERASE              ; put tiles back where this buffer's sprites were
-        jsr queue_sprites
 pre_spr:                            ; the ring is pure map here: scrolled and erased,
         farjsr F_DRAWSPR            ; before a single sprite has gone down
 pre_part:
@@ -217,10 +238,97 @@ init_far:
         .byte BANK_TIL, <(bar_draw-1), >(bar_draw-1)
         .byte BANK_SPR, <(addsprite-1), >(addsprite-1)
         .byte BANK_SPR, <(init_masks-1), >(init_masks-1)
-        .byte BANK_MAP, <(alt_row-1), >(alt_row-1)
+        .byte BANK_LGC, <(vsync_tick-1), >(vsync_tick-1)    ; F_SPARE13, was the alt row
         .byte BANK_MAP, <(map_copy-1), >(map_copy-1)
         .byte BANK_TIL, <(tile_init-1), >(tile_init-1)
         .byte BANK_MAP, <(map_rect-1), >(map_rect-1)
+
+; ---------------------------------------------------------------- scrolling
+; The ring holds the window's rows wherever the map says they go, so what a move
+; costs is the strip that has just come into view.
+; scroll_validate: make every char of the window valid in this buffer, redrawing
+; only what the window has moved over since this buffer was last drawn.  The window
+; is 80 chars by BUFROWS char rows, and what is tracked per buffer is its char
+; origin: a move of one char needs new chars in either axis, whatever the tiles do.
+scroll_validate:
+        jmp @sv
+@tofull:jmp @full                   ; within reach of the tests below
+@sv:    ldx curbuf
+        lda bvalid,x
+        bne @inc
+        lda #1                      ; this buffer has never been drawn
+        sta bvalid,x
+        jmp @full
+@inc:   lda wcy                     ; ---- vertical, in char rows
+        sec
+        sbc bpty,x
+        beq @dx
+        bmi @up
+        cmp #BUFROWS
+        bcs @tofull
+        sta dt_ncy                  ; new rows are bpty+BUFROWS .. wcy+BUFROWS-1
+        lda bpty,x
+        clc
+        adc #BUFROWS
+        sta dt_cy
+        bra @vdraw
+@up:    eor #$FF
+        clc
+        adc #1                      ; new rows are wcy .. bpty-1
+        cmp #BUFROWS
+        bcs @tofull
+        sta dt_ncy
+        lda wcy
+        sta dt_cy
+@vdraw: lda wcx
+        sta dt_cx
+        lda #ROWCHARS
+        sta dt_ncx
+        farjsr F_DRAWRECT
+@dx:    ldx curbuf
+        lda wcx                     ; ---- horizontal, in chars
+        sec
+        sbc bptx,x
+        beq @save
+        bmi @left
+        cmp #ROWCHARS
+        bcs @tofull2
+        sta dt_ncx                  ; new chars are bptx+80 .. wcx+79
+        lda bptx,x
+        clc
+        adc #ROWCHARS
+        sta dt_cx
+        bra @hdraw
+@left:  eor #$FF
+        clc
+        adc #1                      ; new chars are wcx .. bptx-1
+        cmp #ROWCHARS
+        bcs @tofull2
+        sta dt_ncx
+        lda wcx
+        sta dt_cx
+@hdraw: lda wcy
+        sta dt_cy
+        lda #BUFROWS
+        sta dt_ncy
+        farjsr F_DRAWRECT
+        bra @save
+@tofull2:                           ; in reach of the horizontal tests above
+@full:  lda wcx
+        sta dt_cx
+        lda #ROWCHARS
+        sta dt_ncx
+        lda wcy
+        sta dt_cy
+        lda #BUFROWS
+        sta dt_ncy
+        farjsr F_DRAWRECT
+@save:  ldx curbuf
+        lda wcx
+        sta bptx,x
+        lda wcy
+        sta bpty,x
+        rts
 
 ; wx/wy from the char window: a char is two game pixels across and a char row is
 ; four down, with wfine the two-scanline remainder.
