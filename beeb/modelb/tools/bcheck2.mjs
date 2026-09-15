@@ -10,6 +10,7 @@ const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const s = new MachineSession("B-DFS1.2");
 await s.initialise(); await s.boot(30);
 s.loadDisc(path.resolve("build/cleob.ssd"));
+const MAXSPR = parseInt(/MAXSPRDEF = (\d+)/.exec((await import("node:fs")).readFileSync("build/assets.inc", "utf8"))[1]);
 const cpu = s._machine.processor;
 const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
 const inbank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
@@ -33,7 +34,7 @@ const st = inbank(5, () => ({ wcx: r16(lab.wcx), wcy: cpu.readmem(lab.wcy), wfin
   px: r16(lab.px), py: r16(lab.py), frame: cpu.readmem(lab.frame), wcxm: cpu.readmem(0xe5), mrow: cpu.readmem(0xe4),
   // the records of the buffer being drawn, with KEEP: a kept sprite's pixels stay in the ring
   kept: (() => { const cb = cpu.readmem(lab.curbuf), n = cpu.readmem(lab.RECCNT + cb), out = [];
-    for (let i = 0; i < n; i++) { const r = lab.SPRREC + (cb * 24 + i) * 10;
+    for (let i = 0; i < n; i++) { const r = lab.SPRREC + (cb * MAXSPR + i) * 10;
       out.push({ keep: cpu.readmem(lab.KEEP + i), id: cpu.readmem(r), cx: r16(r + 5), cy: cpu.readmem(r + 7), w: cpu.readmem(r + 8), h: cpu.readmem(r + 9) & 0x7f }); }
     return out; })() }));
 writeFileSync("build/state.json", JSON.stringify(st));

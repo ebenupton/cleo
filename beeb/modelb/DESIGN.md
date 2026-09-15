@@ -81,8 +81,10 @@ next instruction is read from the new bank -- so every switch runs from main RAM
   the mirror are built here; `bar_bg` only resets the digit cache.
 - `init_maprows`, `music_init` are nothing; `MUSIC_TAB` is the data; `t_`/`m_`
   bridges are names, with stubs for the menus the one-level disc has no use for.
-- tables: MAXSPR/MAXREC 24 (the Master's 32), OBJN 126 (149), the level's tables
-  and the object arrays laid out as the Master's.
+- tables: MAXSPR/MAXREC and BINMAX are the level's own bounds, computed by the
+  packer from the objects' grid cells and the walk rectangle over every camera
+  position (L1B: 24 sprites a step, 18 in a bin list; L0B: 19 and 12); OBJN 126
+  (149); the level's tables and the object arrays laid out as the Master's.
 
 ## The 6502 spellings
 

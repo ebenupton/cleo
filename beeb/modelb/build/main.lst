@@ -295,6 +295,8 @@ Current file: src/main.s
 000000r 3               SPR_DIGITS = digits_art
 000000r 3               NOBJS = 126
 000000r 3               LEVEL_IDX = 2
+000000r 3               MAXSPRDEF = 24
+000000r 3               BINMAXDEF = 18
 000000r 3               SPR6_MIRROR = 0
 000000r 3               SPR4_COPY = 0
 000000r 3               STARTX = 29
@@ -461,13 +463,14 @@ Current file: src/main.s
 000000r 2                 .endif
 000000r 2               WINPX     = ROWCHARS*2            ; window width in pixels
 000000r 2               VISLINES  = VISROWS*8
+000000r 2                 .if MODELB                      ; the level's own bounds, computed by the packer
+000000r 2               BINMAX    = BINMAXDEF             ; from the objects' grid cells and the walk rectangle
+000000r 2               MAXREC    = MAXSPRDEF             ; (assets.inc)
+000000r 2               MAXSPR    = MAXSPRDEF
+000000r 2                 .else
 000000r 2               BINMAX    = 40                    ; cached object list: 24-32 objects a frame is the most
 000000r 2                                                 ; seen across the levels, and the walk falls back to
 000000r 2                                                 ; processing directly if it ever overflows
-000000r 2                 .if MODELB
-000000r 2               MAXREC    = 24                    ; the records are bank RAM and the list low RAM,
-000000r 2               MAXSPR    = 24                    ; both short; 24 is more than a frame has been seen to queue
-000000r 2                 .else
 000000r 2               MAXREC    = 32
 000000r 2               MAXSPR    = 32
 000000r 2                 .endif
@@ -5788,14 +5791,14 @@ Current file: src/main.s
 0007DEr 2  B9 rr rr             lda O_TYPE,y
 0007E1r 2  D0 11                bne @apo                    ; that, so a cached step and a rebuilt one take the
 0007E3r 2  AE rr rr             ldx NSTARL                  ; same path through the handlers.  Stars go in their
-0007E6r 2  E0 28                cpx #BINMAX                 ; own list: the walk then reaches ob_star without
+0007E6r 2  E0 12                cpx #BINMAX                 ; own list: the walk then reaches ob_star without
 0007E8r 2  B0 1B                bcs @full                   ; reading the type or going through the table.
 0007EAr 2  98                   tya
 0007EBr 2  9D rr rr             sta LV_BINSTAR,x
 0007EEr 2  EE rr rr             inc NSTARL
 0007F1r 2  4C rr rr             bra @skip
 0007F4r 2  AE rr rr     @apo:   ldx NOTHL
-0007F7r 2  E0 28                cpx #BINMAX
+0007F7r 2  E0 12                cpx #BINMAX
 0007F9r 2  B0 0A                bcs @full
 0007FBr 2  98                   tya
 0007FCr 2  9D rr rr             sta LV_BINOTH,x
@@ -9580,21 +9583,21 @@ Current file: src/main.s
 000AE0r 2  xx xx xx xx  LV_BINSTAR: .res BINMAX
 000AE4r 2  xx xx xx xx  
 000AE8r 2  xx xx xx xx  
-000B08r 2  xx xx xx xx  LV_BINOTH:  .res BINMAX
-000B0Cr 2  xx xx xx xx  
-000B10r 2  xx xx xx xx  
-000B30r 2                       .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"
-000B30r 2  xx           title_res:  .res 1                  ; (the menus': game.s clears it)
-000B31r 2               
-000B31r 1                       .include "init.s"
-000B31r 2               ; ============================================================================
-000B31r 2               ; Start-up.  The loader leaves bank 7 paged in and jumps to $8100.  The low-RAM
-000B31r 2               ; image lives in bank 6 (the only bank with a corner free below the mask tables),
-000B31r 2               ; so the copy runs there; the rest is the Master's start (src/main.s) less the
-000B31r 2               ; disc: the tables it builds are static here (banks.s) and the bank-5 part is
-000B31r 2               ; init5.
-000B31r 2               ; ============================================================================
-000B31r 2                       .segment "LGCENT"           ; bank 7, $8100: the entry vector
+000AF2r 2  xx xx xx xx  LV_BINOTH:  .res BINMAX
+000AF6r 2  xx xx xx xx  
+000AFAr 2  xx xx xx xx  
+000B04r 2                       .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"
+000B04r 2  xx           title_res:  .res 1                  ; (the menus': game.s clears it)
+000B05r 2               
+000B05r 1                       .include "init.s"
+000B05r 2               ; ============================================================================
+000B05r 2               ; Start-up.  The loader leaves bank 7 paged in and jumps to $8100.  The low-RAM
+000B05r 2               ; image lives in bank 6 (the only bank with a corner free below the mask tables),
+000B05r 2               ; so the copy runs there; the rest is the Master's start (src/main.s) less the
+000B05r 2               ; disc: the tables it builds are static here (banks.s) and the bank-5 part is
+000B05r 2               ; init5.
+000B05r 2               ; ============================================================================
+000B05r 2                       .segment "LGCENT"           ; bank 7, $8100: the entry vector
 000000r 2                       .assert * = BANKCODE, error, "the loader jumps to BANKCODE"
 000000r 2               ; A bank cannot page itself out and carry on: the instruction after the switch is
 000000r 2               ; read from the new bank.  So the switch runs from main RAM -- the bottom of the

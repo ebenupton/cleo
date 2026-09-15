@@ -127,6 +127,41 @@ if not os.path.exists(MUS):
     os.system('python3 ' + os.path.join(BEEB, 'tools', 'midi2snd.py'))
 out('music.bin', open(MUS, 'rb').read())
 
+# ---------------------------------------------------------------- the sprite list's size
+# How many sprites one logic step can queue is a property of the level: the objects
+# whose grid cells (level_init's per-type boxes, 64 px cells) the walk rectangle
+# (game_frame: wx..wx+159, wy..wy+VISLINES/2-1) can ever cover, each type's sprites
+# (rsnake draws two), plus the player and the boomerang.  MAXSPR/MAXREC, SPRLIST,
+# the records and KEEP are sized to that bound; BINMAX to the longer of the two
+# cached lists.  The camera is clamped to the map, so every position is tried.
+VISLINES = 168                              # 21 rows (engine.s, MODELB)
+SPRITES_OF = {0: 1, 1: 1, 2: 1, 3: 2, 4: 1, 5: 1, 6: 1, 7: 1, 8: 0, 9: 1, 10: 1, 11: 0, 12: 1}
+def cellbox(t, x, y, e):                    # level_init's gx0, gx1, gy, gy1, in cells
+    m0 = lambda v: max(v, 0)
+    gx0, gx1, gy, gy1 = m0(x - 1) >> 3, x >> 3, y >> 3, (y + 1) >> 3
+    if t == 0: gy, gy1 = m0(y - 1) >> 3, y >> 3
+    elif t == 1: gx0, gx1, gy = m0(x - 2) >> 3, (x + 1) >> 3, (y + 1) >> 3; gy1 = gy
+    elif t in (2, 5, 6): gx1 = (x + e[0]) >> 3
+    elif t == 3: gy = m0(y - 4) >> 3
+    elif t == 4: gy, gx1, gy1 = m0(y - 1) >> 3, (x + e[0]) >> 3, (y + e[1]) >> 3
+    elif t == 9: gy, gy1 = m0(y - 2) >> 3, y >> 3
+    elif t == 11: gy1 = gy
+    return gx0, gx1, gy, gy1
+boxes = []
+for (t, x, y, extra) in L['objs']:
+    e = (list(extra) + [0, 0, 0])[:3]
+    boxes.append((t, cellbox(t, x, y, e)))
+maxwx, maxwy = w * 8 - 160, h * 8 - VISLINES // 2
+rects = set()
+for wx in range(0, maxwx + 1, 2):
+    for wy in range(0, maxwy + 1):
+        rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + VISLINES // 2 - 1) >> 6))
+MAXSPR, BINMAX = 0, 0
+for (rx0, rx1, ry0, ry1) in rects:
+    hit = [t for (t, (gx0, gx1, gy, gy1)) in boxes if gx0 <= rx1 and gx1 >= rx0 and gy <= ry1 and gy1 >= ry0]
+    MAXSPR = max(MAXSPR, sum(SPRITES_OF[t] for t in hit) + 2)
+    BINMAX = max(BINMAX, sum(1 for t in hit if t == 0), sum(1 for t in hit if t != 0))
+
 # ---------------------------------------------------------------- sprites
 # The ids the level can draw: Cleo and the common ones, the object types' frames,
 # and the box stars of its tile set (black indoors, cyan out) with the trampolines.
@@ -272,9 +307,11 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('SPR_BAR = 0\nSPR_DIGITS = digits_art\n')   # (no bar art: the loader puts the bar in place)
     f.write('NOBJS = %d\n' % len(L['objs']))
     f.write('LEVEL_IDX = %d\n' % (lv * 2 + sub))   # game.s: file = FI_L0A + (i eor 1) * 2
+    f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))   # the bounds above
     f.write('SPR6_MIRROR = 0\n')      # bank 6 holds no image that is drawn mirrored
     f.write('SPR4_COPY = 0\n')        # and bank 4 nothing the copy blitter draws
     f.write('STARTX = %d\nSTARTY = %d\n' % L['start'])
+print('%s: at most %d sprites a step, %d in a bin list' % (name, MAXSPR, BINMAX))
 print('%s: %d tiles (%d B), map %dx%d, %d objects, sprites %d images: bank 4 %d+%d B, bank 6 %d+%d+%d B'
       % (name, NTILES, len(tiles), w, h, len(L['objs']), len(imgs),
          len(blobs['r4']), len(blobs['h4']), len(blobs['r6']), len(blobs['h6']), len(blobs['s6'])))

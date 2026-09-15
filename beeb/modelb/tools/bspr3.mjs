@@ -7,6 +7,7 @@ const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const A = loadLabels("build/labels.txt");
 const s = new MachineSession("B-DFS1.2");
 await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleob.ssd"));
+const MAXSPR = parseInt(/MAXSPRDEF = (\d+)/.exec((await import("node:fs")).readFileSync("build/assets.inc", "utf8"))[1]);
 const cpu = s._machine.processor;
 const bank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
@@ -22,7 +23,7 @@ console.log("bactive", cpu.readmem(A.bactive), "bx", r16(A.bx), "by", r16(A.by),
 for (let i = 0; i < n; i++) { const e = A.SPRLIST + i * 5; console.log(`  id ${cpu.readmem(e)} at ${r16(e + 1)},${r16(e + 3)}`); }
 await runTo(A.frame_top, 7);
 bank(5, () => { const cb = cpu.readmem(A.curbuf) ^ 1, rc = cpu.readmem(A.RECCNT + cb); console.log("records of buffer", cb, ":", rc);
-  for (let i = 0; i < rc; i++) { const r = A.SPRREC + (cb * 24 + i) * 10; console.log(`  id ${cpu.readmem(r)} rect cx=${r16(r+5)} cy=${cpu.readmem(r+7)} w=${cpu.readmem(r+8)} h=${cpu.readmem(r+9)}`); } });
+  for (let i = 0; i < rc; i++) { const r = A.SPRREC + (cb * MAXSPR + i) * 10; console.log(`  id ${cpu.readmem(r)} rect cx=${r16(r+5)} cy=${cpu.readmem(r+7)} w=${cpu.readmem(r+8)} h=${cpu.readmem(r+9)}`); } });
 // and a screenshot of the frame after that
 await s.runFor(200000);
 { const { writeFileSync } = await import("node:fs"); const { deflateSync } = await import("node:zlib");

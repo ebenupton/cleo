@@ -167,13 +167,14 @@ CRTCBASE  = RINGBASE / 8          ; the CRTC counts characters, so the ring star
   .endif
 WINPX     = ROWCHARS*2            ; window width in pixels
 VISLINES  = VISROWS*8
+  .if MODELB                      ; the level's own bounds, computed by the packer
+BINMAX    = BINMAXDEF             ; from the objects' grid cells and the walk rectangle
+MAXREC    = MAXSPRDEF             ; (assets.inc)
+MAXSPR    = MAXSPRDEF
+  .else
 BINMAX    = 40                    ; cached object list: 24-32 objects a frame is the most
                                   ; seen across the levels, and the walk falls back to
                                   ; processing directly if it ever overflows
-  .if MODELB
-MAXREC    = 24                    ; the records are bank RAM and the list low RAM,
-MAXSPR    = 24                    ; both short; 24 is more than a frame has been seen to queue
-  .else
 MAXREC    = 32
 MAXSPR    = 32
   .endif

@@ -1,6 +1,6 @@
 al 00B486 .__LGCBSS_LOAD__
 al 00B486 .__LGCBSS_RUN__
-al 000B31 .__LGCBSS_SIZE__
+al 000B05 .__LGCBSS_SIZE__
 al 0091D4 .__LGCCODE_LOAD__
 al 0091D4 .__LGCCODE_RUN__
 al 0022B2 .__LGCCODE_SIZE__
@@ -104,7 +104,7 @@ al 00AFF2 .frame_loop
 al 00AFBE .level_loop
 al 00AFA2 .new_game
 al 00AF95 .title_loop
-al 00BFB6 .title_res
+al 00BF8A .title_res
 al 00AF7C .game_main
 al 00AF7B .@wyok
 al 00AF6F .@wy0
@@ -313,7 +313,7 @@ al 00A2CC .po_star
 al 009A28 .@rlo
 al 009A0D .@rls
 al 00A1CA .process_object
-al 00BF8E .LV_BINOTH
+al 00BF78 .LV_BINOTH
 al 0099EA .@skip
 al 00BF66 .LV_BINSTAR
 al 0099D9 .@full
