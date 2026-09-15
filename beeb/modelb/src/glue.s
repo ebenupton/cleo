@@ -19,18 +19,18 @@ scan_keys:
         lda #3
         sta VIA_ORB                 ; autoscan off: the matrix is read directly
         lda #0
-        sta tmp
+        sta isr_t1
         ldx #9                      ; down and throw as well as the walk and the jump
 @k:     lda keytab,x
         sta VIA_ORANH
         lda VIA_ORANH
         bpl :+
         lda keybits,x
-        ora tmp                     ; no tsb on a 6502
-        sta tmp
+        ora isr_t1                  ; no tsb on a 6502
+        sta isr_t1
 :       dex
         bpl @k
-        lda tmp
+        lda isr_t1
         sta keys
         rts
 keytab:  .byte $61,$19, $42,$79, $48,$39,$49, $68,$29, $62
@@ -193,6 +193,205 @@ init_maprows:
         sta maph+1
         rts
 
+; ---------------------------------------------------------------- sound
+; The Master's, unchanged: sfx steps of (latch, period hi, volume, frames) written to
+; the SN76489, ending at $FF.  It runs in the vsync interrupt, where the keyboard is
+; read too, so nothing in the frame loop can be halfway through the VIA when it
+; writes.
+sound_tick:
+        lda SFXREQ
+        beq @play
+        asl                         ; start a new effect
+        tax
+        lda sfxtab-2,x
+        sta SFXPTR
+        lda sfxtab-1,x
+        sta SFXPTR+1
+        stz SFXREQ
+        lda #1
+        sta SFXDUR
+@play:  lda SFXPTR+1
+        beq @done
+        dec SFXDUR
+        bne @done
+        ldy #0
+        lda (SFXPTR),y
+        cmp #$FF
+        beq @end
+        jsr sndwrite
+        ldy #1
+        lda (SFXPTR),y
+        jsr sndwrite
+        iny
+        lda (SFXPTR),y
+        jsr sndwrite
+        iny
+        lda (SFXPTR),y
+        sta SFXDUR
+        lda SFXPTR
+        clc
+        adc #4
+        sta SFXPTR
+        bcc @done
+        inc SFXPTR+1
+        bra @done
+@end:   stz SFXPTR+1
+        lda #$DF                    ; channel 2 off
+        jsr sndwrite
+        lda #$FF
+        jsr sndwrite
+@done:  jmp music_tick
+
+sndwrite:
+        pha
+        lda #$FF
+        sta VIA_DDRA
+        lda #$0B
+        sta VIA_ORB                 ; autoscan on, so the keyboard does not pull PA7
+        pla
+        sta VIA_ORANH
+        lda #0
+        sta VIA_ORB
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        lda #8
+        sta VIA_ORB
+        lda #$7F
+        sta VIA_DDRA
+        rts
+
+; sfx steps: byte0 = channel/period latch ($80 | ch<<5 | lo4), byte1 = period hi,
+; byte2 = volume ($90 | ch<<5 | att), byte3 = frames
+sfxtab: .word sfx_jump, sfx_star, sfx_throw, sfx_hit, sfx_kill, sfx_power, sfx_die
+sfx_jump:  .byte $C0|8, 12, $D0, 2,  $C0|4, 9, $D2, 2,  $C0|0, 7, $D4, 2,  $C0|8, 5, $D6, 3, $FF
+sfx_star:  .byte $C0|0, 4, $D0, 2,  $C0|0, 3, $D0, 3,  $C0|0, 3, $D6, 3, $FF
+sfx_throw: .byte $E0|4, 0, $F2, 2,  $E0|5, 0, $F5, 3,  $E0|5, 0, $F9, 3, $FF
+sfx_hit:   .byte $C0|0, 40, $D0, 4, $C0|0, 48, $D2, 4, $C0|0, 60, $D5, 5, $FF
+sfx_kill:  .byte $C0|0, 6, $D0, 2,  $C0|0, 9, $D1, 2,  $C0|0, 12, $D3, 3, $C0|0, 16, $D6, 3, $FF
+sfx_power: .byte $C0|0, 6, $D0, 3,  $C0|0, 5, $D0, 3,  $C0|0, 4, $D0, 3,  $C0|0, 3, $D0, 6, $FF
+sfx_die:   .byte $C0|0, 12, $D0, 6, $C0|0, 16, $D1, 6, $C0|0, 22, $D2, 8, $C0|0, 30, $D4, 10, $C0|0, 40, $D7, 12, $FF
+
+; ---------------------------------------------------------------- music
+; 144 bytes of SN76489 periods (MIDI 24..95), decoded into RAM once, then 50Hz
+; records of (frames, note0, note1, note2), frames = 0 meaning loop.  The Master's
+; player, with its bank juggling dropped: the vsync's far call has already put this
+; bank in.
+MUSIC_SEQ = MUSIC + 144
+
+music_init:
+        ldx #144
+:       lda MUSIC-1,x
+        sta music_tab-1,x
+        dex
+        bne :-
+        rts
+
+music_start:
+        lda #<MUSIC_SEQ
+        sta MUSPTR
+        lda #>MUSIC_SEQ
+        sta MUSPTR+1
+        lda #1
+        sta MUSDUR
+        stza MUSNOTE
+        stza MUSNOTE+1
+        stza MUSNOTE+2
+        sta MUSON
+        rts
+
+music_stop:
+        stz MUSON
+        lda #$9F
+        jsr sndwrite
+        lda #$BF
+        jsr sndwrite
+        lda #$DF
+        jsr sndwrite
+        lda #$FF
+        jmp sndwrite
+
+music_tick:
+        lda MUSON
+        beq @done
+        dec MUSDUR
+        bne @done
+        jsr musbyte
+        bne :+
+        lda #<MUSIC_SEQ             ; frames = 0: back to the top
+        sta MUSPTR
+        lda #>MUSIC_SEQ
+        sta MUSPTR+1
+        jsr musbyte
+:       sta MUSDUR
+        ldx #0
+@v:     jsr musbyte
+        cmp MUSNOTE,x
+        beq :+
+        sta MUSNOTE,x
+        jsr set_voice
+:       inx
+        cpx #3
+        bne @v
+@done:  rts
+
+; A = the next music byte; MUSPTR += 1.  Preserves X.  Z reflects A.
+musbyte:
+        ldaz MUSPTR
+        inc MUSPTR
+        bne :+
+        inc MUSPTR+1
+:       cmp #0
+        rts
+
+; X = voice, A = MIDI note (0 = silence)
+set_voice:
+        tay                         ; the note goes in Y before X is pushed: on a 6502
+        phx                         ; phx is txa/pha and would land on it
+        txa
+        asl
+        asl
+        asl
+        asl
+        asl
+        sta isr_t2                  ; ch << 5
+        cpy #0
+        bne @note
+        ora #$9F                    ; A is still ch<<5
+        jsr sndwrite
+        plx
+        rts
+@note:  tya
+        sec
+        sbc #24
+        asl
+        tay
+        lda music_tab,y
+        and #15
+        ora isr_t2
+        ora #$80
+        jsr sndwrite
+        lda music_tab,y
+        lsr
+        lsr
+        lsr
+        lsr
+        sta isr_t3
+        lda music_tab+1,y
+        asl
+        asl
+        asl
+        asl
+        ora isr_t3
+        jsr sndwrite
+        plx
+        rts
+
 ; ---------------------------------------------------------------- random
 m_rnd:  lsr seed+1
         ror seed
@@ -207,6 +406,7 @@ m_rnd:  lsr seed+1
 ; The logic reads these in its own bank: the map itself stays in bank 6, where the
 ; tile blitter can fetch a strip of it without leaving its own.
         .segment "LGCDATA"
+MUSIC:  .incbin "build/music.bin"       ; the period table, then the note stream
         .align 256
 LV_HDR:                                 ; header, objects, attributes, alt classes
         .incbin "build/level.bin"
@@ -226,6 +426,10 @@ LV_BOBJ:  .res OBJN+1                   ; and its chains
 LV_BNEXT: .res OBJN+1
 LV_BINSTAR: .res BINMAX                 ; the cached bin walk: stars, then the rest
 LV_BINOTH:  .res BINMAX
+MUSON:    .res 1                        ; the music player's state
+MUSDUR:   .res 1
+MUSNOTE:  .res 3
+music_tab: .res 144                     ; the periods, decoded out of the data above
 bvalid:   .res 2                        ; per buffer: has it ever been drawn, and the
 bptx:     .res 2                        ; window origin in chars it was last drawn for
 bpty:     .res 2
@@ -242,7 +446,6 @@ NSTARL:   .res 1
 NOTHL:    .res 1
 BINI:     .res 1
 BINOK:    .res 1
-SFXREQ:   .res 1
 mapw:     .res 2
 maph:     .res 2
 maplw:    .res 1

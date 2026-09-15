@@ -24,6 +24,9 @@ ringbase: .res 2                    ; and its base
 
 irq_x:    .res 1
 irq_y:    .res 1
+isr_t1:   .res 1                    ; scratch for what runs in the interrupt: the key
+isr_t2:   .res 1                    ; scan and the sound player must not touch tmp*,
+isr_t3:   .res 1                    ; which the blitter they interrupted is using
 vsyncs:   .res 1
 flipreq:  .res 1
 flipvs:   .res 1
@@ -32,6 +35,10 @@ SECIDX:   .res 1
 DISPSECT: .res 1
 NEXTSECT: .res 1
 keys:     .res 1
+SFXREQ:   .res 1                    ; the logic asks for an effect; the vsync plays it
+SFXPTR:   .res 2                    ; where it has got to, and how long this step lasts
+SFXDUR:   .res 1
+MUSPTR:   .res 2                    ; the music's place in the stream
 fc_a:     .res 1                    ; A across a far call
 
 crtcbm:   .res 2                    ; crtcb - RINGCHARS: the mirror redirect

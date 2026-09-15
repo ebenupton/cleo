@@ -78,6 +78,8 @@ init:
         sta health
         lda #LEVEL
         sta level
+        jsr music_init              ; the periods into RAM, then start the tune
+        jsr music_start
         jsr level_init              ; the objects, the collision grid and the player
         lda px                      ; and the window on her, as game_frame will
         sec
@@ -130,7 +132,6 @@ init:
         jsr take_over
         ; ---------------------------------------------------------------- loop
 frame_top:
-        jsr scan_keys
         stz NSPR                    ; two logic steps a rendered frame, as the Master
         jsr game_frame              ; does: only the second one's sprite list is drawn
         lda exiting
@@ -213,7 +214,9 @@ vsync_tick:
         adc #QROWS-1-QVSYNC
         and #$7F
         sta CRTC_DAT
-        inc vsyncs
+        jsr scan_keys               ; the keyboard and the sound are the interrupt's,
+        jsr sound_tick              ; as they are on the Master: 50Hz, and nothing in
+        inc vsyncs                  ; the frame loop is halfway through the VIA                  ; the frame loop is halfway through the VIA
         lda flipreq
         beq @noflip
         lda vsyncs

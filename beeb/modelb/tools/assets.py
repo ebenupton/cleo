@@ -110,6 +110,12 @@ open(os.path.join(OUT, 'level.bin'), 'wb').write(bytes(hdr + objs + attr + acls)
 open(os.path.join(OUT, 'alt.bin'), 'wb').write(bytes(m.altfile))
 open(os.path.join(OUT, 'digits.bin'), 'wb').write(bytes(m.digits))   # the HUD's 0..9
 
+# the music: 144 bytes of SN76489 periods then 50Hz note records, from midi2snd.py
+MUS = os.path.join(BEEB, 'build', 'MUSIC')
+if not os.path.exists(MUS):
+    os.system('python3 ' + os.path.join(BEEB, 'tools', 'midi2snd.py'))
+open(os.path.join(OUT, 'music.bin'), 'wb').write(open(MUS, 'rb').read())
+
 # ---------------------------------------------------------------- sprites
 TYPE_IDS = m.TYPE_IDS
 types = sorted(set(t for (t, x, y, e) in L['objs']))
