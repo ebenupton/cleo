@@ -35,7 +35,12 @@ keytab:  .byte $61,$19, $42,$79, $48,$39,$49
 keybits: .byte K_LEFT,K_LEFT, K_RIGHT,K_RIGHT, K_UP,K_UP,K_FIRE
 
 ; ---------------------------------------------------------------- the player
-; px, py are her feet in game pixels; vy is 1/256 px a step, as on the Master.
+; px, py are the J2ME anchor in game pixels, which is what the level's spawn, the
+; object coordinates and every sprite's reference point are in: her feet are FEET
+; pixels below it (the Master samples the ground at py+16 for the same reason, and
+; every one of her frames has its reference 15 pixels above its bottom row).
+; vy is 1/256 px a step, as on the Master.
+FEET    = 16
 player_step:
         jsr scan_keys
         lda #0                      ; horizontal: a step is two pixels, and the
@@ -122,8 +127,11 @@ player_step:
         adc #0
         bne @novx                   ; off either edge: the map is 256 px wide, and
         sta w16b+1                  ; ground_at only ever looks at the low byte
-        lda py                      ; look from eight pixels above her feet, so a
-        sec                         ; step up is found as well as the floor
+        lda py                      ; her feet, and a look from eight pixels above
+        clc                         ; them, so a step up is found as well as the floor
+        adc #FEET
+        sta t16
+        sec
         sbc #8
         sta ga_py
         lda w16b
@@ -132,8 +140,8 @@ player_step:
         cmp #255
         beq @movex                  ; nothing there: walk off the edge
         clc
-        adc #4                      ; surface + 4 < py means it rises too steeply
-        cmp py
+        adc #4                      ; surface + 4 < her feet: it rises too steeply
+        cmp t16
         bcc @novx
 @movex: lda w16b
         sta px
@@ -144,12 +152,16 @@ player_step:
         lda tmp4
         cmp #255
         beq @novx
+        sec
+        sbc #FEET                   ; the anchor is FEET above where her feet land
         sta py
         lda #0
         sta py+1
 @novx:
         ; ---- the floor under her, before she moves down it
         lda py
+        clc
+        adc #FEET
         sta ga_py
         lda px
         jsr ground_at
@@ -172,16 +184,23 @@ player_step:
         lda py+1
         adc #$FF
         sta py+1
-@noy:   lda floor
+@noy:   lda py                      ; where her feet are after the move
+        clc
+        adc #FEET
+        sta t16
+        bcs @air                    ; below the map: nothing to land on
+        lda floor
         cmp #255
         beq @air
-        cmp py                      ; her feet have reached the floor when py >= floor
+        cmp t16                     ; her feet have reached the floor
         beq @landit
         bcc @landit
         lda #0                      ; still above it
         sta onground
         bra @anim
-@landit: sta py
+@landit: sec
+        sbc #FEET
+        sta py
         lda #0
         sta py+1
         sta vy

@@ -187,6 +187,19 @@ What the tile blitter learned on the way there, in the order it mattered:
   slot row 0 -- so the range has to be clamped, or the copy runs off the end of the
   mirror and into the ring.
 
+## px, py are the J2ME anchor, not her feet
+
+Every sprite's reference point comes from the original's table, and for all of Cleo's
+frames it sits 15 pixels above the image's bottom row.  The original's player position
+is that anchor, which is also what the level's spawn and every object coordinate are
+in -- so the ground is sampled at `py + FEET` (FEET = 16), exactly as the Master does
+with `getAltitude(px, py+16)`.  Reading `py` as her feet, which is the obvious thing to
+do when writing the physics fresh, draws her sixteen pixels into the floor: the sprite
+looks misaligned to the backdrop and nothing else is visibly wrong.
+`tools/balign.mjs` is the check -- it compares the ring against a pure-map render
+inside each sprite's record and reports where the pixels actually landed, in map
+pixels, next to where the logic says she is.
+
 ## How it is checked
 
 The ring is not something to eyeball.  `tools/bcheck.mjs` plays N frames and stops at
