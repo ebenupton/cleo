@@ -47,6 +47,20 @@ BAYER = np.array([[6, 4],
                   [5, 7],
                   [3, 1]], dtype=np.float32)
 
+# 8x8 blue-noise (void-and-cluster, toroidal, generated once with sigma 1.5 seed 0):
+# an ordered threshold mask with no long runs at any level, so a flat mid-tone dithers
+# to a high-frequency stipple instead of the 2x4 Bayer's alternating-scanline stripes.
+# It is 8x8 = a tile, and every tile dithers at phase 0, so it tiles seamlessly and the
+# baked pattern is scroll-invariant.  The three channels use rolled copies so a grey
+# does not collapse to a coordinated black/white pattern.  MODE 2 only (dither is
+# reassigned to dither_cmyk in MODE 1).
+BLUE8 = np.array([[47, 34, 3, 20, 56, 13, 62, 4], [22, 43, 59, 26, 42, 9, 30, 16],
+                  [57, 10, 15, 38, 2, 49, 53, 35], [1, 28, 52, 33, 61, 19, 25, 40],
+                  [63, 48, 5, 23, 11, 45, 6, 14], [44, 18, 37, 41, 54, 29, 58, 32],
+                  [7, 27, 60, 8, 17, 0, 50, 21], [55, 12, 51, 31, 46, 36, 24, 39]], dtype=np.float32)
+BLUE_OFF = [(0, 0), (0, 0), (0, 0)]   # one shared mask: a region orders as a density stipple
+USE_BLUE = os.environ.get('DITHER2', 'blue') == 'blue'   # DITHER2=bayer for the old look
+
 
 def dither(rgb_img, alpha, x0=0, y0=0, full=True):
     """rgb_img: (h,w,3) uint8 ; alpha: (h,w) bool.
@@ -58,11 +72,22 @@ def dither(rgb_img, alpha, x0=0, y0=0, full=True):
         v = np.repeat(v, 2, axis=0)
         alpha = np.repeat(alpha, 2, axis=0)
     hh = v.shape[0]
-    kh, kw = BAYER.shape
-    yy = (np.arange(hh) + (2 * y0 if full else y0)) % kh
-    xx = (np.arange(w) + x0) % kw
-    thr = (BAYER[yy][:, xx] + 0.5) / float(BAYER.max() + 1)   # levels, not cells: 2x2 is a checker of two
-    bits = (v > thr[:, :, None]).astype(np.uint8)
+    yb = (2 * y0 if full else y0)
+    if USE_BLUE:
+        bits = np.empty((hh, w, 3), np.uint8)
+        for ch in range(3):
+            oy, ox = BLUE_OFF[ch]
+            m = np.roll(np.roll(BLUE8, oy, 0), ox, 1)
+            yy = (np.arange(hh) + yb) % 8
+            xx = (np.arange(w) + x0) % 8
+            thr = (m[yy][:, xx] + 0.5) / 64.0
+            bits[:, :, ch] = (v[:, :, ch] > thr).astype(np.uint8)
+    else:
+        kh, kw = BAYER.shape
+        yy = (np.arange(hh) + yb) % kh
+        xx = (np.arange(w) + x0) % kw
+        thr = (BAYER[yy][:, xx] + 0.5) / float(BAYER.max() + 1)
+        bits = (v > thr[:, :, None]).astype(np.uint8)
     col = bits[:, :, 0] | (bits[:, :, 1] << 1) | (bits[:, :, 2] << 2)
     col = np.where(col == 0, 8, col).astype(np.uint8)
     col = np.where(alpha, col, 0).astype(np.uint8)
