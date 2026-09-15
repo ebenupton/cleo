@@ -679,7 +679,9 @@ for (lv, sub), cm in maps.items():
 # smooth edges by merging near-duplicate variants into one another.  Protect them so
 # the dunes keep their gradation; the outdoor set has ~290 other foldable tiles, far
 # more than the ~55 the fold needs, so this costs nothing elsewhere.
-DUNE_ORIG = [15, 16, 47, 48, 81, 149, 150]
+DUNE_ORIG = [2, 3, 13, 14, 15, 16, 45, 46, 47, 48, 77, 78, 79, 80, 81, 149, 150,
+             190, 222, 254, 286, 318, 350]   # light sky-edges, the dark-orange face,
+                                              # and the two-tone wiggle where they meet
 _nomerge = ({special['VANISH0'] + i for i in range(8)} | {special['FLOWER0'] + i for i in range(4)}
             | {orig2compact[o] for o in DUNE_ORIG if o in orig2compact})
 def _bits(a, b):
