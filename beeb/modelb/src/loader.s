@@ -69,7 +69,38 @@ start:
         jsr OSWRCH                  ; latch; the game reprograms only the CRTC
         lda #1
         jsr OSWRCH
+        ; the status bar, straight into the two rows the CRTC will scan it from: staged
+        ; at $2000 like the banks, since $0300-$07FF is the MOS's until the game starts
+        ldx #<barname
+        ldy #>barname
+        stx block
+        sty block+1
+        lda #$00
+        sta block+2
+        sta block+6
+        lda #$20
+        sta block+3
+        lda #$FF
+        sta block+4
+        sta block+5
+        lda #$FF
+        ldx #<block
+        ldy #>block
+        jsr OSFILE
         sei
+        ldx #0
+@bar:   lda $2000,x
+        sta $0300,x
+        lda $2100,x
+        sta $0400,x
+        lda $2200,x
+        sta $0500,x
+        lda $2300,x
+        sta $0600,x
+        lda $2400,x
+        sta $0700,x
+        inx
+        bne @bar
         lda #7
         sta ROMSELC
         sta ROMSEL
@@ -78,6 +109,7 @@ start:
 idx:      .byte 0
 oldbank:  .byte 0
 fname:    .byte "BANK4", 13
+barname:  .byte "BAR", 13
 block:    .word fname
           .dword $FFFF2000          ; load address: the $FFFF names the I/O
                                     ; processor, and DFS wants it even with no tube

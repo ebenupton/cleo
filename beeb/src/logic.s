@@ -190,7 +190,11 @@
 ; ---------------------------------------------------------------- object arrays (bank 7)
 NLEAN   = 2                        ; object types below this take the lean path in
                                    ; process_object: no zero-page staging at all
+  .if MODELB
+OBJN    = 126                      ; the one level on the disc has 126 objects; the arrays
+  .else                            ; are laid out exactly as the Master's, just shorter
 OBJN    = 149
+  .endif
 O_STAMP = LV_OBJST
 O_TYPE  = O_STAMP + OBJN
 O_XL    = O_TYPE + OBJN
@@ -207,8 +211,10 @@ O_DL    = O_CH + OBJN
 O_DH    = O_DL + OBJN
 O_EL    = O_DH + OBJN
 O_EH    = O_EL + OBJN
+  .if .not MODELB                  ; (Model B: labels in bank 6, page aligned)
 LV_MAPROWLO = $A900               ; bank 6: 256 : tile row -> map row address
 LV_MAPROWHI = $AA00
+  .endif
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)
         .zeropage
@@ -288,7 +294,7 @@ mapptr  = $D9                     ; 2 bytes
 q1x     = $DB
 rise    = $DC                     ; 2 bytes
 
-        .segment "LOGIC"
+        PLACE "LOGIC", "LGCCODE"
 
 ; ============================================================================
 ; Map queries.  The map is in bank 6 with the row tables and the row-page table,
@@ -512,7 +518,7 @@ level_init:
         adc t16b+1
         adc #>LV_OBJS               ; the high-byte add cannot carry: t16+1 <= 1, t16b+1 <= 3
         sta t16+1
-        ldaz t16                    ; lda (t16)
+        ldazy t16                   ; lda (t16), Y kept: it is still obj
         sta otype
         sta O_TYPE,y                ; Y is still obj (sty obj at @ol; nothing since has touched Y)
         ldy #1
@@ -738,7 +744,7 @@ level_init:
         sta O_DH,y
         lda q2
         beq :+                      ; submin0 1 specialised: max(q2-1, 0)
-        dec a
+        deca
 :       lsr
         lsr
         lsr
@@ -1306,7 +1312,7 @@ player_update:
         cmp dpx
         bcs :+
         sta dpx
-        stz dpx+1
+        stza dpx+1                  ; A (alt) is live: the sbc below reads it
 :       sec
         sbc dpx
         sta alt
@@ -2089,7 +2095,7 @@ ob_star:
         lda O_AL,y
         cmp #18                     ; cap: a collected star's A must not wrap 8-bit
         bcs @nostep                 ; (it would make the star reappear ~every 20s).
-        inc a                       ; A still holds it: there is no inc abs,y
+        inca                        ; A still holds it: there is no inc abs,y
         sta O_AL,y
 @nostep:
         lda O_AL,y
@@ -2195,7 +2201,7 @@ tramp_safe:
 ob_tramp:
         lda O_AL,y
         beq :+
-        inc a                       ; there is no inc abs,y, and A holds it anyway --
+        inca                        ; there is no inc abs,y, and A holds it anyway --
         sta O_AL,y                  ; which also saves the reload the old code did
         cmp #10
         bne :+
@@ -2986,7 +2992,7 @@ ob_vanish:
 @ret:   rts
 @count: inc fe
         lda fe
-        bit #3
+        bitimm 3
         bne @done
         cmp #12
         bcs :+
@@ -3085,7 +3091,7 @@ ob_switch:
 ; ============================================================================
 ; Status bar digits (drawn into the bar master image in bank 4)  [main RAM]
 ; ============================================================================
-        .code
+        PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with the digits and the bar art
 ; draw digit A at bar pixel column X (even), digit slot Y (0..8): copies a 64-byte digit
 ; tile into the bar image.
 ;
@@ -3098,9 +3104,11 @@ bar_digit:
         cmp BARCACHE,y              ; one bar, so one cache: no curbuf in the index
         beq bd_same
         sta BARCACHE,y
+  .if .not MODELB
         pha
         setbank HUD_BANK
         pla
+  .endif
         lsr                         ; C = d bit0, A = d >> 1
         sta w16+1
         lda #0
@@ -3150,7 +3158,9 @@ bar_digit:
         sta (ptr),y
         dey
         bpl :-
+  .if .not MODELB
         setbank BANK_LVL
+  .endif
 bd_same:
         rts
 
@@ -3235,7 +3245,7 @@ div10_16:
         sta q1
         rts
 
-        .segment "LOGIC"
+        PLACE "LOGIC", "LGCCODE"
 ; ============================================================================
 ; Sound effect ids
 ; ============================================================================

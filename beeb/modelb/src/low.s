@@ -1,24 +1,26 @@
 ; ============================================================================
-; Main RAM, $0140-$02FF.  Everything here is visible whatever bank is paged in:
-; the interrupt handler, the section table it reads, the far-call thunk, and the
-; buffer a bank copies a strip of its data into for another bank to read.
+; Main RAM, $0140-$02FF: what has to be visible whatever bank is paged in.  The
+; far-call thunk, the interrupt stub (the handler itself is in bank 7), the two
+; map fetches the tile blitter makes from bank 5, and the sprite list.  The
+; Master's own main-RAM map helpers (maprow, mapbyte, mapput, pagelogic) land here
+; too, from engine.s: they page bank 6 in and bank 7 back exactly as they do there.
 ; ============================================================================
         .segment "LOWCODE"
 
 ; ---------------------------------------------------------------- far calls
-; X = the index of a (bank, address) entry.  The caller's bank comes back from the
-; stack, so a bank may call one that replaces it, and a call may nest.
-; X = the index of a (bank, address-1) entry.  The target address goes on the
-; stack rather than into a patched jsr: the interrupt handler far-calls too, and
-; a step landing between the patch and the jump sent the foreground wherever the
-; handler was going.  Everything here is on the stack, so it nests and re-enters.
+; X = the index of a (bank, address-1) entry in FARTAB, which every bank carries at
+; the same address.  A goes in and comes back, Y is untouched, X is destroyed.
+; Everything is on the stack -- the caller's bank, the return into fcret, the target
+; -- so it nests and a step of the interrupt handler can land anywhere in it: the
+; handler reads the bank from $F4 and puts it back, which is the MOS's own rule.
 ;
 ;   caller's return
+;   A on entry
 ;   caller's bank          <- fcret pulls this
 ;   fcret-1                <- the target's rts lands here
 ;   target-1               <- this rts goes there
 farcall:
-        sta fc_a
+        pha
         lda ROMSEL_CPY
         pha
         lda #>(fcret-1)
@@ -32,149 +34,102 @@ farcall:
         lda FARTAB,x
         sta ROMSEL_CPY
         sta ROMSEL
-        lda fc_a
+        tsx
+        lda $0106,x                 ; A as it came in
         rts
-fcret:  sta fc_a
+fcret:  tax                         ; the target's A
         pla
-        sta ROMSEL_CPY
+        sta ROMSEL_CPY              ; the caller's bank
         sta ROMSEL
-        lda fc_a
-        rts
-
-; mirdirty: A = the first char written of the row the mirror follows, X = the last.
-; It lives here because a macro with a branch in it cannot be expanded inside the
-; blitters: ca65's anonymous labels are global, so the caller's :+ binds to the
-; macro's colon, and a .local in a macro resets the cheap-local scope of whatever
-; routine it lands in.
-mirdirty:
-        cmp #ROWCHARS               ; only chars 0..79 of the map row are in the ring's
-        bcs @out                    ; last slot row: 80 and up wrapped to slot row 0,
-        pha                         ; which is not what the mirror follows
-        cpx #ROWCHARS
-        bcc :+
-        ldx #ROWCHARS-1
-:       ldy curbuf
-        lda #1
-        sta mirdty,y
-        pla
-        cmp mirlo,y
-        bcs :+
-        sta mirlo,y
-:       txa
-        cmp mirhi,y
-        bcc :+
-        sta mirhi,y
-:       rts
-@out:   rts
-
-; ---------------------------------------------------------------- the map
-; The logic is in bank 7 and the map in bank 6, so these three live in main RAM and
-; leave bank 7 selected, exactly as the Master's do.  maprow needs no table here: the
-; map is 32 tiles wide and page aligned, so the row address is two shifts.
-mapbyte:                            ; A = (mapptr),y ; Y preserved
-        lda #BANK_MAP
-        sta ROMSEL_CPY
-        sta ROMSEL
-        lda (mapptr),y
-        jmp pagelogic
-
-mapput:                             ; store A at (mapptr),y ; Y preserved
-        pha
-        lda #BANK_MAP
-        sta ROMSEL_CPY
-        sta ROMSEL
-        pla
-        sta (mapptr),y
-        ; fall through
-pagelogic:                          ; put the logic's bank back, A and Y untouched
-        ldx #BANK_LGC
-        stx ROMSEL_CPY
-        stx ROMSEL
+        pla                         ; (the A that went in)
+        txa
         rts
 
 ; ---------------------------------------------------------------- interrupts
+; The chain step and the vsync work are in bank 7 with their tables: this pages it
+; in around them.  The step's timing (VS2T_DEFAULT) allows for the ~30 cycles that
+; takes, in place of the hold loop the Master's handler has.
 irq_handler:
         stx irq_x
         sty irq_y
-        bit VIA_IFR
-        bvs @t1arm
-        jmp @notT1
-@t1arm: ; A rupture step is a CRTC restart: R12/R13 were armed during the section
-        ; before and latch at the boundary; R9 with R4 decide where the section ends
-        ; and are compared at the start of its last scanline, and R6 from scanline 1
-        ; on.  The chain is phased so the step fires ~60 cycles BEFORE the restart,
-        ; and the hold below carries the first write past it.
-        ldx SECIDX
-        ldy #5
-@hold:  dey
-        bne @hold
-        lda #9
-        sta CRTC_IDX
-        lda SECTAB+3,x
-        sta CRTC_DAT
-        lda #4
-        sta CRTC_IDX
-        lda SECTAB+2,x
-        sta CRTC_DAT
-        lda #6
-        sta CRTC_IDX
-        lda SECTAB+4,x
-        sta CRTC_DAT
-        lda #7
-        sta CRTC_IDX
-        lda SECTAB+5,x
-        sta CRTC_DAT
-        sta curR7
-        lda #12
-        sta CRTC_IDX
-        lda SECTAB,x
-        sta CRTC_DAT
-        lda #13
-        sta CRTC_IDX
-        lda SECTAB+1,x
-        sta CRTC_DAT
-        lda SECTAB+6,x
-        sta VIA_T1LL
-        lda SECTAB+7,x
-        sta VIA_T1LH
-        lda VIA_T1CL                ; clear the T1 flag
-        lda curR7                   ; the chain stops at Q, the only section whose R7
-        cmp #QVSYNC                 ; is the vsync row: a late vsync must not walk it
-        beq @stay                   ; off the end of SECTAB
-        txa
-        clc
-        adc #8
-        sta SECIDX
-@stay:  ldy irq_y
-        ldx irq_x
-        lda $FC
-        rti
-
-@notT1:
-        lda VIA_IFR
-        and #$02
-        beq @exit
-        ; ---- vsync.  The T1 re-phase, the flip and section 0 all have the 64 lines
-        ; between the vsync and the bar to happen in, so they live in bank 7 and this
-        ; pays 63 cycles to reach them -- main RAM is 448 bytes and the step above is
-        ; the only part of the chain that cannot afford to be anywhere else.
-        farjsr F_VSYNC
-@exit:
+        lda ROMSEL_CPY
+        pha
+        lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jsr isr_body
+        pla
+        sta ROMSEL_CPY
+        sta ROMSEL
         ldy irq_y
         ldx irq_x
         lda $FC
         rti
 
+; the start-up's switch from bank 6 to bank 7 (init.s): a bank cannot page itself out
+to7:    lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jmp start7
+
+; ---------------------------------------------------------------- the tile blitter's map
+; drawrect runs in bank 5 and reads the map in bank 6: the row pointer is arithmetic
+; (MAPSTRIDE is a constant here, so there are no row tables) and the strip copy is
+; the one bank switch a tile row costs.
+maprow5:                            ; A = tile row -> ptr = LV_MAP + row*MAPSTRIDE + rc_tx0
+        .assert MAPLW = 7, error, "maprow5 assumes 128-tile rows"
+        lsr                         ; row * 128: the row's low bit is the low byte's top
+        sta ptr+1
+        lda #0
+        ror
+        clc
+        adc rc_tx0                  ; < 128, so no carry out
+        sta ptr
+        lda ptr+1
+        clc
+        adc #>LV_MAP
+        sta ptr+1
+        rts
+
+mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF
+        lda #BANK_MAP
+        sta ROMSEL_CPY
+        sta ROMSEL
+        ldy rc_nt
+:       lda (ptr),y
+        sta MAPBUF,y
+        dey
+        bpl :-
+        lda #BANK_TILES
+        sta ROMSEL_CPY
+        sta ROMSEL
+        rts
+
+; the sprite directory is in bank 6 and the prologue in bank 5: an entry's eight
+; bytes come across here, and ptr is left pointing at the copy
+dirfetch:                           ; ptr -> the entry in SPR_TABLE
+        lda #BANK_TIL1
+        sta ROMSEL_CPY
+        sta ROMSEL
+        ldy #7
+:       lda (ptr),y
+        sta MAPBUF,y
+        dey
+        bpl :-
+        lda #BANK_TILES
+        sta ROMSEL_CPY
+        sta ROMSEL
+        lda #<MAPBUF
+        sta ptr
+        lda #>MAPBUF
+        sta ptr+1
+        rts
+
         .segment "LOWBSS"
-SECTAB:     .res 2*48               ; per buffer: 6 sections x 8 bytes
-FARTAB:     .res 3*NFAR             ; (bank, lo, hi) per far entry point
-; the mirror's bookkeeping: every bank writes it, and zero page is full
-mirdty:     .res 2                  ; per buffer: the ring's last row has been written
-mirwcx:     .res 2                  ; since the mirror was made, and the wcx it used
-NSPR:       .res 1                  ; the sprite list's length: the logic in bank 7
-                                    ; fills it, the blitter in bank 4 walks it
-partlo:     .res 2                  ; per buffer: the columns of the window's top row
-parthi:     .res 2                  ; written since the composed row was last made
-partfine:   .res 2                  ; and the wfine it was made with
-mirlo:      .res 2                  ; and which chars of it were written, so the copy
-mirhi:      .res 2                  ; is the 12 chars a sprite touched, not all 80
+MAPBUF:   .res 21                   ; a tile row of the rectangle: 21 tiles at most
+; the mirror's bookkeeping (display.s): the blitters in bank 5 note what they wrote
+; to the ring's last slot row, the copy in bank 7 reads it
+mirdty:   .res 2                    ; per buffer: the row has been written since the copy
+mirlo:    .res 2                    ; and which chars of it (in slot chars, 0..79)
+mirhi:    .res 2
+mirwcx:   .res 2                    ; the wcxm the copy was made for
