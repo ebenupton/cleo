@@ -14,7 +14,22 @@ s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.ru
 { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60); cpu.writemem(0xfe30, was); }
 const tiles = readFileSync("build/tiles.bin"), mp = readFileSync("build/map.bin");
 const r16 = (a) => cpu.readmem(a) | (cpu.readmem(a + 1) << 8);
+// A sprite the blitter kept (match_sprites said its pixels are already right) is not
+// erased, so at pre_spr its rectangle is not map: skip those chars.
+const keptRects = () => {
+  const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 4);
+  const buf = cpu.readmem(lab.curbuf), n = cpu.readmem(lab.RECCNT + buf), out = [];
+  for (let i = 0; i < n; i++) {
+    if (!cpu.readmem(lab.KEEP + i)) continue;
+    const p = lab.SPRREC + buf * 160 + i * 10;
+    out.push({ cx: cpu.readmem(p + 5) | (cpu.readmem(p + 6) << 8), cy: cpu.readmem(p + 7),
+               w: cpu.readmem(p + 8), h: cpu.readmem(p + 9) & 0x7f });
+  }
+  cpu.writemem(0xfe30, was); return out;
+};
 const check = () => {
+  const kept = keptRects();
+  const inKept = (cx, cy) => kept.some((r) => cx >= r.cx && cx < r.cx + r.w && cy >= r.cy && cy < r.cy + r.h);
   const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7);
   const curbuf = cpu.readmem(lab.curbuf), base = curbuf ? 0x4680 : 0x0a80;
   const wcx = r16(lab.wcx), wcy = cpu.readmem(lab.wcy);
@@ -23,6 +38,7 @@ const check = () => {
     for (let c = 0; c < 80; c++) { const mx = wcx + c; if ((cy >> 1) >= 32 || (mx >> 2) >= 32) continue;
       const o = mp[(cy >> 1) * 32 + (mx >> 2)] * 64 + (cy & 1) * 32 + (mx & 3) * 8;
       const rc = ((cy % 23) * 80 + mx) % 1840;
+      if (inKept(mx, cy)) continue;
       for (let k = 0; k < 8; k++) if (cpu.readmem(base + rc * 8 + k) !== tiles[o + k]) { bad++; break; } } }
   let mbad = 0, mchars = [];
   cpu.writemem(0xfe30, was);

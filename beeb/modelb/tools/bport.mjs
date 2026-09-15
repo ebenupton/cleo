@@ -18,13 +18,24 @@ const r16 = (a) => cpu.readmem(a) | (cpu.readmem(a + 1) << 8);
 let stopAt = 0;
 cpu.debugInstruction.add((p) => p === stopAt && cpu.readmem(0xf4) === 7);
 const step = async (to) => { stopAt = to; for (let i = 0; i < 600; i++) { await s.runFor(2000); if (cpu.pc === to && cpu.readmem(0xf4) === 7) return true; } return false; };
-const check = () => { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7);
+const keptRects = () => {
+  const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 4);
+  const buf = cpu.readmem(lab.curbuf), n = cpu.readmem(lab.RECCNT + buf), out = [];
+  for (let i = 0; i < n; i++) { if (!cpu.readmem(lab.KEEP + i)) continue;
+    const p = lab.SPRREC + buf * 160 + i * 10;
+    out.push({ cx: cpu.readmem(p + 5) | (cpu.readmem(p + 6) << 8), cy: cpu.readmem(p + 7),
+               w: cpu.readmem(p + 8), h: cpu.readmem(p + 9) & 0x7f }); }
+  cpu.writemem(0xfe30, was); return out; };
+const check = () => { const kept = keptRects();
+  const inKept = (cx, cy) => kept.some((r) => cx >= r.cx && cx < r.cx + r.w && cy >= r.cy && cy < r.cy + r.h);
+  const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7);
   const buf = cpu.readmem(lab.curbuf), base = buf ? 0x4680 : 0x0a80, wcx = r16(lab.wcx), wcy = cpu.readmem(lab.wcy);
   let bad = 0;
   for (let r = 0; r < 22; r++) { const cy = wcy + r;
     for (let c = 0; c < 80; c++) { const mx = wcx + c; if ((cy >> 1) >= 32 || (mx >> 2) >= 32) continue;
       const o = mp[(cy >> 1) * 32 + (mx >> 2)] * 64 + (cy & 1) * 32 + (mx & 3) * 8;
       const rc = ((cy % 23) * 80 + mx) % 1840;
+      if (inKept(mx, cy)) continue;
       for (let k = 0; k < 8; k++) if (cpu.readmem(base + rc * 8 + k) !== tiles[o + k]) { bad++; break; } } }
   cpu.writemem(0xfe30, was); return { bad, wcx, wcy, buf }; };
 let rng = 2463534242, fails = 0;
