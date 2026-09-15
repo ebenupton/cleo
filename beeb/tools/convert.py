@@ -675,7 +675,13 @@ for (lv, sub), cm in maps.items():
     if any(o[0] == 11 for o in levels[(lv, sub)]['objs']):
         s.update(special['VANISH0'] + i for i in range(8))
 
-_nomerge = {special['VANISH0'] + i for i in range(8)} | {special['FLOWER0'] + i for i in range(4)}
+# Sand-dune silhouette tiles (sand curving against sky): the fold used to nibble their
+# smooth edges by merging near-duplicate variants into one another.  Protect them so
+# the dunes keep their gradation; the outdoor set has ~290 other foldable tiles, far
+# more than the ~55 the fold needs, so this costs nothing elsewhere.
+DUNE_ORIG = [15, 16, 47, 48, 81, 149, 150]
+_nomerge = ({special['VANISH0'] + i for i in range(8)} | {special['FLOWER0'] + i for i in range(4)}
+            | {orig2compact[o] for o in DUNE_ORIG if o in orig2compact})
 def _bits(a, b):
     return sum(bin(x ^ y).count('1') for x, y in zip(a, b))
 
