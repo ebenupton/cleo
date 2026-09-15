@@ -480,11 +480,13 @@ mirror_copy:
         sbc #>RINGBYTES
         sta w16b+1
         ldy #0
-@c:     .repeat 8
-        lda (w16),y
+@c:     ldx #8
+@b:     lda (w16),y
         sta (w16b),y
         iny
-        .endrepeat
+        dex
+        bne @b
+        cpy #0
         bne :+
         inc w16+1
         inc w16b+1

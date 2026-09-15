@@ -799,19 +799,23 @@ drawrect:
         jmp next
 .endif
 .endmacro
+  .if .not MODE1                    ; MODE 1 has no periodic cells: nothing reaches these
 @t3:    jmp @p3                     ; the periodic blocks are out of branch range: trampolines
 @t2:    jmp @p2
+  .endif
 @b31:   CHARCPY 3, @t3
 @b23:   CHARCPY 2, @t2
 @b15:   CHARCPY 1, @t1
 @b7:    CHARCPY 0, @t0
         jmp @advsp
+  .if .not MODE1
 @t1:    jmp @p1
 @t0:    jmp @p0
 @p3:    CHARPER 3, @b23
 @p2:    CHARPER 2, @b15
 @p1:    CHARPER 1, @b7
 @p0:    CHARPER 0                   ; no trailing jmp: falls into @advsp
+  .endif
 @advsp: lda sp
         adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
@@ -2374,33 +2378,19 @@ copy_partial:
   .endif
         sta ptr+1
         ; Y is the dest line, 0..7-wfine, and the source line is Y + wfine through the
-        ; offset sp: enter the unrolled copy at the pair for this wfine
-        ldx wfine
-        lda @ftab-2,x
-        sta @fjmp+1
-        lda @ftab-1,x
-        sta @fjmp+2
+        ; offset sp.  (This was an unrolled copy entered at the pair for this wfine;
+        ; the loop is 40 bytes smaller and costs ~20 cycles a char on the frames that
+        ; recompose the whole row.)
+        lda #7
+        sec
+        sbc wfine
+        sta tmp3                    ; the last dest line
         ldx cnt                     ; char counter in X: dex/beq is 3 cycles cheaper
-@fjmp:  jmp @g4
-@ftab:  .word @g4, @g2, @g0         ; wfine 2: six lines, 4: four, 6: two
-@g4:    ldy #5
-        lda (sp),y
+@fchar: ldy tmp3
+@fline: lda (sp),y
         sta (ptr),y
         dey
-        lda (sp),y
-        sta (ptr),y
-@g2:    ldy #3
-        lda (sp),y
-        sta (ptr),y
-        dey
-        lda (sp),y
-        sta (ptr),y
-@g0:    ldy #1
-        lda (sp),y
-        sta (ptr),y
-        dey
-        lda (sp),y
-        sta (ptr),y
+        bpl @fline
         ; next char, both with the ring fold on the page crossing: the composed row
         ; can straddle the ring end like any other row
         spnext
@@ -2410,12 +2400,12 @@ copy_partial:
         clc
         adc #8
         sta ptr
-        bcc @fjmp
+        bcc @fchar
         lda ptr+1
         inca
         ringup ptr
         sta ptr+1
-        bra @fjmp
+        bra @fchar
 @done:  rts
 
 ; ============================================================================

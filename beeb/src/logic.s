@@ -3148,15 +3148,6 @@ bar_digit:
 :       lda (w16),y
         sta (ptr),y
         dey
-        lda (w16),y
-        sta (ptr),y
-        dey
-        lda (w16),y
-        sta (ptr),y
-        dey
-        lda (w16),y
-        sta (ptr),y
-        dey
         bpl :-
   .if .not MODELB
         setbank BANK_LVL
