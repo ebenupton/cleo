@@ -106,34 +106,55 @@ def dither(rgb_img, alpha, x0=0, y0=0, full=True):
 # ---------------------------------------------------------------------------
 def _wspace(x):
     return (np.asarray(x, float) / 255.0) ** GAMMA   # the space Bayer dithers in
+def _lab(g):
+    """working-space colour (gamma^GAMMA) -> CIELAB via sRGB.  (h,3) or (3,)"""
+    srgb = np.clip(np.asarray(g, float), 0, 1) ** (1.0 / GAMMA)
+    lin = np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
+    M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+    xyz = lin @ M.T / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16.0 / 116)
+    L = 116 * f[..., 1] - 16
+    a = 500 * (f[..., 0] - f[..., 1]); b = 200 * (f[..., 1] - f[..., 2])
+    return np.stack([L, a, b], -1)
 _PLIN = _wspace(BEEB_RGB.astype(float))
-_LW = np.array([0.299, 0.587, 0.114])                # luma weights in the working space
-_PGLUM = _PLIN @ _LW
-YLI_N = 8
-YLI_WL = float(os.environ.get('YLI_WL', '4'))
-YLI_WC = float(os.environ.get('YLI_WC', '1'))
-YLI_LAM = float(os.environ.get('YLI_LAM', '8'))
+_PL = _lab(_PLIN)[:, 0]                              # each palette colour's L*
+YLI_K = os.environ.get('YLI_K', '4x4')            # placement: 2x4 (alternate scanlines at 50%) or 4x4 (checkerboard)
+if YLI_K == '4x4':
+    _YMAT = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]])
+else:
+    _YMAT = BAYER.astype(int)
+YLI_N = int(_YMAT.size)
+YLI_WL = float(os.environ.get('YLI_WL', '1'))        # weight on the mix's average L* error
+YLI_WC = float(os.environ.get('YLI_WC', '1'))        # weight on its average a*b* (hue/chroma) error
+YLI_LAM = float(os.environ.get('YLI_LAM', '0.08'))   # penalty on the mix's L* variance (luma noise)
+# every 8-cell plan = a multiset of 8 palette colours: 6435 of them; Bayer's own
+# outputs (e.g. wwyyyyrr) are all in here, so a good metric can match or beat it
+def _all_plans(n=YLI_N, k=8):
+    out = []
+    def rec(i, left, cur):
+        if i == k - 1:
+            out.append(cur + [left]); return
+        for c in range(left, -1, -1):
+            rec(i + 1, left - c, cur + [c])
+    rec(0, n, [])
+    return np.array(out, np.int16)
+_CNT = _all_plans()                                  # (6435, 8) counts per colour
+_AVG = (_CNT.astype(float) @ _PLIN) / YLI_N          # working-space average
+_LABM = _lab(_AVG)                                    # its Lab
+_lm = (_CNT.astype(float) @ _PL) / YLI_N
+_LVAR = (_CNT.astype(float) @ (_PL ** 2)) / YLI_N - _lm ** 2   # L* variance of the plan
 _yli_cache = {}
 def _yli_plan(t):
     key = tuple(int(v) for v in t)
     if key in _yli_cache:
         return _yli_cache[key]
-    tl = _wspace(t); tL = tl @ _LW
-    N = YLI_N; best = None
-    for i in range(8):
-        for j in range(i, 8):
-            for r in range(N + 1):
-                avg = ((N - r) * _PLIN[i] + r * _PLIN[j]) / N
-                aL = avg @ _LW
-                le = (aL - tL) ** 2
-                ce = max(float(np.sum((avg - tl) ** 2)) - le, 0.0)
-                var = (r * (N - r) / float(N * N)) * (_PGLUM[i] - _PGLUM[j]) ** 2
-                c = YLI_WL * le + YLI_WC * ce + YLI_LAM * var
-                if best is None or c < best[0]:
-                    best = (c, i, j, r)
-    _, i, j, r = best
-    plan = sorted([i] * (N - r) + [j] * r, key=lambda k: _PGLUM[k])
-    plan = np.array(plan, np.uint8)
+    tl = _lab(_wspace(t))
+    dL2 = (_LABM[:, 0] - tl[0]) ** 2
+    dC2 = (_LABM[:, 1] - tl[1]) ** 2 + (_LABM[:, 2] - tl[2]) ** 2
+    cost = YLI_WL * dL2 + YLI_WC * dC2 + YLI_LAM * _LVAR
+    best = int(np.argmin(cost))
+    plan = np.repeat(np.arange(8), _CNT[best])
+    plan = np.array(sorted(plan, key=lambda k: _PL[k]), np.uint8)   # luma order for the matrix
     _yli_cache[key] = plan
     return plan
 
@@ -143,10 +164,10 @@ def dither_yli(rgb_img, alpha, x0=0, y0=0, full=True):
     al = np.repeat(alpha, 2, axis=0) if full else alpha
     hh = img.shape[0]
     # Bayer rank 0..N-1 per cell (the 2x4 matrix values already are 0..7)
-    kh, kw = BAYER.shape
+    kh, kw = _YMAT.shape
     yy = (np.arange(hh) + (2 * y0 if full else y0)) % kh
     xx = (np.arange(w) + x0) % kw
-    rank = BAYER[yy][:, xx].astype(int)
+    rank = _YMAT[yy][:, xx].astype(int)
     out = np.empty((hh, w), np.uint8)
     flat = img.reshape(-1, 3)
     uniq, inv = np.unique(flat, axis=0, return_inverse=True)
