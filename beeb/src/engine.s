@@ -3949,28 +3949,26 @@ loadfile:
         stz ptr
         ; read ld_n sectors from linear sector ld_sec to ptr
 ldread:
-        ; track/sector from linear sector
+        ; track = ld_sec / 10, sector-on-track = ld_sec mod 10.  A 16-bit divide by
+        ; repeated subtraction: the disc is 80 tracks, so the quotient is under 80 and
+        ; this runs at most ~80 times, once per file.  (The old form accumulated the
+        ; high byte as "25 tracks + 6 sectors" into the low byte, which overflowed a
+        ; file whose start sector had a low byte of 250 or more -- L4B's header piece
+        ; landed exactly there and read from the wrong track.)
         stz ld_trk
-        lda ld_sec
-        sta ld_sc
-        lda ld_sec+1
-        beq :++
-:       lda ld_sc                   ; subtract 256 = 25 tracks + 6 sectors
-        clc
-        adc #6
-        sta ld_sc
-        lda ld_trk
-        adc #25
-        sta ld_trk
-        dec ld_sec+1
-        bne :-
-:       lda ld_sc
-        cmp #10
-        bcc ldr_trk
+@d10:   lda ld_sec
+        sec
         sbc #10
-        sta ld_sc
+        tay
+        lda ld_sec+1
+        sbc #0
+        bcc @drem                   ; ld_sec < 10: what is left is the sector
+        sty ld_sec
+        sta ld_sec+1
         inc ld_trk
-        bra :-
+        bne @d10                    ; (unconditional: ld_trk stays under 80)
+@drem:  lda ld_sec
+        sta ld_sc
 ldr_trk: lda ld_trk
         cmp cur_trk
         beq ldr_rd
