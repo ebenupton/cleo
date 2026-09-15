@@ -48,7 +48,20 @@ draw_maprect:
         jsr clip_rect               ; nothing left of the rectangle: nothing to draw
         bcs :+
         rts
-:       lda mrow                    ; does it write the row the mirror follows?
+:       lda dt_cy                   ; does it write the window's top row, which the
+        cmp wcy                     ; composed row above it is made from?
+        bne :+
+        lda dt_cx
+        sec
+        sbc wcx
+        pha
+        clc
+        adc dt_ncx
+        tax
+        dex
+        pla
+        jsr part5                   ; (in this bank: main RAM has no room for another
+:       lda mrow                    ;  shared routine, and the variables are in it)                    ; does it write the row the mirror follows?
         sec
         sbc dt_cy
         bcc :+
@@ -132,6 +145,28 @@ draw_maprect:
         sbc #>RINGBYTES
 :       sta dst1+1
         jmp dm_row
+
+; part5: A = the first window column of the top row written, X = the last.  The
+; composed row above the window is made from that row, so only these columns of it
+; need making again.  The same few lines live in bank 4 for the sprite blitter: the
+; variables are in main RAM, and main RAM has no room for the code.
+part5:  cmp #ROWCHARS
+        bcs @pout
+        pha
+        cpx #ROWCHARS
+        bcc :+
+        ldx #ROWCHARS-1
+:       ldy curbuf
+        pla
+        cmp partlo,y
+        bcs :+
+        sta partlo,y
+:       txa
+        cmp parthi,y
+        bcc :+
+        sta parthi,y
+:       rts
+@pout:  rts
 
 ; clip_rect: bring the rectangle inside both the window and the map.  Both axes are
 ; clipped to the char: the ring is 23 rows of 80 chars and the window is 22 of them,
@@ -428,6 +463,21 @@ til_copy:
 copy_partial:
         lda wfine
         bne :+
+        rts
+:       ldx curbuf                  ; the whole row when the fine offset has changed:
+        cmp partfine,x              ; every column of it shows different scanlines then
+        beq :+
+        sta partfine,x
+        lda #0
+        sta partlo,x
+        lda #ROWCHARS-1
+        sta parthi,x
+        lda wfine
+:       ldx curbuf
+        lda partlo,x                ; nothing has been written: the row still stands
+        cmp parthi,x
+        bcc :+
+        beq :+
         rts
 :       lda mrow                    ; the composed row is the ring row above the
         sec                         ; window, which is the mirror's row when the

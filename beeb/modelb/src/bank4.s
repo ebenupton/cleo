@@ -130,6 +130,10 @@ draw_sprites:
 @done:  ldx curbuf
         lda spi
         sta RECCNT,x
+        lda wcx                     ; the window these records were written with
+        sta recwcx,x
+        lda wcy
+        sta recwcy,x
                                     ; (NSPR is cleared by the frame loop before each
                                     ;  logic step: only the last step's list is drawn)
         rts
@@ -155,6 +159,21 @@ spr_copy:
 ; This is most of what makes a dozen objects on screen affordable: without it every
 ; standing star costs a rectangle of tiles a frame, twice (once in each buffer).
 match_sprites:
+        ; The records were written with the window where it was then.  If it has moved,
+        ; a sprite's clipped extent may have moved with it and the erase of the new
+        ; record would not reach what the old one put down -- so only a box star, whose
+        ; next frame covers the last exactly, may be kept across a scroll.
+        ldx curbuf
+        lda wcx
+        cmp recwcx,x
+        bne @moved
+        lda wcy
+        cmp recwcy,x
+        beq @still
+@moved: lda #1
+        bra :+
+@still: lda #0
+:       sta boxonly
         ldx curbuf
         lda RECCNT,x
         cmp NSPR
@@ -204,7 +223,16 @@ match_sprites:
         lda SPRLIST+4,x
         cmp (rp),y
         bne @next
-        ldx tmp4
+        lda boxonly                 ; the window has moved under the records
+        beq @set
+        ldy #9                      ; a box star, and all of it on screen
+        lda (rp),y
+        bmi @next
+        ldy #0
+        lda (rp),y
+        cmp #BOXID0
+        bcc @next
+@set:   ldx tmp4
         lda tmp3
         sta KEEP,x
 @next:  lda rp
@@ -255,7 +283,8 @@ erase_old:
         sta dt_cx                   ; chars, which no window reaches)
         ldy #8
         lda (rp),y                  ; w in chars: the rectangle is clipped to the
-        sta dt_ncx                  ; char, so it goes straight in
+        inca                        ; char, so it goes straight in -- plus the char a
+        sta dt_ncx                  ; sprite drawn at an odd pixel spills into
         ldy #7
         lda (rp),y                  ; cy
         sta dt_cy
@@ -567,9 +596,22 @@ drawsprite:
         lsr
         lsr
         sta sp_r0                   ; sta sets no flags: Z still from the third lsr
-        bne @nopart                 ; (the Master tracks which columns of the window's
-@nopart:                            ; top row a sprite touched, to recompose only those;
-                                    ; here copy_partial redoes the row either way)
+        bne @nopart                 ; it touches the window's top row, which the
+        lda sp_c1                   ; composed row above it is made from
+        cmp #ROWCHARS
+        bcc :+
+        lda #ROWCHARS-1
+:       tax
+        ldy curbuf
+        lda sp_c0
+        cmp partlo,y
+        bcs :+
+        sta partlo,y
+:       txa
+        cmp parthi,y
+        bcc @nopart
+        sta parthi,y
+@nopart:
         ; ---- record rect in current sprite record
         ldy #5
         lda wcx
@@ -984,6 +1026,9 @@ MASKTAB2:   .res 256
 MASKTAB3:   .res 256
 SWAPTAB:    .res 256
 SPRLIST:    .res 5*MAXSPR
+recwcx:     .res 2                  ; per buffer: the window its records were drawn at
+recwcy:     .res 2
+boxonly:    .res 1                  ; match_sprites: only box stars may be kept
 KEEP:       .res MAXREC             ; per list index: what record i already has right
 SPRREC:     .res 2*10*MAXREC
 RECCNT:     .res 2

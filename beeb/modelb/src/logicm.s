@@ -442,7 +442,7 @@ level_init:
         sbc #3
         sta gridsh
         ; clear object state, then grid
-        stz BINOK                   ; the cached object list belongs to the old level
+        stza BINOK                   ; the cached object list belongs to the old level
         ldx #0                      ; 16 arrays of OBJN, not the Master's ten pages
         lda #0
 :       sta O_STAMP,x
@@ -487,9 +487,10 @@ level_init:
         adc t16b+1
         adc #>LV_OBJS               ; the high-byte add cannot carry: t16+1 <= 1, t16b+1 <= 3
         sta t16+1
-        ldaz t16                    ; lda (t16)
-        sta otype
-        sta O_TYPE,y                ; Y is still obj (sty obj at @ol; nothing since has touched Y)
+        ldaz t16                    ; lda (t16).  On the Master that is one instruction
+        sta otype                   ; and Y survives it; here the macro is ldy #0 /
+        ldy obj                     ; lda (zp),y, so obj has to go back into Y or every
+        sta O_TYPE,y                ; object's type lands on object 0
         ldy #1
         lda (t16),y
         sta q1                      ; x tiles
@@ -799,15 +800,15 @@ level_init:
         ; player state
         mov16 px, startx
         mov16 py, starty
-        stz vx
-        stz vx+1
-        stz vy
-        stz vy+1
-        stz anim
+        stza vx
+        stza vx+1
+        stza vy
+        stza vy+1
+        stza anim
         mov16 evframe, frame
-        stz facing
-        stz running
-        stz firing
+        stza facing
+        stza running
+        stza firing
         lda #1
         sta hurt
         sta control
@@ -966,8 +967,8 @@ game_frame:
         sta BINR+2
         lda gy1
         sta BINR+3
-        stz NSTARL
-        stz NOTHL
+        stza NSTARL
+        stza NOTHL
         lda #1
         sta BINOK
 @rows:  lda gx0
@@ -1034,7 +1035,7 @@ game_frame:
         ; a list is rebuilt, but 'cmp frame' tests the low byte alone: let a stamp go 256
         ; steps stale and an object returning to range matches it and is skipped -- for
         ; one step before, but for the whole life of a cached list now.
-        stz BINI
+        stza BINI
 @rls:   ldx BINI
         cpx NSTARL
         beq @rlo
@@ -1060,7 +1061,7 @@ game_frame:
         ; ---- after objects
         lda bounce
         beq :+
-        stz vy
+        stza vy
         lda #>(-1280)
         sta vy+1
 :       ; kill tile under player
@@ -1112,9 +1113,9 @@ player_hit:
         jsr bar_touch
         lda #1
         sta hurt
-        stz control
-        stz vx
-        stz vx+1
+        stza control
+        stza vx
+        stza vx+1
         lda health
         beq :+
         lda #>768                   ; vx low is already 0 from the stz above, and both
@@ -1152,11 +1153,11 @@ player_dead:
 @respawn:
         mov16 px, startx
         mov16 py, starty
-        stz vx
-        stz vx+1
-        stz vy
-        stz vy+1
-        stz anim
+        stza vx
+        stza vx+1
+        stza vy
+        stza vy+1
+        stza anim
         mov16 evframe, frame
         lda #3
         sta health
@@ -1166,8 +1167,8 @@ player_dead:
         sta exiting                 ; game over handled by caller (lives == 0)
         rts
 :       stz facing
-        stz running
-        stz firing
+        stza running
+        stza firing
         lda #1
         sta hurt
         sta control
@@ -1211,7 +1212,7 @@ vy_step:
         bcc @cdone
 @cdn:   lda #MAXDWY
         sta dpx
-        stz dpx+1
+        stza dpx+1
         rts
 @up:    lda dpx                     ; dpx+1 is $FF on this arm, so neither the
         cmp #<-MAXDWY               ; <= -256 test nor the clamp's rewrite of the
@@ -1246,7 +1247,7 @@ player_update:
         beq @nothrow
         lda bactive
         bne @nothrow
-        stz anim
+        stza anim
         lda #1
         sta firing
 @nothrow:
@@ -1262,7 +1263,7 @@ player_update:
         lda keys
         and #(K_UP|K_FIRE)
         beq @stand
-        stz vy                      ; -1280 = $FB00: the low byte is zero
+        stza vy                      ; -1280 = $FB00: the low byte is zero
         lda #>(-1280)
         sta vy+1
         lda #SFX_JUMP
@@ -1281,7 +1282,7 @@ player_update:
         cmp dpx
         bcs :+
         sta dpx
-        stz dpx+1
+        stza dpx+1
 :       sec
         sbc dpx
         sta alt
@@ -1315,9 +1316,9 @@ player_update:
 @fell:  mov16 evframe, frame
         stza health
         jsr bar_touch
-        stz control
-        stz vx
-        stz vx+1
+        stza control
+        stza vx
+        stza vx+1
         lda #SFX_DIE
         sta SFXREQ
 @push:  mov16 qx, px
@@ -1434,7 +1435,7 @@ player_update:
         lda running
         ora firing
         bne :+
-        stz anim
+        stza anim
 :       ; accel = (alt > 0 || push == 3) ? 288 : 36
         lda alt
         beq :+
@@ -1456,7 +1457,7 @@ player_update:
         sta facing
         bra @run
 @right: add16 vx, t16
-        stz facing
+        stza facing
 @run:   lda #1
         sta running
         bra @hmove
@@ -1469,7 +1470,7 @@ player_update:
         adc #0                      ; A = high byte of vx + 128
         sta dpx
         bne :+
-        stz dpx+1                   ; dpx = 0, so its sign extension is 0 too
+        stza dpx+1                   ; dpx = 0, so its sign extension is 0 too
         jmp @hdone
 :       and #$80
         beq :+
@@ -1538,7 +1539,7 @@ player_update:
 :       beq @hdone      ; Z survives from the inc/dec
         jmp @hl
 @wall:  stz vx
-        stz vx+1
+        stza vx+1
 @hdone:
         ; animation counters
         inc anim
@@ -1550,7 +1551,7 @@ player_update:
         ; launch boomerang
         mov16 bx, px
         mov16 by, py
-        stz bvx
+        stza bvx
         lda #>3584
         sta bvx+1
         lda facing
@@ -1558,8 +1559,8 @@ player_update:
         lda #>(-3584)
         sta bvx+1
 @bdir:  stz bvy
-        stz bvy+1
-        stz bcnt
+        stza bvy+1
+        stza bcnt
         lda #1
         sta bactive
         lda #SFX_THROW
@@ -1580,7 +1581,7 @@ player_update:
 :       lda anim
         cmp #128
         bne @animdone
-        stz anim
+        stza anim
 @animdone:
         ; timers
         lda hurt
@@ -1602,7 +1603,7 @@ player_update:
         bcc @noctl
         bra @setctl
 @clrhurt:
-        stz hurt
+        stza hurt
 @afterhurt:
         lda control
         bne @ctl
@@ -1711,7 +1712,7 @@ player_update:
         bge16i rx, 8, @nocatch
         ble16i ry, -8, @nocatch
         bge16i ry, 8, @nocatch
-        stz bactive
+        stza bactive
 @nocatch:
         lda bcnt
         cmp #8
@@ -2224,7 +2225,7 @@ ob_snake:
         lda fc
         and #1
         sta fc
-        stz fe
+        stza fe
 @st:    lda fc
         beq @c0
         cmp #1
@@ -2302,7 +2303,7 @@ ob_snake:
         jsr addscore
 :       inc fc
         inc fc
-        stz fe
+        stza fe
         lda #1
         sta bounce
         lda #SFX_KILL
@@ -2334,7 +2335,7 @@ ob_snake:
         bpl :+
         lda #5
 :       sta fc
-        stz fe
+        stza fe
         lda #8
         sta bcnt
         lda #SFX_KILL
@@ -2443,7 +2444,7 @@ ob_rsnake:
         bgt16 ox, px, :+
         ldx #2
 :       stx fb
-        stz fb+1
+        stza fb+1
         lda q6
         beq :+
         mov16 fc, rise

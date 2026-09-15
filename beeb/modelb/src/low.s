@@ -173,5 +173,8 @@ mirdty:     .res 2                  ; per buffer: the ring's last row has been w
 mirwcx:     .res 2                  ; since the mirror was made, and the wcx it used
 NSPR:       .res 1                  ; the sprite list's length: the logic in bank 7
                                     ; fills it, the blitter in bank 4 walks it
+partlo:     .res 2                  ; per buffer: the columns of the window's top row
+parthi:     .res 2                  ; written since the composed row was last made
+partfine:   .res 2                  ; and the wfine it was made with
 mirlo:      .res 2                  ; and which chars of it were written, so the copy
 mirhi:      .res 2                  ; is the 12 chars a sprite touched, not all 80

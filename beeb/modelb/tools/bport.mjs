@@ -13,7 +13,13 @@ const cpu = s._machine.processor;
 const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(24_000_000);
 { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60); cpu.writemem(0xfe30, was); }
-const tiles = readFileSync("build/tiles.bin"), mp = readFileSync("build/map.bin");
+const tiles = readFileSync("build/tiles.bin");
+// the map is read live out of bank 6: the logic writes tiles into it (vanishing
+// platforms, flowers, a collected box star), so the packed file goes stale
+const liveMap = () => { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 6);
+  const m2 = new Uint8Array(1024); for (let i = 0; i < 1024; i++) m2[i] = cpu.readmem(lab.LV_MAP + i);
+  cpu.writemem(0xfe30, was); return m2; };
+let mp = null;
 const r16 = (a) => cpu.readmem(a) | (cpu.readmem(a + 1) << 8);
 let stopAt = 0;
 cpu.debugInstruction.add((p) => p === stopAt && cpu.readmem(0xf4) === 7);
@@ -26,8 +32,9 @@ const keptRects = () => {
     out.push({ cx: cpu.readmem(p + 5) | (cpu.readmem(p + 6) << 8), cy: cpu.readmem(p + 7),
                w: cpu.readmem(p + 8), h: cpu.readmem(p + 9) & 0x7f }); }
   cpu.writemem(0xfe30, was); return out; };
-const check = () => { const kept = keptRects();
+const check = () => { const kept = keptRects(); mp = liveMap();
   const inKept = (cx, cy) => kept.some((r) => cx >= r.cx && cx < r.cx + r.w && cy >= r.cy && cy < r.cy + r.h);
+  mp = liveMap();
   const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7);
   const buf = cpu.readmem(lab.curbuf), base = buf ? 0x4680 : 0x0a80, wcx = r16(lab.wcx), wcy = cpu.readmem(lab.wcy);
   let bad = 0;
