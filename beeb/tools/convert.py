@@ -855,28 +855,65 @@ for g in (0, 1):
     open(os.path.join(OUT, 'TILES' + SETNAME[g]), 'wb').write(
         b''.join(tiles_mode2[c] for c in tileset[g]))
 
-# Isolated black tiles read as holes punched in the foreground: a cell that dithers to
-# solid black but is orthogonally surrounded by textured tiles (two of L1B's are brick
-# walls whose dark brown falls to black in the four inks; the rest are shadow tiles).
-# Fill each with its commonest textured neighbour so it blends into the wall or floor.
-# Keyed on this mode's solid-black set, so MODE 2 -- which shows these as brick -- is
-# left alone.
+# Isolated black cells read as holes punched in the foreground.  A hole is black
+# that is NOT part of the backdrop: a 4-connected component of solid-black cells of
+# at most four cells (1x1 up to 2x2) that touches neither the map edge nor any other
+# black -- so a black cell under the black sky beside a doorway is backdrop, not a
+# hole, however textured its floor neighbours are.  Each hole is filled with the
+# majority tile among the component's textured neighbours; on a tie, the neighbour
+# whose art is nearest the hole's own (so a doorframe never wins over a wall).  Keyed
+# on this mode's solid-black set, so MODE 2, which shows these tiles, is left alone.
+def _tile_mean(c):
+    o = [oo for oo, cc in orig2compact.items() if cc == c]
+    return til_rgb0[til_idx[o[0] * 8:o[0] * 8 + 8, :]].reshape(-1, 3).mean(0) if o else np.zeros(3)
 for (lv, sub), cm in maps.items():
     rm = remap[tileset_of(lv, sub)]
-    sb = lambda c: rm.get(int(c)) == SOLID_BLACK
-    tex = lambda c: rm.get(int(c), 0) < SOLID_CYAN
     h, w = cm.shape
+    black = np.vectorize(lambda c: rm.get(int(c)) == SOLID_BLACK)(cm)
+    tex = lambda c: rm.get(int(c), 0) < SOLID_CYAN
+    seen = np.zeros_like(black)
     fills = []
-    for y in range(1, h - 1):
-        for x in range(1, w - 1):
-            if sb(cm[y, x]):
-                t = [int(c) for c in (cm[y, x-1], cm[y, x+1], cm[y-1, x], cm[y+1, x]) if tex(c)]
-                if len(t) >= 3:
-                    fills.append((x, y, max(set(t), key=t.count)))
+    for y in range(h):
+        for x in range(w):
+            if not black[y, x] or seen[y, x]:
+                continue
+            comp, stack, edge = [], [(y, x)], False
+            seen[y, x] = True
+            while stack and len(comp) <= 4:
+                cy, cx = stack.pop(); comp.append((cy, cx))
+                for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                    ny, nx = cy + dy, cx + dx
+                    if not (0 <= ny < h and 0 <= nx < w):
+                        edge = True; continue
+                    if black[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True; stack.append((ny, nx))
+            if stack or len(comp) > 4 or edge:
+                for cy, cx in stack: pass                  # (the rest is marked as visited on the way)
+                while stack:
+                    cy, cx = stack.pop()
+                    for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                        ny, nx = cy + dy, cx + dx
+                        if 0 <= ny < h and 0 <= nx < w and black[ny, nx] and not seen[ny, nx]:
+                            seen[ny, nx] = True; stack.append((ny, nx))
+                continue
+            nb = []
+            for cy, cx in comp:
+                for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                    ny, nx = cy + dy, cx + dx
+                    if (ny, nx) not in comp and tex(cm[ny, nx]):
+                        nb.append(int(cm[ny, nx]))
+            if not nb:
+                continue
+            top = max(nb.count(c) for c in set(nb))
+            cands = [c for c in set(nb) if nb.count(c) == top]
+            me = _tile_mean(int(cm[comp[0][0], comp[0][1]]))
+            pick = min(cands, key=lambda c: float(np.sum((_tile_mean(c) - me) ** 2)))
+            for cy, cx in comp:
+                fills.append((cx, cy, pick))
     for (x, y, c) in fills:
         cm[y, x] = c
     if fills:
-        print('%s: filled %d isolated black foreground cells' % (name_of(lv, sub), len(fills)))
+        print('%s: filled %d isolated black cells (%d holes)' % (name_of(lv, sub), len(fills), len(set((x, y) for x, y, _ in fills))))
 
 for (lv, sub), L in levels.items():
     cm = maps[(lv, sub)]
