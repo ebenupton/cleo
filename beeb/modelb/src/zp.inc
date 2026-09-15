@@ -43,10 +43,17 @@ VS2T:     .res 2                    ; vsync -> the bar's restart, in T1 ticks
 BUF_SEC0: .res 4                    ; per buffer: the CRTC start of section 0
 BUF_SEC0T1: .res 4                  ;   and how long it lasts
 MAPBUF:   .res 48                   ; a strip of map, fetched from bank 6 in one call
-dt_tx:    .res 1                    ; draw_maprect: the tile rectangle
+dt_cx:    .res 1                    ; draw_maprect: chars across, tile rows down
+dt_ncx:   .res 1
 dt_ty:    .res 1
-dt_nx:    .res 1
 dt_ny:    .res 1
+dt_t0:    .res 1                    ; the tiles that char range spans
+dt_nt:    .res 1
+dt_ls:    .res 1                    ; chars skipped at the left of the first tile
+dt_rem:   .res 1                    ; chars of the range still to draw
+dt_s:     .res 1                    ; draw_tile: first char of the tile, and how many
+dt_n:     .res 1
+dt_c:     .res 1
 dt_i:     .res 1
 dst0:     .res 2                    ; where its two char rows go in the ring
 dst1:     .res 2
@@ -101,6 +108,7 @@ anim:     .res 1
 t16:      .res 2
 tx0:      .res 1                    ; the window's first tile, derived from wcx/wcy
 ty0:      .res 1
+winy:     .res 1                    ; tile rows the window spans: 11 or 12
 ga_x:     .res 1                    ; ground_at's working values
 ga_tx:    .res 1
 ga_ty:    .res 1

@@ -71,7 +71,7 @@ init:
         jsr select_backbuf
         jsr scroll_validate
         jsr mirror_copy
-        jsr bar_pattern
+        farjsr F_BARFLUSH
         lda #0
         sta curbuf
         sta DISPSECT
@@ -102,7 +102,8 @@ frame_top:
         jsr scroll_validate
         farjsr F_ERASE              ; put tiles back where this buffer's sprites were
         jsr queue_sprites
-        farjsr F_DRAWSPR
+pre_spr:                            ; the ring is pure map here: scrolled and erased,
+        farjsr F_DRAWSPR            ; before a single sprite has gone down
         farjsr F_PARTIAL            ; the fine-scroll row, from what was just drawn
         jsr mirror_copy             ; and the ring's last row, for the straddle
         jsr build_sections
@@ -187,21 +188,21 @@ init_far:
         dex
         bpl :-
         rts
-@src:   .byte BANK_LGC, <vsync_tick, >vsync_tick
-        .byte BANK_LGC, <vsync_tick, >vsync_tick    ; F_SCANKEYS, not yet
-        .byte BANK_LGC, <vsync_tick, >vsync_tick    ; F_SNDTICK, not yet
-        .byte BANK_MAP, <map_strip, >map_strip
-        .byte BANK_TIL, <draw_maprect, >draw_maprect
+@src:   .byte BANK_LGC, <(vsync_tick-1), >(vsync_tick-1)
+        .byte BANK_LGC, <(vsync_tick-1), >(vsync_tick-1)    ; F_SCANKEYS, not yet
+        .byte BANK_LGC, <(vsync_tick-1), >(vsync_tick-1)    ; F_SNDTICK, not yet
+        .byte BANK_MAP, <(map_strip-1), >(map_strip-1)
+        .byte BANK_TIL, <(draw_maprect-1), >(draw_maprect-1)
         .byte BANK_TIL, 0, 0
         .byte BANK_TIL, 0, 0
-        .byte BANK_SPR, <draw_sprites, >draw_sprites
-        .byte BANK_SPR, <erase_old, >erase_old
-        .byte BANK_TIL, <copy_partial, >copy_partial
-        .byte BANK_TIL, 0, 0
-        .byte BANK_SPR, <addsprite, >addsprite
-        .byte BANK_SPR, <init_masks, >init_masks
-        .byte BANK_MAP, <alt_row, >alt_row
-        .byte BANK_MAP, <map_copy, >map_copy
+        .byte BANK_SPR, <(draw_sprites-1), >(draw_sprites-1)
+        .byte BANK_SPR, <(erase_old-1), >(erase_old-1)
+        .byte BANK_TIL, <(copy_partial-1), >(copy_partial-1)
+        .byte BANK_TIL, <(bar_draw-1), >(bar_draw-1)
+        .byte BANK_SPR, <(addsprite-1), >(addsprite-1)
+        .byte BANK_SPR, <(init_masks-1), >(init_masks-1)
+        .byte BANK_MAP, <(alt_row-1), >(alt_row-1)
+        .byte BANK_MAP, <(map_copy-1), >(map_copy-1)
 
 ; wx/wy from the char window: a char is two game pixels across and a char row is
 ; four down, with wfine the two-scanline remainder.
@@ -678,16 +679,14 @@ clear_screen:                       ; $0300-$7FFF: the bar, both mirrors and bot
 
 ; the whole window: 20 tiles across, 11 tile rows (22 char rows)
 draw_window:
-        lda wcx                     ; a tile is four chars and two char rows
-        lsr
-        lsr
-        sta dt_tx
-        lda wcy
+        lda wcx
+        sta dt_cx
+        lda #ROWCHARS
+        sta dt_ncx
+        lda wcy                     ; a tile is two char rows
         lsr
         sta dt_ty
-        lda #20
-        sta dt_nx
-        lda #11
+        lda #(BUFROWS+2)/2
         sta dt_ny
         farjsr F_DRAWRECT
         rts
@@ -765,36 +764,59 @@ bar_pattern:                        ; yellow with a black tick every eight chars
         bne @b
         rts
 
-; the mirror is a copy of the ring's last row, so a straddling row reads as one run
+; The mirror is a copy of the ring's last row, so the one displayed row that
+; straddles the ring end can be read as a single run.  Only the chars that row
+; actually takes from it -- wcx..79 -- need to be right, and when the window is
+; row aligned there is no straddling row at all.
 mirror_copy:
-        ldx #RINGROWS-1
+        lda wcx
+        ora wcx+1
+        bne :+
+        rts
+:       ldx #RINGROWS-1             ; source: the last slot, from char wcx
         lda RINGLO,x
         sta w16
         lda RINGHI,x
         sta w16+1
-        lda ringbase
-        sec
-        sbc #<ROWBYTES
+        lda wcx                     ; + wcx*8
+        sta tmp
+        lda #0
+        sta tmp2
+        asl tmp
+        rol tmp2
+        asl tmp
+        rol tmp2
+        asl tmp
+        rol tmp2
+        lda w16
+        clc
+        adc tmp
+        sta w16
+        lda w16+1
+        adc tmp2
+        sta w16+1
+        lda w16                     ; destination: the same char of the mirror, one
+        sec                         ; whole ring lower
+        sbc #<RINGBYTES
         sta w16b
-        lda ringbase+1
-        sbc #>ROWBYTES
+        lda w16+1
+        sbc #>RINGBYTES
         sta w16b+1
+        lda #ROWCHARS               ; (80 - wcx) chars of eight bytes
+        sec
+        sbc wcx
+        sta tmp
         ldy #0
-        ldx #>ROWBYTES
-:       lda (w16),y
+@c:     .repeat 8
+        lda (w16),y
         sta (w16b),y
         iny
-        bne :-
+        .endrepeat
+        bne :+
         inc w16+1
         inc w16b+1
-        dex
-        bne :-
-        ldx #<ROWBYTES              ; the odd half page
-:       lda (w16),y
-        sta (w16b),y
-        iny
-        dex
-        bne :-
+:       dec tmp
+        bne @c
         rts
 
         .include "tables.inc"

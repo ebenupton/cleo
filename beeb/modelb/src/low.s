@@ -8,20 +8,33 @@
 ; ---------------------------------------------------------------- far calls
 ; X = the index of a (bank, address) entry.  The caller's bank comes back from the
 ; stack, so a bank may call one that replaces it, and a call may nest.
+; X = the index of a (bank, address-1) entry.  The target address goes on the
+; stack rather than into a patched jsr: the interrupt handler far-calls too, and
+; a step landing between the patch and the jump sent the foreground wherever the
+; handler was going.  Everything here is on the stack, so it nests and re-enters.
+;
+;   caller's return
+;   caller's bank          <- fcret pulls this
+;   fcret-1                <- the target's rts lands here
+;   target-1               <- this rts goes there
 farcall:
-        sta fc_a                    ; A is an argument and a result, so it travels
-        lda ROMSEL_CPY              ; around the bank switch on both legs
+        sta fc_a
+        lda ROMSEL_CPY
+        pha
+        lda #>(fcret-1)
+        pha
+        lda #<(fcret-1)
+        pha
+        lda FARTAB+2,x
         pha
         lda FARTAB+1,x
-        sta @j+1
-        lda FARTAB+2,x
-        sta @j+2
+        pha
         lda FARTAB,x
         sta ROMSEL_CPY
         sta ROMSEL
         lda fc_a
-@j:     jsr $FFFF
-        sta fc_a
+        rts
+fcret:  sta fc_a
         pla
         sta ROMSEL_CPY
         sta ROMSEL

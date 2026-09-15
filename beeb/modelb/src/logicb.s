@@ -120,8 +120,8 @@ player_step:
         sta w16b
         lda px+1
         adc #0
-        bmi @novx                   ; off the left edge
-        sta w16b+1
+        bne @novx                   ; off either edge: the map is 256 px wide, and
+        sta w16b+1                  ; ground_at only ever looks at the low byte
         lda py                      ; look from eight pixels above her feet, so a
         sec                         ; step up is found as well as the floor
         sbc #8
@@ -322,97 +322,127 @@ camera:
 ; ---------------------------------------------------------------- scrolling
 ; The ring holds the window's rows wherever the map says they go, so what a move
 ; costs is the strip that has just come into view.
+; scroll_validate: make every char of the window valid in this buffer, redrawing
+; only what the window has moved over since this buffer was last drawn.  The window
+; is 80 chars by BUFROWS char rows; what is tracked per buffer is its char origin,
+; because a move of one char can need a new tile column even when the tile origin
+; has not changed.
 scroll_validate:
-        lda wcx
+        jmp @sv
+@tofull:jmp @full                   ; within reach of the tests below
+@sv:    lda wcx
         lsr
         lsr
         sta tx0
-        lda wcy
+        lda wcy                     ; the tile rows the window spans, first and last
         lsr
         sta ty0
+        lda wcy
+        clc
+        adc #BUFROWS-1
+        lsr
+        sec
+        sbc ty0
+        clc
+        adc #1
+        sta winy
         ldx curbuf
         lda bvalid,x
         bne @inc
         lda #1                      ; this buffer has never been drawn
         sta bvalid,x
-        lda tx0
-        sta dt_tx
-        lda ty0
-        sta dt_ty
-        lda #WINTX
-        sta dt_nx
-        lda #WINTY
-        sta dt_ny
-        farjsr F_DRAWRECT
-        jmp @save
+        jmp @full
 @inc:   ldx curbuf
-        lda ty0                     ; ---- vertical
+        lda wcy                     ; ---- vertical, in char rows
         sec
         sbc bpty,x
         beq @dx
         bmi @up
-        cmp #WINTY
-        bcs @full
-        sta dt_ny
+        cmp #BUFROWS
+        bcs @tofull
+        clc                         ; new rows are bpty+BUFROWS .. wcy+BUFROWS-1
+        adc bpty,x
+        sta tmp3                    ; = the old bottom row + 1 .. the new bottom row
         lda bpty,x
         clc
-        adc #WINTY
+        adc #BUFROWS
+        lsr                         ; -> first new tile row
         sta dt_ty
-        bra @vdraw
-@up:    eor #$FF
+        lda tmp3
+        clc
+        adc #BUFROWS-1
+        lsr                         ; -> last new tile row
+        sec
+        sbc dt_ty
         clc
         adc #1
-        cmp #WINTY
-        bcs @full
         sta dt_ny
-        lda ty0
+        jmp @vdraw
+@up:    lda bpty,x                  ; new rows are wcy .. bpty-1
+        sec
+        sbc wcy
+        cmp #BUFROWS
+        bcs @tofull
+        lda wcy
+        lsr
         sta dt_ty
-@vdraw: lda tx0
-        sta dt_tx
-        lda #WINTX
-        sta dt_nx
+        ldx curbuf
+        lda bpty,x
+        sec
+        sbc #1
+        lsr
+        sec
+        sbc dt_ty
+        clc
+        adc #1
+        sta dt_ny
+@vdraw: lda wcx
+        sta dt_cx
+        lda #ROWCHARS
+        sta dt_ncx
         farjsr F_DRAWRECT
 @dx:    ldx curbuf
-        lda tx0                     ; ---- horizontal
+        lda wcx                     ; ---- horizontal, in chars
         sec
         sbc bptx,x
         beq @save
         bmi @left
-        cmp #WINTX
-        bcs @full
-        sta dt_nx
+        cmp #ROWCHARS
+        bcs @tofull2
+        sta dt_ncx                  ; new chars are bptx+80 .. wcx+79
         lda bptx,x
         clc
-        adc #WINTX
-        sta dt_tx
+        adc #ROWCHARS
+        sta dt_cx
         bra @hdraw
 @left:  eor #$FF
         clc
         adc #1
-        cmp #WINTX
-        bcs @full
-        sta dt_nx
-        lda tx0
-        sta dt_tx
+        cmp #ROWCHARS
+        bcs @tofull2
+        sta dt_ncx                  ; new chars are wcx .. bptx-1
+        lda wcx
+        sta dt_cx
 @hdraw: lda ty0
         sta dt_ty
-        lda #WINTY
+        lda winy
         sta dt_ny
         farjsr F_DRAWRECT
         bra @save
-@full:  lda tx0
-        sta dt_tx
+@tofull2:                           ; in reach of the horizontal tests above
+@full:  lda wcx
+        sta dt_cx
+        lda #ROWCHARS
+        sta dt_ncx
         lda ty0
         sta dt_ty
-        lda #WINTX
-        sta dt_nx
-        lda #WINTY
+        lda winy
         sta dt_ny
         farjsr F_DRAWRECT
 @save:  ldx curbuf
-        lda tx0
+        lda wcx
         sta bptx,x
-        lda ty0
+        lda wcy
         sta bpty,x
         rts
 
@@ -451,9 +481,15 @@ queue_sprites:
         sta tmp3
 @o:     ldx tmp3
         lda OBJS,x                  ; type
+        cmp #2
+        bcs @next                   ; only stars and trampolines are drawn here
+        jsr @pos
+        jsr @onscreen               ; queueing what cannot be seen costs an erase
+        bcc @next                   ; rectangle a frame, which is most of the budget
+        ldx tmp3
+        lda OBJS,x
         cmp #0
         bne @notstar
-        jsr @pos
         lda anim                    ; the star spins
         lsr
         lsr
@@ -462,9 +498,6 @@ queue_sprites:
         adc #34
         bra @add
 @notstar:
-        cmp #1
-        bne @next
-        jsr @pos
         lda #43                     ; a trampoline
 @add:   farjsr F_ADDSPR
 @next:  lda tmp3
@@ -501,6 +534,29 @@ queue_sprites:
         adc facing
         farjsr F_ADDSPR
         rts
+; C = 1 if spx/spy is close enough to the window to be worth drawing
+@onscreen:
+        lda spx+1
+        bne @off                    ; past 255: this map is 256 pixels wide
+        lda spx
+        sec
+        sbc wx
+        bcc @off                    ; left of the window
+        cmp #160+24
+        bcs @off
+        lda spy+1
+        bne @off
+        lda spy
+        sec
+        sbc wy
+        bcc @off
+        cmp #VISROWS*4+24
+        bcs @off
+        sec
+        rts
+@off:   clc
+        rts
+
 @pos:   ldx tmp3                    ; the object's tile position, in pixels
         lda OBJS+1,x
         sta tmp4

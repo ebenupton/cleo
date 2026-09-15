@@ -10,15 +10,15 @@
         tax
         lda RINGMODTAB,x
 .endmacro
-.macro ringup                       ; A = sp+1 just advanced: fold sp:A at the ring end
-        .local done
-        cmp ringehi
-        bcc done
+.macro ringup ptr                   ; A = ptr+1 just advanced: fold ptr:A at the ring end
+        .local done                 ; the pointer is named: the row step folds sp_rb,
+        cmp ringehi                 ; not sp, and a macro that only ever knew sp left
+        bcc done                    ; the row 16 chars along at the wrap
         pha                         ; the ring is 23 rows of 640, which is not a whole
-        lda sp                      ; number of pages, so the low byte moves too
+        lda ptr                     ; number of pages, so the low byte moves too
         sec
         sbc #<RINGBYTES
-        sta sp
+        sta ptr
         pla
         sbc #>RINGBYTES
 done:
@@ -32,7 +32,7 @@ done:
         bcc done
         lda sp+1
         inca
-        ringup
+        ringup sp
         sta sp+1
 done:
 .endmacro
@@ -55,7 +55,7 @@ ringaddr:
         sta sp
         lda sp+1
         adc RINGHI,x
-        ringup
+        ringup sp
         sta sp+1
         rts
 
@@ -156,25 +156,14 @@ erase_old:
 :       sta rp
 @l:     ldy #5
         lda (rp),y                  ; cx low (the high byte only matters past 255
-        lsr                         ; chars, which no window reaches)
-        lsr
-        sta dt_tx
+        sta dt_cx                   ; chars, which no window reaches)
+        ldy #8
+        lda (rp),y                  ; w in chars: the rectangle is clipped to the
+        sta dt_ncx                  ; char, so it goes straight in
         ldy #7
         lda (rp),y                  ; cy
         lsr
         sta dt_ty
-        ldy #5
-        lda (rp),y
-        and #3                      ; the columns the rounding down left out
-        sta tmp2
-        ldy #8
-        lda (rp),y                  ; w in chars
-        clc
-        adc tmp2
-        adc #3
-        lsr
-        lsr
-        sta dt_nx
         ldy #7
         lda (rp),y
         and #1
@@ -187,7 +176,7 @@ erase_old:
         adc #1
         lsr
         sta dt_ny
-        lda dt_nx
+        lda dt_ncx
         beq @next
         lda dt_ny
         beq @next
@@ -557,8 +546,9 @@ drawsprite:
         sta (rp),y
         iny
         lda sp_r1
-        sbc sp_r0                   ; C still set by the width sbc above (sp_c1 >= sp_c0)
-        inca
+        sec                         ; inca is clc/adc #1: the width's carry is long gone,
+        sbc sp_r0                   ; and without this the record is one row short and
+        inca                        ; the sprite's bottom row is never erased
         ldx spclip
         beq :+                      ; may be visible next time and it has to be redrawn
         ora #$80
@@ -799,7 +789,7 @@ ds_rowdone:
         sta sp_rb
         lda sp_rb+1
         adc #>ROWBYTES
-        ringup
+        ringup sp_rb
         sta sp_rb+1
         jmp ds_rowloop
 ds_done: rts
