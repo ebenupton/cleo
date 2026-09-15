@@ -60,6 +60,9 @@ UVIA_IER  = $FE6E
 IRQ1V     = $0204
 OSWRCH    = $FFEE
 
+RINGMODTAB = $8000                  ; 256 bytes at the foot of every bank
+BANKCODE   = $8100                  ; where each bank's code starts
+
 MAXSPR    = 24
 MAXREC    = 16
 

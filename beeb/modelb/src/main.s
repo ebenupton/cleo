@@ -2,14 +2,21 @@
         .include "defs.inc"
         .include "cpu.inc"
         .include "zp.inc"
+        .include "assets.inc"
         .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute
         .import __LOWCODE_SIZE__: absolute
+        .segment "TAB4"
+        .incbin "build/ringmod.bin"
+        .segment "TAB5"
+        .incbin "build/ringmod.bin"
+        .segment "TAB6"
+        .incbin "build/ringmod.bin"
+        .segment "TAB7"
+        .incbin "build/ringmod.bin"
         .include "low.s"
         .include "bank7.s"
+        .include "bank6.s"
+        .include "bank5.s"
 
         .segment "SPRCODE"
-        .byte 0
-        .segment "TILCODE"
-        .byte 0
-        .segment "MAPCODE"
         .byte 0

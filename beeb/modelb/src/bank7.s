@@ -10,10 +10,11 @@ init:
         ldx #$3F                    ; the stack is 64 bytes: $0100-$013F
         txs
         lda #0                      ; the OS left its own variables here; $F0-$FF is
-        ldx #$EF                    ; left alone ($F4 is the bank the loader selected,
+        ldx #0                      ; left alone ($F4 is the bank the loader selected,
 :       sta $00,x                   ; and the OS IRQ still restores from it until
-        dex                         ; take_over)
-        bpl :-
+        inx                         ; take_over).  Counting up: $EF is negative, so a
+        cpx #$F0                    ; dex/bpl loop would stop after one store
+        bne :-
         ; the main-RAM image travels in bank 7 and is copied down to $0140
         lda #<__LOWCODE_LOAD__
         sta w16
@@ -33,18 +34,17 @@ init:
         inc w16b+1
         dex
         bne @lc
-        jsr init_tables
         jsr init_far
         jsr clear_screen
         lda #0
         sta curbuf
         jsr select_backbuf
-        jsr test_pattern
+        jsr draw_window
         jsr mirror_copy
         lda #1
         sta curbuf
         jsr select_backbuf
-        jsr test_pattern
+        jsr draw_window
         jsr mirror_copy
         jsr bar_pattern
         lda #0
@@ -181,8 +181,8 @@ init_far:
 @src:   .byte BANK_LGC, <vsync_tick, >vsync_tick
         .byte BANK_LGC, <vsync_tick, >vsync_tick    ; F_SCANKEYS, not yet
         .byte BANK_LGC, <vsync_tick, >vsync_tick    ; F_SNDTICK, not yet
-        .byte BANK_MAP, 0, 0
-        .byte BANK_TIL, 0, 0
+        .byte BANK_MAP, <map_strip, >map_strip
+        .byte BANK_TIL, <draw_maprect, >draw_maprect
         .byte BANK_TIL, 0, 0
         .byte BANK_TIL, 0, 0
         .byte BANK_SPR, 0, 0
@@ -192,36 +192,6 @@ init_far:
         .byte BANK_SPR, 0, 0
 
 ; ---------------------------------------------------------------- tables
-init_tables:
-        ldx #0                      ; slot -> its first char, and -> its address later
-        lda #0
-        sta w16
-        sta w16+1
-@m:     lda w16
-        sta mulrowlo,x
-        lda w16+1
-        sta mulrowhi,x
-        lda w16
-        clc
-        adc #ROWCHARS
-        sta w16
-        bcc :+
-        inc w16+1
-:       inx
-        cpx #RINGROWS+1
-        bne @m
-        ldx #0                      ; row -> slot: the ring is not a power of two
-        lda #0
-@r:     sta ringmodtab,x
-        clc
-        adc #1
-        cmp #RINGROWS
-        bcc :+
-        lda #0
-:       inx
-        bne @r
-        rts
-
 ; select_backbuf: point the ring tables, the fold and the CRTC base at curbuf
 select_backbuf:
         lda curbuf
@@ -278,7 +248,7 @@ select_backbuf:
 ; calc_ring: ringS = ((wcy mod RINGROWS) * 80 + wcx) mod RINGCHARS ; barq = ringS / 80
 calc_ring:
         ldx wcy
-        lda ringmodtab,x
+        lda RINGMODTAB,x
         tax
         lda mulrowlo,x
         clc
@@ -668,6 +638,22 @@ clear_screen:                       ; $0300-$7FFF: the bar, both mirrors and bot
         bne :-
         rts
 
+; the whole window: 20 tiles across, 11 tile rows (22 char rows)
+draw_window:
+        lda wcx                     ; a tile is four chars and two char rows
+        lsr
+        lsr
+        sta dt_tx
+        lda wcy
+        lsr
+        sta dt_ty
+        lda #20
+        sta dt_nx
+        lda #11
+        sta dt_ny
+        farjsr F_DRAWRECT
+        rts
+
 ; A pattern that makes the geometry readable: each ring row is a band of one colour
 ; with its slot number written as a run of black chars at the left, so the order of
 ; the rows on screen, the wrap and the mirror can all be counted off.
@@ -773,7 +759,6 @@ mirror_copy:
         bne :-
         rts
 
+        .include "tables.inc"
+
         .segment "LGCBSS"
-mulrowlo:   .res RINGROWS+1
-mulrowhi:   .res RINGROWS+1
-ringmodtab: .res 256

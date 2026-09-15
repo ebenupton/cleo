@@ -41,3 +41,10 @@ VS2T:     .res 2                    ; vsync -> the bar's restart, in T1 ticks
 BUF_SEC0: .res 4                    ; per buffer: the CRTC start of section 0
 BUF_SEC0T1: .res 4                  ;   and how long it lasts
 MAPBUF:   .res 48                   ; a strip of map, fetched from bank 6 in one call
+dt_tx:    .res 1                    ; draw_maprect: the tile rectangle
+dt_ty:    .res 1
+dt_nx:    .res 1
+dt_ny:    .res 1
+dt_i:     .res 1
+dst0:     .res 2                    ; where its two char rows go in the ring
+dst1:     .res 2

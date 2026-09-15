@@ -4,6 +4,7 @@
 ; do the transfer), so each image is staged at $2000 in main RAM and copied.
 ; ============================================================================
         .setcpu "6502"
+BANKCODE = $8100
 OSFILE  = $FFDD
 OSWRCH  = $FFEE
 ROMSEL  = $FE30
@@ -72,7 +73,7 @@ start:
         lda #7
         sta ROMSELC
         sta ROMSEL
-        jmp $8000                   ; bank 7's entry vector
+        jmp BANKCODE                ; bank 7's entry vector
 
 idx:      .byte 0
 oldbank:  .byte 0
