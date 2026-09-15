@@ -36,6 +36,7 @@ init:
         bne @lc
         jsr init_far
         farjsr F_SPRINIT            ; the MASKTABs, and the directory's pointers
+        farjsr F_TILINIT            ; and the tile address tables
         jsr clear_screen
         lda #1                      ; the mirrors have never been made
         sta mirdty
@@ -43,6 +44,11 @@ init:
         lda #$FF
         sta mirwcx
         sta mirwcx+1
+        sta mirlo
+        sta mirlo+1
+        lda #0
+        sta mirhi
+        sta mirhi+1
         lda #0                      ; a bank's .res is not cleared by loading it
         sta bvalid
         sta bvalid+1
@@ -161,7 +167,7 @@ vsync_tick:
         lda vsyncs
         sec
         sbc flipvs
-        cmp #2
+        cmp #VSPEG
         bcc @noflip
         lda vsyncs
         sta flipvs
@@ -213,6 +219,8 @@ init_far:
         .byte BANK_SPR, <(init_masks-1), >(init_masks-1)
         .byte BANK_MAP, <(alt_row-1), >(alt_row-1)
         .byte BANK_MAP, <(map_copy-1), >(map_copy-1)
+        .byte BANK_TIL, <(tile_init-1), >(tile_init-1)
+        .byte BANK_MAP, <(map_rect-1), >(map_rect-1)
 
 ; wx/wy from the char window: a char is two game pixels across and a char row is
 ; four down, with wfine the two-scanline remainder.
@@ -789,10 +797,14 @@ bar_pattern:                        ; yellow with a black tick every eight chars
 mirror_copy:
         ldx curbuf
         lda wcx                     ; a move left uncovers chars the last copy never
-        cmp mirwcx,x                ; reached, so the mirror has to be made again
+        cmp mirwcx,x                ; reached, so the whole row has to be made again
         bcs :+
         lda #1
         sta mirdty,x
+        lda #0
+        sta mirlo,x
+        lda #ROWCHARS-1
+        sta mirhi,x
 :       lda mirdty,x                ; nothing has touched the ring's last row in this
         bne :+                      ; buffer since the mirror was last made
         rts
@@ -808,7 +820,19 @@ mirror_copy:
         sta w16
         lda RINGHI,x
         sta w16+1
-        lda wcx                     ; + wcx*8
+        ldx curbuf                  ; the copy starts at the first written char, or at
+        lda mirlo,x                 ; wcx if the writing started left of the window
+        cmp wcx
+        bcs :+
+        lda wcx
+:       sta tmp4                    ; and runs to the last written one
+        lda mirhi,x
+        sta tmp3
+        lda #$FF                    ; the written range is empty again
+        sta mirlo,x
+        lda #0
+        sta mirhi,x
+        lda tmp4
         sta tmp
         lda #0
         sta tmp2
@@ -832,9 +856,13 @@ mirror_copy:
         lda w16+1
         sbc #>RINGBYTES
         sta w16b+1
-        lda #ROWCHARS               ; (80 - wcx) chars of eight bytes
+        lda tmp3                    ; the chars from the first written to the last
         sec
-        sbc wcx
+        sbc tmp4
+        bcs :+                      ; nothing of it is in the window
+        rts
+:       clc
+        adc #1
         sta tmp
         ldx curbuf                  ; the chars left of wcx are not copied
         lda wcx

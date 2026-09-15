@@ -36,6 +36,9 @@ CRTCB_B   = RING_B / 8
 
 ; 39 rows of 8 lines = 312.  2 bar + 21 playfield + 16 blanking, vsync at Q row 8, so
 ; the picture starts 64 lines after the vsync: 4 lines below where a MODE 1 screen sits.
+VSPEG     = 3                       ; vsyncs a rendered frame: the logic steps once a
+                                    ; frame, so a frame that sometimes takes two and
+                                    ; sometimes three moves the world at two speeds
 QROWS     = 39 - VISROWS - BARROWS
 QVSYNC    = 8
 LINE      = 64                      ; T1 ticks in one scanline
@@ -88,4 +91,6 @@ F_ADDSPR   = 11*3
 F_SPRINIT  = 12*3
 F_ALTROW   = 13*3
 F_MAPCOPY  = 14*3                   ; bank 6's
-NFAR       = 15
+F_TILINIT  = 15*3
+F_MAPRECT  = 16*3                   ; a whole tile rectangle in one call
+NFAR       = 17

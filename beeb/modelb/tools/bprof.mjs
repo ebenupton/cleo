@@ -9,7 +9,9 @@ s.loadDisc(path.resolve("build/cleob.ssd"));
 const cpu = s._machine.processor;
 const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(13_000_000);
-{ const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60); cpu.writemem(0xfe30, was); }
+{ const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60);
+  if ((process.argv[2] || "").includes("noobj")) cpu.writemem(lab.queue_sprites + 10, 0x00);  // cmp #2 -> cmp #0: every object skipped
+  cpu.writemem(0xfe30, was); }
 // phase boundaries, in the order the loop runs them
 const marks = [["player", lab.player_step], ["camera", lab.camera], ["calc", lab.calc_ring], ["scroll", lab.scroll_validate],
   ["erase", lab.pre_erase], ["queue", lab.queue_sprites], ["sprites", lab.pre_spr], ["partial", lab.pre_part],

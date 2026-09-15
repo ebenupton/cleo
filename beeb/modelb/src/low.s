@@ -41,6 +41,32 @@ fcret:  sta fc_a
         lda fc_a
         rts
 
+; mirdirty: A = the first char written of the row the mirror follows, X = the last.
+; It lives here because a macro with a branch in it cannot be expanded inside the
+; blitters: ca65's anonymous labels are global, so the caller's :+ binds to the
+; macro's colon, and a .local in a macro resets the cheap-local scope of whatever
+; routine it lands in.
+mirdirty:
+        cmp #ROWCHARS               ; only chars 0..79 of the map row are in the ring's
+        bcs @out                    ; last slot row: 80 and up wrapped to slot row 0,
+        pha                         ; which is not what the mirror follows
+        cpx #ROWCHARS
+        bcc :+
+        ldx #ROWCHARS-1
+:       ldy curbuf
+        lda #1
+        sta mirdty,y
+        pla
+        cmp mirlo,y
+        bcs :+
+        sta mirlo,y
+:       txa
+        cmp mirhi,y
+        bcc :+
+        sta mirhi,y
+:       rts
+@out:   rts
+
 ; ---------------------------------------------------------------- map peek
 ; The logic reads single map bytes with this: ptr/Y address the map in bank 6 and
 ; the routine is in main RAM, so only the data is far away.  31 cycles.
@@ -133,3 +159,5 @@ FARTAB:     .res 3*NFAR             ; (bank, lo, hi) per far entry point
 ; the mirror's bookkeeping: every bank writes it, and zero page is full
 mirdty:     .res 2                  ; per buffer: the ring's last row has been written
 mirwcx:     .res 2                  ; since the mirror was made, and the wcx it used
+mirlo:      .res 2                  ; and which chars of it were written, so the copy
+mirhi:      .res 2                  ; is the 12 chars a sprite touched, not all 80

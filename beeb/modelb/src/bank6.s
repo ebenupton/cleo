@@ -35,6 +35,49 @@ map_strip:
         bne @cp
         rts
 
+; map_rect: cnt tiles across by tmp3 rows down from tile (tmp, tmp2), row after row
+; into MAPBUF.  One far call for a whole rectangle instead of one a tile row, which
+; for a narrow one was the largest single cost of drawing it.
+map_rect:
+        stz w16+1
+        lda tmp2
+        ldx #MAPLW
+@sh:    asl
+        rol w16+1
+        dex
+        bne @sh
+        clc
+        adc tmp
+        sta w16
+        lda w16+1
+        adc #0
+        clc
+        adc #>LV_MAP
+        sta w16+1
+        lda w16
+        clc
+        adc #<LV_MAP
+        sta w16
+        bcc :+
+        inc w16+1
+:       ldx #0                      ; x walks MAPBUF, y each row of the map
+@row:   ldy #0
+@cp:    lda (w16),y
+        sta MAPBUF,x
+        inx
+        iny
+        cpy cnt
+        bne @cp
+        lda w16                     ; the next map row is MAPW on
+        clc
+        adc #MAPW
+        sta w16
+        bcc :+
+        inc w16+1
+:       dec tmp3
+        bne @row
+        rts
+
 ; map_col: the same, but a column: cnt bytes down from tile (tmp, tmp2)
 map_col:
         stz w16+1

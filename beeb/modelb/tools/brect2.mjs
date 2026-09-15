@@ -21,7 +21,7 @@ cpu.debugInstruction.add((p) => {
   if (p === lab.frame_top && cpu.readmem(0xf4) === 7) { phase = "scroll"; log.push({ f: cpu.readmem(lab.frame), phase: "FRAME", wcx: cpu.readmem(lab.wcx), wcy: cpu.readmem(lab.wcy) }); }
   else if (p === lab.erase_old && cpu.readmem(0xf4) === 4) phase = "erase";
   else if (p === lab.draw_maprect && cpu.readmem(0xf4) === 5)
-    log.push({ f: cpu.readmem(lab.frame), ret: ((cpu.readmem(0x101+cpu.s) | (cpu.readmem(0x102+cpu.s)<<8))+1).toString(16), phase, cx: cpu.readmem(lab.dt_cx), n: cpu.readmem(lab.dt_ncx), ty: cpu.readmem(lab.dt_ty), ny: cpu.readmem(lab.dt_ny) });
+    log.push({ f: cpu.readmem(lab.frame), ret: ((cpu.readmem(0x101+cpu.s) | (cpu.readmem(0x102+cpu.s)<<8))+1).toString(16), phase, cx: cpu.readmem(lab.dt_cx), n: cpu.readmem(lab.dt_ncx), cy: cpu.readmem(lab.dt_cy), ncy: cpu.readmem(lab.dt_ncy) });
   return p === lab.frame_top && cpu.readmem(0xf4) === 7;
 });
 for (let f = 0; f < frames; f++) { cpu.writemem(lab.keys, keys); for (let i = 0; i < 400; i++) { await s.runFor(2000); if (cpu.pc === lab.frame_top && cpu.readmem(0xf4) === 7) break; } }

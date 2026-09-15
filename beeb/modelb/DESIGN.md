@@ -122,28 +122,66 @@ blitter, the composed row) raises a per-buffer flag when it writes it; `mirror_c
 returns at once when the flag is down.  A move LEFT also raises it, because the copy
 only ever covers chars `wcx..79`.
 
-## What it costs
+## What it costs, and why the frame is pegged at three vsyncs
 
-Measured with `tools/bprof.mjs` on the first level, walking right and jumping, in
-cycles a frame:
+The flip happens at a vsync, so a frame's period is a whole number of them.  Measured
+with `tools/bwork.mjs` on the first level, running right and jumping, the work between
+`frame_top` and the flip is:
+
+| | cycles |
+|---|---|
+| median | 75000 |
+| 90th percentile | 96000 |
+| worst | 103500 |
+
+Two vsyncs is 80000 cycles, so the median frame fits and the heavy ones do not: left
+to itself the game flips on two vsyncs about half the time and three the rest.  The
+logic steps once a rendered frame, so that is the world moving at two speeds -- a
+50% change in how fast Cleo walks, several times a second.  `VSPEG = 3` in `defs.inc`
+holds every frame to three (16.7 fps, steady); set it to 2 to let it free-run.
+
+Where the work goes, in cycles a frame:
 
 | Phase | Cycles |
 |---|---|
-| erase the sprites' old places | 29300 |
-| draw the sprites | 29300 |
-| the scroll strips | 15500 |
-| mirror | 6000 |
-| the composed row | 5000 |
-| queue the sprites | 3500 |
-| the player and the camera | 3400 |
+| draw the sprites | 30700 |
+| erase their old places | 21900 |
+| the scroll strips | 8900 |
+| queue the sprites | 3700 |
+| the composed row | 3600 |
+| the player and the camera | 3100 |
+| the mirror | 600 |
 | build the chain | 900 |
 
-That is about 93000 cycles of work, so the frame lands on the third vsync after it
-started: 16.7 frames a second, with about 20000 cycles of slack before the flip.  Two
-vsyncs (25 fps) needs the work under about 78000, which would take fusing the erase
-into the sprite blitter -- and that cannot be done while the tiles are in bank 5 and
-the sprite blitter is in bank 4, because the fused loop would need a bank switch per
-char.
+Sprites and the erase are two thirds of it.  Getting the worst frame under 80000 would
+take fusing the erase into the sprite blitter, so that a char covered by a sprite is
+written once (tile AND mask, then sprite) instead of twice -- and that cannot be done
+while the tiles are in bank 5 and the sprite blitter in bank 4, because the fused loop
+would need a bank switch per char.
+
+What the tile blitter learned on the way there, in the order it mattered:
+
+- **Fill blank tiles, do not copy them.**  Over half of a level's map is a tile with
+  nothing in it, and a fill is 8 cycles a byte against 13.
+- **Draw both char rows of a tile row at once.**  A tile row is two char rows of the
+  same tile, so the map byte, the tile pointer and the rectangle's bookkeeping are
+  shared; for a narrow rectangle that was most of the cost.  The odd row at either end
+  of a rectangle still goes through the one-row path.
+- **One map fetch a rectangle.**  `map_rect` in bank 6 copies the whole rectangle's
+  tiles into `MAPBUF` in one far call whenever they fit (nt * rows <= 40, which is
+  everything but a full-window redraw).  A far call is ~175 cycles, and it was being
+  paid per tile row.
+- **Step the ring address down the rows** instead of rebuilding it from the slot table
+  and a shift loop, and look the tile's address up in a table rather than shifting.
+- **One unrolled copy chain, labelled every 8 bytes.**  The `y` value comes from the
+  register, so entering at the block for `dt_n` chars copies exactly that many: a
+  partial run costs the same 13 cycles a byte as a whole tile.
+- **Copy only the chars of the mirror that were written.**  Every writer reports the
+  char range it touched of the row the mirror follows; the copy was 80 chars and is
+  now the 12 a sprite covers.  That one took the mirror from 6400 cycles a frame to
+  600.  Chars 80 and up of a map row are NOT in that ring row -- they have wrapped to
+  slot row 0 -- so the range has to be clamped, or the copy runs off the end of the
+  mirror and into the ring.
 
 ## How it is checked
 

@@ -554,17 +554,22 @@ drawsprite:
         ora #$80
 :       sta (rp),y
         lda mrow                    ; if it lands on the row the mirror follows, the
-        sec                         ; mirror has to be made again
-        sbc wcy
+        sec                         ; mirror has to be made again -- over the chars
+        sbc wcy                     ; this sprite covers, not all 80
         bcc @nomir
         cmp sp_r0
         bcc @nomir
         cmp sp_r1
         beq :+
         bcs @nomir
-:       ldx curbuf
-        lda #1
-        sta mirdty,x
+:       lda wcx
+        clc
+        adc sp_c1
+        tax
+        lda wcx
+        clc
+        adc sp_c0
+        jsr mirdirty
 @nomir:
         ; ---- column base pointer & step
         lda sp_flags

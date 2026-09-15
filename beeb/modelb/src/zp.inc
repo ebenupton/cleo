@@ -41,7 +41,9 @@ RINGHI:   .res RINGROWS
 VS2T:     .res 2                    ; vsync -> the bar's restart, in T1 ticks
 BUF_SEC0: .res 4                    ; per buffer: the CRTC start of section 0
 BUF_SEC0T1: .res 4                  ;   and how long it lasts
-MAPBUF:   .res 48                   ; a strip of map, fetched from bank 6 in one call
+MAPBUF:   .res 40                   ; a strip of map, fetched from bank 6 in one call:
+                                    ; 21 tiles is the widest strip, 40 the object fetch
+tp2:      .res 2                    ; the tile's second char row, when both are drawn
 jv:       .res 2                    ; jmpx vector (6502 has no jmp (abs,x))
 mrow:     .res 1                    ; the map char row in the ring's last slot row
 dt_cx:    .res 1                    ; draw_maprect: chars across, char rows down
@@ -49,7 +51,9 @@ dt_ncx:   .res 1
 dt_cy:    .res 1
 dt_ncy:   .res 1
 dt_half:  .res 1                    ; 0 = the tile's top char row, 32 = its bottom
-dt_lastty:.res 1                    ; tile row MAPBUF holds
+dt_lastty:.res 1                    ; tile row MAPBUF holds ($FE = the whole rectangle)
+dt_mbase: .res 1                    ; where this tile row's strip starts in MAPBUF
+dt_ilim:  .res 1
 dt_t0:    .res 1                    ; the tiles that char range spans
 dt_nt:    .res 1
 dt_ls:    .res 1                    ; chars skipped at the left of the first tile

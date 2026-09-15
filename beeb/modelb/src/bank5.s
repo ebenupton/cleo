@@ -5,6 +5,39 @@
 ; whole tiles can straddle the ring end, never their columns.
 ; ============================================================================
         .segment "TILCODE"
+
+.macro SETPTR2                      ; X = tile id -> tp = its top char row, tp2 its
+        lda TILELO,x                ; bottom one
+        sta tp
+        clc
+        adc #32
+        sta tp2
+        lda TILEHI,x
+        sta tp+1
+        sta tp2+1
+.endmacro
+.macro SETY                         ; Y = dt_s chars in, X = dt_n, Z = nothing to draw
+        lda dt_s
+        asl
+        asl
+        asl
+        tay
+        ldx dt_n
+.endmacro
+.macro SPAN                         ; how many of this tile's chars are wanted, and
+        lda #4                      ; what is left of the rectangle after them
+        sec
+        sbc dt_s
+        cmp dt_rem
+        bcc :+
+        lda dt_rem
+:       sta dt_n
+        lda dt_rem
+        sec
+        sbc dt_n
+        sta dt_rem
+.endmacro
+
 ; draw_maprect: the rectangle (dt_cx, dt_cy) size (dt_ncx chars, dt_ncy char rows),
 ; into the ring where the window arithmetic says it goes.  A map char (cx, cy) is
 ; ring char ((cy mod 23)*80 + cx) mod 1840, which does not depend on the window.
@@ -21,9 +54,13 @@ draw_maprect:
         bcc :+
         cmp dt_ncy
         bcs :+
-        ldx curbuf
-        lda #1
-        sta mirdty,x
+        lda dt_cx                   ; then the mirror needs these chars of it again
+        clc
+        adc dt_ncx
+        tax
+        dex
+        lda dt_cx
+        jsr mirdirty
 :       lda dt_cx                   ; the tiles the char range spans, first one first
         lsr
         lsr
@@ -40,6 +77,34 @@ draw_maprect:
         sta dt_nt                   ; tiles the range spans
         lda #$FF
         sta dt_lastty               ; no map strip fetched yet
+        stz dt_mbase
+        lda dt_cy                   ; tile rows the rectangle spans
+        and #1
+        clc
+        adc dt_ncy
+        clc
+        adc #1
+        lsr
+        sta tmp3                    ; nt * rows tiles in all: one far call if they fit
+        tax
+        lda #0
+:       clc
+        adc dt_nt
+        cmp #41
+        bcs @perrow
+        dex
+        bne :-
+        lda dt_cy                   ; they fit: fetch the lot, rows contiguous
+        lsr
+        sta tmp2
+        lda dt_t0
+        sta tmp
+        lda dt_nt
+        sta cnt
+        farjsr F_MAPRECT
+        lda #$FE
+        sta dt_lastty               ; "MAPBUF holds the whole rectangle"
+@perrow:
         lda dt_cy                   ; the first row's ring address, once: every row
         jsr ring_row                ; below it is one row of bytes further on
         lda dt_t0                   ; + 4*t0 chars = 32*t0 bytes, which is 16 bit
@@ -163,23 +228,21 @@ clip_rect:
 @ok:    sec
         rts
 
-dm_row: lda dt_cy                   ; one char row: half of a row of tiles
-        lsr
-        cmp dt_lastty               ; the strip is per tile row, so the second char
-        beq @haverow                ; row of a pair reuses it
+dm_row: lda dt_lastty
+        cmp #$FE                    ; the whole rectangle is already in MAPBUF
+        beq @haverow
+        lda dt_cy                   ; the map strip is per tile row, so the second
+        lsr                         ; char row of a pair reuses it
+        cmp dt_lastty
+        beq @haverow
         sta dt_lastty
         sta tmp2
         lda dt_t0
         sta tmp
         lda dt_nt
         sta cnt
-        farjsr F_MAPSTRIP
+        farjsr F_MAPSTRIP           ; (this is why w16 is set up below it, not above)
 @haverow:
-        lda dt_cy
-        and #1                      ; the tile's second char row is 32 bytes on
-        beq :+
-        lda #32
-:       sta dt_half
         lda dst1                    ; the row's first char
         sta dst0
         lda dst1+1
@@ -188,63 +251,141 @@ dm_row: lda dt_cy                   ; one char row: half of a row of tiles
         sta dt_rem
         lda dt_ls
         sta dt_s                    ; only the first tile starts part way in
-        ldx #0
-        stx dt_i
-@tile:  lda dt_s                    ; a whole tile, which is every tile but the two at
-        bne @edge                   ; the ends of the rectangle
+        lda dt_mbase                ; the strip for this tile row
+        sta dt_i
+        clc
+        adc dt_nt
+        sta dt_ilim
+        lda dt_cy
+        and #1                      ; the bottom char row of a tile row on its own
+        bne @to1
+        lda dt_ncy                  ; the top one on its own, at the rectangle's end
+        cmp #2
+        bcs :+
+@to1:   jmp @one                    ; the two-row chain is between here and there
+:
+        ; ---- both char rows of this tile row, which share everything but the store
+        lda dst0                    ; w16 = the char row below dst0
+        clc
+        adc #<ROWBYTES
+        sta w16
+        lda dst0+1
+        adc #>ROWBYTES
+        cmp ringehi
+        bcc :+
+        pha
+        lda w16
+        sec
+        sbc #<RINGBYTES
+        sta w16
+        pla
+        sbc #>RINGBYTES
+:       sta w16+1
+@t2:    lda dt_s                    ; a whole tile, which is every tile but the two
+        bne @edge2                  ; at the ends of the rectangle
         lda dt_rem
         cmp #4
-        bcc @edge
+        bcc @edge2
+        sbc #4
+        sta dt_rem
+        ldx dt_i
+        lda MAPBUF,x
+        jsr draw_tile2_full
+        bra @adv2
+@edge2: SPAN
+        ldx dt_i
+        lda MAPBUF,x
+        jsr draw_tile2
+@adv2:  stz dt_s
+        lda dst0                    ; the next tile is four chars on in both rows
+        clc
+        adc #32
+        sta dst0
+        bcc :+
+        inc dst0+1
+        jsr fold0
+:       lda w16
+        clc
+        adc #32
+        sta w16
+        bcc :+
+        inc w16+1
+        lda w16+1
+        cmp ringehi
+        bcc :+
+        lda w16
+        sec
+        sbc #<RINGBYTES
+        sta w16
+        lda w16+1
+        sbc #>RINGBYTES
+        sta w16+1
+:       inc dt_i
+        lda dt_i
+        cmp dt_ilim
+        bne @t2
+        jsr dt_nextstrip
+        inc dt_cy
+        inc dt_cy
+        dec dt_ncy
+        dec dt_ncy
+        bne :+
+        rts
+:
+        lda dst1                    ; two char rows on: 1280 crosses the ring end at
+        clc                         ; most once
+        adc #<(2*ROWBYTES)
+        sta dst1
+        lda dst1+1
+        adc #>(2*ROWBYTES)
+        bra @nextrow
+        ; ---- one char row: the tile's top half or its bottom half
+@one:   lda dt_cy
+        and #1
+        beq :+
+        lda #32
+:       sta dt_half
+@t1:    lda dt_s
+        bne @edge1
+        lda dt_rem
+        cmp #4
+        bcc @edge1
         sbc #4
         sta dt_rem
         ldx dt_i
         lda MAPBUF,x
         jsr draw_tile_full
-        bra @adv
-@edge:  lda #4                      ; how many of this tile's chars are wanted
-        sec
-        sbc dt_s
-        cmp dt_rem
-        bcc :+
-        lda dt_rem
-:       sta dt_n
-        lda dt_rem
-        sec
-        sbc dt_n
-        sta dt_rem
+        bra @adv1
+@edge1: SPAN
         ldx dt_i
         lda MAPBUF,x
         jsr draw_tile
-@adv:   stz dt_s                    ; every tile after the first starts at its left
-        lda dst0                    ; the next tile is four chars on, and the columns
-        clc                         ; of a row can carry past the ring end
+@adv1:  stz dt_s
+        lda dst0
+        clc
         adc #32
         sta dst0
-        bcc @nc
+        bcc :+
         inc dst0+1
-        lda dst0+1
-        cmp ringehi
-        bcc @nc
-        lda dst0
-        sec
-        sbc #<RINGBYTES
-        sta dst0
-        lda dst0+1
-        sbc #>RINGBYTES
-        sta dst0+1
-@nc:    inc dt_i
+        jsr fold0
+:       inc dt_i
         lda dt_i
-        cmp dt_nt
-        bne @tile
-        inc dt_cy
+        cmp dt_ilim
+        bne @t1
+        lda dt_cy                   ; a bottom half finishes its tile row
+        and #1
+        beq :+
+        jsr dt_nextstrip
+:       inc dt_cy
         dec dt_ncy
-        beq @done
+        beq dm_done
         lda dst1                    ; the next char row is one row of bytes on
         clc
         adc #<ROWBYTES
         sta dst1
         lda dst1+1
         adc #>ROWBYTES
+@nextrow:
         cmp ringehi
         bcc :+
         pha
@@ -256,7 +397,19 @@ dm_row: lda dt_cy                   ; one char row: half of a row of tiles
         sbc #>RINGBYTES
 :       sta dst1+1
         jmp dm_row
-@done:  rts
+dm_done:
+        rts
+
+; dt_nextstrip: the next tile row's strip, when MAPBUF holds the whole rectangle
+dt_nextstrip:
+        lda dt_lastty
+        cmp #$FE
+        bne :+
+        lda dt_mbase
+        clc
+        adc dt_nt
+        sta dt_mbase
+:       rts
 
 ; til_copy: w16b = an address in this bank, cnt = bytes -> MAPBUF.  Every bank has
 ; one of these: it is the only way anything outside the bank can read its data.
@@ -281,9 +434,9 @@ copy_partial:
         sbc wcy                     ; window starts on a multiple of 23
         cmp #BUFROWS
         bne :+
-        ldx curbuf
-        lda #1
-        sta mirdty,x
+        ldx #ROWCHARS-1             ; and it writes all 80 chars of it
+        lda #0
+        jsr mirdirty
 :
         lda ringS                   ; source = the window's first char
         sta w16
@@ -417,78 +570,209 @@ ring_next:
 ; char row and 32 for its bottom one, dt_s/dt_n = the first char of the tile to draw
 ; and how many.  Only the two edge tiles of a rectangle are ever partial, so the rest
 ; go through draw_tile_full, which skips the tests and the dt_rem bookkeeping.
+;
+; The copy is one unrolled chain of 32 `lda (tp),y / sta (dst0),y / iny', labelled
+; every 8 bytes: the y value comes from the register, so entering at the block for
+; dt_n chars and running to the end copies exactly dt_n chars from wherever y starts.
+; A partial run therefore costs the same 13 cycles a byte as a whole tile.
 draw_tile_full:
         tax
         lda BLANKT,x
-        beq :+
-        jmp dt_blankfill
-:       txa
-        jsr dt_setptr
-        jmp dt_fullcopy
+        bne @blank
+        lda TILELO,x                ; the tile's bytes for this char row, from a table:
+        ora dt_half                 ; id*64 is 64-aligned, so the half never carries
+        sta tp
+        lda TILEHI,x
+        sta tp+1
+        ldy #0
+        jmp dt_cp4
+@blank: ldy #0
+        lda #0
+        jmp dt_bl4
 draw_tile:
         tax
         lda BLANKT,x                ; over half of a level's map is a tile with
         bne @blank                  ; nothing in it: fill, do not copy 32 zero bytes
-        txa
-        jsr dt_setptr
-        lda dt_s
-        bne @part
-        lda dt_n
-        cmp #4
-        bne @part
-        jmp dt_fullcopy
-@part:  lda dt_n                    ; the edge tiles of a char-clipped rectangle: a
-        bne :+                      ; run of dt_n chars starting dt_s chars in
-        rts
-:       asl
-        asl
-        asl
-        tax
-        lda dt_s
-        asl
-        asl
-        asl
-        tay
-:       lda (tp),y
-        sta (dst0),y
-        iny
-        dex
-        bne :-
-        rts
-@blank: lda dt_s
-        bne @bpart
-        lda dt_n
-        cmp #4
-        bne @bpart
-        jmp dt_blankfill
-@bpart: lda dt_n
+        lda TILELO,x
+        ora dt_half
+        sta tp
+        lda TILEHI,x
+        sta tp+1
+        SETY                        ; y = the first char wanted, X = how many
+        beq @none
+        cpx #4
         bne :+
-        rts
-:       asl
-        asl
-        asl
+        jmp dt_cp4
+:       cpx #3
+        bne :+
+        jmp dt_cp3
+:       cpx #2
+        bne :+
+        jmp dt_cp2
+:       jmp dt_cp1
+@none:  rts
+@blank: SETY
+        beq @none
+        lda #0                      ; the fill chain is past the copy chain, so these
+        cpx #4                      ; are out of branch range
+        bne :+
+        jmp dt_bl4
+:       cpx #3
+        bne :+
+        jmp dt_bl3
+:       cpx #2
+        bne :+
+        jmp dt_bl2
+:       jmp dt_bl1
+
+; draw_tile2 / draw_tile2_full: both char rows of a tile row at once, the top at dst0
+; and the bottom at w16.  A tile row is two char rows of the same tile, so the map
+; byte, the tile pointer and the rectangle's bookkeeping are all shared -- which is
+; most of the cost of a narrow rectangle.
+draw_tile2_full:
         tax
-        lda dt_s
-        asl
-        asl
-        asl
-        tay
+        lda BLANKT,x
+        bne @blank
+        SETPTR2
+        ldy #0
+        jmp dt_2cp4
+@blank: ldy #0
         lda #0
-:       sta (dst0),y
+        jmp dt_2bl4
+draw_tile2:
+        tax
+        lda BLANKT,x
+        bne @blank
+        SETPTR2
+        SETY
+        beq @none
+        cpx #4
+        bne :+
+        jmp dt_2cp4
+:       cpx #3
+        bne :+
+        jmp dt_2cp3
+:       cpx #2
+        bne :+
+        jmp dt_2cp2
+:       jmp dt_2cp1
+@none:  rts
+@blank: SETY
+        beq @none
+        lda #0
+        cpx #4
+        bne :+
+        jmp dt_2bl4
+:       cpx #3
+        bne :+
+        jmp dt_2bl3
+:       cpx #2
+        bne :+
+        jmp dt_2bl2
+:       jmp dt_2bl1
+
+dt_2cp4: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        lda (tp2),y
+        sta (w16),y
         iny
-        dex
-        bne :-
+        .endrepeat
+dt_2cp3: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        lda (tp2),y
+        sta (w16),y
+        iny
+        .endrepeat
+dt_2cp2: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        lda (tp2),y
+        sta (w16),y
+        iny
+        .endrepeat
+dt_2cp1: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        lda (tp2),y
+        sta (w16),y
+        iny
+        .endrepeat
         rts
 
-; dt_setptr: A = tile id -> tp = its bytes for this char row
-dt_setptr:
-        pha
+dt_2bl4: .repeat 8
+        sta (dst0),y
+        sta (w16),y
+        iny
+        .endrepeat
+dt_2bl3: .repeat 8
+        sta (dst0),y
+        sta (w16),y
+        iny
+        .endrepeat
+dt_2bl2: .repeat 8
+        sta (dst0),y
+        sta (w16),y
+        iny
+        .endrepeat
+dt_2bl1: .repeat 8
+        sta (dst0),y
+        sta (w16),y
+        iny
+        .endrepeat
+        rts
+
+dt_cp4: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        iny
+        .endrepeat
+dt_cp3: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        iny
+        .endrepeat
+dt_cp2: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        iny
+        .endrepeat
+dt_cp1: .repeat 8
+        lda (tp),y
+        sta (dst0),y
+        iny
+        .endrepeat
+        rts
+
+dt_bl4: .repeat 8                   ; a tile with nothing in it: 8 cycles a byte
+        sta (dst0),y
+        iny
+        .endrepeat
+dt_bl3: .repeat 8
+        sta (dst0),y
+        iny
+        .endrepeat
+dt_bl2: .repeat 8
+        sta (dst0),y
+        iny
+        .endrepeat
+dt_bl1: .repeat 8
+        sta (dst0),y
+        iny
+        .endrepeat
+        rts
+
+; tile_init: the tile address tables, built once from where the linker put TILES
+tile_init:
+        ldx #0
+:       txa
         lsr
         lsr
         clc
-        adc #>TILES                 ; the tiles are page aligned: id*64 is
-        sta tp+1                    ; (id >> 2) pages plus (id & 3) * 64
-        pla
+        adc #>TILES                 ; id*64 is (id >> 2) pages plus (id & 3) * 64,
+        sta TILEHI,x                ; and TILES is page aligned
+        txa
         and #3
         asl
         asl
@@ -496,26 +780,10 @@ dt_setptr:
         asl
         asl
         asl
-        clc
-        adc dt_half                 ; (id & 3)*64 + 32 is 224 at most: it cannot carry
-        sta tp
-        rts
-
-dt_fullcopy:
-        ldy #0                      ; unrolled: the dey/bpl per byte was a fifth of
-        .repeat 32                  ; the cost of a tile
-        lda (tp),y
-        sta (dst0),y
-        iny
-        .endrepeat
-        rts
-dt_blankfill:
-        lda #0                      ; a tile with nothing in it: 8 cycles a byte
-        ldy #0
-        .repeat 32
-        sta (dst0),y
-        iny
-        .endrepeat
+        sta TILELO,x
+        inx
+        cpx #128
+        bne :-
         rts
 
 ; the status bar's picture, copied into place once: it is single buffered and
@@ -543,6 +811,8 @@ bar_draw:
 
         .segment "TILDATA"
         .align 256
+TILELO: .res 128                    ; tile id -> the address of its bytes, built by
+TILEHI: .res 128                    ; tile_init
 TILES:  .incbin "build/tiles.bin"
         .align 256
 BLANKT: .incbin "build/tileblank.bin"   ; one byte a tile: non-zero = entirely black

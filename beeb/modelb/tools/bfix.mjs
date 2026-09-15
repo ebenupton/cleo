@@ -30,7 +30,7 @@ const check = () => { let bad = []; for (let r = 0; r < 22; r++) { const cy = wc
   return bad; };
 console.log("before:", check().length, JSON.stringify(check().slice(0, 6)));
 // hand-call draw_maprect
-cpu.writemem(lab.dt_cx, cx); cpu.writemem(lab.dt_ncx, ncx); cpu.writemem(lab.dt_ty, ty); cpu.writemem(lab.dt_ny, ny);
+cpu.writemem(lab.dt_cx, cx); cpu.writemem(lab.dt_ncx, ncx); cpu.writemem(lab.dt_cy, ty); cpu.writemem(lab.dt_ncy, ny);
 cpu.writemem(0x01ff, 0x00); cpu.writemem(0x01fe, 0xff);   // rts -> $0100
 const oldS = cpu.s; cpu.s = 0xfd;
 cpu.writemem(0xf4, 5); cpu.writemem(0xfe30, 5);
