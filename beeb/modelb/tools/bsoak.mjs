@@ -38,14 +38,25 @@ const checkMirror = () => { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 
   for (let c = wcx; c < 80; c++) for (let k = 0; k < 8; k++)
     if (cpu.readmem(mb + c * 8 + k) !== cpu.readmem(last + c * 8 + k)) { mbad++; break; }
   cpu.writemem(0xfe30, was); return mbad; };
-const seq = [2, 2, 6, 6, 1, 1, 5, 4, 2, 6, 0, 1, 3, 2, 4, 6];
+// a repeatable pseudo-random walk, so a long run visits positions a fixed sequence
+// never reaches; the seed is argv[3]
+let rng = (parseInt(process.argv[3] ?? "1") >>> 0) || 1;
+const nextKey = () => { rng ^= rng << 13; rng >>>= 0; rng ^= rng >> 17; rng ^= rng << 5; rng >>>= 0;
+  return [0, 1, 2, 4, 5, 6, 2, 6, 4][rng % 9]; };
+let held = 2, heldFor = 0;
 let fails = 0;
+const span = { px: [999, -1], py: [999, -1], wcx: [999, -1], wcy: [999, -1] };
+const note = (k, v) => { if (v < span[k][0]) span[k][0] = v; if (v > span[k][1]) span[k][1] = v; };
 for (let f = 0; f < frames; f++) {
-  cpu.writemem(lab.keys, seq[(f >> 5) % seq.length]);
+  if (heldFor-- <= 0) { held = nextKey(); heldFor = 3 + (rng % 20); }
+  cpu.writemem(lab.keys, held);
   let hit = false;
   stopAt = lab.pre_spr;
   for (let i = 0; i < 400; i++) { await s.runFor(2000); if (cpu.pc === stopAt && cpu.readmem(0xf4) === 7) { hit = true; break; } }
   if (!hit) { console.log(`frame ${f}: never reached pre_spr -- hung at pc=$${cpu.pc.toString(16)}`); process.exit(1); }
+  { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7);
+    note("px", r16(lab.px)); note("py", r16(lab.py)); note("wcx", r16(lab.wcx)); note("wcy", cpu.readmem(lab.wcy));
+    cpu.writemem(0xfe30, was); }
   if (f % 10 === 9) {
     const r = check();
     stopAt = lab.wait_flip;
@@ -55,4 +66,6 @@ for (let f = 0; f < frames; f++) {
   }
 }
 console.log(fails ? `${fails} checks failed` : `clean over ${frames} frames`);
+console.log("visited: px " + span.px.join("..") + ", py " + span.py.join("..") +
+  ", window " + span.wcx.join("..") + " x " + span.wcy.join(".."));
 process.exit(0);
