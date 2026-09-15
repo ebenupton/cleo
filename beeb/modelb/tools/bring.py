@@ -21,3 +21,8 @@ for buf,base in ((0,0x0a80),(1,0x4680)):
             rc=((cy%23)*80+cx)%1840
             if ram[base+rc*8: base+rc*8+8]!=exp: bad.append((r,c))
     print(f'buffer {buf}: {len(bad)} chars differ; {bad[:12]}')
+    # the mirror must hold the ring's last row from char wcx on: it is what the CRTC
+    # reads for the one window row whose 80 chars straddle the ring end
+    mb=base-640; last=base+1760*8
+    mbad=[c for c in range(st['wcx'],80) if ram[mb+c*8:mb+c*8+8]!=ram[last+c*8:last+c*8+8]]
+    print(f'buffer {buf}: mirror differs in {len(mbad)} chars; {mbad[:8]}')

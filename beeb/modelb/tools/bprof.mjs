@@ -12,7 +12,8 @@ s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.ru
 { const was = cpu.readmem(0xf4); cpu.writemem(0xfe30, 7); cpu.writemem(lab.scan_keys, 0x60); cpu.writemem(0xfe30, was); }
 // phase boundaries, in the order the loop runs them
 const marks = [["player", lab.player_step], ["camera", lab.camera], ["calc", lab.calc_ring], ["scroll", lab.scroll_validate],
-  ["erase+spr", lab.queue_sprites], ["draw", lab.build_sections], ["frame", lab.frame_top]];
+  ["erase", lab.pre_erase], ["queue", lab.queue_sprites], ["sprites", lab.pre_spr], ["partial", lab.pre_part],
+  ["mirror", lab.pre_mirror], ["sections", lab.build_sections], ["wait", lab.wait_flip], ["frame", lab.frame_top]];
 const acc = {}, seen = {};
 let lastName = null, lastCyc = 0, frames = 0;
 const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;

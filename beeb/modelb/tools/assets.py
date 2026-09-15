@@ -42,6 +42,13 @@ EMPTY = NTILES                              # one extra, all black, for map id -
 tiles += bytes(64)
 open(os.path.join(OUT, 'tiles.bin'), 'wb').write(tiles)
 
+# Half this level's map is a tile that is entirely black, so the blitter fills those
+# rather than copying 32 zero bytes: one byte per tile, non-zero = nothing but black.
+blank = bytearray(128)
+for i in range(NTILES + 1):
+    blank[i] = 0 if any(tiles[i*64:(i+1)*64]) else 1
+open(os.path.join(OUT, 'tileblank.bin'), 'wb').write(bytes(blank))
+
 # ---------------------------------------------------------------- map
 mp = L['map']
 h, w = mp.shape

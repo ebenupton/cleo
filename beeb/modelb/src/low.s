@@ -130,3 +130,6 @@ irq_handler:
         .segment "LOWBSS"
 SECTAB:     .res 2*48               ; per buffer: 6 sections x 8 bytes
 FARTAB:     .res 3*NFAR             ; (bank, lo, hi) per far entry point
+; the mirror's bookkeeping: every bank writes it, and zero page is full
+mirdty:     .res 2                  ; per buffer: the ring's last row has been written
+mirwcx:     .res 2                  ; since the mirror was made, and the wcx it used

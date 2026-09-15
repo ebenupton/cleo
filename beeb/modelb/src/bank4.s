@@ -162,23 +162,13 @@ erase_old:
         sta dt_ncx                  ; char, so it goes straight in
         ldy #7
         lda (rp),y                  ; cy
-        lsr
-        sta dt_ty
-        ldy #7
-        lda (rp),y
-        and #1
-        sta tmp2
+        sta dt_cy
         ldy #9
         lda (rp),y                  ; h in rows, bit 7 = it was clipped
         and #$7F
-        clc
-        adc tmp2
-        adc #1
-        lsr
-        sta dt_ny
+        sta dt_ncy
         lda dt_ncx
         beq @next
-        lda dt_ny
         beq @next
         farjsr F_DRAWRECT
 @next:  lda rp
@@ -553,6 +543,19 @@ drawsprite:
         beq :+                      ; may be visible next time and it has to be redrawn
         ora #$80
 :       sta (rp),y
+        lda mrow                    ; if it lands on the row the mirror follows, the
+        sec                         ; mirror has to be made again
+        sbc wcy
+        bcc @nomir
+        cmp sp_r0
+        bcc @nomir
+        cmp sp_r1
+        beq :+
+        bcs @nomir
+:       ldx curbuf
+        lda #1
+        sta mirdty,x
+@nomir:
         ; ---- column base pointer & step
         lda sp_flags
         and #1                      ; no bit #imm on a 6502: A is reloaded below

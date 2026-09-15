@@ -37,6 +37,12 @@ init:
         jsr init_far
         farjsr F_SPRINIT            ; the MASKTABs, and the directory's pointers
         jsr clear_screen
+        lda #1                      ; the mirrors have never been made
+        sta mirdty
+        sta mirdty+1
+        lda #$FF
+        sta mirwcx
+        sta mirwcx+1
         lda #0                      ; a bank's .res is not cleared by loading it
         sta bvalid
         sta bvalid+1
@@ -100,11 +106,14 @@ frame_top:
         jsr win_px
         jsr calc_ring
         jsr scroll_validate
+pre_erase:
         farjsr F_ERASE              ; put tiles back where this buffer's sprites were
         jsr queue_sprites
 pre_spr:                            ; the ring is pure map here: scrolled and erased,
         farjsr F_DRAWSPR            ; before a single sprite has gone down
+pre_part:
         farjsr F_PARTIAL            ; the fine-scroll row, from what was just drawn
+pre_mirror:
         jsr mirror_copy             ; and the ring's last row, for the straddle
         jsr build_sections
         lda curbuf
@@ -113,6 +122,7 @@ pre_spr:                            ; the ring is pure map here: scrolled and er
 :       sta NEXTSECT
         lda #1
         sta flipreq
+wait_flip:                          ; everything before this is the frame's work
 :       lda flipreq
         bne :-
         lda curbuf
@@ -320,6 +330,15 @@ calc_ring:
         dey
         bpl @div
         stx barq
+        ldx wcy                     ; mrow: the map char row that lives in the ring's
+        lda RINGMODTAB,x            ; last slot row, the only row whose 80 chars can
+        sta tmp                     ; straddle the ring end -- so the only row whose
+        lda #RINGROWS-1             ; content the mirror has to follow
+        sec
+        sbc tmp
+        clc
+        adc wcy
+        sta mrow
         rts
 
 ; ---------------------------------------------------------------- the chain
@@ -683,11 +702,10 @@ draw_window:
         sta dt_cx
         lda #ROWCHARS
         sta dt_ncx
-        lda wcy                     ; a tile is two char rows
-        lsr
-        sta dt_ty
-        lda #(BUFROWS+2)/2
-        sta dt_ny
+        lda wcy
+        sta dt_cy
+        lda #BUFROWS
+        sta dt_ncy
         farjsr F_DRAWRECT
         rts
 
@@ -769,11 +787,23 @@ bar_pattern:                        ; yellow with a black tick every eight chars
 ; actually takes from it -- wcx..79 -- need to be right, and when the window is
 ; row aligned there is no straddling row at all.
 mirror_copy:
-        lda wcx
-        ora wcx+1
-        bne :+
+        ldx curbuf
+        lda wcx                     ; a move left uncovers chars the last copy never
+        cmp mirwcx,x                ; reached, so the mirror has to be made again
+        bcs :+
+        lda #1
+        sta mirdty,x
+:       lda mirdty,x                ; nothing has touched the ring's last row in this
+        bne :+                      ; buffer since the mirror was last made
         rts
-:       ldx #RINGROWS-1             ; source: the last slot, from char wcx
+:       lda wcx
+        ora wcx+1
+        bne :+                      ; wcx = 0: no row straddles, so the mirror is not
+        rts                         ; read -- and the flag stays up for when it is
+:       ldx curbuf
+        lda #0
+        sta mirdty,x
+        ldx #RINGROWS-1             ; source: the last slot, from char wcx
         lda RINGLO,x
         sta w16
         lda RINGHI,x
@@ -806,6 +836,9 @@ mirror_copy:
         sec
         sbc wcx
         sta tmp
+        ldx curbuf                  ; the chars left of wcx are not copied
+        lda wcx
+        sta mirwcx,x
         ldy #0
 @c:     .repeat 8
         lda (w16),y

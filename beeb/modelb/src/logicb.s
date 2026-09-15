@@ -324,78 +324,38 @@ camera:
 ; costs is the strip that has just come into view.
 ; scroll_validate: make every char of the window valid in this buffer, redrawing
 ; only what the window has moved over since this buffer was last drawn.  The window
-; is 80 chars by BUFROWS char rows; what is tracked per buffer is its char origin,
-; because a move of one char can need a new tile column even when the tile origin
-; has not changed.
+; is 80 chars by BUFROWS char rows, and what is tracked per buffer is its char
+; origin: a move of one char needs new chars in either axis, whatever the tiles do.
 scroll_validate:
         jmp @sv
 @tofull:jmp @full                   ; within reach of the tests below
-@sv:    lda wcx
-        lsr
-        lsr
-        sta tx0
-        lda wcy                     ; the tile rows the window spans, first and last
-        lsr
-        sta ty0
-        lda wcy
-        clc
-        adc #BUFROWS-1
-        lsr
-        sec
-        sbc ty0
-        clc
-        adc #1
-        sta winy
-        ldx curbuf
+@sv:    ldx curbuf
         lda bvalid,x
         bne @inc
         lda #1                      ; this buffer has never been drawn
         sta bvalid,x
         jmp @full
-@inc:   ldx curbuf
-        lda wcy                     ; ---- vertical, in char rows
+@inc:   lda wcy                     ; ---- vertical, in char rows
         sec
         sbc bpty,x
         beq @dx
         bmi @up
         cmp #BUFROWS
         bcs @tofull
-        clc                         ; new rows are bpty+BUFROWS .. wcy+BUFROWS-1
-        adc bpty,x
-        sta tmp3                    ; = the old bottom row + 1 .. the new bottom row
+        sta dt_ncy                  ; new rows are bpty+BUFROWS .. wcy+BUFROWS-1
         lda bpty,x
         clc
         adc #BUFROWS
-        lsr                         ; -> first new tile row
-        sta dt_ty
-        lda tmp3
+        sta dt_cy
+        bra @vdraw
+@up:    eor #$FF
         clc
-        adc #BUFROWS-1
-        lsr                         ; -> last new tile row
-        sec
-        sbc dt_ty
-        clc
-        adc #1
-        sta dt_ny
-        jmp @vdraw
-@up:    lda bpty,x                  ; new rows are wcy .. bpty-1
-        sec
-        sbc wcy
+        adc #1                      ; new rows are wcy .. bpty-1
         cmp #BUFROWS
         bcs @tofull
+        sta dt_ncy
         lda wcy
-        lsr
-        sta dt_ty
-        ldx curbuf
-        lda bpty,x
-        sec
-        sbc #1
-        lsr
-        sec
-        sbc dt_ty
-        clc
-        adc #1
-        sta dt_ny
+        sta dt_cy
 @vdraw: lda wcx
         sta dt_cx
         lda #ROWCHARS
@@ -417,16 +377,16 @@ scroll_validate:
         bra @hdraw
 @left:  eor #$FF
         clc
-        adc #1
+        adc #1                      ; new chars are wcx .. bptx-1
         cmp #ROWCHARS
         bcs @tofull2
-        sta dt_ncx                  ; new chars are wcx .. bptx-1
+        sta dt_ncx
         lda wcx
         sta dt_cx
-@hdraw: lda ty0
-        sta dt_ty
-        lda winy
-        sta dt_ny
+@hdraw: lda wcy
+        sta dt_cy
+        lda #BUFROWS
+        sta dt_ncy
         farjsr F_DRAWRECT
         bra @save
 @tofull2:                           ; in reach of the horizontal tests above
@@ -434,10 +394,10 @@ scroll_validate:
         sta dt_cx
         lda #ROWCHARS
         sta dt_ncx
-        lda ty0
-        sta dt_ty
-        lda winy
-        sta dt_ny
+        lda wcy
+        sta dt_cy
+        lda #BUFROWS
+        sta dt_ncy
         farjsr F_DRAWRECT
 @save:  ldx curbuf
         lda wcx
