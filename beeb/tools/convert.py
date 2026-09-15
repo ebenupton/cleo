@@ -59,7 +59,7 @@ BLUE8 = np.array([[47, 34, 3, 20, 56, 13, 62, 4], [22, 43, 59, 26, 42, 9, 30, 16
                   [63, 48, 5, 23, 11, 45, 6, 14], [44, 18, 37, 41, 54, 29, 58, 32],
                   [7, 27, 60, 8, 17, 0, 50, 21], [55, 12, 51, 31, 46, 36, 24, 39]], dtype=np.float32)
 BLUE_OFF = [(0, 0), (0, 0), (0, 0)]   # one shared mask: a region orders as a density stipple
-USE_BLUE = os.environ.get('DITHER2', 'blue') == 'blue'   # DITHER2=bayer for the old look
+USE_BLUE = os.environ.get('DITHER2', 'bayer') == 'blue'   # DITHER2=blue for the blue-noise look
 
 
 def dither(rgb_img, alpha, x0=0, y0=0, full=True):
@@ -336,6 +336,12 @@ TIL_SOLID = {
 TIL_NOBLACK = {
     # (85, 68, 68): 3,   # example: this wall brown's black dither -> yellow
 }
+#   TIL_RECOLOR source colour -> a new source colour (still dithered normally): a
+#               hand-tune of the palette before the dither picks MODE 2 inks
+TIL_RECOLOR = {
+    (187, 119, 51): (221, 162, 68),   # dark (left) dune sand: halfway up to the light
+                                      # (255,204,85) face, so the shadow side is brighter
+}
 
 til_rgb = til_rgb0.copy()
 # hand-painted tile overrides from the tile editor (tools/tile_editor.py):
@@ -349,6 +355,8 @@ for _i, _c in enumerate(til_rgb0):
     _t = tuple(int(v) for v in _c)
     if _t in TIL_SOLID:
         til_rgb[_i] = BEEB_RGB[TIL_SOLID[_t]]      # dithers to that solid colour
+    elif _t in TIL_RECOLOR:
+        til_rgb[_i] = np.array(TIL_RECOLOR[_t], np.uint8)
     if _t in TIL_NOBLACK:
         noblack_idx[_i] = TIL_NOBLACK[_t]
 
