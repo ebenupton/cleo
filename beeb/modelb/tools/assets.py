@@ -9,7 +9,7 @@ Emits into build/:
    level.bin   header, objects, tile attributes and altitude classes
    alt.bin     altitude class rows
    spr.bin     the sprite images this level can show, with their masks
-   sprtab.bin  the sprite directory, with data and mask OFFSETS from the bank base
+   sprtab.bin  the sprite directory: ten bytes an entry, data and mask OFFSETS
    assets.inc  sizes and counts for the assembler
 """
 import os, sys, io, contextlib, importlib.util
@@ -67,15 +67,24 @@ for cid in [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] 
     hdr.append(local.get(o, EMPTY))
 hdr = hdr.ljust(256, b'\0')     # the logic indexes LV_OBJS with <LV_OBJS = 0
 
+# The object record is packed the way convert.py packs it for the Master, box classes
+# and all: e0 says whether this star's background is flat enough to bake into an
+# opaque box sprite, e1 whether an enemy can reach it (and so whether its pixels may
+# be left alone between frames).
+import numpy as _np
+cm = _np.vectorize(lambda t: m.orig2compact[t] if t >= 0 else 0)(mp)
+reach = m.enemy_reach(L['objs'])
 objs = bytearray()
 for (t, x, y, extra) in L['objs']:
     e = (list(extra) + [0, 0, 0])[:3]
     if t == 0:
-        e[0] = 0                            # every star a plain sprite: no box stars here
-        e[1] = 1
+        e[0] = m.star_class(cm, x, y)
+        e[1] = 1 if m.star_reachable(x, y, reach) else 0
     elif t == 1:
-        e[0] = 0
-        e[1] = 1
+        e[0] = m.tramp_class(cm, x, y)
+        b = m.TYPE_BOX[1]
+        selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
+        e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
     objs += bytes([t, x, y] + e)
 objs = objs.ljust(256, b'\0')
 
@@ -84,6 +93,8 @@ objs = objs.ljust(256, b'\0')
 # rendering fact and says nothing about what Cleo can stand on.  Reading it as
 # "solid ground" walled her in and left black indoor floors to fall through.
 NOGROUND = next(i for r, i in m.classes.items() if bytes(r) == b'\x80' * 8)
+# convert.py's own rule, and the Master plays with it: a tile that is one flat colour
+# is sky or a backdrop, and nothing stands on it
 attr = bytearray(256)
 acls = bytearray([NOGROUND]) * 256
 for o, i in local.items():
@@ -92,7 +103,7 @@ for o, i in local.items():
     if c in m.push_tiles: a = m.push_tiles[c] + 3
     if c in m.kill_tiles: a |= 0x80
     attr[i] = a
-    acls[i] = m.alt_class[c]
+    acls[i] = NOGROUND if c in m.tile_solid else m.alt_class[c]
 attr[EMPTY] = 3
 acls[EMPTY] = NOGROUND
 open(os.path.join(OUT, 'level.bin'), 'wb').write(bytes(hdr + objs + attr + acls))
@@ -121,6 +132,15 @@ maskoff = {}
 for j in imgs:
     maskoff[j] = len(data)
     data += m.img_mask[j]
+# Box stars: a star whose whole 2x2 tile neighbourhood is one flat colour is drawn
+# as an opaque rectangle with that background baked in -- no mask, and (with the
+# "nothing can disturb it" alias) no erase either, because the next box covers the
+# last one exactly.  L3A is an indoor level, so only the black set is packed.
+BOXID0 = 103
+boxoff = {}
+for k in range(6, 12):                      # 103..108 cyan, 109..114 black
+    boxoff[BOXID0 + k] = len(data)
+    data += m.box_bytes[k]
 open(os.path.join(OUT, 'spr.bin'), 'wb').write(data)
 
 tab = bytearray()
@@ -128,7 +148,7 @@ msk = bytearray()
 for i in range(103):
     e = m.entry[ALIAS.get(i, i)]
     if e is None or e[0] not in imgs:
-        tab += bytes(8); msk += bytes(2); continue
+        tab += bytes(10); continue
     j, mirror, rx, ry = e
     im = m.images[j][0]
     hpx, wpx = im.shape
@@ -139,10 +159,18 @@ for i in range(103):
     do, _ = imgs[j]
     mo = maskoff[j]
     tab += bytes([do & 255, do >> 8, W, hpx, rx & 255, ry & 255,
-                  (1 if mirror else 0) | 2, 2 * hpx])
-    msk += bytes([mo & 255, mo >> 8])
+                  (1 if mirror else 0) | 2, 2 * hpx, mo & 255, mo >> 8])
+for k in range(15):                         # 103..117: the boxes, then the trampolines
+    i = BOXID0 + k
+    if i not in boxoff:
+        tab += bytes(10); continue
+    lo, wc = m.box_geom[k % 6]
+    p = boxoff[i]
+    tab += bytes([p & 255, p >> 8, int(wc), m.BOX_H, (6 - 2 * int(lo)) & 255, 8,
+                  2 | 8, m.BOX_H * 2, 0, 0])   # bit 3: the copy blitter, no mask
+# Ten bytes an entry: the eight the blitter reads plus the mask plane's offset, so
+# one copy into MAPBUF brings everything it needs across from bank 6.
 open(os.path.join(OUT, 'sprtab.bin'), 'wb').write(tab)
-open(os.path.join(OUT, 'sprmask.bin'), 'wb').write(msk)
 
 # ---------------------------------------------------------------- status bar
 open(os.path.join(OUT, 'bar.bin'), 'wb').write(bytes(m.barbytes))
@@ -152,6 +180,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; level %s\n' % name)
     f.write('NTILES = %d\nEMPTYTILE = %d\n' % (NTILES, EMPTY))
     f.write('MAPW = %d\nMAPH = %d\nMAPLW = %d\nMAPLH = %d\n' % (w, h, L['lw'], L['lh']))
+    f.write('BOXID0 = 103\n')     # the first box-star sprite id, as convert.py numbers them
     f.write('NOBJS = %d\n' % len(L['objs']))
     f.write('STARTX = %d\nSTARTY = %d\n' % L['start'])
     f.write('NALTCLS = %d\n' % (len(m.altfile) // 8))

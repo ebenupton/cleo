@@ -130,8 +130,8 @@ draw_sprites:
 @done:  ldx curbuf
         lda spi
         sta RECCNT,x
-        lda #0
-        sta NSPR                    ; the logic fills the list again next frame
+                                    ; (NSPR is cleared by the frame loop before each
+                                    ;  logic step: only the last step's list is drawn)
         rts
 
 ; spr_copy: w16b = an address in this bank, cnt = bytes -> MAPBUF
@@ -144,14 +144,81 @@ spr_copy:
         bne :-
         rts
 
-; ---------------------------------------------------------------- erase
-; put the tiles back where this buffer's sprites were two frames ago.  The
-; record is in chars; the tile blitter wants tiles, so round outwards.
-erase_old:
+; ---------------------------------------------------------------- keep
+; match_sprites: KEEP[i] = what this buffer's record i has in common with the sprite
+; the logic has just queued at the same index.  The list is built in bin-walk order,
+; which is stable while the window is, so index i is the same object frame to frame.
+;   2 = the same picture in the same place: its pixels are already right
+;   1 = a different frame of a box star in the same place: every pixel of a box is
+;       opaque and covers the frame before it, so that needs no erase either
+;   0 = erase it
+; This is most of what makes a dozen objects on screen affordable: without it every
+; standing star costs a rectangle of tiles a frame, twice (once in each buffer).
+match_sprites:
         ldx curbuf
         lda RECCNT,x
-        beq @done
-        sta tmp4
+        cmp NSPR
+        bcc :+
+        lda NSPR
+:       sta cnt                     ; n = min(RECCNT, NSPR)
+        stz tmp4                    ; i
+        jsr rec_base
+@l:     ldx tmp4
+        cpx NSPR
+        bcs @done
+        stz KEEP,x
+        cpx cnt
+        bcs @next
+        txa                         ; the list entry is five bytes
+        asl
+        asl
+        clc
+        adc tmp4
+        tax
+        ldy #0
+        lda SPRLIST,x
+        cmp (rp),y
+        beq @same
+        cmp #BOXID0                 ; both box stars: one covers the other exactly
+        bcc @next
+        lda (rp),y
+        cmp #BOXID0
+        bcc @next
+        lda #1
+        bra @pos
+@same:  lda #2
+@pos:   sta tmp3
+        ldy #1                      ; and in the same place, or it has to be erased
+        lda SPRLIST+1,x
+        cmp (rp),y
+        bne @next
+        iny
+        lda SPRLIST+2,x
+        cmp (rp),y
+        bne @next
+        iny
+        lda SPRLIST+3,x
+        cmp (rp),y
+        bne @next
+        iny
+        lda SPRLIST+4,x
+        cmp (rp),y
+        bne @next
+        ldx tmp4
+        lda tmp3
+        sta KEEP,x
+@next:  lda rp
+        clc
+        adc #10
+        sta rp
+        bcc :+
+        inc rp+1
+:       inc tmp4
+        bra @l
+@done:  rts
+
+; rp = this buffer's first record
+rec_base:
         lda curbuf
         beq :+
         lda #>(SPRREC + 10*MAXREC)
@@ -164,7 +231,26 @@ erase_old:
         bra :++
 :       lda #<SPRREC
 :       sta rp
-@l:     ldy #5
+        rts
+
+; ---------------------------------------------------------------- erase
+; put the tiles back where this buffer's sprites were two frames ago, except where
+; match_sprites says the pixels there are already right.
+erase_old:
+        jsr match_sprites
+        ldx curbuf
+        lda RECCNT,x
+        beq @done
+        sta tmp4
+        stz lidx
+        jsr rec_base
+@l:     ldx lidx                    ; kept: the tiles under it were never disturbed
+        cpx NSPR
+        bcs @erase
+        lda KEEP,x
+        beq @erase
+        jmp @next
+@erase: ldy #5
         lda (rp),y                  ; cx low (the high byte only matters past 255
         sta dt_cx                   ; chars, which no window reaches)
         ldy #8
@@ -179,9 +265,9 @@ erase_old:
         sta dt_ncy
         lda dt_ncx
         beq @next
-        beq @next
         farjsr F_DRAWRECT
-@next:  lda rp
+@next:  inc lidx
+        lda rp
         clc
         adc #10
         sta rp
@@ -256,51 +342,6 @@ init_masks:
         sta SWAPTAB,x
         inx
         bne @mt
-        ; the directory carries offsets from the start of the sprite data
-        lda #<SPRTAB
-        sta ptr
-        lda #>SPRTAB
-        sta ptr+1
-        ldx #103
-@fx:    ldy #0
-        lda (ptr),y
-        clc
-        adc #<SPRDATA
-        sta (ptr),y
-        iny
-        lda (ptr),y
-        adc #>SPRDATA
-        sta (ptr),y
-        lda ptr
-        clc
-        adc #8
-        sta ptr
-        bcc :+
-        inc ptr+1
-:       dex
-        bne @fx
-        lda #<SPRMSKTAB
-        sta ptr
-        lda #>SPRMSKTAB
-        sta ptr+1
-        ldx #103
-@fm:    ldy #0
-        lda (ptr),y
-        clc
-        adc #<SPRDATA
-        sta (ptr),y
-        iny
-        lda (ptr),y
-        adc #>SPRDATA
-        sta (ptr),y
-        lda ptr
-        clc
-        adc #2
-        sta ptr
-        bcc :+
-        inc ptr+1
-:       dex
-        bne @fm
         rts
 
 ; the logic is in another bank, so it hands sprites over one at a time
@@ -331,43 +372,61 @@ addsprite:                          ; A = id, spx/spy = map px of the reference 
 
 drawsprite:
         stza spclip                 ; set at every window edge the sprite is cut against
-        sta sp_id
-        stza ptr+1
-        asl                         ; id*8 -> the directory offset
-        rol ptr+1
+        cmp #BOXID0+BOXN            ; the "nothing can disturb it" aliases draw the same
+        bcc :+                      ; picture as the ids BOXN below them
+        sbc #BOXN
+:       sta sp_id
+        ; The directory is in bank 6 -- bank 4 is full of pictures -- so the ten bytes
+        ; of this sprite's entry come across in one copy, into MAPBUF.  The offsets it
+        ; carries are from the start of the sprite data, which is still here.
+        lda #0                      ; (not stz: that macro is lda #0 here, and the id
+        sta w16b+1                  ;  is still in A)
+        lda sp_id
+        asl                         ; id*10
+        rol w16b+1
+        sta tmp
         asl
-        rol ptr+1
+        rol w16b+1
         asl
-        rol ptr+1
+        rol w16b+1
+        clc
+        adc tmp
+        sta w16b
+        lda w16b+1
+        adc #0
+        sta w16b+1
+        lda w16b
         clc
         adc #<SPRTAB
-        sta ptr
-        lda ptr+1
+        sta w16b
+        lda w16b+1
         adc #>SPRTAB
-        sta ptr+1
-        ldy #6
-        lda (ptr),y
+        sta w16b+1
+        lda #10
+        sta cnt
+        farjsr F_MAPCOPY
+        lda MAPBUF+6
         sta sp_flags
-        lda sp_id                   ; the mask plane, from the table beside it
-        asl
-        tax
-        lda SPRMSKTAB,x
+        lda MAPBUF+8                ; the mask plane
+        clc
+        adc #<SPRDATA
         sta sp_mbase
-        lda SPRMSKTAB+1,x
+        lda MAPBUF+9
+        adc #>SPRDATA
         sta sp_mbase+1
 @entry2:
-        ldaz ptr
+        lda MAPBUF
+        clc
+        adc #<SPRDATA
         sta sp_ptr
-        ldy #1
-        lda (ptr),y
+        lda MAPBUF+1
+        adc #>SPRDATA
         sta sp_ptr+1
-        iny
-        lda (ptr),y
+        lda MAPBUF+2
         sta sp_w
         beq @out0
 :                                   ; keep the bare label: it preserves the anonymous-label count
-        ldy #7
-        lda (ptr),y
+        lda MAPBUF+7
         sta sp_lines
         sta sp_ext
   .if MODE1
@@ -379,15 +438,14 @@ drawsprite:
         bne :+
         asl sp_ext                  ; half-res: two scanlines per stored row
 :       ; ---- horizontal: sx = spx - refx - wx ; c0 = sx >> 1
-        ldy #4
-        lda (ptr),y
+        lda MAPBUF+4
         and #$80                    ; sext inlined: the jsr/rts was 12 cycles of the 39
         beq @sxp
         lda #$FF
 @sxp:   sta tmp3
         lda spx
         sec
-        sbc (ptr),y
+        sbc MAPBUF+4
         tax
         lda spx+1
         sbc tmp3
@@ -436,12 +494,11 @@ drawsprite:
 @out0:  rts
 @vert:
         ; ---- vertical: sy = spy - refy - wy ; lb0 = 2*sy + wfine
-        ldy #5
-        lda (ptr),y
+        lda MAPBUF+5
         jsr sext
         lda spy
         sec
-        sbc (ptr),y
+        sbc MAPBUF+5
         tax
         lda spy+1
         sbc tmp3
@@ -917,8 +974,6 @@ mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit
                                     ; keep what is NOT opaque -- right only opaque keeps the left dots
 
         .segment "SPRDATA"
-SPRTAB:     .incbin "build/sprtab.bin"
-SPRMSKTAB:  .incbin "build/sprmask.bin"
 SPRDATA:    .incbin "build/spr.bin"
 
         .segment "SPRBSS"
@@ -929,6 +984,6 @@ MASKTAB2:   .res 256
 MASKTAB3:   .res 256
 SWAPTAB:    .res 256
 SPRLIST:    .res 5*MAXSPR
+KEEP:       .res MAXREC             ; per list index: what record i already has right
 SPRREC:     .res 2*10*MAXREC
 RECCNT:     .res 2
-NSPR:       .res 1

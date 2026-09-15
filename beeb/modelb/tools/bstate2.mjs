@@ -30,7 +30,7 @@ const OBJN = 32, OBJST = lab.LV_GRID - 16 * OBJN;
 const O = (n, i) => cpu.readmem(OBJST + n * OBJN + i);
 const objs = [];
 for (let i = 0; i < out.nobj; i++)
-  objs.push({ i, t: O(1, i), x: O(2, i) | (O(3, i) << 8), y: O(4, i) | (O(5, i) << 8), st: O(0, i) });
+  objs.push({ i, t: O(1, i), x: O(2, i) | (O(3, i) << 8), y: O(4, i) | (O(5, i) << 8), st: O(0, i), A: O(6, i), EL: O(14, i), EH: O(15, i) });
 const grid = []; for (let g = 0; g < 16; g++) grid.push(cpu.readmem(lab.LV_GRID + g));
 cpu.writemem(0xfe30, was);
 console.log(JSON.stringify(out));

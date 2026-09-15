@@ -38,6 +38,11 @@ init:
         farjsr F_SPRINIT            ; the MASKTABs, and the directory's pointers
         farjsr F_TILINIT            ; and the tile address tables
         jsr clear_screen
+        ldx #15                     ; the bar's digit cache is bank RAM: it comes up
+        lda #$FF                    ; undefined, and a slot that happens to match is
+:       sta BARCACHE,x              ; a digit that never gets drawn
+        dex
+        bpl :-
         lda #1                      ; the mirrors have never been made
         sta mirdty
         sta mirdty+1
@@ -126,8 +131,15 @@ init:
         ; ---------------------------------------------------------------- loop
 frame_top:
         jsr scan_keys
-        jsr game_frame              ; the whole game: the camera, every object, Cleo,
-        jsr calc_ring               ; and the sprite list for this frame
+        stz NSPR                    ; two logic steps a rendered frame, as the Master
+        jsr game_frame              ; does: only the second one's sprite list is drawn
+        lda exiting
+        bne level_over
+        stz NSPR
+        jsr game_frame
+        lda exiting
+        bne level_over
+        jsr calc_ring
         lda BARDIRTY                ; the HUD, when a digit in it has changed
         beq :+
         jsr redraw_hud
@@ -156,6 +168,25 @@ wait_flip:                          ; everything before this is the frame's work
         eor #1
         sta curbuf
         jsr select_backbuf
+        jmp frame_top
+
+; The level ended: she reached the exit, or the last life went.  With one level on
+; the disc, finishing it starts it again with the score kept, and a game over starts
+; a new game.
+level_over:
+        lda lives
+        bne :+
+        lda #3                      ; a new game
+        sta lives
+        sta health
+        stz score
+        stz score+1
+:       jsr level_init
+        lda #1
+        sta BARDIRTY
+        lda #0                      ; both buffers hold the old level
+        sta bvalid
+        sta bvalid+1
         jmp frame_top
 
 ; ---------------------------------------------------------------- vsync

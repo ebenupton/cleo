@@ -171,5 +171,7 @@ FARTAB:     .res 3*NFAR             ; (bank, lo, hi) per far entry point
 ; the mirror's bookkeeping: every bank writes it, and zero page is full
 mirdty:     .res 2                  ; per buffer: the ring's last row has been written
 mirwcx:     .res 2                  ; since the mirror was made, and the wcx it used
+NSPR:       .res 1                  ; the sprite list's length: the logic in bank 7
+                                    ; fills it, the blitter in bank 4 walks it
 mirlo:      .res 2                  ; and which chars of it were written, so the copy
 mirhi:      .res 2                  ; is the 12 chars a sprite touched, not all 80

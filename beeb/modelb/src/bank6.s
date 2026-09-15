@@ -130,3 +130,6 @@ map_copy:
         .align 256                      ; the map, and only the map: the header, the
 LV_MAP:                                 ; objects and the two tile tables are read by
         .incbin "build/map.bin"         ; the logic, which is in bank 7
+; The sprite directory lives here too: bank 4 is full of pictures, and the blitter
+; needs only ten bytes of it a sprite, which come across in one copy into MAPBUF.
+SPRTAB: .incbin "build/sprtab.bin"

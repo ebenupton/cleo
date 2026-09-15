@@ -104,6 +104,7 @@ mptr:     .res 2
 mtab:     .res 2
 rp:       .res 2
 spi:      .res 1
+lidx:     .res 1                    ; erase_old's place in the record list
 LTMP1:
         .assert LTMP1 - LTMP0 >= 56, error, "the logic's temps do not fit over the renderer's scratch"
 

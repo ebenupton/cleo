@@ -22,7 +22,7 @@ for (const m of readFileSync("build/map.txt", "utf8").matchAll(/^(\w+) +([0-9A-F
 }
 // a label's bank is the bank of the file it was written in: labels.txt has no
 // segment, and every bank has code at $8100.
-const fileBank = { "bank4.s": 4, "bank5.s": 5, "bank6.s": 6, "bank7.s": 7, "logicb.s": 7, "low.s": 0 };
+const fileBank = { "bank4.s": 4, "bank5.s": 5, "bank6.s": 6, "bank7.s": 7, "logicm.s": 7, "glue.s": 7, "low.s": 0 };
 const ownBank = {};
 for (const [f, b] of Object.entries(fileBank))
   for (const m of readFileSync("src/" + f, "utf8").matchAll(/^(\w+):/gm)) ownBank[m[1]] = b;
