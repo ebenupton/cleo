@@ -94,6 +94,69 @@ def dither(rgb_img, alpha, x0=0, y0=0, full=True):
     return col
 
 
+# ---------------------------------------------------------------------------
+# Luma-preserving ordered dither (Yliluoma-style palette mixing + an HVS luma-
+# variance penalty).  For each source colour we pre-compute the best two-palette
+# mixture: the cost is the mix's average error (luma weighted far above chroma,
+# in linear light) PLUS lambda * the luma spread of the two colours.  The spread
+# term is what rejects "1/8 black in a pale wall" -- a right-average, ruinous-luma
+# mix -- in favour of e.g. yellow+white (chroma only, invisible) or green+magenta
+# for a grey.  The plan is sorted by luma so the threshold matrix places luma-
+# neighbours next to each other.  MODE 2 only.
+# ---------------------------------------------------------------------------
+def _srgb_lin(x):
+    x = np.asarray(x, float) / 255.0
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+_PLIN = _srgb_lin(BEEB_RGB.astype(float))
+_LW = np.array([0.2126, 0.7152, 0.0722])
+_PGLUM = (BEEB_RGB.astype(float) / 255.0) @ np.array([0.299, 0.587, 0.114])
+YLI_N = 8
+YLI_WL = float(os.environ.get('YLI_WL', '4'))
+YLI_WC = float(os.environ.get('YLI_WC', '1'))
+YLI_LAM = float(os.environ.get('YLI_LAM', '8'))
+_yli_cache = {}
+def _yli_plan(t):
+    key = tuple(int(v) for v in t)
+    if key in _yli_cache:
+        return _yli_cache[key]
+    tl = _srgb_lin(t); tL = tl @ _LW
+    N = YLI_N; best = None
+    for i in range(8):
+        for j in range(i, 8):
+            for r in range(N + 1):
+                avg = ((N - r) * _PLIN[i] + r * _PLIN[j]) / N
+                aL = avg @ _LW
+                le = (aL - tL) ** 2
+                ce = max(float(np.sum((avg - tl) ** 2)) - le, 0.0)
+                var = (r * (N - r) / float(N * N)) * (_PGLUM[i] - _PGLUM[j]) ** 2
+                c = YLI_WL * le + YLI_WC * ce + YLI_LAM * var
+                if best is None or c < best[0]:
+                    best = (c, i, j, r)
+    _, i, j, r = best
+    plan = sorted([i] * (N - r) + [j] * r, key=lambda k: _PGLUM[k])
+    plan = np.array(plan, np.uint8)
+    _yli_cache[key] = plan
+    return plan
+
+def dither_yli(rgb_img, alpha, x0=0, y0=0, full=True):
+    h, w, _ = rgb_img.shape
+    img = np.repeat(rgb_img, 2, axis=0) if full else rgb_img
+    al = np.repeat(alpha, 2, axis=0) if full else alpha
+    hh = img.shape[0]
+    # Bayer rank 0..N-1 per cell (the 2x4 matrix values already are 0..7)
+    kh, kw = BAYER.shape
+    yy = (np.arange(hh) + (2 * y0 if full else y0)) % kh
+    xx = (np.arange(w) + x0) % kw
+    rank = BAYER[yy][:, xx].astype(int)
+    out = np.empty((hh, w), np.uint8)
+    flat = img.reshape(-1, 3)
+    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
+    plans = np.stack([_yli_plan(c) for c in uniq])       # (U, N)
+    cid = inv.reshape(hh, w)
+    out = plans[cid, rank]
+    out = np.where(out == 0, 8, out).astype(np.uint8)     # 0 = opaque black -> 8
+    return np.where(al, out, 0).astype(np.uint8)
+
 def dither_cpc(rgb_img, alpha, x0=0, y0=0, full=True):
     """DITHER=cpc: a 1x2 dither to the CPC's 27 colours.  Each channel is quantised to
     0, 1/2 or 1 (in the same gamma space as the Bayer path) and a half channel lights one
@@ -125,11 +188,13 @@ def dither_cpc(rgb_img, alpha, x0=0, y0=0, full=True):
     col = np.where(alpha, col, 0).astype(np.uint8)
     return col
 
-DITHER = os.environ.get('DITHER', 'bayer')   # bayer (ordered, the default) or cpc
+DITHER = os.environ.get('DITHER', 'bayer')   # bayer (default), cpc, or yli (luma-preserving)
 if DITHER == 'cpc':
     dither = dither_cpc
+elif DITHER == 'yli':
+    dither = dither_yli
 elif DITHER != 'bayer':
-    sys.exit('DITHER must be bayer or cpc')
+    sys.exit('DITHER must be bayer, cpc or yli')
 # KERNEL=1x2 / 2x2 / 2x4 (default): the ordered matrix.  1x2 is the CPC quantisation
 # with every half level on the same scanline (stripes); 2x2 alternates it with x.
 KERNEL = os.environ.get('KERNEL', '2x4')
