@@ -134,6 +134,16 @@ draw_sprites:
         sta NSPR                    ; the logic fills the list again next frame
         rts
 
+; spr_copy: w16b = an address in this bank, cnt = bytes -> MAPBUF
+spr_copy:
+        ldy #0
+:       lda (w16b),y
+        sta MAPBUF,y
+        iny
+        cpy cnt
+        bne :-
+        rts
+
 ; ---------------------------------------------------------------- erase
 ; put the tiles back where this buffer's sprites were two frames ago.  The
 ; record is in chars; the tile blitter wants tiles, so round outwards.

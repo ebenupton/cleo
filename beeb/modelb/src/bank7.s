@@ -203,8 +203,8 @@ init_far:
         .byte BANK_LGC, <(vsync_tick-1), >(vsync_tick-1)    ; F_SNDTICK, not yet
         .byte BANK_MAP, <(map_strip-1), >(map_strip-1)
         .byte BANK_TIL, <(draw_maprect-1), >(draw_maprect-1)
-        .byte BANK_TIL, 0, 0
-        .byte BANK_TIL, 0, 0
+        .byte BANK_TIL, <(til_copy-1), >(til_copy-1)
+        .byte BANK_SPR, <(spr_copy-1), >(spr_copy-1)
         .byte BANK_SPR, <(draw_sprites-1), >(draw_sprites-1)
         .byte BANK_SPR, <(erase_old-1), >(erase_old-1)
         .byte BANK_TIL, <(copy_partial-1), >(copy_partial-1)

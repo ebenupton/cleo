@@ -258,6 +258,17 @@ dm_row: lda dt_cy                   ; one char row: half of a row of tiles
         jmp dm_row
 @done:  rts
 
+; til_copy: w16b = an address in this bank, cnt = bytes -> MAPBUF.  Every bank has
+; one of these: it is the only way anything outside the bank can read its data.
+til_copy:
+        ldy #0
+:       lda (w16b),y
+        sta MAPBUF,y
+        iny
+        cpy cnt
+        bne :-
+        rts
+
 ; copy_partial: compose the row section A shows.  It is the 80 chars above the
 ; window, and holds lines wfine..7 of the window's first row in lines 0..7-wfine,
 ; so the playfield can scroll in two-scanline steps.

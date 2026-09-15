@@ -61,6 +61,11 @@ lives in the banks, each with the data its inner loop touches:
 | 6 | the map, the object table, the tile attributes, and the routines that read them |
 | 7 | the game logic, the frame loop, the chain builder, and the low-RAM image |
 
+Each bank also has a `*_copy`, the one way anything outside it can read its data:
+given an address in the bank and a length it copies into `MAPBUF`, the 48-byte buffer
+in zero page.  Only the map's is used in anger -- the tile and sprite data is read by
+the blitters that live beside it -- but the mechanism is uniform.
+
 A bank-resident routine calls another bank through `farcall` in main RAM, which saves
 the caller's bank, switches, calls and switches back: about 63 cycles.  That is far too
 slow per tile, so the traffic is arranged to be per *frame* or per *rectangle*: the tile
