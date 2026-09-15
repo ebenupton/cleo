@@ -88,3 +88,23 @@ rp:       .res 2
 spi:      .res 1
 PART_LO:  .res 2
 PART_HI:  .res 2
+
+; the player and the camera
+px:       .res 2
+py:       .res 2
+vy:       .res 2
+dx:       .res 1
+dy:       .res 1
+facing:   .res 1
+onground: .res 1
+anim:     .res 1
+t16:      .res 2
+tx0:      .res 1                    ; the window's first tile, derived from wcx/wcy
+ty0:      .res 1
+ga_x:     .res 1                    ; ground_at's working values
+ga_tx:    .res 1
+ga_ty:    .res 1
+ga_row:   .res 1
+ga_k:     .res 1
+ga_py:    .res 1                    ; the y ground_at starts looking from
+floor:    .res 1

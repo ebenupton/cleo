@@ -73,6 +73,36 @@ map_col:
         bne @cp
         rts
 
+; alt_row: tmp2 = tile id -> MAPBUF[0..7] = the altitude row of its class
+alt_row:
+        ldx tmp2
+        lda LV_ACLS,x
+        asl
+        asl
+        asl
+        clc
+        adc #<LV_ALT
+        sta w16
+        lda #0
+        adc #>LV_ALT
+        sta w16+1
+        ldy #7
+:       lda (w16),y
+        sta MAPBUF,y
+        dey
+        bpl :-
+        rts
+
+; map_copy: cnt bytes from w16b in this bank into MAPBUF
+map_copy:
+        ldy #0
+:       lda (w16b),y
+        sta MAPBUF,y
+        iny
+        cpy cnt
+        bne :-
+        rts
+
         .segment "MAPDATA"
         .align 256
 LV_HDR:

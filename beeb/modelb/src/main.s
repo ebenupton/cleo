@@ -15,6 +15,7 @@
         .incbin "build/ringmod.bin"
         .include "low.s"
         .include "bank7.s"
+        .include "logicb.s"
         .include "bank6.s"
         .include "bank5.s"
         .include "bank4.s"

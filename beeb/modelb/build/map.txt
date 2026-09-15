@@ -1,19 +1,20 @@
 Modules list:
 -------------
 main.o:
-    ZEROPAGE          Offs=000000  Size=0000D3  Align=00001  Fill=0000
+    ZEROPAGE          Offs=000000  Size=0000E9  Align=00001  Fill=0000
     TAB4              Offs=000000  Size=000100  Align=00001  Fill=0000
     TAB5              Offs=000000  Size=000100  Align=00001  Fill=0000
     TAB6              Offs=000000  Size=000100  Align=00001  Fill=0000
     TAB7              Offs=000000  Size=000100  Align=00001  Fill=0000
     LOWCODE           Offs=000000  Size=0000C6  Align=00001  Fill=0000
-    LOWBSS            Offs=000000  Size=000087  Align=00001  Fill=0000
-    LGCCODE           Offs=000000  Size=000635  Align=00001  Fill=0000
-    MAPCODE           Offs=000000  Size=000074  Align=00001  Fill=0000
+    LOWBSS            Offs=000000  Size=00008D  Align=00001  Fill=0000
+    LGCCODE           Offs=000000  Size=000A0A  Align=00001  Fill=0000
+    LGCBSS            Offs=000000  Size=0000BE  Align=00001  Fill=0000
+    MAPCODE           Offs=000000  Size=00009F  Align=00001  Fill=0000
     MAPDATA           Offs=000000  Size=000800  Align=00100  Fill=0000
-    TILCODE           Offs=000000  Size=0000C8  Align=00001  Fill=0000
+    TILCODE           Offs=000000  Size=000182  Align=00001  Fill=0000
     TILDATA           Offs=000000  Size=002000  Align=00100  Fill=0000
-    SPRCODE           Offs=000000  Size=000848  Align=00001  Fill=0000
+    SPRCODE           Offs=000000  Size=000853  Align=00001  Fill=0000
     SPRDATA           Offs=000000  Size=002E94  Align=00001  Fill=0000
     SPRBSS            Offs=000000  Size=0006BB  Align=00100  Fill=0000
 
@@ -22,33 +23,34 @@ Segment list:
 -------------
 Name                   Start     End    Size  Align
 ----------------------------------------------------
-ZEROPAGE              000000  0000D2  0000D3  00001
-LOWBSS                000140  0001C6  000087  00001
+ZEROPAGE              000000  0000E8  0000E9  00001
+LOWBSS                000140  0001CC  00008D  00001
 LOWCODE               000206  0002CB  0000C6  00001
 TAB4                  008000  0080FF  000100  00001
 TAB5                  008000  0080FF  000100  00001
 TAB6                  008000  0080FF  000100  00001
 TAB7                  008000  0080FF  000100  00001
-LGCCODE               008100  008734  000635  00001
-MAPCODE               008100  008173  000074  00001
-SPRCODE               008100  008947  000848  00001
-TILCODE               008100  0081C7  0000C8  00001
+LGCCODE               008100  008B09  000A0A  00001
+MAPCODE               008100  00819E  00009F  00001
+SPRCODE               008100  008952  000853  00001
+TILCODE               008100  008281  000182  00001
 MAPDATA               008200  0089FF  000800  00100
-TILDATA               008200  00A1FF  002000  00100
-SPRDATA               008948  00B7DB  002E94  00001
+TILDATA               008300  00A2FF  002000  00100
+SPRDATA               008953  00B7E6  002E94  00001
+LGCBSS                008BD0  008C8D  0000BE  00001
 SPRBSS                00B800  00BEBA  0006BB  00100
 
 
 Exports list by name:
 ---------------------
-__LOWCODE_LOAD__          008735 RLA    __LOWCODE_RUN__           000206 RLA    
+__LOWCODE_LOAD__          008B0A RLA    __LOWCODE_RUN__           000206 RLA    
 __LOWCODE_SIZE__          0000C6 REA    
 
 
 Exports list by value:
 ----------------------
 __LOWCODE_SIZE__          0000C6 REA    __LOWCODE_RUN__           000206 RLA    
-__LOWCODE_LOAD__          008735 RLA    
+__LOWCODE_LOAD__          008B0A RLA    
 
 
 Imports list:

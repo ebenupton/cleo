@@ -34,6 +34,7 @@ draw_maprect:
         lda dst0+1
         adc w16+1
         sta dst0+1
+        jsr fold0                   ; the columns can carry past the ring end
         jsr ring_next               ; dst1 = the char row below
         ldx #0
         stx dt_i
@@ -46,13 +47,15 @@ draw_maprect:
         sta dst0
         bcc :+
         inc dst0+1
-:       lda dst1
+:       jsr fold0
+        lda dst1
         clc
         adc #32
         sta dst1
         bcc :+
         inc dst1+1
-:       inc dt_i
+:       jsr fold1
+        inc dt_i
         lda dt_i
         cmp dt_nx
         bne @tile
@@ -60,6 +63,111 @@ draw_maprect:
         dec dt_ny
         bne @row
         rts
+
+; copy_partial: compose the row section A shows.  It is the 80 chars above the
+; window, and holds lines wfine..7 of the window's first row in lines 0..7-wfine,
+; so the playfield can scroll in two-scanline steps.
+copy_partial:
+        lda wfine
+        bne :+
+        rts
+:
+        lda ringS                   ; source = the window's first char
+        sta w16
+        lda ringS+1
+        sta w16+1
+        asl w16
+        rol w16+1
+        asl w16
+        rol w16+1
+        asl w16
+        rol w16+1
+        lda w16
+        clc
+        adc ringbase
+        sta dst1                    ; dst1 is the source here, and carries the
+        lda w16+1                   ; wfine offset: a positive offset under 8 on an
+        adc ringbase+1              ; 8-aligned pointer leaves its page crossings on
+        sta dst1+1                  ; the char boundaries, so the fold still works
+        lda dst1                    ; destination = one row earlier, wrapped
+        sec
+        sbc #<ROWBYTES
+        sta dst0
+        lda dst1+1
+        sbc #>ROWBYTES
+        sta dst0+1
+        cmp ringbase+1              ; below the base: + RINGBYTES
+        bcs :+
+        lda dst0
+        clc
+        adc #<RINGBYTES
+        sta dst0
+        lda dst0+1
+        adc #>RINGBYTES
+        sta dst0+1
+:       lda #8                      ; bytes per char = 8 - wfine
+        sec
+        sbc wfine
+        sta tmp2
+        lda dst1                    ; the source starts wfine lines into the row
+        clc
+        adc wfine
+        sta dst1
+        bcc :+
+        inc dst1+1
+:       lda #ROWCHARS
+        sta tmp
+@char:  ldy #0
+@l:     lda (dst1),y
+        sta (dst0),y
+        iny
+        cpy tmp2
+        bne @l
+        lda dst0                    ; next char in both
+        clc
+        adc #8
+        sta dst0
+        bcc :+
+        inc dst0+1
+:       jsr fold0
+        lda dst1
+        clc
+        adc #8
+        sta dst1
+        bcc :+
+        inc dst1+1
+:       jsr fold1
+        dec tmp
+        beq :+
+        jmp @char
+:       rts
+
+; fold0/fold1: bring a destination back inside the ring.  A row of the window is
+; 80 chars wherever it starts, so the columns of a tile row can run off the end.
+fold0:
+        lda dst0+1
+        cmp ringehi
+        bcc :+
+        lda dst0
+        sec
+        sbc #<RINGBYTES
+        sta dst0
+        lda dst0+1
+        sbc #>RINGBYTES
+        sta dst0+1
+:       rts
+fold1:
+        lda dst1+1
+        cmp ringehi
+        bcc :+
+        lda dst1
+        sec
+        sbc #<RINGBYTES
+        sta dst1
+        lda dst1+1
+        sbc #>RINGBYTES
+        sta dst1+1
+:       rts
 
 ; ring_row: A = char row -> dst0 = the address of its first char in the ring
 ring_row:

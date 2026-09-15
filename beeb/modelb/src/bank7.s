@@ -37,15 +37,39 @@ init:
         jsr init_far
         farjsr F_SPRINIT            ; the MASKTABs, and the directory's pointers
         jsr clear_screen
+        lda #0                      ; a bank's .res is not cleared by loading it
+        sta bvalid
+        sta bvalid+1
+        sta bptx
+        sta bptx+1
+        sta bpty
+        sta bpty+1
+        sta onground
+        sta facing
+        sta anim
+        sta vy
+        sta vy+1
+        jsr fetch_objs
+        lda #<(STARTX*8)            ; Cleo starts where the level says
+        sta px
+        lda #>(STARTX*8)
+        sta px+1
+        lda #<(STARTY*8)
+        sta py
+        lda #>(STARTY*8)
+        sta py+1
+        jsr camera
+        jsr win_px
+        jsr calc_ring
         lda #0
         sta curbuf
         jsr select_backbuf
-        jsr draw_window
+        jsr scroll_validate
         jsr mirror_copy
         lda #1
         sta curbuf
         jsr select_backbuf
-        jsr draw_window
+        jsr scroll_validate
         jsr mirror_copy
         jsr bar_pattern
         lda #0
@@ -71,36 +95,16 @@ init:
         ; ---------------------------------------------------------------- loop
 frame_top:
         inc frame
-        .ifdef TESTY                ; a fixed window, so a screenshot can be checked
-        lda #TESTY                  ; against the geometry it is meant to show
-        sta wcy
-        lda #TESTX
-        sta wcx
-        lda #0
-        sta wcx+1
-        lda #TESTF
-        sta wfine
-        .else
-        lda frame                   ; walk the window: two frames a char row down,
-        lsr                         ; and a char right every eight, which takes the
-        sta wcy                     ; straddling row through every column
-        lda frame
-        lsr
-        lsr
-        lsr
-        sta wcx
-        lda #0
-        sta wcx+1
-        lda frame
-        and #3
-        asl
-        sta wfine
-        .endif
-        jsr win_px                  ; the blitter works in game pixels
+        jsr player_step
+        jsr camera
+        jsr win_px
         jsr calc_ring
+        jsr scroll_validate
         farjsr F_ERASE              ; put tiles back where this buffer's sprites were
         jsr queue_sprites
         farjsr F_DRAWSPR
+        farjsr F_PARTIAL            ; the fine-scroll row, from what was just drawn
+        jsr mirror_copy             ; and the ring's last row, for the straddle
         jsr build_sections
         lda curbuf
         beq :+
@@ -192,10 +196,12 @@ init_far:
         .byte BANK_TIL, 0, 0
         .byte BANK_SPR, <draw_sprites, >draw_sprites
         .byte BANK_SPR, <erase_old, >erase_old
-        .byte BANK_TIL, 0, 0
+        .byte BANK_TIL, <copy_partial, >copy_partial
         .byte BANK_TIL, 0, 0
         .byte BANK_SPR, <addsprite, >addsprite
         .byte BANK_SPR, <init_masks, >init_masks
+        .byte BANK_MAP, <alt_row, >alt_row
+        .byte BANK_MAP, <map_copy, >map_copy
 
 ; wx/wy from the char window: a char is two game pixels across and a char row is
 ; four down, with wfine the two-scanline remainder.
@@ -222,41 +228,6 @@ win_px:
         bcc :+
         inc wy+1
 :       rts
-
-; A hand-made draw list until the logic arrives: Cleo where the level starts her,
-; and the stars that share her ledge.
-queue_sprites:
-        lda #<(STARTX*8)
-        sta spx
-        lda #>(STARTX*8)
-        sta spx+1
-        lda #<(STARTY*8)
-        sta spy
-        lda #>(STARTY*8)
-        sta spy+1
-        lda #8                      ; Cleo, standing
-        farjsr F_ADDSPR
-        lda #<(STARTX*8+40)
-        sta spx
-        lda #>(STARTX*8+40)
-        sta spx+1
-        lda #<(STARTY*8-16)
-        sta spy
-        lda #>(STARTY*8-16)
-        sta spy+1
-        lda #34                     ; a star
-        farjsr F_ADDSPR
-        lda #<(STARTX*8-48)
-        sta spx
-        lda #>(STARTX*8-48)
-        sta spx+1
-        lda #<(STARTY*8)
-        sta spy
-        lda #>(STARTY*8)
-        sta spy+1
-        lda #37
-        farjsr F_ADDSPR
-        rts
 
 ; ---------------------------------------------------------------- tables
 ; select_backbuf: point the ring tables, the fold and the CRTC base at curbuf

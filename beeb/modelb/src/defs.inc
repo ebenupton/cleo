@@ -64,6 +64,8 @@ RINGMODTAB = $8000                  ; 256 bytes at the foot of every bank
 BANKCODE   = $8100                  ; where each bank's code starts
 
 MODE1     = 1                       ; the MODE 1 paths of the ported blitter
+WINTX     = 21                      ; tiles across the window, and down
+WINTY     = 12
 MAXSPR    = 24
 MAXREC    = 16
 
@@ -80,8 +82,10 @@ F_SCROLLV  = 5*3
 F_DRAWDIRT = 6*3
 F_DRAWSPR  = 7*3
 F_ERASE    = 8*3
-F_PARTIAL  = 9*3
+F_PARTIAL  = 9*3                    ; copy_partial
 F_BARFLUSH = 10*3
 F_ADDSPR   = 11*3
 F_SPRINIT  = 12*3
-NFAR       = 13
+F_ALTROW   = 13*3
+F_MAPCOPY  = 14*3
+NFAR       = 15

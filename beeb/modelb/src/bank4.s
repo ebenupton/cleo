@@ -206,6 +206,10 @@ erase_old:
 ; MASKTABk[x] is the AND mask for the column of phase k in mask byte x: the
 ; blitter indexes by the whole byte and never shifts.
 init_masks:
+        lda #0                      ; the bank's variables come up undefined
+        sta NSPR
+        sta RECCNT
+        sta RECCNT+1
         ldx #0
 @mt:    txa
         lsr
