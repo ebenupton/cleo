@@ -887,43 +887,12 @@ img_wbytes = []
 img_shift = []
 preview = []
 
-# MODE 1's four inks have no red: the red snake (type 3, ids 54..59) dithers to a
-# muddy magenta/yellow mix.  Rotating its hues by -60 degrees puts the body on magenta
-# itself, which the four colours can show, and keeps the rest of the sprite consistent.
-HUE_ROTATE = {54: -60, 55: -60, 56: -60, 57: -60, 58: -60, 59: -60} if MODE == 1 else {}
-def hue_rotate(rgb, degrees):
-    x = rgb.astype(np.float32) / 255.0
-    mx, mn = x.max(axis=2), x.min(axis=2)
-    d = mx - mn
-    h = np.zeros_like(mx)
-    r, g, b = x[..., 0], x[..., 1], x[..., 2]
-    nz = d > 0
-    h[nz & (mx == r)] = ((g - b) / np.where(d == 0, 1, d))[nz & (mx == r)] % 6
-    h[nz & (mx == g)] = ((b - r) / np.where(d == 0, 1, d) + 2)[nz & (mx == g)]
-    h[nz & (mx == b)] = ((r - g) / np.where(d == 0, 1, d) + 4)[nz & (mx == b)]
-    h = (h * 60 + degrees) % 360
-    s = np.where(mx > 0, d / np.where(mx == 0, 1, mx), 0)
-    c = mx * s
-    hh = h / 60
-    xx = c * (1 - np.abs(hh % 2 - 1))
-    z = np.zeros_like(c)
-    sel = [(c, xx, z), (xx, c, z), (z, c, xx), (z, xx, c), (xx, z, c), (c, z, xx)]
-    out = np.zeros_like(x)
-    for k, (rr, gg, bb) in enumerate(sel):
-        mk = (hh >= k) & (hh < k + 1)
-        out[..., 0][mk] = rr[mk]; out[..., 1][mk] = gg[mk]; out[..., 2][mk] = bb[mk]
-    out += (mx - c)[..., None]
-    return np.clip(out * 255 + 0.5, 0, 255).astype(np.uint8)
-
-def _pack(im, full, shift, src=None):
+def _pack(im, full, shift):
     h, w = im.shape
     W = (w + 1) // 2
     padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
     padded[:, shift:shift + w] = im
-    rgb = spr_rgb[padded]
-    if src in HUE_ROTATE:
-        rgb = hue_rotate(rgb, HUE_ROTATE[src])
-    col = dither(rgb, padded != spr_tr, x0=(-shift) & 1, full=full)
+    col = dither(spr_rgb[padded], padded != spr_tr, x0=(-shift) & 1, full=full)
     return col, encode_sprite(col, packcol(col))  # (lines, W): see encode_sprite
 
 _masked = lambda e: int((((e & 0x80) == 0) & (e != 0x41)).sum())
@@ -931,10 +900,10 @@ _saved = 0
 for (im, full, src) in images:
     h, w = im.shape
     W = (w + 1) // 2
-    col, packed = _pack(im, full, 0, src)
+    col, packed = _pack(im, full, 0)
     shift = 0
     if w & 1:
-        col1, packed1 = _pack(im, full, 1, src)
+        col1, packed1 = _pack(im, full, 1)
         if _masked(packed1) < _masked(packed):
             _saved += _masked(packed) - _masked(packed1)
             shift, col, packed = 1, col1, packed1
