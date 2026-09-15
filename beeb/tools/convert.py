@@ -104,12 +104,11 @@ def dither(rgb_img, alpha, x0=0, y0=0, full=True):
 # for a grey.  The plan is sorted by luma so the threshold matrix places luma-
 # neighbours next to each other.  MODE 2 only.
 # ---------------------------------------------------------------------------
-def _srgb_lin(x):
-    x = np.asarray(x, float) / 255.0
-    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
-_PLIN = _srgb_lin(BEEB_RGB.astype(float))
-_LW = np.array([0.2126, 0.7152, 0.0722])
-_PGLUM = (BEEB_RGB.astype(float) / 255.0) @ np.array([0.299, 0.587, 0.114])
+def _wspace(x):
+    return (np.asarray(x, float) / 255.0) ** GAMMA   # the space Bayer dithers in
+_PLIN = _wspace(BEEB_RGB.astype(float))
+_LW = np.array([0.299, 0.587, 0.114])                # luma weights in the working space
+_PGLUM = _PLIN @ _LW
 YLI_N = 8
 YLI_WL = float(os.environ.get('YLI_WL', '4'))
 YLI_WC = float(os.environ.get('YLI_WC', '1'))
@@ -119,7 +118,7 @@ def _yli_plan(t):
     key = tuple(int(v) for v in t)
     if key in _yli_cache:
         return _yli_cache[key]
-    tl = _srgb_lin(t); tL = tl @ _LW
+    tl = _wspace(t); tL = tl @ _LW
     N = YLI_N; best = None
     for i in range(8):
         for j in range(i, 8):
