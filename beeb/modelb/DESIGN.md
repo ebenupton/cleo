@@ -83,6 +83,10 @@ staging copy is there.  After the last bank it sets MODE 1 and jumps into bank 7
 game copies its low-RAM image to $0140, takes the machine over and never calls the OS
 again.
 
+SHIFT+BREAK boots it.  The controls are the cursor keys or Z and X to walk, and the
+up cursor or : to jump; the keyboard is read straight from the matrix (the MOS is
+gone by then), which is `scan_keys` in bank 7.
+
 ## Rectangles are in chars, both ways
 
 Everything that repairs the ring -- the scroll strips, the erase of a sprite's old
