@@ -17,6 +17,4 @@
         .include "bank7.s"
         .include "bank6.s"
         .include "bank5.s"
-
-        .segment "SPRCODE"
-        .byte 0
+        .include "bank4.s"

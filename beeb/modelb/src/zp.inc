@@ -34,6 +34,8 @@ DISPSECT: .res 1
 NEXTSECT: .res 1
 keys:     .res 1
 frame:    .res 1
+fc_a:     .res 1                    ; A across a far call
+
 crtcbm:   .res 2                    ; crtcb - RINGCHARS: the mirror redirect
 RINGLO:   .res RINGROWS             ; slot -> address, for the buffer being drawn
 RINGHI:   .res RINGROWS
@@ -48,3 +50,41 @@ dt_ny:    .res 1
 dt_i:     .res 1
 dst0:     .res 2                    ; where its two char rows go in the ring
 dst1:     .res 2
+
+; the sprite blitter's state: all of it is per sprite and none of it is shared
+spx:      .res 2
+spy:      .res 2
+sp_ptr:   .res 2
+sp_w:     .res 1
+sp_lines: .res 1
+sp_ext:   .res 1
+sp_flags: .res 1
+sp_c0:    .res 1
+sp_c1:    .res 1
+sp_lb0:   .res 2
+sp_r0:    .res 1
+sp_r1:    .res 1
+sp_ra0:   .res 1
+sp_ra1:   .res 1
+sp_col:   .res 2
+sp_rb:    .res 2
+sp_rp:    .res 2
+sp_rinc:  .res 1
+sp_ncol:  .res 1
+sp_row:   .res 1
+sp_c:     .res 1
+sp_lim:   .res 1
+sp_cnt:   .res 1
+spclip:   .res 1
+sp_id:    .res 1
+sp_msk:   .res 1
+sp_mpg0:  .res 1
+sp_mh:    .res 1
+sp_mrp:   .res 2
+sp_mbase: .res 2
+mptr:     .res 2
+mtab:     .res 2
+rp:       .res 2
+spi:      .res 1
+PART_LO:  .res 2
+PART_HI:  .res 2

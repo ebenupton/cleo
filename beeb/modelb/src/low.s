@@ -9,7 +9,8 @@
 ; X = the index of a (bank, address) entry.  The caller's bank comes back from the
 ; stack, so a bank may call one that replaces it, and a call may nest.
 farcall:
-        lda ROMSEL_CPY
+        sta fc_a                    ; A is an argument and a result, so it travels
+        lda ROMSEL_CPY              ; around the bank switch on both legs
         pha
         lda FARTAB+1,x
         sta @j+1
@@ -18,10 +19,13 @@ farcall:
         lda FARTAB,x
         sta ROMSEL_CPY
         sta ROMSEL
+        lda fc_a
 @j:     jsr $FFFF
-        pla                         ; whatever the callee left in A is the result:
-        sta ROMSEL_CPY              ; the bank comes back from the stack, not from A
+        sta fc_a
+        pla
+        sta ROMSEL_CPY
         sta ROMSEL
+        lda fc_a
         rts
 
 ; ---------------------------------------------------------------- map peek

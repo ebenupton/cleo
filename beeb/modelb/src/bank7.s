@@ -35,6 +35,7 @@ init:
         dex
         bne @lc
         jsr init_far
+        farjsr F_SPRINIT            ; the MASKTABs, and the directory's pointers
         jsr clear_screen
         lda #0
         sta curbuf
@@ -95,7 +96,11 @@ frame_top:
         asl
         sta wfine
         .endif
+        jsr win_px                  ; the blitter works in game pixels
         jsr calc_ring
+        farjsr F_ERASE              ; put tiles back where this buffer's sprites were
+        jsr queue_sprites
+        farjsr F_DRAWSPR
         jsr build_sections
         lda curbuf
         beq :+
@@ -185,11 +190,73 @@ init_far:
         .byte BANK_TIL, <draw_maprect, >draw_maprect
         .byte BANK_TIL, 0, 0
         .byte BANK_TIL, 0, 0
-        .byte BANK_SPR, 0, 0
-        .byte BANK_SPR, 0, 0
+        .byte BANK_SPR, <draw_sprites, >draw_sprites
+        .byte BANK_SPR, <erase_old, >erase_old
         .byte BANK_TIL, 0, 0
         .byte BANK_TIL, 0, 0
-        .byte BANK_SPR, 0, 0
+        .byte BANK_SPR, <addsprite, >addsprite
+        .byte BANK_SPR, <init_masks, >init_masks
+
+; wx/wy from the char window: a char is two game pixels across and a char row is
+; four down, with wfine the two-scanline remainder.
+win_px:
+        lda wcx
+        asl
+        sta wx
+        lda wcx+1
+        rol
+        sta wx+1
+        lda wcy                     ; a char row is four game pixels
+        sta wy
+        lda #0
+        sta wy+1
+        asl wy
+        rol wy+1
+        asl wy
+        rol wy+1
+        lda wfine
+        lsr
+        clc
+        adc wy
+        sta wy
+        bcc :+
+        inc wy+1
+:       rts
+
+; A hand-made draw list until the logic arrives: Cleo where the level starts her,
+; and the stars that share her ledge.
+queue_sprites:
+        lda #<(STARTX*8)
+        sta spx
+        lda #>(STARTX*8)
+        sta spx+1
+        lda #<(STARTY*8)
+        sta spy
+        lda #>(STARTY*8)
+        sta spy+1
+        lda #8                      ; Cleo, standing
+        farjsr F_ADDSPR
+        lda #<(STARTX*8+40)
+        sta spx
+        lda #>(STARTX*8+40)
+        sta spx+1
+        lda #<(STARTY*8-16)
+        sta spy
+        lda #>(STARTY*8-16)
+        sta spy+1
+        lda #34                     ; a star
+        farjsr F_ADDSPR
+        lda #<(STARTX*8-48)
+        sta spx
+        lda #>(STARTX*8-48)
+        sta spx+1
+        lda #<(STARTY*8)
+        sta spy
+        lda #>(STARTY*8)
+        sta spy+1
+        lda #37
+        farjsr F_ADDSPR
+        rts
 
 ; ---------------------------------------------------------------- tables
 ; select_backbuf: point the ring tables, the fold and the CRTC base at curbuf

@@ -63,6 +63,7 @@ OSWRCH    = $FFEE
 RINGMODTAB = $8000                  ; 256 bytes at the foot of every bank
 BANKCODE   = $8100                  ; where each bank's code starts
 
+MODE1     = 1                       ; the MODE 1 paths of the ported blitter
 MAXSPR    = 24
 MAXREC    = 16
 
@@ -82,4 +83,5 @@ F_ERASE    = 8*3
 F_PARTIAL  = 9*3
 F_BARFLUSH = 10*3
 F_ADDSPR   = 11*3
-NFAR       = 12
+F_SPRINIT  = 12*3
+NFAR       = 13
