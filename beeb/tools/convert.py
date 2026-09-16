@@ -880,17 +880,12 @@ for g in (0, 1):
             a = strip(np.asarray(tile_preview[c])); b = strip(np.asarray(tile_preview[k]))
             d = (a != b); d = d[0::2] | d[1::2]
             return int((d & _flatmask(_art(c))).sum())
-        # A tile may only fold into a twin with the same dominant source colour: a
-        # twin on a different ground is a whole background swap on screen (a light
-        # ramp block turning dark), however few bits differ in the dither.
-        def _dom(c):
-            v, n = np.unique(_art(c), return_counts=True); return int(v[np.argmax(n)])
         cand = []
         for i, c in enumerate(ids):
             if c in _nomerge:
                 continue
             for k in ids[:i]:
-                if k in _nomerge or alt_class[k] != alt_class[c] or _dom(k) != _dom(c):
+                if k in _nomerge or alt_class[k] != alt_class[c]:
                     continue
                 d = _bits(tiles_mode2[c], tiles_mode2[k])
                 if d <= 64:
