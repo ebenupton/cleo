@@ -435,7 +435,20 @@ TILE_EDITS = {}
 _edits_path = os.path.join(os.path.dirname(__file__), '..', 'tile_edits.json')
 if os.path.exists(_edits_path):
     TILE_EDITS = {int(k): np.array(v, np.uint8) for k, v in json.load(open(_edits_path)).items()}
+#   TIL_PATTERN (MODE 2 only) source colour -> fn(x, y) giving the MODE 2 colour of
+#               game pixel (x, y) of the tile: a hand-laid pattern in place of the
+#               dither.  The dark dune sand is a 50% red/yellow checkerboard of game
+#               pixels with one red in four replaced by black, on a dispersed period-4
+#               lattice so it tiles across the 8 px grid.
+TIL_PATTERN = {}
+if MODE == 2:
+    def _dune_dark(x, y):
+        if (x & 3, y & 3) in ((0, 0), (2, 2)):
+            return 8                                   # opaque black
+        return 1 if ((x + y) & 1) == 0 else 3          # red / yellow checker
+    TIL_PATTERN[(187, 119, 51)] = _dune_dark
 noblack_idx = {}                 # palette index -> replacement MODE2 colour
+pattern_idx = {}                 # palette index -> pattern function
 for _i, _c in enumerate(til_rgb0):
     _t = tuple(int(v) for v in _c)
     if _t in TIL_SOLID:
@@ -444,6 +457,8 @@ for _i, _c in enumerate(til_rgb0):
         til_rgb[_i] = np.array(TIL_RECOLOR[_t], np.uint8)
     if _t in TIL_NOBLACK:
         noblack_idx[_i] = TIL_NOBLACK[_t]
+    if _t in TIL_PATTERN:
+        pattern_idx[_i] = TIL_PATTERN[_t]
 
 tile_preview = []
 for cid, orig in enumerate(compact):
@@ -456,6 +471,11 @@ for cid, orig in enumerate(compact):
             nb[sidx == _pi] = _rc
         nb16 = np.repeat(nb, 2, axis=0)
         col = np.where((col == 8) & (nb16 >= 0), nb16.astype(col.dtype), col)
+    for _pi, _fn in pattern_idx.items():           # hand-laid pattern per source colour
+        for yy, xx in zip(*np.nonzero(sidx == _pi)):
+            v = _fn(int(xx), int(yy))
+            col[2 * yy, xx] = v
+            col[2 * yy + 1, xx] = v
     if orig in TILE_EDITS:
         col = TILE_EDITS[orig]                     # hand-painted override
     tile_preview.append(col)
