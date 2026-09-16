@@ -846,6 +846,31 @@ for g in (0, 1):
     # same altitude class fold together, and the animations never fold at all.
     rep_of, worst = {}, 0
     if len(ids) > TILE_DATA_MAX:
+        # A pixel in a flat region -- same source colour as an in-tile orthogonal
+        # neighbour, or on the tile border where the neighbour is the next tile --
+        # must render as its colour's own dither: a fold that alters one bleeds
+        # energy into the region, and that is what the eye picks out.  No fold of
+        # the outdoor set is flat-safe within 254 ids (37 candidates, 284 tiles
+        # left), so the fold minimises the damage instead: candidates are ordered
+        # by (cells using the tile) x (flat pixels whose rendering changes), then
+        # by raw bit difference.  From 35,048 to 3,237 damaged pixel-cells.
+        usage = {}
+        for (lv_, sub_), cm_ in maps.items():
+            if tileset_of(lv_, sub_) == g:
+                for v, n in zip(*np.unique(cm_, return_counts=True)):
+                    usage[int(v)] = usage.get(int(v), 0) + int(n)
+        def _art(c):
+            o = compact[c]; return til_idx[o * 8:o * 8 + 8, :]
+        def _flatmask(a):
+            f = np.zeros((8, 8), bool)
+            f[:, 1:] |= a[:, 1:] == a[:, :-1]; f[:, :-1] |= a[:, :-1] == a[:, 1:]
+            f[1:, :] |= a[1:, :] == a[:-1, :]; f[:-1, :] |= a[:-1, :] == a[1:, :]
+            f[0, :] = f[-1, :] = f[:, 0] = f[:, -1] = True
+            return f
+        def _flatdiff(c, k):
+            a = strip(np.asarray(tile_preview[c])); b = strip(np.asarray(tile_preview[k]))
+            d = (a != b); d = d[0::2] | d[1::2]
+            return int((d & _flatmask(_art(c))).sum())
         cand = []
         for i, c in enumerate(ids):
             if c in _nomerge:
@@ -855,10 +880,10 @@ for g in (0, 1):
                     continue
                 d = _bits(tiles_mode2[c], tiles_mode2[k])
                 if d <= 64:
-                    cand.append((d, c, k))
+                    cand.append((usage.get(c, 0) * _flatdiff(c, k), d, c, k))
         cand.sort()
         live, target = len(ids), set()
-        for d, c, k in cand:
+        for dmg, d, c, k in cand:
             if live <= TILE_DATA_MAX:
                 break
             if c in rep_of or c in target:      # each tile folds once, and only
