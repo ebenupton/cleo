@@ -1155,6 +1155,28 @@ shr6:   lda t16+1                   ; t16 < 16384: result = (hi<<2) | (lo>>6)
 ; player_hit: knock back. hx = relative x of the enemy (sign used)
 ; ============================================================================
 player_hit:
+  .ifdef DBGHIT                     ; debug build (DBGHIT=1 sh build.sh): the score
+        lda #0                      ; shows obj*100 + otype of whatever hit us, and
+        sta score                   ; addscore is a no-op so it stays until the next hit
+        sta score+1
+        ldx obj
+        beq @dh1
+@dh0:   lda score
+        clc
+        adc #100
+        sta score
+        bcc @dh2
+        inc score+1
+@dh2:   dex
+        bne @dh0
+@dh1:   lda otype
+        clc
+        adc score
+        sta score
+        bcc @dh3
+        inc score+1
+@dh3:
+  .endif
         mov16 evframe, frame
         dec health
         jsr bar_touch
@@ -2100,6 +2122,9 @@ boomready:
 @no:    clc
         rts
 addscore:                           ; A = points
+  .ifdef DBGHIT
+        rts                         ; (debug: the score is the last hit's obj/type)
+  .endif
         clc
         adc score
         sta score
