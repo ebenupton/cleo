@@ -1131,6 +1131,12 @@ game_frame:
         beq :+
         lda #$FF
 :       sta hx+1                    ; facing left -> hx negative -> vx = +768
+  .ifdef DBGHIT
+        lda #250                    ; the readout shows 25009 for a kill tile (obj and
+        sta obj                     ; otype are free here: the walk is over for this step)
+        lda #9
+        sta otype
+  .endif
         jsr player_hit
 @nokill:
         lda health
