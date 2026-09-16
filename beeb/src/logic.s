@@ -2534,9 +2534,10 @@ ob_rsnake:
         sta bcnt
         lda #SFX_KILL
         sta SFXREQ
-        dif16 rx, ox, px
-@hitp:  lda q6
-        beq @draw
+@hitp:  dif16 rx, ox, px            ; the boomerang test above left rx boomerang-
+        lda q6                      ; relative; on a miss it fell through here with
+        beq @draw                   ; that x, so a boomerang passing the snake while
+                                    ; Cleo stood at its height read as Cleo touching it
         lda health
         beq @draw
         clc                         ; ry = oy + rise, in one pass
