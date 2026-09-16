@@ -482,11 +482,12 @@ pause_menu:
 
 ; win/lose: A = 1 win, 0 lose ; score/hiscore shown
 winlose:
-        sta tmp4
-        jsr load_title
+        sta mtop                    ; the win/lose flag (tmp4 is the sprite prologue's
+        jsr load_title              ; mask page: after the first draw the lose screen
+                                    ; was cycling the WIN frames)
         jsr m_music_stop              ; the win/lose screen is silent
         jsr menu_begin
-        lda tmp4
+        lda mtop
         beq @lose
         mov16i spx, 36
         lda #4
@@ -544,13 +545,14 @@ winlose:
         jsr draw_number
         lda #$FF
         sta lastkeys
-        sta tmp2                    ; last drawn frame
-        stz tmp3                    ; animation counter
-@loop:  ; big cleo frame
-        lda tmp3                    ; the shift count is the same on both arms
+        sta mcount                  ; last drawn frame   (menu_list's variables: this
+        stz msel                    ; animation counter   screen never runs a list, and
+@loop:  ; big cleo frame            ; tmp2/tmp3 are clobbered by menu_show's callees
+        lda msel                    ; every pass, which froze big Cleo on one frame)
+                                    ; the shift count is the same on both arms
         and #30
         tax
-        lda tmp4
+        lda mtop
         beq @lframe
         ; win: 4 + ((441 >> (n & 30)) & 3)
         lda #<441
@@ -574,19 +576,19 @@ winlose:
         and #3
 @drawc: clc
         adc #TP_CLEO0
-        cmp tmp2
+        cmp mcount
         beq @same
-        sta tmp2
+        sta mcount
         lda #66
         sta spx
         stz spx+1
         lda #28
         sta spy
         stz spy+1
-        lda tmp2
+        lda mcount
         jsr draw_piece
 @same:  jsr menu_show
-        inc tmp3
+        inc msel
         jsr menu_keys
         and #(K_FIRE|K_RIGHT)
         bne :+
