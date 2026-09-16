@@ -1219,9 +1219,12 @@ for f in range(6):
     box_art.append((col, x0))
     box_alpha.append(np.repeat(padded != spr_tr, 2, axis=0))
 
-# MODE 2 keeps its old rule (a black star pixel over the background reads as the
-# background); MODE 1 has no black-vs-transparent distinction in col, so it uses alpha
-_boxmask = (lambda f: box_art[f][0] != 0) if MODE == 2 else (lambda f: box_alpha[f])
+# The mask is the art's alpha in both modes.  (MODE 2 used to take "col != 0", but
+# strip() has already turned opaque black into 0 there, so every black star pixel --
+# the whole dark outline -- was painted with the box colour instead: invisible on a
+# black box, a star with no dark bits on a cyan one.)  The copy blitter copies the
+# field verbatim, so black as colour 0 in it is simply black.
+_boxmask = lambda f: box_alpha[f]
 def _span(f):                   # opaque pixel range of one frame, in field px
     col, x0 = box_art[f]
     xs = np.where(_boxmask(f).any(axis=0))[0]
@@ -1280,7 +1283,7 @@ for _i in TRAMP_IDS:
     tramp_art.append((_col, _x0))
     tramp_alpha.append(np.repeat(_pad != spr_tr, 2, axis=0))
 
-_tmask = (lambda f: tramp_art[f][0] != 0) if MODE == 2 else (lambda f: tramp_alpha[f])
+_tmask = lambda f: tramp_alpha[f]          # alpha, as the box stars (see there)
 def _tspan(f):
     col, x0 = tramp_art[f]
     xs = np.where(_tmask(f).any(axis=0))[0]
