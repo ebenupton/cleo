@@ -427,6 +427,12 @@ TIL_RECOLOR = {
     (187, 119, 51): (221, 162, 68),   # dark (left) dune sand: halfway up to the light
                                       # (255,204,85) face, so the shadow side is brighter
 }
+if MODE == 2:
+    # colour 5, the pale outdoor wall: its Bayer dither was YWWWYKWW, one black cell.
+    # Any colour with R,G in 244..255 (all eight cells lit) and B in 194..218 (six lit)
+    # dithers naturally to YWWWWYWW -- no black, the two yellows sheared into opposite
+    # columns.  This one sits mid-window so a gamma tweak cannot tip it back.
+    TIL_RECOLOR[(238, 221, 187)] = (246, 246, 200)
 
 til_rgb = til_rgb0.copy()
 # hand-painted tile overrides from the tile editor (tools/tile_editor.py):
