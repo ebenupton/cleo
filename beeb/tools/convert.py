@@ -449,6 +449,10 @@ if MODE == 2:
             return 8                                   # opaque black
         return 1 if ((x + line) & 1) == 0 else 3       # red / yellow checker
     TIL_PATTERN[(187, 119, 51)] = _dune_dark
+    # the anti-aliased join between the two dune faces (six pixels along the wiggle):
+    # the same checker in the same phase, with no black, so the lattice stops at the
+    # dark face and Bayer's stray black cannot double up against it
+    TIL_PATTERN[(221, 170, 85)] = lambda x, line: 1 if ((x + line) & 1) == 0 else 3
 noblack_idx = {}                 # palette index -> replacement MODE2 colour
 pattern_idx = {}                 # palette index -> pattern function
 for _i, _c in enumerate(til_rgb0):
