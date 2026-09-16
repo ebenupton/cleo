@@ -460,11 +460,11 @@ if MODE == 2:
     # dark face and Bayer's stray black cannot double up against it
     TIL_PATTERN[(221, 170, 85)] = lambda x, line: 1 if ((x + line) & 1) == 0 else 3
     # colour 1, the mid outdoor wall: its Bayer dither was RYWWRKYW, one black.  The
-    # wanted YWRWWYWG (scan order over the 2x4 kernel) is not any colour's natural
-    # dither -- its red and green sit on the kernel's first-lighting cells -- so it is laid by
+    # wanted YWRWWYWB (scan order over the 2x4 kernel; B black) is not any colour's natural
+    # dither -- its red and black sit on the kernel's first-lighting cells -- so it is laid by
     # hand, in the same tile-local phase as the Bayer kernel.
-    _C1 = {'Y': 3, 'W': 7, 'R': 1, 'G': 2}
-    TIL_PATTERN[(221, 187, 119)] = lambda x, line: _C1['YWRWWYWG'[(line & 3) * 2 + (x & 1)]]
+    _C1 = {'Y': 3, 'W': 7, 'R': 1, 'B': 8}                  # B = opaque black
+    TIL_PATTERN[(221, 187, 119)] = lambda x, line: _C1['YWRWWYWB'[(line & 3) * 2 + (x & 1)]]
 noblack_idx = {}                 # palette index -> replacement MODE2 colour
 pattern_idx = {}                 # palette index -> pattern function
 for _i, _c in enumerate(til_rgb0):
