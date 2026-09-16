@@ -62,7 +62,7 @@ BLUE_OFF = [(0, 0), (0, 0), (0, 0)]   # one shared mask: a region orders as a de
 USE_BLUE = os.environ.get('DITHER2', 'bayer') == 'blue'   # DITHER2=blue for the blue-noise look
 
 
-def dither(rgb_img, alpha, x0=0, y0=0, full=True):
+def _dither_raw(rgb_img, alpha, x0=0, y0=0, full=True):
     """rgb_img: (h,w,3) uint8 ; alpha: (h,w) bool.
     Returns MODE 2 colour indices (h2, w) with h2 = 2h if full else h.
     Transparent -> 0, opaque black -> 8.  Ordered 2x4 Bayer dither per channel."""
@@ -176,6 +176,58 @@ def dither_yli(rgb_img, alpha, x0=0, y0=0, full=True):
     out = plans[cid, rank]
     out = np.where(out == 0, 8, out).astype(np.uint8)     # 0 = opaque black -> 8
     return np.where(al, out, 0).astype(np.uint8)
+
+
+# A pale colour's ordered dither can put a lone black cell among bright ones (a pale
+# wall at 7/8 white + 1/8 black): high-frequency luma the eye reads as speckle.  A
+# colour is pale if its own flat dither is at most a quarter black; in the output, a
+# black cell of a pale colour with no black among its four screen-pixel neighbours is
+# isolated and takes the commonest neighbouring colour.  Full-alpha 8x8 inputs (tiles)
+# wrap, since a flat area is the tile repeated; sprites clip at their edges and only
+# opaque neighbours count.  MODE 2 only (MODE 1 rebinds dither to dither_cmyk).
+_pale_cache = {}
+def _is_pale(c):
+    key = tuple(int(v) for v in c)
+    if key not in _pale_cache:
+        d = _dither_raw(np.tile(np.array(key, np.uint8), (8, 8, 1)), np.ones((8, 8), bool), full=True)
+        f = float((d == 8).mean())
+        _pale_cache[key] = (0.0 < f <= 0.25)
+    return _pale_cache[key]
+
+def dither(rgb_img, alpha, x0=0, y0=0, full=True):
+    col = _dither_raw(rgb_img, alpha, x0, y0, full)
+    if not UNSPECKLE:
+        return col
+    h, w, _ = rgb_img.shape
+    flat = rgb_img.reshape(-1, 3)
+    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
+    pale_u = np.array([_is_pale(c) for c in uniq], bool)
+    pale = pale_u[inv].reshape(h, w) & alpha
+    if full:
+        pale = np.repeat(pale, 2, axis=0)
+    if not pale.any():
+        return col
+    wrap = bool(alpha.all()) and rgb_img.shape[:2] == (8, 8)
+    H, W = col.shape
+    out = col.copy()
+    ys, xs = np.nonzero(pale & (col == 8))
+    for y, x in zip(ys, xs):
+        nb = []
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            ny, nx = y + dy, x + dx
+            if wrap:
+                ny %= H; nx %= W
+            elif not (0 <= ny < H and 0 <= nx < W):
+                continue
+            nb.append(int(col[ny, nx]))
+        if any(v == 8 for v in nb):
+            continue                              # part of a line or clump: keep
+        nb = [v for v in nb if v != 0]            # opaque neighbours only
+        if not nb:
+            continue
+        out[y, x] = max(set(nb), key=nb.count)
+    return out
+UNSPECKLE = os.environ.get('UNSPECKLE', '1') == '1'
 
 def dither_cpc(rgb_img, alpha, x0=0, y0=0, full=True):
     """DITHER=cpc: a 1x2 dither to the CPC's 27 colours.  Each channel is quantised to
