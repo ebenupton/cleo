@@ -329,6 +329,7 @@ NSPR:      .res 1
 BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
 BUF_CY:    .res 2
 BUF_VALID: .res 2
+BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 PART_CY:   .res 2                 ; per buffer: row/fine the partial (A) row was last copied for
 PART_F:    .res 2
 PART_LO:   .res 2                 ; per buffer: window columns of row wcy drawn since that copy
@@ -390,6 +391,7 @@ dpass:     .res 1
 BUF_CX:    .res 4
 BUF_CY:    .res 2
 BUF_VALID: .res 2
+BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 PART_CY:   .res 2
 PART_F:    .res 2
 PART_LO:   .res 2
@@ -1065,6 +1067,7 @@ scroll_validate:
         ldx curbuf
         lda #1
         sta BUF_VALID,x
+        stz BUF_BOTOK,x             ; the window moved: the slot below is stale again
         lda wcy
         sta BUF_CY,x
         txa
@@ -2426,6 +2429,46 @@ copy_partial:
 @done:  rts
 
 ; ============================================================================
+; blank_below: the 6845 always displays the first scanline of a frame, whatever R6
+; says, so the blanking section's row 0 line 0 -- the ring slot below the playfield --
+; is a 241st line under the picture.  Everywhere it is the next map line; parked on
+; the map's bottom row it is whatever that never-drawn slot last held.  So when the
+; window sits on the bottom row, blank the slot, once per buffer per arrival.
+; ============================================================================
+        PLACE "CODE", "TILCODE"
+blank_below:
+        lda wfine
+        bne @no
+        lda wy
+        cmp maxwy
+        bne @no
+        lda wy+1
+        cmp maxwy+1
+        bne @no
+        ldx curbuf
+        lda BUF_BOTOK,x
+        bne @no
+        inc BUF_BOTOK,x
+        lda wcx                     ; the row below the playfield: map char row
+        sta w16                     ; wcy + VISROWS at the window's column -- rows
+        lda wcx+1                   ; are not slot aligned, so this is a run of 80
+        sta w16+1                   ; chars that may straddle the ring end
+        lda wcy
+        clc
+        adc #VISROWS
+        jsr ringaddr                ; sp = its ring address
+        ldx #ROWCHARS
+@char:  lda #0
+        ldy #7
+@b:     sta (sp),y
+        dey
+        bpl @b
+        spnext                      ; 8 on, folding at the ring end
+        dex
+        bne @char
+@no:    rts
+
+; ============================================================================
 ; calc_ring: ringS = ((wcy & 31) * 80 + wcx) mod 2560 ; barq = ringS / 80
 ; ============================================================================
 ; copy_bar: if this buffer's bar rows are stale, write bar image into ring slots q-3, q-2
@@ -2888,6 +2931,7 @@ render_frame:                       ; is render_core in bank 5
         jsr draw_dirty
         jsr draw_sprites
         jsr copy_partial
+        jsr blank_below
   .endif
         stza NSPR
   .if MODELB
@@ -2929,6 +2973,7 @@ render_core:
         jsr draw_dirty
         jsr draw_sprites
         jsr copy_partial
+        jsr blank_below
         jmp mirror_copy             ; the straddling row's copy (display.s)
   .endif
 
