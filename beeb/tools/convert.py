@@ -839,7 +839,7 @@ DUNE_ORIG = [2, 3, 13, 14, 15, 16, 45, 46, 47, 48, 77, 78, 79, 80, 81, 149, 150,
                                               # and the two-tone wiggle where they meet
 # Slope tiles whose fold twin sits on a dark ground: the fold was swapping a light
 # ramp block for a black-backed one.  Kept, like the dunes.
-RAMP_ORIG = [474]
+RAMP_ORIG = [474, 493, 508]        # 474: MODE 2 fold; 493, 508: MODE 1 fold
 _nomerge = ({special['VANISH0'] + i for i in range(8)} | {special['FLOWER0'] + i for i in range(4)}
             | {orig2compact[o] for o in DUNE_ORIG + RAMP_ORIG if o in orig2compact})
 def _bits(a, b):
