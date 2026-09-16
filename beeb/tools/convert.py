@@ -837,8 +837,9 @@ for (lv, sub), cm in maps.items():
 DUNE_ORIG = [2, 3, 13, 14, 15, 16, 45, 46, 47, 48, 77, 78, 79, 80, 81, 149, 150,
              190, 222, 254, 286, 318, 350]   # light sky-edges, the dark-orange face,
                                               # and the two-tone wiggle where they meet
+KEEP_ORIG = [465]                  # tiles kept out of the fold by hand (orig ids)
 _nomerge = ({special['VANISH0'] + i for i in range(8)} | {special['FLOWER0'] + i for i in range(4)}
-            | {orig2compact[o] for o in DUNE_ORIG if o in orig2compact})
+            | {orig2compact[o] for o in DUNE_ORIG + KEEP_ORIG if o in orig2compact})
 def _bits(a, b):
     return sum(bin(x ^ y).count('1') for x, y in zip(a, b))
 
