@@ -435,17 +435,19 @@ TILE_EDITS = {}
 _edits_path = os.path.join(os.path.dirname(__file__), '..', 'tile_edits.json')
 if os.path.exists(_edits_path):
     TILE_EDITS = {int(k): np.array(v, np.uint8) for k, v in json.load(open(_edits_path)).items()}
-#   TIL_PATTERN (MODE 2 only) source colour -> fn(x, y) giving the MODE 2 colour of
-#               game pixel (x, y) of the tile: a hand-laid pattern in place of the
-#               dither.  The dark dune sand is a 50% red/yellow checkerboard of game
-#               pixels with one red in four replaced by black, on a dispersed period-4
-#               lattice so it tiles across the 8 px grid.
+#   TIL_PATTERN (MODE 2 only) source colour -> fn(x, line) giving the MODE 2 colour of
+#               screen pixel (x, line) of the tile (x 0..7, line 0..15: two lines a
+#               game pixel): a hand-laid pattern in place of the dither.  A screen
+#               pixel is 2:1 on screen, so a checkerboard of them is a 2:1 checker.
+#               The dark dune sand is a 50% red/yellow checkerboard of screen pixels
+#               with one red in four replaced by black, on a dispersed period-4
+#               lattice so it tiles across the 8 px / 16 line grid.
 TIL_PATTERN = {}
 if MODE == 2:
-    def _dune_dark(x, y):
-        if (x & 3, y & 3) in ((0, 0), (2, 2)):
+    def _dune_dark(x, line):
+        if (x & 3, line & 3) in ((0, 0), (2, 2)):
             return 8                                   # opaque black
-        return 1 if ((x + y) & 1) == 0 else 3          # red / yellow checker
+        return 1 if ((x + line) & 1) == 0 else 3       # red / yellow checker
     TIL_PATTERN[(187, 119, 51)] = _dune_dark
 noblack_idx = {}                 # palette index -> replacement MODE2 colour
 pattern_idx = {}                 # palette index -> pattern function
@@ -473,9 +475,8 @@ for cid, orig in enumerate(compact):
         col = np.where((col == 8) & (nb16 >= 0), nb16.astype(col.dtype), col)
     for _pi, _fn in pattern_idx.items():           # hand-laid pattern per source colour
         for yy, xx in zip(*np.nonzero(sidx == _pi)):
-            v = _fn(int(xx), int(yy))
-            col[2 * yy, xx] = v
-            col[2 * yy + 1, xx] = v
+            col[2 * yy, xx] = _fn(int(xx), 2 * int(yy))
+            col[2 * yy + 1, xx] = _fn(int(xx), 2 * int(yy) + 1)
     if orig in TILE_EDITS:
         col = TILE_EDITS[orig]                     # hand-painted override
     tile_preview.append(col)
