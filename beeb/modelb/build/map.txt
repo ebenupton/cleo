@@ -1,15 +1,15 @@
 Modules list:
 -------------
 main.o:
-    ZEROPAGE          Offs=000000  Size=0000A2  Align=00001  Fill=0000
-    TILBSS            Offs=000000  Size=0004AF  Align=00001  Fill=0000
+    ZEROPAGE          Offs=000000  Size=0000A3  Align=00001  Fill=0000
+    TILBSS            Offs=000000  Size=0004B1  Align=00001  Fill=0000
     LGCBSS            Offs=000000  Size=000B05  Align=00001  Fill=0000
     LOWBSS            Offs=000000  Size=0000A9  Align=00001  Fill=0000
-    TILCODE           Offs=000000  Size=000CF0  Align=00001  Fill=0000
+    TILCODE           Offs=000000  Size=000D55  Align=00001  Fill=0000
     LGCLO             Offs=000000  Size=00007B  Align=00001  Fill=0000
     SPR4CODE          Offs=000000  Size=000407  Align=00001  Fill=0000
     SPR6CODE          Offs=000000  Size=000290  Align=00001  Fill=0000
-    LGCCODE           Offs=000000  Size=0022AB  Align=00001  Fill=0000
+    LGCCODE           Offs=000000  Size=0022C4  Align=00001  Fill=0000
     LOWCODE           Offs=000000  Size=0000D6  Align=00001  Fill=0000
     COMMON4           Offs=000000  Size=000020  Align=00001  Fill=0000
     COMMON5           Offs=000000  Size=000100  Align=00001  Fill=0000
@@ -34,7 +34,7 @@ Segment list:
 -------------
 Name                   Start     End    Size  Align
 ----------------------------------------------------
-ZEROPAGE              000000  0000A1  0000A2  00001
+ZEROPAGE              000000  0000A2  0000A3  00001
 LOWBSS                000140  0001E8  0000A9  00001
 LOWCODE               000206  0002DB  0000D6  00001
 COMMON4               008000  00801F  000020  00001
@@ -44,7 +44,7 @@ COMMON7               008000  0080FF  000100  00001
 MAPLO                 008020  008056  000037  00001
 SPR4HOLE              008020  0082FF  0002E0  00001
 LGCENT                008100  008117  000018  00001
-TILCODE               008100  008DEF  000CF0  00001
+TILCODE               008100  008E54  000D55  00001
 LGCLO                 008120  00819A  00007B  00001
 SPR6HOLE              008150  0082FB  0001AC  00001
 LGCDATA               008200  0091D3  000FD4  00001
@@ -54,12 +54,12 @@ SPR4MASK              008400  0087FF  000400  00001
 SPR6MASK              008400  0087FF  000400  00001
 MAPDATA               008800  00ABAF  0023B0  00001
 SPR4DATA              008800  00B9F3  0031F4  00001
-TILDATA               008E00  00B8AB  002AAC  00001
-LGCCODE               0091D4  00B47E  0022AB  00001
+TILDATA               008F00  00B9AB  002AAC  00001
+LGCCODE               0091D4  00B497  0022C4  00001
 SPR6DATA              00ABB0  00BD68  0011B9  00001
-LGCBSS                00B47F  00BF83  000B05  00001
-TILBSS                00B900  00BDAE  0004AF  00001
+LGCBSS                00B498  00BF9C  000B05  00001
 SPR4CODE              00B9F4  00BDFA  000407  00001
+TILBSS                00BA00  00BEB0  0004B1  00001
 SPR6CODE              00BD69  00BFF8  000290  00001
 
 
