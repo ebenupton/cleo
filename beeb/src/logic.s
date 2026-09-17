@@ -1112,6 +1112,22 @@ game_frame:
         lda #>(-1280)
         sta vy+1
 :       ; kill tile under player
+  .ifdef DBGTILE                    ; debug build: the score shows the tile byte under
+        mov16 qx, px                ; Cleo's feet (its id in the level's tile set;
+        clc                         ; 254 cyan, 255 black), refreshed every step
+        lda py
+        adc #12
+        sta qy
+        lda py+1
+        adc #0
+        sta qy+1
+        jsr tilexy
+        bcc @dbgt
+        jsr maptile
+        sta score
+        stz score+1
+@dbgt:
+  .endif
         lda health
         bne :+
         lda hurt
@@ -2128,8 +2144,8 @@ boomready:
 @no:    clc
         rts
 addscore:                           ; A = points
-  .ifdef DBGHIT
-        rts                         ; (debug: the score is the last hit's obj/type)
+  .if .defined(DBGHIT) .or .defined(DBGTILE)
+        rts                         ; (debug: the score is a readout)
   .endif
         clc
         adc score

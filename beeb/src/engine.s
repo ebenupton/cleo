@@ -3604,7 +3604,22 @@ sound_tick:
         jsr sndwrite
         lda #$FF
         jsr sndwrite
-@music: jmp music_tick
+@music:
+  .ifdef DBGSND                     ; diagnostic build (DBGSND=1 sh build.sh): while no
+        lda MUSON                   ; music plays, re-silence one of the channels play
+        bne :+                      ; never writes -- channel 0, channel 1, noise, in
+        lda vsyncs                  ; turn, a frame each.  A tone that survives this on
+        and #3                      ; hardware is not in the SN76489's registers.
+        tax
+        lda @dbgsil,x
+        beq :+
+        jsr sndwrite
+:
+  .endif
+        jmp music_tick
+  .ifdef DBGSND
+@dbgsil: .byte $9F, $BF, $FF, 0
+  .endif
 
 sndwrite:
         pha
