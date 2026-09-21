@@ -32,6 +32,7 @@ UVIA_IER  = $FE6E
 OSWRCH    = $FFEE
 OSBYTE    = $FFF4
 OSFILE    = $FFDD
+OSGBPB    = $FFD1
 OSCLI     = $FFF7
 IRQ1V     = $0204
 ROMSEL_CPY= $F4
@@ -3964,14 +3965,41 @@ nmi_nd: and #1
 :       pla
         rti
 
-; The 1770 answers at $FE24 (control) and $FE28 (registers).  Control has reset in
-; bit 2 (active low) and density in bit 5.
+; The 1770 answers at $FE24 (control) and $FE28 (registers).  Control selects the
+; drive in bits 0-1 (one bit per drive), has reset in bit 2 (active low), the side
+; in bit 4 and density in bit 5.
+; The drive is whichever DFS has current when the game is *RUN, so a Gotek on drive
+; 1 (*DRIVE 1, or *DIR :1, then *RUN CLEO) is read from where the game came: drive 0
+; was hard-coded before.  DFS is asked (OSGBPB 6: current drive name and boot
+; option) by disc_drive, which main.s calls first thing: the MOS vectors it goes
+; through are overwritten by LOW2 once MODE 2 is up, and the tables are cleared
+; after that, so the answer lives in the code segment.  Drives 2 and 3 are the
+; second sides of 0 and 1.
+disc_drive:
+        lda #6
+        ldx #<ld_gbpb
+        ldy #>ld_gbpb
+        jsr OSGBPB
+        ldx ld_drv                  ; the name's last character is the digit
+        lda ld_drv,x
+        and #3
+        tax
+        lda drvsel,x
+        sta ld_ctl
+        rts
+ld_gbpb: .byte 0                    ; OSGBPB control block: the data address is all
+        .word ld_drv, $FFFF         ;  call 6 reads (the I/O processor's memory, Tube
+        .res 8                      ;  or no Tube)
+ld_drv: .res 8                      ; its answer: <len> "<drive>" <len> <boot option>
+ld_ctl: .byte $25                   ; the control byte for the drive (drive 0 unless asked)
+drvsel: .byte $25, $26, $35, $36    ; drive 0, 1, 0 side 1, 1 side 1
+
 ; initialise: reset controller, restore head to track 0
 disc_init:
         lda #$20
         sta FDC_CTRL                ; reset asserted (active low bit 2)
-        lda #$25
-        sta FDC_CTRL                ; drive 0, FM, reset released
+        lda ld_ctl
+        sta FDC_CTRL                ; the drive, FM, reset released
         lda #$00                    ; restore, spin up, 6ms
         sta FDC_CMD
         jsr fdc_wait

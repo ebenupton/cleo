@@ -42,7 +42,9 @@ The original JAR contents are expected in `../v500/` (unzipped `CleoV500.jar`).
   current level (map, page tables, objects, altitude data) and the title pack.
 * **Loading**: after `*RUN CLEO` the MOS is abandoned; a small WD1770 driver reads the
   data files by sector (multi-sector reads under NMI) using a table generated at build
-  time by `tools/mkdfs.py`.
+  time by `tools/mkdfs.py`. It reads whichever drive DFS had current at `*RUN`, so a
+  Gotek on drive 1 works after `*DRIVE 1` (or `*DIR :1`); `*RUN :1.CLEO` alone does not
+  change the current drive.
 * **Logic**: a direct port of `CleoApp.run()` (all 13 object types, the player physics
   and boomerang), fixed at 25 Hz with frame skipping; rendering runs at whatever rate
   the 2 MHz 6502 manages (about 12-25 fps). Sprites that did not change since the

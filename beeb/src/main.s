@@ -16,6 +16,7 @@ MODE1 = 0                           ; ca65 -D MODE1=1: MODE 1 build (assets from
         .code
 ; ---------------------------------------------------------------- entry
 start:
+        jsr disc_drive              ; which drive we came from, while DFS can still say
         sei
         ; NMI handler: jump to ours (1770 DRQ/INTRQ driven sector transfer)
         lda #$4C
