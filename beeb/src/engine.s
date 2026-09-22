@@ -1393,7 +1393,8 @@ erase_old:                          ; redraws are bank 5's tile blitter: a far c
         lda (rp),y
         sta rc_y
   .if MODELB
-        farjsr F_DRAWRECT
+        lda #BANK_TILES             ; bank 5's, by low RAM's direct switch (its
+        jsr callbank                ; BANKENTRY is drawrect_clip)
   .else
         jsr drawrect_clip
   .endif
@@ -1918,7 +1919,7 @@ drawsprite:
         clc
         adc sp_r0
   .if MODELB
-        jsr ringaddr7               ; bank 5's, through the far table
+        jsr ringaddr7               ; this bank's own copy (no crossing)
   .else
         jsr ringaddr
   .endif
@@ -1972,14 +1973,10 @@ drawsprite:
         sta sp_ncol                 ; columns-1
   .if MODELB
         ; the row loop and the inner blocks are assembled into each sprite data bank
-        ; (SPRITE_LOOPS below): call the copy in the bank the directory named
+        ; (SPRITE_LOOPS below): call the copy in the bank the directory named, through
+        ; low RAM's direct switch (both banks enter at BANKENTRY) and back to this bank
         lda sp_dbank
-        cmp #BANK_SPR
-        bne @loop6
-        farjsr F_SPRLOOP4
-        rts
-@loop6: farjsr F_SPRLOOP6
-        rts
+        jmp callbank
   .endif
 ; ---- inner blocks.  ptr = source column (already offset), sp = screen char,
 ;      tmp = ra0', tmp2 = ra1'.  Full-res: source byte per line.
@@ -2489,11 +2486,17 @@ mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit
         SPRFULL sprFC, 0, 1
         .endif
         .endscope
+        .segment "SPR4END"          ; the same entry address in both banks (BANKENTRY),
+        jmp spr4::ds_entry          ; for low RAM's callbank
         .segment "SPR6CODE"
         .scope spr6
         SPRITE_LOOPS ::SPR6_MIRROR, 1
         SPRFULL sprFC, 0, 1
         .endscope
+        .segment "SPR6END"
+        jmp spr6::ds_entry
+        .segment "TIL5END"          ; and bank 5's, for erase_old's rects
+        jmp drawrect_clip
         PLACE "CODE", "TILCODE"
   .else
         SPRITE_LOOPS 1, 1
@@ -4706,9 +4709,34 @@ m_mark_dirty:                       ; sprite prologue: farcall takes X, so mark_
         stx farx                    ; X = ty crosses in farx
         ldx #F_MARKDIRTY
         jmp farcall
+; bank 7's own ringaddr, for the sprite prologue: the ring modulus by subtraction (no
+; table this side), the row multiple from the tables the chain keeps here, the
+; buffer's base from select_backbuf (both bases are xx80: ringbhi is the page)
 ringaddr7:
-        ldx #F_RINGADDR
-        jmp farcall
+        ringmod7
+        tax
+        lda mulrowlo,x              ; slot * 80 + cx: the ring char (the tables are
+        clc                         ; in chars, as the chain wants them)
+        adc w16
+        sta sp
+        lda mulrowhi,x
+        adc w16+1
+        sta sp+1
+        asl sp                      ; x 8: bytes from the ring base
+        rol sp+1
+        asl sp
+        rol sp+1
+        asl sp
+        rol sp+1
+        lda sp
+        clc
+        adc #<RING_A
+        sta sp
+        lda sp+1
+        adc ringbhi
+        ringup sp
+        sta sp+1
+        rts
 ; The menus live in bank 5's overlay (menu.s under MNUCODE) and are called from bank
 ; 7; what they call back in bank 7 crosses the same way.  What they call in main RAM
 ; is a plain name.

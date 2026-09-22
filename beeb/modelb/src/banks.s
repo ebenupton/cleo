@@ -14,9 +14,6 @@
 .endmacro
 .macro COMMON_TABLES                ; the far table: the same $40 bytes in every bank
         .assert * = FARTAB, error, "the far table must be at FARTAB in every bank"
-        FAR BANK_SPR,   spr4::ds_entry      ; F_SPRLOOP4
-        FAR BANK_MAP,   spr6::ds_entry      ; F_SPRLOOP6
-        FAR BANK_TILES, drawrect_clip       ; F_DRAWRECT  (erase_old's rects)
         FAR BANK_TILES, render5             ; F_RENDER5
         FAR BANK_TILES, select_backbuf      ; F_SELBB
         FAR BANK_TILES, title_menu          ; F_TITLE     (the menu overlay)
@@ -32,7 +29,6 @@
         FAR BANK_LVL,   drawsprite          ; F_DRAWSPR
         FAR BANK_LVL,   calc_ring           ; F_CALCRING
         FAR BANK_TILES, copy_partial        ; F_COPYPART
-        FAR BANK_TILES, ringaddr            ; F_RINGADDR  (the sprite prologue)
         FAR BANK_TILES, mark_dirty_x        ; F_MARKDIRTY (the logic)
         FAR BANK_TILES, init5               ; F_INIT5     (start-up: with take_over)
         .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"

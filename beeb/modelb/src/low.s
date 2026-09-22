@@ -83,32 +83,18 @@ irq_handler:
 ; mapshr = 8 - lw, which the loader sets from the header) and the strip copy is the
 ; one bank switch a tile row costs.
 maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 << lw) + rc_tx0
-        sta ptr+1                   ; (X kept, as maprow)
-        txa
-        pha
-        lda #0
-        sta ptr
-        ldx mapshr
-        beq :++
-:       lsr ptr+1
-        ror ptr
-        dex
-        bne :-
-:       pla
-        tax
-        lda ptr
+        jsr maprow                  ; (X kept; the logic's mapptr is its scratch)
+        lda mapptr
         clc
         adc rc_tx0
         sta ptr
-        lda ptr+1
-        adc #>LV_MAP
+        lda mapptr+1
+        adc #0
         sta ptr+1
         rts
 
-mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; the caller's bank back
-        lda ROMSEL_CPY
-        pha
-        lda #BANK_MAP
+mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; bank 5 back (the row
+        lda #BANK_MAP               ; loop's: dirfetch, the other caller, restores its own)
         sta ROMSEL_CPY
         sta ROMSEL
         ldy rc_nt
@@ -116,7 +102,7 @@ mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; the caller's ba
         sta MAPBUF,y
         dey
         bpl :-
-        pla
+        lda #BANK_TILES
         sta ROMSEL_CPY
         sta ROMSEL
         rts
@@ -132,7 +118,18 @@ dirfetch:                           ; ptr -> the entry in bank 6
         sta ptr
         lda #>MAPBUF
         sta ptr+1
-        rts
+        jmp pagelogic               ; bank 7 back (mapstrip left bank 5)
+
+; ---------------------------------------------------------------- the direct switch
+; The two crossings that happen once a sprite and once an erased rect skip the far
+; table: page the bank, call its entry vector -- BANKENTRY, the same address in
+; banks 4, 5 and 6: the sprite row loop in 4 and 6, drawrect_clip in 5 -- and page
+; bank 7 back (pagelogic).  ~30 cycles against the thunk's ~90.
+callbank:                           ; A = the bank
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jsr BANKENTRY
+        jmp pagelogic
 
         .segment "LOWBSS"
 MAPBUF:   .res 21                   ; a tile row of the rectangle: 21 tiles at most

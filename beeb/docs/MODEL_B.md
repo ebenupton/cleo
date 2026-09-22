@@ -115,7 +115,11 @@ expansions, so bank 7's calc_ring lost its ring-modulus table (whole rows landed
 the wrong slot); and the boot loader's piece table still loaded bank 5's code at
 its old address (the first jsr into it went to $0000).  The half tiles had to give
 up their page alignment for L4B to fit: they follow the full tiles at once, and the
-gather counts slots from the page they start in.
+gather counts slots from the page they start in.  Grinding the crossings after --
+bank 7's own arithmetic ringaddr, a direct-switch thunk with a common entry vector
+at $BFFD in banks 4/5/6 for the sprite loop and the erased rect, mapstrip paging
+bank 5 back outright -- took the far calls a frame from 19 to 3 and the frame from
+99.5k to 98.7k cycles: the thunk was never the cost, the drawing is.
 
 **The 8271 latches "not ready".**  The title's idle let the controller unload the
 head (DFS's specify says after a few index pulses), so the level's first read came

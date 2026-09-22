@@ -54,17 +54,23 @@ because they are copied while it is still being read).
 | 7 | the far table, the entry vector, the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue and SPRMASK, draw_sprites, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
 Every bank starts with the same far table at $8000 (banks.s `COMMON_TABLES`), so the
-thunk in low RAM reads it whatever bank is paged in -- all 21 entries of it are
-taken.  The small tables are assembled in the bank of the code that indexes them:
-sprmul5 and the row multiples in bank 7 (the prologue, the records, the chain), the
-ring modulus in bank 5 (ringaddr; RINGROWS x 5 entries, the `ringmod` macro brings
-a row under that with two subtractions) -- bank 7's one use, calc_ring, subtracts
-instead (`ringmod7`).  What crosses between the two each frame: render_core (bank
-7) makes three far calls into bank 5 -- select_backbuf; scroll_validate, draw_dirty
-and blank_below; copy_partial -- erase_old one per rect it redraws (drawrect_clip),
-the sprite prologue one per sprite for its ring address (ringaddr7), and the logic
-one per tile it changes (m_mark_dirty, which parks X in `farx` because the thunk
-takes X).  The mask tables are assembled too.
+thunk in low RAM reads it whatever bank is paged in (17 entries).  The small tables
+are assembled in the bank of the code that indexes them: sprmul5 and the row
+multiples in bank 7 (the prologue, the records, the chain), the ring modulus in
+bank 5 (ringaddr; RINGROWS x 5 entries, the `ringmod` macro brings a row under
+that with two subtractions).  Bank 7 has its own `ringaddr7` for the sprite
+prologue -- the modulus by subtraction (`ringmod7`, calc_ring's too), the row
+multiple from its own tables, the base from select_backbuf's `ringbhi` -- so a
+sprite's address never crosses.  What does cross each frame: render_core (bank 7)
+makes three far calls into bank 5 -- select_backbuf; scroll_validate, draw_dirty
+and blank_below; copy_partial -- and the logic one per tile it changes
+(m_mark_dirty, which parks X in `farx` because the thunk takes X).  The two
+crossings that happen once a sprite and once an erased rect skip the far table
+(~90 cycles) for low RAM's `callbank` (~30): page the bank, `jsr BANKENTRY` --
+$BFFD, a `jmp` to the sprite row loop in banks 4 and 6 and to drawrect_clip in
+bank 5 -- and bank 7 back through `pagelogic`.  `mapstrip`, the row loop's, pages
+bank 5 back directly (dirfetch, the prologue's, restores 7 itself).  The mask
+tables are assembled too.
 
 Bank 5 is nearly all tiles because the level's tile count is the Master's own (no
 folding beyond the set fold convert.py already does): L4B's 233 tiles would be 14.9K.

@@ -32,6 +32,9 @@ MASKTAB1  = MASKTAB0 + $100         ; the four mask-phase pages in both sprite b
 MASKTAB2  = MASKTAB0 + $200
 MASKTAB3  = MASKTAB0 + $300
 BANKCODE  = $8040                   ; bank 7's entry vector, where the loader jumps
+BANKENTRY = $BFFD                   ; banks 4, 5 and 6: a jump to the routine bank 7 calls
+                                    ; once a sprite or rect (low.s callbank): the sprite
+                                    ; row loop, drawrect_clip
 TILES     = $8100                   ; bank 5: this level's tiles, 64 bytes each, by id,
                                     ; page aligned (drawrect's gather is arithmetic)
 MENU_BASE = TILES                   ; or the menu overlay, over them
@@ -96,26 +99,24 @@ FDC1770_DAT = $FE87
 ; that crosses a bank boundary goes through one of these: two a frame for the ring
 ; work in bank 5, one a sprite for its row loop, one a rect for the tile blitter's
 ; rows, and the rare rest.  A goes in and comes back, Y survives, X does not.
-F_SPRLOOP4  = 0*3                   ; the sprite row loop   bank 4
-F_SPRLOOP6  = 1*3                   ;                       bank 6
-F_DRAWRECT  = 2*3                   ; drawrect_clip         bank 5 (erase_old's rects)
-F_RENDER5   = 3*3                   ; scroll_validate + draw_dirty + blank_below, bank 5
-F_SELBB     = 4*3                   ; select_backbuf        bank 5
-F_TITLE     = 5*3                   ; the menus: bank 5's overlay, present only while
-F_HELP      = 6*3                   ;   title_res says so
-F_LEVELSEL  = 7*3
-F_WINLOSE   = 8*3
-F_BUILDSECT = 9*3                   ; build_sections, bank 7 (the menus call it)
-F_BLANKPAL  = 10*3                  ; blank_palette   bank 7
-F_SETPAL    = 11*3                  ; set_palette     bank 7
-F_LOADTITLE = 12*3                  ; load_title      bank 7: the overlay and the pack
-F_MUSSTOP   = 13*3                  ; music_stop      bank 7
-F_DIV10     = 14*3                  ; div10_16        bank 7
-F_DRAWSPR   = 15*3                  ; drawsprite      bank 7 (the menus' title pieces)
-F_CALCRING  = 16*3                  ; calc_ring       bank 7 (the menus)
-F_COPYPART  = 17*3                  ; copy_partial    bank 5
-F_RINGADDR  = 18*3                  ; ringaddr        bank 5 (the sprite prologue)
-F_MARKDIRTY = 19*3                  ; mark_dirty      bank 5 (the logic; X in farx)
-F_INIT5     = 20*3                  ; init5 + take_over, bank 5's low corner (start-up)
-NFAR        = 21                    ; (the table is full: $40 bytes)
+; (The sprite row loop, erase_old's rects and the prologue's ring address do not go
+; through the table: low.s callbank, engine.s ringaddr7.)
+F_RENDER5   = 0*3                   ; scroll_validate + draw_dirty + blank_below, bank 5
+F_SELBB     = 1*3                   ; select_backbuf        bank 5
+F_TITLE     = 2*3                   ; the menus: bank 5's overlay, present only while
+F_HELP      = 3*3                   ;   title_res says so
+F_LEVELSEL  = 4*3
+F_WINLOSE   = 5*3
+F_BUILDSECT = 6*3                   ; build_sections, bank 7 (the menus call it)
+F_BLANKPAL  = 7*3                   ; blank_palette   bank 7
+F_SETPAL    = 8*3                   ; set_palette     bank 7
+F_LOADTITLE = 9*3                   ; load_title      bank 7: the overlay and the pack
+F_MUSSTOP   = 10*3                  ; music_stop      bank 7
+F_DIV10     = 11*3                  ; div10_16        bank 7
+F_DRAWSPR   = 12*3                  ; drawsprite      bank 7 (the menus' title pieces)
+F_CALCRING  = 13*3                  ; calc_ring       bank 7 (the menus)
+F_COPYPART  = 14*3                  ; copy_partial    bank 5
+F_MARKDIRTY = 15*3                  ; mark_dirty      bank 5 (the logic; X in farx)
+F_INIT5     = 16*3                  ; init5 + take_over, bank 5's low corner (start-up)
+NFAR        = 17
 .assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"
