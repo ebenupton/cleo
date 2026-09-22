@@ -3,7 +3,7 @@
 # mirror against the ring's last slot row.
 import json, sys
 st=json.load(open('build/state.json'))
-ram=open('build/ram.bin','rb').read(); tiles=open('build/tiles.bin','rb').read(); mp=open('build/map.bin','rb').read()
+ram=open('build/ram.bin','rb').read(); tiles=open('build/tiles.bin','rb').read(); mp=open('build/map.bin','rb').read(); halves=open('build/halves.bin','rb').read()
 inc=json.load(open('build/level.json'))          # bcheck2.mjs dumps the level's shape with its tiles and map
 MAPW=int(inc['MAPW']); MAPH=int(inc['MAPH'])
 RINGROWS, RINGCHARS = 22, 22*80
@@ -26,6 +26,11 @@ for buf,base in ((0,0x0b00),(1,0x4500)):
             t=mp[ty*MAPW+tx]
             if t>=240:                          # a flat tile (the solids among them): two
                 p=inc['flat'][(t-240)*2:(t-240)*2+2]; exp=bytes(p*4)   # bytes alternating
+            elif t>=inc['half0']:               # a half tile: one row stored, the other a
+                k=t-inc['half0']; row=cy&1      # fill or the same row
+                fill=(row==0 and k<inc['half1']-inc['half0']) or (row==1 and inc['half1']-inc['half0']<=k<inc['half2']-inc['half0'])
+                if fill: p=inc['hpair'][k*2:k*2+2]; exp=bytes(p*4)
+                else: o=k*32+(cx&3)*8; exp=halves[o:o+8]
             else:
                 o=t*64+(cy&1)*32+(cx&3)*8; exp=tiles[o:o+8]
             rc=((cy%RINGROWS)*80+cx)%RINGCHARS

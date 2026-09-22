@@ -243,38 +243,94 @@ def pack_level(lv, sub):
     # a flat tile -- every char the same two bytes alternating down its lines (one
     # colour's dither) -- is two bytes in FLATTAB and an id from FLAT0, as the two
     # solids are (the last two entries); the blitter fills it (drawrect's @solid)
-    def flat_pair(t):
-        cs = [bytes(t[k * 8:k * 8 + 8]) for k in range(8)]
+    def flat_pair_row(row):                 # a char row (4 chars) of one 2-byte dither
+        cs = [bytes(row[k * 8:k * 8 + 8]) for k in range(4)]
         if all(c == cs[0] for c in cs) and all(cs[0][i] == cs[0][i & 1] for i in range(8)):
             return cs[0][:2]
         return None
-    byrep = {}                              # representative -> level tile id
-    flats = []                              # the flat pairs, in id order from FLAT0
+    def flat_pair(t):
+        a, b = flat_pair_row(t[:32]), flat_pair_row(t[32:])
+        return a if a is not None and a == b else None
+    # A half tile has one char row that is a fill (flat_pair of its four chars) or
+    # equal to the other: only the other row is stored, 32 bytes, in a region above
+    # the full tiles, with the fill's pair in HALFPAIR.  Ids: full tiles from 0,
+    # halves from half0 in three runs (top row fills, bottom row fills, both rows the
+    # same), flats from FLAT0.  Byte-identical tiles (the set fold only merges near
+    # ones) share an id.
+    def half_of(t):
+        top, bot = flat_pair_row(t[:32]), flat_pair_row(t[32:])
+        if top is not None and bot is None:
+            return ('top', t[32:], top)      # the top row is the fill: the bottom stored
+        if bot is not None and top is None:
+            return ('bot', t[:32], bot)
+        if t[:32] == t[32:]:
+            return ('pair', t[:32], b'\0\0')
+        return None
     reps = sorted(set(rep2(c) for c in sorted(live) if c not in m.tile_solid))
+    # identical tiles share one representative -- identical to the game too: the logic
+    # reads a tile's attribute and altitude class by id, so those are in the key
+    def attr_of(c):
+        a = 3
+        if c in m.push_tiles:
+            a = m.push_tiles[c] + 3
+        if c in m.kill_tiles:
+            a |= 0x80
+        return a
+    def ident(r):
+        return (bytes(m.tiles_mode2[r]), attr_of(r), m.alt_class[r])
+    bybytes = {}
     for r in reps:
-        fp = flat_pair(m.tiles_mode2[r])
+        bybytes.setdefault(ident(r), r)
+    canon = {r: bybytes[ident(r)] for r in reps}
+    ureps = sorted(set(canon.values()))
+    flats, halves, fulls = [], {'top': [], 'bot': [], 'pair': []}, []
+    for r in ureps:
+        t = m.tiles_mode2[r]
+        fp = flat_pair(t)
         if fp is not None:
-            byrep[r] = FLAT0 + len(flats); flats.append(fp)
-    for r in reps:
-        if r not in byrep:
-            byrep[r] = len([x for x in byrep.values() if x < FLAT0])
+            flats.append((r, fp)); continue
+        h = half_of(t)
+        if h is not None:
+            halves[h[0]].append((r, h[1], h[2])); continue
+        fulls.append(r)
+    byrep = {}
+    for i, r in enumerate(fulls):
+        byrep[r] = i
+    half0 = len(fulls)
+    hlist = halves['top'] + halves['bot'] + halves['pair']
+    half1 = half0 + len(halves['top'])
+    half2 = half1 + len(halves['bot'])
+    for i, (r, stored, pr) in enumerate(hlist):
+        byrep[r] = half0 + i
+    for i, (r, fp) in enumerate(flats):
+        byrep[r] = FLAT0 + i
+    assert half0 + len(hlist) <= FLAT0, (name, half0, len(hlist))
     for c in sorted(live):
         if c not in m.tile_solid:
-            local[c] = byrep[rep2(c)]
-    NTILES = len(reps) - len(flats)
+            local[c] = byrep[canon[rep2(c)]]
+    NTILES = len(fulls)
+    NHALF = len(hlist)
     assert NTILES <= TILE_ROOM, (name, NTILES)
     assert len(flats) <= NFLAT, (name, len(flats))
     flattab = bytearray()
-    for fp in flats:
+    for r, fp in flats:
         flattab += fp
     flattab = flattab.ljust(2 * NFLAT, b'\0')
     flattab += bytes([0x0F, 0x0F, 0x00, 0x00])          # cyan, black: ids 254, 255
+    halfpair = bytearray()
+    for r, stored, pr in hlist:
+        halfpair += pr
+    # the room: full tiles, the halves from the next page, their pairs after them
+    HALFBASE = TILES_BASE + ((NTILES * 64 + 255) & ~255)
+    assert HALFBASE + NHALF * 32 + len(halfpair) <= B5X, (name, NTILES, NHALF)
     # the tile list: for each level id, the tile's index in the set's file (TILESO/I)
     setidx = {c: i for i, c in enumerate(m.tileset[gset])}
     tilelist = bytearray()
-    for r, t in sorted(byrep.items(), key=lambda kv: kv[1]):
-        if t < FLAT0:
-            tilelist.append(setidx[r])
+    for r in fulls:
+        tilelist.append(setidx[r])
+    halflist = bytearray()                  # per half: the set index and the stored row
+    for r, stored, pr in hlist:
+        halflist += bytes([setidx[r], 0 if stored == bytes(m.tiles_mode2[r][:32]) else 1])
     lut = np.zeros(len(m.compact), dtype=np.uint8)
     for c, t in local.items():
         lut[c] = t
@@ -290,6 +346,7 @@ def pack_level(lv, sub):
     hdr.append(gset)
     hdr.append(NTILES)
     hdr.append(8 - L['lw'])                 # maprow's shift: row * 2^lw = (row << 8) >> (8 - lw)
+    hdr += bytes([NHALF, half0, half1, half2, HALFBASE >> 8])   # +23..+27: the halves
     hdr = hdr.ljust(32, b'\0')
     objs = bytearray()
     reach = m.enemy_reach(L['objs'])
@@ -406,7 +463,8 @@ def pack_level(lv, sub):
     maprle = rle(mapb)
     assert unrle(maprle) == mapb
     secs = [('hdr', hdr), ('objs', objs), ('attr', attr), ('altcls', acls),
-            ('tiles', tilelist), ('place', placement), ('map', maprle), ('flat', flattab)]
+            ('tiles', tilelist), ('place', placement), ('map', maprle), ('flat', flattab),
+            ('halves', halflist), ('hpair', halfpair)]
     off = 2 * len(secs)
     table = bytearray()
     body = bytearray()
@@ -416,7 +474,7 @@ def pack_level(lv, sub):
         body += data
     assert off + len(body) <= 0x7800 - 0x5C00, (name, off + len(body))   # STAGE_LVL..LV_OBJS (defs.inc)
     out('L%d' % (lv * 2 + sub), table + body)
-    stats = dict(name=name, ntiles=NTILES, nflat=len(flats), folded=len(extra), damage=dmg, w=w, h=h, nobj=len(L['objs']),
+    stats = dict(name=name, ntiles=NTILES, nflat=len(flats), nhalf=NHALF, folded=len(extra), damage=dmg, w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],
                  maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=off + len(body))
     return stats
@@ -426,9 +484,9 @@ for lv in range(8):
     for sub in (0, 1):
         s = pack_level(lv, sub)
         allstats.append(s)
-        print('%-4s %3d tiles +%d flat (%2d folded, damage %4d) map %3dx%2d rle %5d  %3d obj %2d img  '
+        print('%-4s %3d tiles +%2d half +%d flat (%2d folded, damage %4d) map %3dx%2d rle %5d  %3d obj %2d img  '
               'b4 %5d+%3d  b6 %5d+%3d+%3d  spr %2d bin %2d  file %5d'
-              % (s['name'], s['ntiles'], s['nflat'], s['folded'], s['damage'], s['w'], s['h'], s['maprle'], s['nobj'], s['nimg'],
+              % (s['name'], s['ntiles'], s['nhalf'], s['nflat'], s['folded'], s['damage'], s['w'], s['h'], s['maprle'], s['nobj'], s['nimg'],
                  s['r4'], s['h4'], s['r6'], s['h6'], s['s6'], s['maxspr'], s['binmax'], s['size']))
 
 MAXSPR = max(s['maxspr'] for s in allstats)

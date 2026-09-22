@@ -51,7 +51,7 @@ because they are copied while it is still being read).
 | Bank | Fixed | Per level (the loader's) | During the menus |
 |---|---|---|---|
 | 4 | the far table, SWAPTAB + MASKTAB0..3 at $8300, the sprite row loop at $BBE0 (`SPRITE_LOOPS 1, 0`) | images and masks $8800-$BBDF, masks alone in the hole $8040-$82FF | (untouched) |
-| 5 | the far table; the tile blitter's row loop, scroll_validate and draw_dirty at $BB40, the gather above them | the tiles from $8100, the Master's own count for the level less its flat ones (up to 227: L4B) | the menu overlay from $8100: menu.s, the tune and its player, the font |
+| 5 | the far table; the tile blitter's row loop and scroll_validate at $BB40, the gather and the half tiles' variables above them | the full tiles from $8100 (up to 193: L4B), the half tiles' stored rows from the next page (32 bytes each, up to 34), their pair table after them | the menu overlay from $8100: menu.s, the tune and its player, the font |
 | 6 | the far table, the start-up and the low-RAM image at $8040, MASKTAB0..3 at $8400, the row loop without the mirrored blitter at $BD60 (`SPRITE_LOOPS 0, 1`) | the map at $8800 (up to 8K), the sprite directory above it (`sprtab`), the rest of the sprites, more in the hole $8180-$8300 and the page SWAPTAB would take | the title pack at $8900, over the map |
 | 7 | the far table, the entry vector, the sprite records below $8300, the logic, the game loop, `render_frame` and `render_core`, the sprite prologue and SPRMASK, draw_sprites, copy_partial, blank_below, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
@@ -71,8 +71,17 @@ MODE 1 is the same two bytes alternating down every char -- is not stored at all
 it gets an id from FLAT0 (240) and two bytes in FLATTAB (main RAM, the loader's),
 the two solids being the table's last entries, and the row loop fills a run of them
 from the pair (the gather flags a fill in the high byte's bit 6 and indexes the pair
-with the low byte).  Every level has five to seven such tiles, 62 bytes each --
-Commando's `drawfill`, from the other port.  drawrect's head -- the mirror and partial-row
+with the low byte) -- Commando's `drawfill`, from the other port.  A *half* tile has
+one char row that is such a fill, or equal to the other: only the other row is
+stored, 32 bytes in a region above the full tiles, with the fill's pair in a table
+after the halves (the row loop reaches it through two operands the loader patches).
+Its id is from `half0`, in three runs -- top row fills, bottom row fills, both rows
+the stored one -- and the gather puts the half's flags in the low byte's bottom
+bits (bit 2 a half, bits 0-1 which row fills); the run path, which decides copy or
+fill once per tile and char row anyway, reads them.  Tiles identical in bytes,
+attribute and altitude class share an id.  L4B: 193 full tiles, 34 halves, 4 flats
+-- 12.4K where the Master's 233 tiles are 14.9K; every level shows the Master's
+pixels.  drawrect's head -- the mirror and partial-row
 notes, the per-rect invariants, the ring address, the map row pointer -- is main
 RAM's, and the rows are one far call; the sprite prologue and its records went to
 bank 7 with the logic that queues the sprites; match_sprites and erase_old are main
@@ -123,7 +132,8 @@ The disc (`build.sh`, 28 files):
                            tile list (set-file index per stored tile id), the sprite
                            placement list (item, bank, address, mask address), the
                            RLE map (c < 128: c+1 literals; c >= 128: a byte c-126
-                           times), the flat tiles' pairs
+                           times), the flat tiles' pairs, the half tiles' list (set
+                           index and stored row) and their pairs
 
 Sector numbers are baked in by `mkdfs.py table` (files.inc); the build runs twice
 so they settle, and a third time to check that they have.
@@ -143,7 +153,9 @@ A level load, palette black, interrupts off (`load_level_b`):
    Master's entries less their pointers, which become the item and its kind), the
    pointer and the bank-6 flag filled in from the placement; SPRMASK (bank 7,
    the ids below the boxes) likewise
-6. the flat tiles' pairs go to FLATTAB; the bar template is read to $0300
+6. the half tiles' rows and pairs go above the full tiles (the fill's operands
+   patched to the table), the flat tiles' pairs to FLATTAB; the bar template is
+   read to $0300
 7. back in bank 7, the game's `load_level` goes on from the header as on the Master
 
 The title's load (`load_title_b`) is the same machinery: the overlay to bank 5 at
@@ -159,9 +171,9 @@ most of it is seeks, which the disc order keeps short.
 
 `tools/assets.py` packs all sixteen levels and prints a fit report.  Per level it
 picks the tiles the map (and the animations) can show -- the Master's own set, no
-level folds a tile the Master shows -- gives the flat ones ids from FLAT0 and the
-rest ids from 0 (the room is 233; L4B stores 227), writes attr/altcls by that
-numbering,
+level folds a tile the Master shows -- merges the byte-identical ones (attribute
+and altitude class included: the logic reads those by id), classes them as full,
+half or flat and numbers them, writes attr/altcls by that numbering,
 and places the level's sprites in banks 4 and 6 largest first: mirrored images to
 bank 4 (SWAPTAB is there), box stars and trampolines to bank 6 (the copy blitter
 is there), the rest wherever they fit, a mask always in its image's bank.  MAXSPR
@@ -221,8 +233,8 @@ Y (the one site with Y live is `ldazy`), `bitimm` keeps A.
   harness does it (`tools/bopen.mjs`, shared by the tools below).
 - `tools/bcheck2.mjs keys frames [pre] level` + `tools/bring2.py cur`: the current
   buffer's ring against the map at `draw_sprites` (pure map, kept sprites excluded)
-  and the mirror against the last slot row at `frame_top`; the tiles and map are
-  dumped from the banks, so this also proves what the loader put there.
+  and the mirror against the last slot row at `frame_top`; the tiles, halves, pairs
+  and map are dumped from the banks, so this also proves what the loader put there.
 - `tools/bwork2.mjs frames seed level`: frame cost.
 - `tools/bshot2.mjs cycles out x0 x1 y0 y1 level`, `bboot.mjs model secs outdir`
   (the disc booted through the title into a game, both controllers), `bbrk.mjs`.

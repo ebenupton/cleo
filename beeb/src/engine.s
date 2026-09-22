@@ -388,6 +388,11 @@ NEXTBUF:   .res 1
         .segment "TILBSS"           ; bank 5: the tile blitter's gather, above the tiles
 GATHERL:   .res 24
 GATHERH:   .res 24
+half0:     .res 1                   ; the level's half tiles: first id, the two range
+half1:     .res 1                   ;   boundaries (bottom fills from half1, rowpairs
+half2:     .res 1                   ;   from half2), the halves' page (the loader's)
+halfhi:    .res 1
+rowbit:    .res 1                   ; the char row being drawn, as a flag bit (1, 2)
         .segment "FRAG1"            ; main RAM ($0800): the buffers' state, read from
 RINGLO:    .res RINGROWS            ; every bank (select_backbuf rebuilds the row table)
 RINGHI:    .res RINGROWS
@@ -655,9 +660,16 @@ drawrect_rows:
         ; flat tile is two bytes alternating down every char (FLATTAB, the loader's;
         ; the two solids are the last two entries) -- flagged by bit 6 of the high
         ; byte, the low byte indexing the pair.
+        ; Between the full tiles and the flats are the HALF tiles (ids from half0,
+        ; the loader's): one 32-byte char row stored at halfhi:00 + k*32, the other
+        ; either a fill (its pair in HALFPAIR) or the same row again.  Their low byte
+        ; carries the flags: bit 2 = a half, bit 0 = the top row is the fill, bit 1 the
+        ; bottom (neither: both rows are the stored one).
         lda MAPBUF,y
         cmp #FLAT0
         bcs @gflat
+        cmp half0
+        bcs @ghalf
         tax
         lsr
         lsr
@@ -678,6 +690,34 @@ drawrect_rows:
         sta GATHERL,y
         lda #$C0
         sta GATHERH,y
+        dey
+        bpl @gl
+        bmi @gdone
+@ghalf: tax                         ; X = the id, for the range tests
+        sbc half0                   ; k (C is set)
+        sta tmp
+        lsr
+        lsr
+        lsr
+        clc
+        adc halfhi
+        sta GATHERH,y
+        lda tmp
+        and #7
+        asl
+        asl
+        asl
+        asl
+        asl                         ; (k & 7) << 5
+        ora #4                      ; a half: bit 2; the fill row's flag by range:
+        cpx half1                   ; [top fills][bottom fills][both rows stored]
+        bcs :+
+        ora #1
+        bne @gh2                    ; (always)
+:       cpx half2
+        bcs @gh2
+        ora #2
+@gh2:   sta GATHERL,y
         dey
         bpl @gl
 @gdone:
@@ -702,6 +742,10 @@ drawrect_rows:
         stz rc_sub
         lda rc_ro0
         sta rowoff
+  .if MODELB
+        lda #1                      ; the char row, as a half tile's flag bit
+        sta rowbit
+  .endif
         jsr @drawrow
         inc rc_y
         dec rc_h
@@ -711,6 +755,10 @@ drawrect_rows:
         sta rc_sub
         ora rc_ro0
         sta rowoff
+  .if MODELB
+        lda #2
+        sta rowbit
+  .endif
         jsr @drawrow
         inc rc_y
         dec rc_h
@@ -758,9 +806,26 @@ drawrect_rows:
         beq :+                      ; solid path does not read tp+1, so writing it is free)
         jmp @solid
 :       lda GATHERL,x               ; every tile is in bank 5, selected once per tile row
+  .if MODELB
+        and #7
+        beq @full
+        and rowbit                  ; a half tile: is this row its fill?
+        beq @hcopy
+        jmp @hfill
+@hcopy: lda rowoff                  ; no: the stored row -- this run's char offset,
+        and #$1F                    ; without the row's 32
+        sta tmp
+        lda GATHERL,x
+        and #$E0
+        ora tmp
+        sta tp
+        jmp @tpset
+@full:  lda GATHERL,x
+  .endif
         and #$C0
         ora rowoff
         sta tp
+@tpset:
         ; chars in this run: min(4 - rc_subc, cnt) -> rc_n, X = 2*rc_n, tmp = 8*rc_n
         lda #4
         sbc rc_subc
@@ -920,6 +985,25 @@ drawrect_rows:
         sta tp
         lda FLATTAB+1,y
         sta tp+1
+        jmp @fillgo
+@hfill: lda GATHERH,x               ; the half's pair: k back out of its address
+        sec
+        sbc halfhi
+        asl
+        asl
+        asl
+        sta tmp
+        lda GATHERL,x
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        ora tmp
+        asl
+        tay
+        jsr halfpair_tp             ; the pair, from where the loader put the table
+@fillgo:
   .else
 @solid: lda GATHERL,x
         and #$10
@@ -931,7 +1015,7 @@ drawrect_rows:
   .endif
 :       sta tp                      ; fill value (tp is otherwise unused on this path)
   .endif
-        lda #4
+        lda #4                      ; (@fillgo)
         sec
         sbc rc_subc
         cmp cnt
@@ -1065,6 +1149,20 @@ drawrect_rows:
         dec tmp2
         bne @fsc
         jmp @runend
+
+  .if MODELB
+; Y = a half tile's index * 2 -> tp, tp+1 = its pair.  The table sits above the
+; halves, wherever the level's tiles ended: the loader patches these two operands.
+; (A routine of its own, after the row loop: a label inside it would end its scope.)
+halfpair_tp:
+        .byte $B9                   ; lda HALFPAIR,y
+HPAIR0: .word $FFFF
+        sta tp
+        .byte $B9                   ; lda HALFPAIR+1,y
+HPAIR1: .word $FFFF
+        sta tp+1
+        rts
+  .endif
 
 ; ============================================================================
 ; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
@@ -3461,7 +3559,7 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
         bne @b
         rts
 
-        PLACE "LOW2", "TILCODE"     ; Model B: bank 5 (F_RENDER5)
+        PLACE "LOW2", "MRXCODE"     ; Model B: main RAM (drawrect's head is there)
 draw_dirty:
         ldx curbuf
         lda DIRTYCNT,x

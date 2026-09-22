@@ -258,6 +258,114 @@ lv_load:
 :       iny
         bne @tile
 @tiles_done:
+        ; ---- the half tiles: one 32-byte row each, from the page after the full tiles;
+        ; their pair table follows them and the blitter's fill is patched to find it
+        lda #8
+        jsr section
+        lda src
+        sta lp
+        lda src+1
+        sta lp+1
+        lda LV_HDR+23               ; the count (two list bytes a half), the ids' ranges
+        asl                         ; and the halves' page, the packer's, into bank 5's
+        sta nt                      ; variables
+        lda LV_HDR+24               ; (read with bank 7 in: the header is its)
+        sta tmp
+        lda LV_HDR+25
+        sta tmp2
+        lda LV_HDR+26
+        sta cnt
+        lda LV_HDR+27
+        sta cnt+1
+        lda #BANK_TILES
+        sta ROMSEL_CPY
+        sta ROMSEL
+        lda tmp
+        sta half0
+        lda tmp2
+        sta half1
+        lda cnt
+        sta half2
+        lda cnt+1
+        sta halfhi
+        lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        lda #0
+        sta dst
+        lda LV_HDR+27
+        sta dst+1
+        ldy #0
+@half:  cpy nt
+        beq @halves_done
+        sty tmp2
+        lda (lp),y                  ; the tile's index in the set ...
+        pha
+        and #3
+        lsr
+        ror
+        ror
+        sta src
+        pla
+        lsr
+        lsr
+        clc
+        adc #>STAGE
+        sta src+1
+        iny
+        lda (lp),y                  ; ... and which of its rows: 0 or 32 on
+        beq :+
+        lda src
+        clc
+        adc #32
+        sta src
+:       lda #32
+        sta cnt
+        lda #0
+        sta cnt+1
+        ldx #BANK_TILES
+        jsr bcopy
+        ldy tmp2
+        lda dst
+        clc
+        adc #32
+        sta dst
+        bcc :+
+        inc dst+1
+:       iny
+        iny
+        bne @half
+@halves_done:
+        lda #9                      ; the pairs, right after the halves
+        jsr section
+        lda dst                     ; (dst is where the halves ended)
+        pha
+        lda dst+1
+        pha
+        lda LV_HDR+23               ; two bytes a half
+        asl
+        sta cnt
+        lda #0
+        rol
+        sta cnt+1
+        ldx #BANK_TILES
+        jsr bcopy
+        lda #BANK_TILES             ; the fill reads them through two patched operands
+        sta ROMSEL_CPY
+        sta ROMSEL
+        pla
+        sta HPAIR0+1
+        sta HPAIR1+1
+        pla
+        sta HPAIR0
+        clc
+        adc #1
+        sta HPAIR1
+        bcc :+
+        inc HPAIR1+1
+:       lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
         ; ---- the sprites: each source file staged in turn, the placement list walked
         lda #0
         sta fnum
@@ -453,7 +561,7 @@ lv_load:
         rts                         ; (the tile addresses are arithmetic: drawrect's gather)
 
 ; ---- helpers
-section:                            ; A = section 0..7 -> src = its start in the staged file
+section:                            ; A = section 0..9 -> src = its start in the staged file
         asl
         tay
         lda STAGE_LVL,y

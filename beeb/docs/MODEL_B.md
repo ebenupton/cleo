@@ -103,6 +103,18 @@ prologue.  Wrong trade: the tiles are the picture.  Bank 5 is nearly all tiles n
 and a display row paid for the main RAM -- 22 ring slots, 20 visible, which also
 makes the rings whole pages and the fold a byte compare again.
 
+**A merge is only lossless if the game agrees.**  Two tiles with identical bytes can
+differ in the attribute and altitude class the logic reads by id; merging them on
+pixels alone put a wall's altitude on a floor and lock step diverged in eight
+frames.  The screen check cannot see this class of error; the lock-step test can.
+
+**Half tiles.**  A stored tile with one char row that is a fill, or equal to the
+other, keeps only the other row: 32 bytes and a pair.  26-34 tiles on every big
+level, so L4B stores 12.4K for the Master's 14.9K, and the run path pays ~10 cycles
+a run to tell them apart (L4B 92k -> 96k cycles a frame).  Two of the three bugs
+it took were the loader's: a loop that stepped by two and counted by one, and a
+header read after paging the bank it was to be written to.
+
 **Flat tiles are two bytes.**  Commando's `drawfill`, read across from the other
 port: a tile that is one colour's dither is, in MODE 1, the same two bytes down
 every char, so it is an id and a pair in a table, and the row loop fills a run of

@@ -14,7 +14,12 @@ if (lab.TILES === undefined) lab.TILES = lab.MENU_BASE;
   const map = Buffer.alloc(1 << (lw + lh)); inbank(6, () => { for (let i = 0; i < map.length; i++) map[i] = cpu.readmem(lab.MAP6 + i); });
   writeFileSync("build/tiles.bin", tiles); writeFileSync("build/map.bin", map);
   const flat = Array.from({ length: 32 }, (_, i) => cpu.readmem(lab.FLATTAB + i));   // main RAM: the flat pairs
-  writeFileSync("build/level.json", JSON.stringify({ MAPW: 1 << lw, MAPH: 1 << lh, NTILES: nt, level: LEVEL, flat })); }
+  const hv = inbank(5, () => ({ nhalf: cpu.readmem(lab.LV_HDR + 23) }));   // (LV_HDR is bank 7's: read below)
+  const [nhalf, half0, half1, half2, halfhi] = inbank(7, () => [23, 24, 25, 26, 27].map(o => cpu.readmem(lab.LV_HDR + o)));
+  const halves = Buffer.alloc(32 * nhalf), hpair = Buffer.alloc(2 * nhalf);
+  inbank(5, () => { for (let i = 0; i < halves.length; i++) halves[i] = cpu.readmem((halfhi << 8) + i); for (let i = 0; i < hpair.length; i++) hpair[i] = cpu.readmem((halfhi << 8) + halves.length + i); });
+  writeFileSync("build/halves.bin", halves);
+  writeFileSync("build/level.json", JSON.stringify({ MAPW: 1 << lw, MAPH: 1 << lh, NTILES: nt, level: LEVEL, flat, nhalf, half0, half1, half2, hpair: Array.from(hpair) })); }
 // 'pre': stop at draw_sprites (bank 5), where the current buffer's ring is pure map
 const pre = (process.argv[4] || "") === "pre";
 const stopAt = pre ? lab.draw_sprites : lab.frame_top, stopBank = 7;   // (draw_sprites is bank 7's now)
