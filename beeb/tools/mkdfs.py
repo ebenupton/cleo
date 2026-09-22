@@ -25,7 +25,8 @@ def build(out, title, files, boot=3):
         img[start * 256:start * 256 + len(data)] = data
         sec += nsec
         entries.append((name, load, exe, len(data), start))
-    assert sec <= sectors, 'disc full'
+    assert sec <= sectors, 'disc full (%d sectors)' % sec
+    assert len(files) <= 31, 'a DFS catalogue holds 31 files'
     entries.sort(key=lambda e: -e[4])
     for i, (name, load, exe, length, start) in enumerate(entries):
         d = '$'

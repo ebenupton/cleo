@@ -1,21 +1,19 @@
 // Play N frames with fixed keys, stop at frame_top (bank 7), dump main RAM and the
 // per-buffer window origins bank 5 keeps, for bring2.py to compare both rings
 // against a render of the map.
-import { findJsbeeb } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
-import { pathToFileURL } from "node:url";
+import { openB } from "./bopen.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-const keys = parseInt(process.argv[2] ?? "2"), frames = parseInt(process.argv[3] ?? "60");
-const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
-const s = new MachineSession("B-DFS1.2");
-await s.initialise(); await s.boot(30);
-s.loadDisc(path.resolve("build/cleob.ssd"));
-const MAXSPR = parseInt(/MAXSPRDEF = (\d+)/.exec((await import("node:fs")).readFileSync("build/assets.inc", "utf8"))[1]);
-const cpu = s._machine.processor;
-const lab = {}; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab[m[2]] = parseInt(m[1], 16);
-const inbank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
-s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16); await s.runFor(30_000_000);
-inbank(7, () => cpu.writemem(lab.scan_keys, 0x60));       // the harness owns 'keys'
+const keys = parseInt(process.argv[2] ?? "2"), frames = parseInt(process.argv[3] ?? "60"), LEVEL = parseInt(process.argv[5] ?? "0");
+const MAXSPR = parseInt(/MAXSPRDEF = (\d+)/.exec(readFileSync("build/assets.inc", "utf8"))[1]);
+const { s, cpu, A: lab, bank: inbank } = await openB({ level: LEVEL });
+for (const m of readFileSync("build/defs_ld.inc", "utf8").matchAll(/^(\w+)\s*=\s*\$([0-9A-Fa-f]+)/gm)) if (lab[m[1]] === undefined) lab[m[1]] = parseInt(m[2], 16);   // MENU_BASE, MAP6: constants
+if (lab.TILES === undefined) lab.TILES = lab.MENU_BASE;
+// the level's tiles and map, as the loader put them in banks 5 and 6, for bring2.py
+{ const nt = inbank(7, () => cpu.readmem(lab.LV_HDR + 21)), lw = inbank(7, () => cpu.readmem(lab.LV_HDR)), lh = inbank(7, () => cpu.readmem(lab.LV_HDR + 1));
+  const tiles = Buffer.alloc(64 * nt); inbank(5, () => { for (let i = 0; i < tiles.length; i++) tiles[i] = cpu.readmem(lab.TILES + i); });
+  const map = Buffer.alloc(1 << (lw + lh)); inbank(6, () => { for (let i = 0; i < map.length; i++) map[i] = cpu.readmem(lab.MAP6 + i); });
+  writeFileSync("build/tiles.bin", tiles); writeFileSync("build/map.bin", map);
+  writeFileSync("build/level.json", JSON.stringify({ MAPW: 1 << lw, MAPH: 1 << lh, NTILES: nt, level: LEVEL })); }
 // 'pre': stop at draw_sprites (bank 5), where the current buffer's ring is pure map
 const pre = (process.argv[4] || "") === "pre";
 const stopAt = pre ? lab.draw_sprites : lab.frame_top, stopBank = pre ? 5 : 7;

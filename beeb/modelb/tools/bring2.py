@@ -4,7 +4,7 @@
 import json, sys
 st=json.load(open('build/state.json'))
 ram=open('build/ram.bin','rb').read(); tiles=open('build/tiles.bin','rb').read(); mp=open('build/map.bin','rb').read()
-inc=dict(l.split(' = ') for l in open('build/assets.inc') if ' = ' in l and not l.startswith(';'))
+inc=json.load(open('build/level.json'))          # bcheck2.mjs dumps the level's shape with its tiles and map
 MAPW=int(inc['MAPW']); MAPH=int(inc['MAPH'])
 RINGROWS, RINGCHARS = 23, 23*80
 print(st)

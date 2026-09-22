@@ -48,7 +48,9 @@ fcret:  tax                         ; the target's A
 ; ---------------------------------------------------------------- interrupts
 ; The chain step and the vsync work are in bank 7 with their tables: this pages it
 ; in around them.  The step's timing (VS2T_DEFAULT) allows for the ~30 cycles that
-; takes, in place of the hold loop the Master's handler has.
+; takes, in place of the hold loop the Master's handler has.  The title tune's
+; player is in the menu overlay (bank 5): the vsync work leaves MUSON set only
+; while the overlay is there, and it is stepped from here, between the banks.
 irq_handler:
         stx irq_x
         sty irq_y
@@ -58,7 +60,13 @@ irq_handler:
         sta ROMSEL_CPY
         sta ROMSEL
         jsr isr_body
-        pla
+        lda MUSON
+        beq @nomus
+        lda #BANK_TILES
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jsr music_tick
+@nomus: pla
         sta ROMSEL_CPY
         sta ROMSEL
         ldy irq_y
@@ -66,40 +74,33 @@ irq_handler:
         lda $FC
         rti
 
-; the start-up's switch from bank 6 to bank 7 (init.s): a bank cannot page itself out
-to7:    lda #BANK_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
-        jmp start7
-
 ; ---------------------------------------------------------------- the tile blitter's map
 ; drawrect runs in bank 5 and reads the map in bank 6: the row pointer is arithmetic
-; (MAPSTRIDE is a constant here, so there are no row tables) and the strip copy is
-; the one bank switch a tile row costs.
-maprow5:                            ; A = tile row -> ptr = LV_MAP + row*MAPSTRIDE + rc_tx0
-  .if MAPLW = 7
-        lsr                         ; row * 128: the row's low bit is the low byte's top
-        sta ptr+1
+; (a map is 32, 64, 128 or 256 tiles wide: row * 2^lw is row * 256 shifted right by
+; mapshr = 8 - lw, which the loader sets from the header) and the strip copy is the
+; one bank switch a tile row costs.
+maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 << lw) + rc_tx0
+        sta ptr+1                   ; (X kept, as maprow)
+        txa
+        pha
         lda #0
-        ror
+        sta ptr
+        ldx mapshr
+        beq :++
+:       lsr ptr+1
+        ror ptr
+        dex
+        bne :-
+:       pla
+        tax
+        lda ptr
         clc
-        adc rc_tx0                  ; < 128, so no carry out
+        adc rc_tx0
         sta ptr
         lda ptr+1
-        clc
         adc #>LV_MAP
         sta ptr+1
         rts
-  .elseif MAPLW = 8
-        clc                         ; row * 256: the row is the high byte
-        adc #>LV_MAP
-        sta ptr+1
-        lda rc_tx0
-        sta ptr
-        rts
-  .else
-        .error "maprow5: a map is 128 or 256 tiles wide"
-  .endif
 
 mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF
         lda #BANK_MAP
@@ -115,20 +116,13 @@ mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF
         sta ROMSEL
         rts
 
-; the sprite directory is in bank 6 and the prologue in bank 5: an entry's eight
-; bytes come across here, and ptr is left pointing at the copy
-dirfetch:                           ; ptr -> the entry in SPR_TABLE
-        lda #BANK_TIL1
-        sta ROMSEL_CPY
-        sta ROMSEL
-        ldy #7
-:       lda (ptr),y
-        sta MAPBUF,y
-        dey
-        bpl :-
-        lda #BANK_TILES
-        sta ROMSEL_CPY
-        sta ROMSEL
+; the sprite directory (and the title pack's) is in bank 6 and the prologue in bank
+; 5: an entry's eight bytes come across here, and ptr is left pointing at the copy.
+; (mapstrip's loop, with its count: rc_nt is drawrect's, which is not running.)
+dirfetch:                           ; ptr -> the entry in bank 6
+        lda #7
+        sta rc_nt
+        jsr mapstrip
         lda #<MAPBUF
         sta ptr
         lda #>MAPBUF
@@ -143,3 +137,11 @@ mirdty:   .res 2                    ; per buffer: the row has been written since
 mirlo:    .res 2                    ; and which chars of it (in slot chars, 0..79)
 mirhi:    .res 2
 mirwcx:   .res 2                    ; the wcxm the copy was made for
+; the level's shape, set by the loader: read from banks 5 and 7
+sprtab:   .res 2                    ; the sprite directory: bank 6, just above the map
+mapshr:   .res 1                    ; 8 - lw (maprow, maprow5)
+MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
+MUSON:    .res 1                    ; the tune plays: the interrupt stub steps it
+GLYPHBUF: .res 8                    ; one font glyph, for the menus (bank 5 both sides)
+title_res: .res 1                   ; the menu overlay and the title pack are in banks 5
+                                    ; and 6 (a level load replaces both; menu.s reads it)

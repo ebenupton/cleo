@@ -55,6 +55,13 @@ The original JAR contents are expected in `../v500/` (unzipped `CleoV500.jar`).
 Not ported: the level/hi-score persistence (kept in RAM only), the curtain "wipe"
 transitions and the "BONUS LEVEL" banner sprite.
 
+## The Model B
+
+`modelb/` builds the same game for a Model B with 64K of sideways RAM (four banks)
+from these sources with `MODELB=1`: `sh modelb/build.sh` writes `modelb/build/cleob.ssd`.
+All sixteen levels, loaded from the disc by the game's own driver (8271 or Acorn 1770,
+decided at boot), 21 visible rows, the menus in an overlay.  `modelb/DESIGN.md`.
+
 ## Layout
 
     src/engine.s   display engine, interrupts, loader, sound

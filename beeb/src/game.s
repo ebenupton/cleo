@@ -7,7 +7,9 @@
 ; ---------------------------------------------------------------- level loading
 ; X = level index 0..15 (even = main, odd = bonus)
 load_level:
-  .if .not MODELB                   ; (Model B: the one level is resident)
+  .if MODELB
+        jsr load_level_b            ; the disc: bank 7's loader (modelb/src/disc.s)
+  .else
         ; file order is L0A, L0B, L1A, ..., two files each, and level index 0 is the
         ; main level, which is the 'B' one: file = FI_L0A + (i eor 1) * 2
         txa
@@ -207,18 +209,16 @@ game_main:
         stza maxlevel
         stza title_res
 title_loop:
+  .if MODELB
+        jsr ensure_menu             ; the menus are bank 5's overlay: in place first
+  .endif
         jsr t_title_menu
         cmp #MENU_HELP
         bne new_game
         jsr t_help_screen
         bra title_loop
 new_game:
-  .if MODELB
-        lda #LEVEL_IDX              ; the level on the disc
-        sta level
-  .else
         stz level
-  .endif
         lda #3
         sta lives
         sta health
@@ -230,17 +230,13 @@ new_game:
         asl
         sta level
 level_loop:
-  .if MODELB
-        jsr blank_palette
-        lda #LEVEL_IDX              ; whatever the last level's end made of 'level'
-        sta level
-  .else
         jsr blank_palette           ; hide the loading and the first-frame build-up
         stza title_res               ; the level's map replaces the title pack
+  .if .not MODELB
         lda #FI_BOX                  ; and the title pack replaced the box stars
         jsr loadfile
-        ldx level
   .endif
+        ldx level
         jsr load_level
         jsr t_level_init
         lda #1                      ; lay the bar template + digits into both buffers on
@@ -330,14 +326,54 @@ fl_over:
 :       jmp level_loop
 game_over:
         jsr update_hiscore
+  .if MODELB
+        jsr ensure_menu
+  .endif
         lda #0
         jsr t_winlose
         jmp title_loop
 game_won:
         jsr update_hiscore
+  .if MODELB
+        jsr ensure_menu
+  .endif
         lda #1
         jsr t_winlose
         jmp title_loop
+  .if MODELB
+; the menu overlay and the title pack, unless they are still in (menu.s's load_title
+; does the same from inside the overlay, for the screens reached from the title)
+ensure_menu:
+        lda title_res
+        bne :+
+        jsr blank_palette
+        jsr load_title_b
+        inc title_res
+:       rts
+  .endif
+  .if MODELB
+; The pause key freezes the game -- the menu overlay is not in bank 5 during a level,
+; so there is no list to draw: ESCAPE again resumes, RETURN leaves for the title.
+; Returns 0 resume, 1 exit, as the Master's pause_menu does.
+t_pause_menu:
+:       lda keys                    ; the pause key released first
+        and #K_MENU
+        bne :-
+@w:     lda vsyncs                  ; then a vsync at a time
+:       cmp vsyncs
+        beq :-
+        lda keys
+        and #K_MENU
+        bne @resume
+        lda keys
+        and #K_FIRE
+        beq @w
+        lda #1
+        rts
+@resume:
+        lda #0
+        rts
+  .endif
 update_hiscore:
         lda hiscore
         cmp score

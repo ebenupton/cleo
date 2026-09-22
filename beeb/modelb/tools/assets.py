@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-"""Pack one level's data for the Model B target, in the Master's own formats.
+"""Pack every level for the Model B target, in the Master's own formats.
 
-   python3 tools/assets.py [lv] [sub]     (default 1 0 = L1B, the first large indoor level)
+   python3 tools/assets.py            (all sixteen levels; prints a fit report)
 
-The Master's convert.py is imported for its tables (MODE=1) and the files are laid
-out exactly as it lays them out for the Master's loader, only cut down to what one
-level needs and split between the banks the Model B has room in:
+The Master's convert.py is imported for its tables (MODE=1).  The shared files (SPR,
+SPRAND, BOX, TILESO, TILESI, TITLE, MUSIC) go on the disc as convert.py wrote them;
+the game's own loader (ldprog.s) stages one at a time in display RAM and copies the
+pieces a level needs into the banks, where the packer here decided they go.  What
+this writes to build/:
 
-   tiles.bin    the tiles this level can show, 64 bytes each, by tile id (0..253);
-                the two solid fills are ids 254/255 and own no bytes, as on the Master
-   map.bin      row major tile ids
-   hdr.bin      the level header (256), objs.bin (768), attr.bin, altcls.bin (256 each),
-                alt.bin -- the pieces of the Master's L?? file, bank-7 half
-   spr4.bin     sprite images and masks for bank 4 ($8800 on), spr4h.bin (bank 4,
-                $8100-$82FF) and spr6.bin (bank 6, $8800 on): the level's sprites do
-                not fit one bank beside the blitter, so the directory's $10 flag
-                names the second bank, the way the Master's does
-   sprtab.bin   the 118-entry, 8-byte sprite directory; sprmask.bin the mask addresses
-   digits.bin, bar.bin, music.bin, assets.inc
+   L0..L15        per level: header, objects, attr/altcls, the level's tile list
+                  (set-local id per level-local id), the sprite placement list,
+                  the RLE map.  A small table of section offsets at the top.
+   sprdir.bin     the 118-entry directory template: (image, kind) in place of the
+                  pointer; the loader fills the pointer and the bank flag in
+   imgtab.bin     per image, box and trampoline: which shared file holds it and
+                  where, and the same for its mask
+   digits.bin     the HUD's digits (bank 7); font.bin (the menu image); alt.bin
+   BAR            the bar template, 1280 bytes, loaded to $0300 at every level
+   assets.inc     the bounds every level fits: MAXSPR, BINMAX, the biggest map,
+                  the solid ids, the file sizes the bank images incbin
 """
 import os, sys, io, contextlib, importlib.util
 import numpy as np
@@ -36,105 +38,170 @@ os.makedirs(OUT, exist_ok=True)
 def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
-lv = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-sub = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-L = m.levels[(lv, sub)]
-name = m.name_of(lv, sub)
-cm = m.maps[(lv, sub)]                      # the compact map, as the Master packs it
-assert cm.min() >= 0
-gset = m.tileset_of(lv, sub)
 SOLID_CYAN, SOLID_BLACK = 254, 255
+VISLINES = 168                              # 21 rows (engine.s, MODELB)
 
-# ---------------------------------------------------------------- tiles
-specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
-inset = set(m.remap[gset])                  # the compact ids the level's tile set has
-live = set(int(c) for c in np.unique(cm)) | (set(specials) & inset)
-# The Master folds a set's near-duplicate tiles into one another to fit 254 ids
-# (convert.py: folded[g] maps a compact id to the one that stands in for it), so the
-# tile drawn for c is the representative's; the same here, or the pixels differ.
-rep = m.folded[gset]
-def rep_of(c): return rep.get(c, c)
-local = {}                                  # compact id -> tile id
-for c in sorted(live):
-    if c in m.tile_solid:
-        local[c] = SOLID_CYAN if m.tile_solid[c] == 1 else SOLID_BLACK
-byrep = {}                                  # representative -> tile id
-for c in sorted(live):
-    if c not in m.tile_solid:
-        r = rep_of(c)
-        if r not in byrep:
-            byrep[r] = len(byrep)
-        local[c] = byrep[r]
-NTILES = len(byrep)
-assert NTILES <= 254, NTILES
-tiles = bytearray()
-for r, t in sorted(byrep.items(), key=lambda kv: kv[1]):
-    tiles += m.tiles_mode2[r]
-assert len(tiles) == 64 * NTILES
-out('tiles.bin', tiles)
+# ---------------------------------------------------------------- the banks' fixed shape
+# Code sits at the top of banks 4 and 6 and the data below it can be any size; the
+# level image of bank 5 is its code and BSS from $8100 and the tiles above them, page
+# aligned.  These are the bounds the linker config (cleo_b.cfg) and defs.inc share.
+B4_DATA = (0x8800, 0xBBE0)                  # bank 4: images and masks
+B4_HOLE = (0x8040, 0x8300)                  #   masks on their own below the tables
+B6_HOLE = (0x8180, 0x8300)                  # bank 6: below the tables, above the low image
+B6_SWAP = (0x8300, 0x8400)                  #   the page SWAPTAB would take: data here
+B6_TOP = 0xBD60                             #   the row loop and copy blitter above this
+MAP6 = 0x8800                               #   the map, then the directory, then images
+B5_TILES_END = 0xC000
+B5_CODE_TOP = 0x8100 + 0x0D00               # bank 5's code and BSS: cleo_b.cfg holds them
+                                            # to this, so TILES starts at $8E00
+TILE_ROOM = (B5_TILES_END - B5_CODE_TOP) // 64     # 200 tiles
 
-lut = np.zeros(len(m.compact), dtype=np.uint8)
-for c, t in local.items():
-    lut[c] = t
-mapb = lut[cm].tobytes()
-h, w = cm.shape
-out('map.bin', mapb)
+SPRFILE_SPR, SPRFILE_AND, SPRFILE_BOX = 0, 1, 2   # the loader's source file ids
 
-# ---------------------------------------------------------------- level tables
-hdr = bytearray([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1],
-                 len(L['objs']), 1])
-for cid in specials:
-    hdr.append(local.get(cid, 255))
-assert len(hdr) == 20
-hdr.append(gset)
-out('hdr.bin', hdr.ljust(32, b'\0'))
+# ---------------------------------------------------------------- the shared files
+# convert.py's bank-4 image, ANDY overflow and box-star file carry every image, mask,
+# box and trampoline: this table says where in which file each one is.  The loader
+# stages a file and copies from these offsets to the addresses placed below.
+def img_src(j):
+    base, region = m.img_addr[j]
+    if region == 0:
+        return (SPRFILE_SPR, base - 0x8000)
+    if region == 1:
+        return (SPRFILE_AND, base - m.SPR_ANDY)
+    return (SPRFILE_BOX, base - m.BOX_BASE)
+def mask_src(j):
+    base, region = m.img_addr[j]
+    a = m.mask_addr[j]
+    if region == 2:
+        return (SPRFILE_BOX, a - m.BOX_BASE)
+    return (SPRFILE_SPR, a - 0x8000)
+box_off = []
+_o = 0
+for b in m.allbox_bytes:                    # 12 boxes then 3 trampolines, in the BOX file
+    box_off.append(_o); _o += len(b)
+NIMG = len(m.images)
+# item keys: ('img', j) | ('box', k) | ('tramp', f) -> a small integer the placement
+# lists and the directory template use
+def item_index(kind, j):
+    return {'img': 0, 'box': NIMG, 'tramp': NIMG + 12}[kind] + j
+def item_bytes(kind, j):
+    return m.img_bytes[j] if kind == 'img' else (m.box_bytes[j] if kind == 'box' else m.tramp_bytes[j])
+imgtab = bytearray()
+for j in range(NIMG):
+    f, o = img_src(j); mf, mo = mask_src(j)
+    n, mn = len(m.img_bytes[j]), len(m.img_mask[j])
+    imgtab += bytes([f, o & 255, o >> 8, n & 255, n >> 8, mf, mo & 255, mo >> 8, mn & 255, mn >> 8])
+for k in range(15):
+    o, n = box_off[k], len(m.allbox_bytes[k])
+    imgtab += bytes([SPRFILE_BOX, o & 255, o >> 8, n & 255, n >> 8, 0, 0, 0, 0, 0])
+out('imgtab.bin', imgtab)
 
-objs = bytearray()
-reach = m.enemy_reach(L['objs'])
-for (t, x, y, extra) in L['objs']:
-    e = (list(extra) + [0, 0, 0])[:3]
-    if t == 0:
-        e[0] = m.star_class(cm, x, y)
-        e[1] = 1 if m.star_reachable(x, y, reach) else 0
-    elif t == 1:
-        e[0] = m.tramp_class(cm, x, y)
-        b = m.TYPE_BOX[1]
-        selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
-        e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
-    objs += bytes([t, x, y] + e)
-assert len(objs) <= 768, len(objs)
-out('objs.bin', objs.ljust(768, b'\0'))
+# the directory template: the Master's entry less its pointer, which becomes the item
+# index and its kind; the loader writes the pointer and the bank-6 flag
+sprdir = bytearray()
+for i in range(103):
+    e = m.entry[i]
+    if e is None:
+        sprdir += bytes([0xFF] + [0] * 7); continue
+    j, mirror, rx, ry = e
+    im, full, src = m.images[j]
+    hh, ww = im.shape
+    W = m.img_wbytes[j]
+    rx += m.img_shift[j]
+    if mirror:
+        rx = (2 * W - 1) - rx
+    if i < 27 and not rx & 1:               # convert.py: Cleo's refx parity rule
+        rx -= 1
+    sprdir += bytes([item_index('img', j), 0, W, hh, rx & 255, ry & 255, (1 if mirror else 0) | 2, 2 * hh])
+for k in range(12):
+    lo, wc = m.box_geom[k % 6]
+    sprdir += bytes([item_index('box', k), 1, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
+for f in range(3):
+    lo, wc = m.tramp_geom[f]
+    sprdir += bytes([item_index('tramp', f), 2, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255, (-8) & 255, 2 | 8, m.TRAMP_H * 2])
+assert len(sprdir) == 118 * 8
+out('sprdir.bin', sprdir)
 
-attr = bytearray(256)
-acls = bytearray(256)
-for c in sorted(live):
-    t = local[c]
-    a = 3
-    if c in m.push_tiles:
-        a = m.push_tiles[c] + 3
-    if c in m.kill_tiles:
-        a |= 0x80
-    attr[t] = a
-    acls[t] = 0 if c in m.tile_solid else m.alt_class[c]
-out('attr.bin', attr)
-out('altcls.bin', acls)
-out('alt.bin', m.altfile)
 out('digits.bin', m.digits)
-out('BAR', m.barbytes)                      # the bar, 1280 bytes: the loader puts it at $0300
-
+out('font.bin', m.font)
+out('alt.bin', m.altfile)
+out('BAR', m.barbytes)
 MUS = os.path.join(BEEB, 'build', 'MUSIC')
 if not os.path.exists(MUS):
     os.system('python3 ' + os.path.join(BEEB, 'tools', 'midi2snd.py'))
 out('music.bin', open(MUS, 'rb').read())
 
-# ---------------------------------------------------------------- the sprite list's size
-# How many sprites one logic step can queue is a property of the level: the objects
-# whose grid cells (level_init's per-type boxes, 64 px cells) the walk rectangle
-# (game_frame: wx..wx+159, wy..wy+VISLINES/2-1) can ever cover, each type's sprites
-# (rsnake draws two), plus the player and the boomerang.  MAXSPR/MAXREC, SPRLIST,
-# the records and KEEP are sized to that bound; BINMAX to the longer of the two
-# cached lists.  The camera is clamped to the map, so every position is tried.
-VISLINES = 168                              # 21 rows (engine.s, MODELB)
+# ---------------------------------------------------------------- per-level helpers
+def _bits(a, b):
+    return sum(bin(x ^ y).count('1') for x, y in zip(a, b))
+def _art(c):
+    o = m.compact[c]; return m.til_idx[o * 8:o * 8 + 8, :]
+def _flatmask(a):
+    f = np.zeros((8, 8), bool)
+    f[:, 1:] |= a[:, 1:] == a[:, :-1]; f[:, :-1] |= a[:, :-1] == a[:, 1:]
+    f[1:, :] |= a[1:, :] == a[:-1, :]; f[:-1, :] |= a[:-1, :] == a[1:, :]
+    f[0, :] = f[-1, :] = f[:, 0] = f[:, -1] = True
+    return f
+def _flatdiff(c, k):
+    a = m.strip(np.asarray(m.tile_preview[c])); b = m.strip(np.asarray(m.tile_preview[k]))
+    d = (a != b); d = d[0::2] | d[1::2]
+    return int((d & _flatmask(_art(c))).sum())
+
+def level_fold(cm, live_reps, usage, room):
+    """The level image holds `room` tiles.  A level that needs more folds its cheapest
+    pairs by convert.py's own damage metric (cells using the tile x flat pixels whose
+    rendering changes), the same order the set fold uses.  Returns {rep: rep} extra."""
+    extra = {}
+    if len(live_reps) <= room:
+        return extra, 0
+    cand = []
+    ids = sorted(live_reps)
+    for i, c in enumerate(ids):
+        if c in m._nomerge:
+            continue
+        for k in ids[:i]:
+            if k in m._nomerge or m.alt_class[k] != m.alt_class[c]:
+                continue
+            d = _bits(m.tiles_mode2[c], m.tiles_mode2[k])
+            if d <= 96:
+                cand.append((usage.get(c, 0) * _flatdiff(c, k), d, c, k))
+    cand.sort()
+    live, target, dmg = len(ids), set(), 0
+    for damage, d, c, k in cand:
+        if live <= room:
+            break
+        if c in extra or c in target or k in extra:
+            continue
+        extra[c] = k; target.add(k); live -= 1; dmg += damage
+    assert live <= room, 'level will not fold into the tile room'
+    return extra, dmg
+
+def rle(data):
+    """PackBits-like: c < 128 = c+1 literal bytes follow; c >= 128 = the next byte
+    repeated c-126 times (2..129).  ldprog.s decodes it."""
+    out_, i, n = bytearray(), 0, len(data)
+    while i < n:
+        j = i
+        while j + 1 < n and data[j + 1] == data[i] and j - i < 128:
+            j += 1
+        run = j - i + 1
+        if run >= 2:
+            out_ += bytes([126 + run, data[i]]); i += run; continue
+        j = i
+        while j < n and j - i < 128 and not (j + 2 < n and data[j] == data[j + 1] == data[j + 2]):
+            j += 1
+        out_ += bytes([j - i - 1]) + data[i:j]; i = j
+    return out_
+def unrle(data):
+    o, i = bytearray(), 0
+    while i < len(data):
+        c = data[i]; i += 1
+        if c < 128:
+            o += data[i:i + c + 1]; i += c + 1
+        else:
+            o += bytes([data[i]]) * (c - 126); i += 1
+    return o
+
 SPRITES_OF = {0: 1, 1: 1, 2: 1, 3: 2, 4: 1, 5: 1, 6: 1, 7: 1, 8: 0, 9: 1, 10: 1, 11: 0, 12: 1}
 def cellbox(t, x, y, e):                    # level_init's gx0, gx1, gy, gy1, in cells
     m0 = lambda v: max(v, 0)
@@ -147,171 +214,214 @@ def cellbox(t, x, y, e):                    # level_init's gx0, gx1, gy, gy1, in
     elif t == 9: gy, gy1 = m0(y - 2) >> 3, y >> 3
     elif t == 11: gy1 = gy
     return gx0, gx1, gy, gy1
-boxes = []
-for (t, x, y, extra) in L['objs']:
-    e = (list(extra) + [0, 0, 0])[:3]
-    boxes.append((t, cellbox(t, x, y, e)))
-maxwx, maxwy = w * 8 - 160, h * 8 - VISLINES // 2
-rects = set()
-for wx in range(0, maxwx + 1, 2):
-    for wy in range(0, maxwy + 1):
-        rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + VISLINES // 2 - 1) >> 6))
-MAXSPR, BINMAX = 0, 0
-for (rx0, rx1, ry0, ry1) in rects:
-    hit = [t for (t, (gx0, gx1, gy, gy1)) in boxes if gx0 <= rx1 and gx1 >= rx0 and gy <= ry1 and gy1 >= ry0]
-    MAXSPR = max(MAXSPR, sum(SPRITES_OF[t] for t in hit) + 2)
-    BINMAX = max(BINMAX, sum(1 for t in hit if t == 0), sum(1 for t in hit if t != 0))
 
-# ---------------------------------------------------------------- sprites
-# The ids the level can draw: Cleo and the common ones, the object types' frames,
-# and the box stars of its tile set (black indoors, cyan out) with the trampolines.
-types = sorted(set(t for (t, x, y, e) in L['objs']))
-ids = set(range(42))                     # Cleo, the boomerang (27..33), the common ones
-for t in types:
-    if t in m.TYPE_IDS:
-        lo, hi = m.TYPE_IDS[t]
-        ids |= set(range(lo, hi + 1))
-imgs = sorted(set(m.entry[i][0] for i in ids if m.entry[i] is not None))
-boxes = list(range(6, 12)) if gset == 1 else list(range(0, 6))    # box_bytes indices
-tramps = [0, 1, 2] if 1 in types else []
+# ---------------------------------------------------------------- one level
+def pack_level(lv, sub):
+    L = m.levels[(lv, sub)]
+    name = m.name_of(lv, sub)
+    cm = m.maps[(lv, sub)]
+    assert cm.min() >= 0
+    gset = m.tileset_of(lv, sub)
+    rep = m.folded[gset]
+    def rep_of(c): return rep.get(c, c)
+    specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
+    inset = set(m.remap[gset])
+    live = set(int(c) for c in np.unique(cm)) | (set(specials) & inset)
+    vals, cnt = np.unique(cm, return_counts=True)
+    usage = {}
+    for v, n in zip(vals, cnt):
+        r = rep_of(int(v)); usage[r] = usage.get(r, 0) + int(n)
+    reps = set(rep_of(c) for c in live if c not in m.tile_solid)
+    extra, dmg = level_fold(cm, reps, usage, TILE_ROOM)
+    def rep2(c):
+        r = rep_of(c); return extra.get(r, r)
+    local = {}                              # compact id -> level tile id
+    for c in sorted(live):
+        if c in m.tile_solid:
+            local[c] = SOLID_CYAN if m.tile_solid[c] == 1 else SOLID_BLACK
+    byrep = {}                              # representative -> level tile id
+    for c in sorted(live):
+        if c not in m.tile_solid:
+            r = rep2(c)
+            if r not in byrep:
+                byrep[r] = len(byrep)
+            local[c] = byrep[r]
+    NTILES = len(byrep)
+    assert NTILES <= TILE_ROOM, (name, NTILES)
+    # the tile list: for each level id, the tile's index in the set's file (TILESO/I)
+    setidx = {c: i for i, c in enumerate(m.tileset[gset])}
+    tilelist = bytearray()
+    for r, t in sorted(byrep.items(), key=lambda kv: kv[1]):
+        tilelist.append(setidx[r])
+    lut = np.zeros(len(m.compact), dtype=np.uint8)
+    for c, t in local.items():
+        lut[c] = t
+    mapb = lut[cm].tobytes()
+    h, w = cm.shape
 
-# Three regions, in the two banks that have room, filled largest first.  An image's
-# mask must sit in the same bank as its pixels (the row loop reads both), but not
-# beside them: bank 4's hole takes masks on their own.
-B4CODE = 1410                               # bank 4: the row loop and inner blocks
-B6CODE = 660                                # bank 6: the row loop without the mirrored blitter
-R6BASE = 0x8800 + len(mapb) + 118 * 8                   # the map, the directory
-regions = {'r4': [0x8800, 0xC000 - B4CODE], 'h4': [0x8020, 0x8300],
-           'r6': [R6BASE, 0xC000 - B6CODE], 's6': [0x8300, 0x8400], 'h6': [0x8150, 0x8300]}
-blobs = {'r4': bytearray(), 'h4': bytearray(), 'r6': bytearray(), 's6': bytearray(), 'h6': bytearray()}
-# an image some entry draws mirrored needs SWAPTAB and the mirrored blitter, which
-# only bank 4 carries: bank 6 takes the never-mirrored ones (and the boxes)
-mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
-def place(region, data):
-    base = regions[region][0] + len(blobs[region])
-    blobs[region] += data
-    return base
-def room(region):
-    return regions[region][1] - regions[region][0] - len(blobs[region])
-img_addr, mask_addr, img_bank = {}, {}, {}
-items = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
-items += [('box', k, len(m.box_bytes[k]), 0) for k in boxes]
-items += [('tramp', f, len(m.tramp_bytes[f]), 0) for f in tramps]
-def canmirror(it):
-    return it[0] == 'img' and it[1] in mirrored
-items.sort(key=lambda it: (0 if it[0] != 'img' else (1 if canmirror(it) else 2), -(it[2] + it[3])))   # boxes to bank 6 first, mirrored to bank 4, then the rest
-def try4(key, data, nm, j):
-    nd = len(data)
-    if room('r4') >= nd + nm:
-        img_addr[key] = place('r4', data); img_bank[key] = 4
-        if nm:
-            mask_addr[key] = place('h4' if room('h4') >= nm else 'r4', m.img_mask[j])
-    elif room('r4') >= nd and room('h4') >= nm:
-        img_addr[key] = place('r4', data); img_bank[key] = 4
-        if nm:
-            mask_addr[key] = place('h4', m.img_mask[j])
-    elif room('h4') >= nd + nm:
-        img_addr[key] = place('h4', data); img_bank[key] = 4
-        if nm:
-            mask_addr[key] = place('h4', m.img_mask[j])
-    else:
-        return False
-    return True
-def try6(key, data, nm, j):
-    nd = len(data)
-    for r in ('r6', 'h6', 's6'):
-        if room(r) >= nd + nm:
-            img_addr[key] = place(r, data); img_bank[key] = 6
-            if nm:
-                mask_addr[key] = place(r, m.img_mask[j])
-            return True
-    for r in ('r6', 'h6'):
-        for rm in ('s6', 'h6', 'r6'):
-            if rm != r and room(r) >= nd and room(rm) >= nm:
-                img_addr[key] = place(r, data); img_bank[key] = 6
-                if nm:
-                    mask_addr[key] = place(rm, m.img_mask[j])
+    # ---- tables
+    hdr = bytearray([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1],
+                     len(L['objs']), 1])
+    for cid in specials:
+        hdr.append(local.get(cid, 255))
+    assert len(hdr) == 20
+    hdr.append(gset)
+    hdr.append(NTILES)
+    hdr.append(8 - L['lw'])                 # maprow's shift: row * 2^lw = (row << 8) >> (8 - lw)
+    hdr = hdr.ljust(32, b'\0')
+    objs = bytearray()
+    reach = m.enemy_reach(L['objs'])
+    for (t, x, y, ex) in L['objs']:
+        e = (list(ex) + [0, 0, 0])[:3]
+        if t == 0:
+            e[0] = m.star_class(cm, x, y)
+            e[1] = 1 if m.star_reachable(x, y, reach) else 0
+        elif t == 1:
+            e[0] = m.tramp_class(cm, x, y)
+            b = m.TYPE_BOX[1]
+            selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
+            e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
+        objs += bytes([t, x, y] + e)
+    assert len(L['objs']) <= 149
+    attr = bytearray(256)
+    acls = bytearray(256)
+    for c in sorted(live):
+        t = local[c]
+        a = 3
+        if c in m.push_tiles:
+            a = m.push_tiles[c] + 3
+        if c in m.kill_tiles:
+            a |= 0x80
+        attr[t] = a
+        acls[t] = 0 if c in m.tile_solid else m.alt_class[c]
+
+    # ---- the sprite list's bounds (see the old packer: the objects whose cells the
+    # walk rectangle can cover from any camera position)
+    boxes = []
+    for (t, x, y, ex) in L['objs']:
+        e = (list(ex) + [0, 0, 0])[:3]
+        boxes.append((t, cellbox(t, x, y, e)))
+    maxwx, maxwy = w * 8 - 160, h * 8 - VISLINES // 2
+    rects = set()
+    for wx in range(0, maxwx + 1, 2):
+        for wy in range(0, maxwy + 1):
+            rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + VISLINES // 2 - 1) >> 6))
+    MAXSPR, BINMAX = 0, 0
+    for (rx0, rx1, ry0, ry1) in rects:
+        hit = [t for (t, (gx0, gx1, gy, gy1)) in boxes if gx0 <= rx1 and gx1 >= rx0 and gy <= ry1 and gy1 >= ry0]
+        MAXSPR = max(MAXSPR, sum(SPRITES_OF[t] for t in hit) + 2)
+        BINMAX = max(BINMAX, sum(1 for t in hit if t == 0), sum(1 for t in hit if t != 0))
+
+    # ---- sprites: which images, and where each goes
+    types = sorted(set(t for (t, x, y, e) in L['objs']))
+    ids = set(range(42))                    # Cleo, the boomerang (27..33), the common ones
+    for t in types:
+        if t in m.TYPE_IDS:
+            lo, hi = m.TYPE_IDS[t]
+            ids |= set(range(lo, hi + 1))
+    imgs = sorted(set(m.entry[i][0] for i in ids if m.entry[i] is not None))
+    bxs = list(range(6, 12)) if gset == 1 else list(range(0, 6))
+    tramps = [0, 1, 2] if 1 in types else []
+    R6BASE = MAP6 + len(mapb) + 118 * 8
+    regions = {'r4': [B4_DATA[0], B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
+               'r6': [R6BASE, B6_TOP], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
+    fill = {r: 0 for r in regions}
+    mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
+    def place(region, n):
+        base = regions[region][0] + fill[region]; fill[region] += n; return base
+    def room(region):
+        return regions[region][1] - regions[region][0] - fill[region]
+    img_addr, mask_addr, img_bank = {}, {}, {}
+    items = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
+    items += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]
+    items += [('tramp', f, len(m.tramp_bytes[f]), 0) for f in tramps]
+    def canmirror(it):
+        return it[0] == 'img' and it[1] in mirrored
+    items.sort(key=lambda it: (0 if it[0] != 'img' else (1 if canmirror(it) else 2), -(it[2] + it[3])))
+    def try4(key, nd, nm):
+        if room('r4') >= nd + nm:
+            img_addr[key] = place('r4', nd); img_bank[key] = 4
+            if nm: mask_addr[key] = place('h4' if room('h4') >= nm else 'r4', nm)
+        elif room('r4') >= nd and room('h4') >= nm:
+            img_addr[key] = place('r4', nd); img_bank[key] = 4
+            if nm: mask_addr[key] = place('h4', nm)
+        elif room('h4') >= nd + nm:
+            img_addr[key] = place('h4', nd); img_bank[key] = 4
+            if nm: mask_addr[key] = place('h4', nm)
+        else:
+            return False
+        return True
+    def try6(key, nd, nm):
+        for r in ('r6', 'h6', 's6'):
+            if room(r) >= nd + nm:
+                img_addr[key] = place(r, nd); img_bank[key] = 6
+                if nm: mask_addr[key] = place(r, nm)
                 return True
-    return False
-for kind, j, nd, nm in items:
-    data = m.img_bytes[j] if kind == 'img' else (m.box_bytes[j] if kind == 'box' else m.tramp_bytes[j])
-    key = (kind, j)
-    if canmirror((kind, j, nd, nm)):
-        assert try4(key, data, nm, j), 'mirrored sprites do not fit bank 4: %s %d' % (kind, j)
-    elif kind != 'img':                        # the copy blitter is bank 6's alone
-        assert try6(key, data, nm, j), 'box stars do not fit bank 6: %s %d' % (kind, j)
-    else:
-        if not (try6(key, data, nm, j) or try4(key, data, nm, j)):
-            left = sum(it[2] + it[3] for it in items[items.index((kind, j, nd, nm)):])
-            raise SystemExit('sprites do not fit: %s %d (%d+%d); room r4=%d h4=%d r6=%d h6=%d s6=%d; %d bytes still to place'
-                             % (kind, j, nd, nm, room('r4'), room('h4'), room('r6'), room('h6'), room('s6'), left))
-out('spr4.bin', blobs['r4'])
-out('spr4h.bin', blobs['h4'])
-out('spr6.bin', blobs['r6'])
-out('spr6s.bin', blobs['s6'].ljust(256, b'\0'))
-out('spr6h.bin', blobs['h6'])
+        for r in ('r6', 'h6'):
+            for rm in ('s6', 'h6', 'r6'):
+                if rm != r and room(r) >= nd and room(rm) >= nm:
+                    img_addr[key] = place(r, nd); img_bank[key] = 6
+                    if nm: mask_addr[key] = place(rm, nm)
+                    return True
+        return False
+    for kind, j, nd, nm in items:
+        key = (kind, j)
+        if canmirror((kind, j, nd, nm)):
+            assert try4(key, nd, nm), '%s: mirrored sprite does not fit bank 4: %s %d' % (name, kind, j)
+        elif kind != 'img':                 # the copy blitter is bank 6's alone
+            assert try6(key, nd, nm), '%s: box stars do not fit bank 6: %s %d' % (name, kind, j)
+        else:
+            if not (try6(key, nd, nm) or try4(key, nd, nm)):
+                raise SystemExit('%s: sprites do not fit: %s %d (%d+%d); room r4=%d h4=%d r6=%d h6=%d s6=%d'
+                                 % (name, kind, j, nd, nm, room('r4'), room('h4'), room('r6'), room('h6'), room('s6')))
+    placement = bytearray()
+    for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0])):
+        ma = mask_addr.get((kind, j), 0)
+        placement += bytes([item_index(kind, j), img_bank[(kind, j)], a & 255, a >> 8, ma & 255, ma >> 8])
+    placement += b'\xff'
 
-# the directory, exactly as convert.py builds the Master's (its comments explain the
-# refx parity rule for Cleo's frames)
-table = bytearray()
-for i in range(103):
-    e = m.entry[i]
-    if e is None or ('img', e[0]) not in img_addr:
-        table += bytes(8); continue
-    j, mirror, rx, ry = e
-    im, full, src = m.images[j]
-    hh, ww = im.shape
-    W = m.img_wbytes[j]
-    rx += m.img_shift[j]
-    if mirror:
-        rx = (2 * W - 1) - rx
-    if i < 27:
-        if not rx & 1:
-            rx -= 1
-    ptr = img_addr[('img', j)]
-    flags = (1 if mirror else 0) | 2 | (0x10 if img_bank[('img', j)] == 6 else 0)
-    table += bytes([ptr & 255, ptr >> 8, W, hh, rx & 255, ry & 255, flags, 2 * hh])
-for k in range(12):                                # 103..108 cyan, 109..114 black
-    if ('box', k) not in img_addr:
-        table += bytes(8); continue
-    lo, wc = m.box_geom[k % 6]
-    ptr = img_addr[('box', k)]
-    flags = 2 | 8 | (0x10 if img_bank[('box', k)] == 6 else 0)
-    table += bytes([ptr & 255, ptr >> 8, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, flags, m.BOX_H * 2])
-for f in range(3):                                 # 115..117: trampoline black boxes
-    if ('tramp', f) not in img_addr:
-        table += bytes(8); continue
-    lo, wc = m.tramp_geom[f]
-    ptr = img_addr[('tramp', f)]
-    flags = 2 | 8 | (0x10 if img_bank[('tramp', f)] == 6 else 0)
-    table += bytes([ptr & 255, ptr >> 8, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255,
-                    (-8) & 255, flags, m.TRAMP_H * 2])
-assert len(table) == 118 * 8
-out('sprtab.bin', table)
-sprmask = bytearray()
-for i in range(118):
-    a = 0
-    if i < 103 and m.entry[i] is not None and ('img', m.entry[i][0]) in mask_addr:
-        a = mask_addr[('img', m.entry[i][0])]
-    sprmask += bytes([a & 255, a >> 8])
-out('sprmask.bin', sprmask)
+    # ---- the file: a table of section offsets, then the sections
+    maprle = rle(mapb)
+    assert unrle(maprle) == mapb
+    secs = [('hdr', hdr), ('objs', objs), ('attr', attr), ('altcls', acls),
+            ('tiles', tilelist), ('place', placement), ('map', maprle)]
+    off = 2 * len(secs)
+    table = bytearray()
+    body = bytearray()
+    for nm_, data in secs:
+        o = off + len(body)
+        table += bytes([o & 255, o >> 8])
+        body += data
+    out('L%d' % (lv * 2 + sub), table + body)
+    stats = dict(name=name, ntiles=NTILES, folded=len(extra), damage=dmg, w=w, h=h, nobj=len(L['objs']),
+                 nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],
+                 maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=off + len(body))
+    return stats
 
+allstats = []
+for lv in range(8):
+    for sub in (0, 1):
+        s = pack_level(lv, sub)
+        allstats.append(s)
+        print('%-4s %3d tiles (%2d folded, damage %4d) map %3dx%2d rle %5d  %3d obj %2d img  '
+              'b4 %5d+%3d  b6 %5d+%3d+%3d  spr %2d bin %2d  file %5d'
+              % (s['name'], s['ntiles'], s['folded'], s['damage'], s['w'], s['h'], s['maprle'], s['nobj'], s['nimg'],
+                 s['r4'], s['h4'], s['r6'], s['h6'], s['s6'], s['maxspr'], s['binmax'], s['size']))
+
+MAXSPR = max(s['maxspr'] for s in allstats)
+BINMAX = max(s['binmax'] for s in allstats)
 with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
-    f.write('; generated by modelb/tools/assets.py from %s\n' % name)
-    f.write('NTILES = %d\n' % NTILES)
-    f.write('MAPW = %d\nMAPH = %d\nMAPLW = %d\nMAPLH = %d\n' % (w, h, L['lw'], L['lh']))
+    f.write('; generated by modelb/tools/assets.py: the bounds every level fits\n')
     f.write('SOLID_CYAN = %d\nSOLID_BLACK = %d\n' % (SOLID_CYAN, SOLID_BLACK))
     f.write('BOXID0 = 103\nBOXN = 15\n')
-    f.write('TITLE_ADDR = $8900\n')     # (the title pieces: never drawn on this target)
-    f.write('HUD_BANK = 6\n')
-    f.write('SPR_BAR = 0\nSPR_DIGITS = digits_art\n')   # (no bar art: the loader puts the bar in place)
-    f.write('NOBJS = %d\n' % len(L['objs']))
-    f.write('LEVEL_IDX = %d\n' % (lv * 2 + sub))   # game.s: file = FI_L0A + (i eor 1) * 2
-    f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))   # the bounds above
-    f.write('SPR6_MIRROR = 0\n')      # bank 6 holds no image that is drawn mirrored
-    f.write('SPR4_COPY = 0\n')        # and bank 4 nothing the copy blitter draws
-    f.write('STARTX = %d\nSTARTY = %d\n' % L['start'])
-print('%s: at most %d sprites a step, %d in a bin list' % (name, MAXSPR, BINMAX))
-print('%s: %d tiles (%d B), map %dx%d, %d objects, sprites %d images: bank 4 %d+%d B, bank 6 %d+%d+%d B'
-      % (name, NTILES, len(tiles), w, h, len(L['objs']), len(imgs),
-         len(blobs['r4']), len(blobs['h4']), len(blobs['r6']), len(blobs['h6']), len(blobs['s6'])))
+    f.write('TITLE_ADDR = $8900\n')         # bank 6, as the Master: over the map
+    f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
+    f.write('HUD_BANK = 7\n')
+    f.write('SPR_BAR = 0\nSPR_DIGITS = digits_art\nSPR_FONT = font_art\n')
+    f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
+    f.write('SPR6_MIRROR = 0\n')            # bank 6 holds no image that is drawn mirrored
+    f.write('SPR4_COPY = 0\n')              # and bank 4 nothing the copy blitter draws
+    f.write('TILE_ROOM = %d\n' % TILE_ROOM)
+    f.write('B4_DATA_END = $%04X\nB6_TOP = $%04X\nMAP6 = $%04X\n' % (B4_DATA[1], B6_TOP, MAP6))
+    f.write('NIMGTAB = %d\n' % (NIMG + 15))
+print('MAXSPR %d BINMAX %d; tile room %d; imgtab %d entries' % (MAXSPR, BINMAX, TILE_ROOM, NIMG + 15))

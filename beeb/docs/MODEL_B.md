@@ -1,11 +1,15 @@
 # The Model B target, and what it taught the shared code
 
-`beeb/modelb` builds the game for a Model B with 64K of sideways RAM from the same
-`src/engine.s`, `src/logic.s` and `src/game.s` as the Master, assembled with
-`MODELB=1` (and `MODE1=1`).  The Master's binaries are unchanged by every conditional
-in them: `build/ref_mode1` is the MODE 1 build from before the work and the build is
-byte-identical to it.  `modelb/DESIGN.md` describes the target; this file is what the
-exercise found about the common code and about porting it.
+`beeb/modelb` builds the whole game for a Model B with 64K of sideways RAM from the
+same `src/engine.s`, `src/logic.s`, `src/game.s` and `src/menu.s` as the Master,
+assembled with `MODELB=1` (and `MODE1=1`): every level is gathered from the disc by
+the game's own loader, the menus live in an overlay over the tiles.  The Master's
+behaviour is unchanged by every conditional in them (the one-level demo's build was
+byte-identical to `build/ref_mode1`; the full game's shared edits -- a branch made a
+jump in menu.s, the sound write as a macro -- move bytes but not behaviour, and the
+lock-step test is against the logic, not the bytes).  `modelb/DESIGN.md` describes
+the target; `docs/PLAN_MODELB_FULL.md` the plan it was built to; this file is what
+the exercise found about the common code and about porting it.
 
 ## Lessons for the common code
 
@@ -36,9 +40,22 @@ Zero-page symbols resolve correctly inside scopes (the addressing mode stays zp)
 
 **A bank cannot page itself out and carry on.**  The instruction after `sta $FE30`
 is read from the new bank.  Every switch on the B runs from main RAM: the far-call
-thunk, the interrupt stub, `pagelogic`, `to7`, and the entry stub, which copies
-itself to the stack page first.  The Master never hits this because its engine is
-in main RAM.
+thunk, the interrupt stub, `pagelogic`, the two start-up stubs (which copy themselves
+to the stack page first), and the load-time program, which lives in display RAM
+while the palette is black.  The Master never hits this because its engine is in
+main RAM.
+
+**A routine the logic calls keeps X.**  The Master's `maprow` is a table lookup
+through Y; the B's is arithmetic, and its first version counted the shift in X.
+The logic has object indices live across it, so a level started with the wrong
+objects awake.  Lock step found it in a frame; nothing else would have.
+
+**A loop's flags are the loop's.**  The RLE decoder tested the control byte's sign
+after a `jsr` that stepped the pointer with `inc`, which sets N from the pointer.
+Literal runs came out as repeats; the outdoor maps, which are mostly runs, looked
+right.  The ring check cannot see this (it compares the ring against the same
+decoded map); the byte-for-byte check of the banks against the packer's data
+(`tools/bcheck2.mjs` dumps them) can, and lock step did.
 
 **Anonymous labels count.**  Adding a `:` inside an `.if MODELB` block shifts every
 `:+`/`:-` that spans it on that target only; the byte-identity check on the Master
@@ -76,14 +93,25 @@ Master's music ever moves.
 
 **The Master's file table is data in `game.s`** under `.if .not MODELB`, because
 `load_level` and the game loop that the B shares sat either side of it and the
-byte order had to stay.
+byte order had to stay.  The B's own sector table is in its load-time program
+(`ldprog.s`), generated the same way (`mkdfs.py table`).
+
+**The menus assume the Master's window.**  `clear_items` cleared ring rows to 27
+through RINGLO/HI, tables 23 entries long on the B: the stores landed on zero page,
+one of them on the ROMSEL copy.  The screens' y positions assume 108 px of window;
+the B has 84.  Both are `.if MODELB` in menu.s now; the lesson is that "the same
+sources" includes the parts that were never assembled for the other target.
 
 ## Verification that stands
 
-- Master: `build/CLEO` and `build/LOGIC` byte-identical to `build/ref_mode1`.
-- B logic: `modelb/tools/bdiff.mjs` -- a 21-row Master (`-D VISROWSDEF=21`,
-  `build/ref_mode1_21`) and the B in lock step, all logic state compared after
-  every frame.
-- B rendering: `modelb/tools/bcheck2.mjs` + `bring2.py` -- ring against the map,
-  mirror against the ring.
-- B cost: `modelb/tools/bwork2.mjs`.
+- B logic: `modelb/tools/bdiff.mjs frames seed level` -- a 21-row Master
+  (`-D VISROWSDEF=21`, `build/ref_mode1_21`) and the B in lock step, all logic
+  state compared after every frame; `BMODEL=B1770` for the 1770 machine.  600
+  frames on L0B (8271) and L1B (1770) at the time of writing.
+- B loading: `modelb/tools/bcheck2.mjs` dumps the level's tiles and map from the
+  banks (compared against the packer's files), `bring2.py` the ring against them
+  and the mirror against the ring; a scratch script compared every placed image,
+  mask, directory entry and SPRMASK entry against the shared files: all exact.
+- B cost: `modelb/tools/bwork2.mjs frames seed level`: L0B median 77k cycles a
+  frame, p90 145k; L1B 70k / 122k.
+- Both controllers and both drives boot to the title under jsbeeb (`bboot.mjs`).

@@ -1,7 +1,8 @@
 ; ============================================================================
-; CLEO - menus, title, help, level select, win/lose, pause  (LOGIC segment: bank 7)
+; CLEO - menus, title, help, level select, win/lose, pause  (LOGIC segment: bank 7;
+; Model B: bank 5's menu overlay, MNUCODE, loaded over the tiles for the menus)
 ; ============================================================================
-        .segment "LOGIC"
+        PLACE "LOGIC", "MNUCODE"
 
 MENU_START = 0
 MENU_HELP  = 1
@@ -102,7 +103,7 @@ draw_glyph_rows:
         sta sp
         lda sp+1
         adc #>ROWBYTES
-        ringup
+        ringup sp
         sta sp+1
 :
         lda GLYPHBUF,x
@@ -137,8 +138,9 @@ draw_glyph_rows:
         sta sp+1
         inx
         cpx #8
-        bne @row
-        rts
+        beq :+
+        jmp @row                    ; (the 6502 spellings put @row out of a branch's reach)
+:       rts
   .if MODE1
 pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game px
   .else
@@ -151,7 +153,11 @@ clear_ring:
         stz w16
         lda #>BARADDR               ; from the bar, not the ring base: the bar sits below
         sta w16+1                   ; $3000 now and the menu still wants it black
+  .if MODELB
+        ldx #((RINGEND_B - BARADDR) >> 8)   ; the bar, both mirrors and both rings
+  .else
         ldx #((RINGEND - BARADDR) >> 8)
+  .endif
         ldy #0
         tya
 @l:     sta (w16),y
@@ -168,8 +174,10 @@ load_title:
         jsr m_blank_palette
         lda title_res
         bne :+
+  .if .not MODELB
         lda #FI_TITLE
-        jsr m_loadfile
+  .endif
+        jsr m_loadfile              ; (Model B: the overlay and the pack, disc.s)
         inc title_res
 :       rts
 
@@ -201,8 +209,12 @@ menu_begin:
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stza curbuf
+  .if MODELB
+        jsr m_build_sections        ; bank 7's
+  .else
         jsr build_sections          ; both are in the bank now
         stz NEXTBUF
+  .endif
         stz NEXTSECT
         lda #1
         sta flipreq
@@ -364,7 +376,11 @@ clear_items:
         dey
         bpl :-
         inx
+  .if MODELB
+        cpx #RINGROWS               ; the ring is 23 slots here: the tables end there
+  .else
         cpx #28
+  .endif
         bne @r
 @done:  rts
 
@@ -403,12 +419,21 @@ help_screen:
         sta ptr
         lda helptab+1,y
         sta ptr+1
+  .if MODELB                        ; 84 px of window: i*10+16, the last line at 66
+        lda tmp3
+        asl
+        asl
+        adc tmp3                    ; i*5
+        adc #8
+        asl                         ; (i*5+8)*2 = i*10+16
+  .else
         lda tmp3
         asl
         adc tmp3                    ; i*3
         adc #5                      ; i*3+5
         asl
         asl                         ; (i*3+5)*4 = i*12+20
+  .endif
         tax
         jsr text_centred
         ldx tmp3
@@ -447,7 +472,7 @@ level_select:
         clc
         adc tmp2                    ; (n-1)*12
         sta tmp2
-        lda #100
+        lda #(VISLINES/2 - 8)       ; (108 on the Master, 84 here)
         sec
         sbc tmp2
         lsr
@@ -525,23 +550,30 @@ winlose:
         sta ptr
         lda #>str_score
         sta ptr+1
+  .if MODELB
+SCORE_Y = 64                        ; 84 px of window: under big Cleo (28..59)
+HISCORE_Y = 76                      ; (a glyph row is a multiple of 4)
+  .else
+SCORE_Y = 84
+HISCORE_Y = 96
+  .endif
         lda #12
-        ldx #84
+        ldx #SCORE_Y
         jsr drawtext
         mov16 t16, score
         lda #84                     ; align the score column with the hi-score below
-        ldx #84
+        ldx #SCORE_Y
         jsr draw_number
         lda #<str_hiscore
         sta ptr
         lda #>str_hiscore
         sta ptr+1
         lda #12
-        ldx #96
+        ldx #HISCORE_Y
         jsr drawtext
         mov16 t16, hiscore
         lda #84
-        ldx #96
+        ldx #HISCORE_Y
         jsr draw_number
         lda #$FF
         sta lastkeys
@@ -620,7 +652,11 @@ draw_number:
         ; convert t16 to decimal (5 digits, leading zeros suppressed) into numbuf
         ldx #4
 @d:     phx
+  .if MODELB
+        jsr m_div10_16
+  .else
         jsr div10_16
+  .endif
         plx
         lda q1
         ora #'0'
@@ -675,11 +711,15 @@ l7:         .byte "NEFERTITI", 0
 str_score:  .byte "SCORE", 0
 str_hiscore:.byte "HISCORE", 0
 
-        .zeropage
-menuptr:   .res 2
+  .if .not MODELB                   ; (Model B: menuptr is in defs.inc, spbank and
+        .zeropage                   ;  menurec in bank 5 with the prologue, title_res
+menuptr:   .res 2                   ;  in low RAM)
 spbank:    .res 1
         .segment "TABLES"
 menurec:   .res 10
+  .else
+        .segment "MNUBSS"
+  .endif
 numbuf:    .res 8
 mcount:    .res 1
 mtop:      .res 1
@@ -687,6 +727,8 @@ mstep:     .res 1
 msel:      .res 1
 mclear:    .res 1
 mlast:     .res 1                  ; item index the cursor was last drawn at
+  .if .not MODELB
 title_res: .res 1                  ; title pack resident in bank 6
+  .endif
 tx:        .res 1
 ty:        .res 1

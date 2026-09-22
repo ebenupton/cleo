@@ -190,11 +190,7 @@
 ; ---------------------------------------------------------------- object arrays (bank 7)
 NLEAN   = 2                        ; object types below this take the lean path in
                                    ; process_object: no zero-page staging at all
-  .if MODELB
-OBJN    = 126                      ; the one level on the disc has 126 objects; the arrays
-  .else                            ; are laid out exactly as the Master's, just shorter
-OBJN    = 149
-  .endif
+OBJN    = 149                      ; the most objects a level has (L7B); both targets
 O_STAMP = LV_OBJST
 O_TYPE  = O_STAMP + OBJN
 O_XL    = O_TYPE + OBJN

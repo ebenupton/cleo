@@ -1,4 +1,0 @@
-frame 250: px=190 py=188 stars=73 score=1 health=3 keys=1 (9s)
-OK: 300 frames in lock step
-299 frames: work median 63151 p90 119191 max 183039 min 29782 cycles (ISR excluded); far calls/frame median 4 max 8; ISR/frame median 3129
-vsyncs a frame at 40000 cycles each: median 1.58, p90 2.98, max 4.58

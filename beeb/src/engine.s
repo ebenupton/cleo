@@ -412,14 +412,14 @@ BUF_SEC0:  .res 4
 BUF_SEC0T1: .res 4
 SECTAB:    .res 2*48
 SFXDUR:    .res 1
-MUSON:     .res 1
-MUSTMP:    .res 1
+KEYSCAN:   .res 1
+VS2T:      .res 2
+        .segment "MNUBSS"           ; bank 5's menu overlay: the tune's player lives there
+MUSTMP:    .res 1                   ; (MUSON is in low RAM: the interrupt stub reads it)
 MUSDUR:    .res 1
 MUSNOTE:   .res 3
 ISRT1:     .res 1
 ISRT2:     .res 1
-KEYSCAN:   .res 1
-VS2T:      .res 2
         .segment "LOWBSS"           ; main RAM: what more than one bank touches (the
 SPRLIST:   .res 5*MAXSPR            ; single bytes are in zero page: defs.inc)
 BARCACHE:  .res 16                  ; bar_bg (bank 4) resets it, bar_digit (bank 7) keeps it
@@ -667,17 +667,10 @@ drawrect:
 @nextrow:                           ; one map row on
         lda ptr
         clc
-  .if MODELB
-        adc #<MAPSTRIDE
-        sta ptr
-        lda ptr+1
-        adc #>MAPSTRIDE
-  .else
         adc MAPSTRIDE
         sta ptr
         lda ptr+1
         adc MAPSTRIDE+1
-  .endif
         sta ptr+1
   .if .not MODELB
         setbank BANK_MAP            ; @drawrow left the tile bank selected
@@ -1317,14 +1310,20 @@ drawsprite:
         stx ROMSEL
   .endif
         clc
+  .if MODELB
+        adc sprtab                  ; the directory sits above the map: where the
+        sta ptr                     ; loader put it (low.s)
+        lda ptr+1
+        adc sprtab+1
+        sta ptr+1
+        jsr dirfetch                ; the directory is in bank 6: its eight bytes come
+  .else                             ; into low RAM and ptr points there
         adc #<SPR_TABLE
         sta ptr
         lda ptr+1
         adc #>SPR_TABLE
         sta ptr+1
-  .if MODELB
-        jsr dirfetch                ; the directory is in bank 6: its eight bytes come
-  .endif                            ; into low RAM and ptr points there
+  .endif
         ldy #6
         lda (ptr),y
         sta sp_flags
@@ -1355,10 +1354,35 @@ drawsprite:
         sta ptr+1
         lda spbank              ; title pieces keep directory and data in one bank
         sta sp_dbank
-  .if .not MODELB
+  .if MODELB                        ; bank 6 is not this one: the entry and the mask
+        lda ptr                     ; address come across through low RAM, the mask
+        pha                         ; first (dirfetch reuses ptr and MAPBUF)
+        lda ptr+1
+        pha
+        lda sp_id
+        asl
+        clc
+        adc #<(TITLE_ADDR+$80)
+        sta ptr
+        lda #0
+        adc #>(TITLE_ADDR+$80)
+        sta ptr+1
+        jsr dirfetch
+        lda MAPBUF
+        sta sp_mbase
+        lda MAPBUF+1
+        sta sp_mbase+1
+        pla
+        sta ptr+1
+        pla
+        sta ptr
+        jsr dirfetch
+        ldy #6
+        lda (ptr),y
+        sta sp_flags
+  .else
         sta ROMSEL_CPY
         sta ROMSEL
-  .endif
         ldy #6
         lda (ptr),y
         sta sp_flags
@@ -1370,6 +1394,7 @@ drawsprite:
         sta sp_mbase
         lda TITLE_ADDR+$81,x
         sta sp_mbase+1
+  .endif
   .endif
 @entry2:
         ldaz ptr
@@ -3606,6 +3631,9 @@ sound_tick:
         lda #$FF
         jsr sndwrite
 @music:
+  .if MODELB
+        rts                         ; the tune is stepped by the interrupt stub (low.s):
+  .endif                            ; its player is in bank 5's menu overlay
   .ifdef DBGSND                     ; diagnostic build (DBGSND=1 sh build.sh): while no
         lda MUSON                   ; music plays, re-silence one of the channels play
         bne :+                      ; never writes -- channel 0, channel 1, noise, in
@@ -3622,7 +3650,7 @@ sound_tick:
 @dbgsil: .byte $9F, $BF, $FF, 0
   .endif
 
-sndwrite:
+.macro SNDWRITE_BODY
         pha
         lda #$FF
         sta VIA_DDRA
@@ -3645,6 +3673,18 @@ sndwrite:
         lda #$7F
         sta VIA_DDRA
         rts
+.endmacro
+sndwrite:
+        SNDWRITE_BODY
+  .if MODELB
+.macro sndw                         ; the player's own copy, in its bank
+        jsr sndwrite_m
+.endmacro
+  .else
+.macro sndw
+        jsr sndwrite
+.endmacro
+  .endif
 
 ; ---------------------------------------------------------------- music
 ; 144-byte period table then the sequence (4-byte records: frames, note0..2;
@@ -3676,6 +3716,11 @@ music_init:
         dex
         bne :-
         rts
+  .endif
+        PLACE "CODE", "MNUCODE"     ; Model B: the menu overlay, with the tune
+  .if MODELB
+sndwrite_m:
+        SNDWRITE_BODY
   .endif
 music_tick:
         lda MUSON
@@ -3737,7 +3782,7 @@ set_voice:
         cpy #0
         bne @note
         ora #$9F                    ; A is still ch<<5
-        jsr sndwrite
+        sndw
         plx
         rts
 @note:  tya
@@ -3749,7 +3794,7 @@ set_voice:
         and #15
         ora ISRT1
         ora #$80
-        jsr sndwrite
+        sndw
         lda MUSIC_TAB,y
         lsr
         lsr
@@ -3762,12 +3807,13 @@ set_voice:
         asl
         asl
         ora ISRT2
-        jsr sndwrite
+        sndw
         plx
         lda musvol,x
         ora ISRT1
         ora #$90
-        jmp sndwrite
+        sndw
+        rts
 musvol: .byte 3, 8, 8
 
 music_start:
@@ -3783,6 +3829,7 @@ music_start:
         sta MUSON
         rts
 
+        PLACE "CODE", "LGCCODE"     ; (bank 7 stops it: the overlay may be gone)
 music_stop:
         stz MUSON
         lda #$9F
@@ -4114,27 +4161,25 @@ ldr_end:  rts
 ; ============================================================================
 ; A = tile row -> mapptr = address of that map row
   .if MODELB
-    .if MAPLW = 7
-maprow: lsr                         ; row * 128: the row's low bit is the low byte's top
-        sta mapptr+1
+maprow:                             ; row * 2^lw = (row << 8) >> (8 - lw): mapshr is
+        sta mapptr+1                ; the loader's (low.s); no table to page in.  X
+        txa                         ; is kept: the logic calls this with it live, as
+        pha                         ; the Master's table lookup allows
         lda #0
-        ror
         sta mapptr
+        ldx mapshr
+        beq :++
+:       lsr mapptr+1
+        ror mapptr
+        dex
+        bne :-
+:       pla
+        tax
         lda mapptr+1
         clc
         adc #>LV_MAP
         sta mapptr+1
         rts
-    .elseif MAPLW = 8
-maprow: clc                         ; row * 256: the row is the high byte
-        adc #>LV_MAP
-        sta mapptr+1
-        lda #0
-        sta mapptr
-        rts
-    .else
-        .error "maprow: a map is 128 or 256 tiles wide"
-    .endif
   .else
 maprow: tay
         lda #BANK_MAP
@@ -4262,6 +4307,15 @@ getglyph:
         bpl :-
         jmp pagelogic
         .segment "CODE"
+  .else
+        .segment "MNUCODE"          ; the font is in the overlay with the menus
+getglyph:
+        ldy #7
+:       lda (w16b),y
+        sta GLYPHBUF,y
+        dey
+        bpl :-
+        rts
   .endif
 
         PLACE "LOW2", "TILCODE"
@@ -4399,6 +4453,7 @@ pagelogic:                          ; A, X, Y and the carry all come through int
 ; the menus, which the one-level disc does without, are stubs.
 t_game_frame = game_frame
 t_level_init = level_init
+t_redraw_hud = redraw_hud
 m_addsprite  = addsprite
 m_clamp_window = clamp_window
 m_rnd        = rnd
@@ -4410,24 +4465,37 @@ m_mark_dirty:                       ; A = tx, X = ty -> the lists are in bank 5,
         pla
         farjsr F_MARKDIRTY
         rts
-MENU_HELP = 1
-t_title_menu:                       ; "play": never the help screen
-        lda #0
-        rts
-t_help_screen:
-t_pause_menu:                       ; resume
-t_winlose:
-        lda #0
-        rts
-t_level_select:                     ; the level is the one on the disc
-        lda #LEVEL_IDX/2
-        rts
-t_redraw_hud = redraw_hud
         .segment "TILCODE"
 mark_dirty_far:                     ; the far entry: Y = ty back into X
         tya
         tax
         jmp mark_dirty
+; The menus live in bank 5's overlay (menu.s under MNUCODE) and are called from bank
+; 7; what they call back in bank 7 crosses the same way.  What they call in bank 5
+; itself (the ring work, the prologue) is a plain name.
+.macro FARSUB name, idx
+.ident(name):
+        farjsr idx
+        rts
+.endmacro
+        .segment "LGCCODE"
+        FARSUB "t_title_menu", F_TITLE
+        FARSUB "t_help_screen", F_HELP
+        FARSUB "t_level_select", F_LEVELSEL
+        FARSUB "t_winlose", F_WINLOSE
+        .segment "MNUCODE"
+        FARSUB "m_blank_palette", F_BLANKPAL
+        FARSUB "m_set_palette", F_SETPAL
+        FARSUB "m_wait_flip", F_WAITFLIP
+        FARSUB "m_loadfile", F_LOADTITLE
+        FARSUB "m_music_stop", F_MUSSTOP
+        FARSUB "m_build_sections", F_BUILDSECT
+        FARSUB "m_div10_16", F_DIV10
+m_music_start = music_start
+m_ringaddr = ringaddr
+m_calc_ring = calc_ring
+m_select_backbuf = select_backbuf
+m_drawsprite = drawsprite
   .endif
 
 ; ============================================================================

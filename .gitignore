@@ -7,3 +7,4 @@ beeb/profile/
 *.jar
 screenshots/
 __pycache__/
+beeb/modelb/build/

@@ -1,22 +1,9 @@
 // Frame cost: cycles from one frame_top (bank 7) to the next, less the wait for the
 // vsync peg, over N frames of a key script; prints the distribution and the far-call
 // count per frame.
-import { findJsbeeb, loadLabels } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
-import { pathToFileURL } from "node:url";
-import path from "node:path";
-const frames = parseInt(process.argv[2] ?? "300"), seed0 = parseInt(process.argv[3] ?? "1");
-const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
-const A = loadLabels("build/labels.txt");
-const s = new MachineSession("B-DFS1.2");
-await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleob.ssd"));
-const cpu = s._machine.processor;
-const bank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
-const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
-s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
-async function runTo(pc, b) { const h = cpu.debugInstruction.add((p) => p === pc && cpu.readmem(0xf4) === b);
-  try { for (let i = 0; i < 3000; i++) { await s.runFor(20000); if (cpu.pc === pc && cpu.readmem(0xf4) === b) return; } } finally { h.remove(); } throw new Error("timeout"); }
-await runTo(A.level_init, 7); bank(7, () => cpu.writemem(A.scan_keys, 0x60));
-await runTo(A.frame_top, 7);
+import { openB } from "./bopen.mjs";
+const frames = parseInt(process.argv[2] ?? "300"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "0");
+const { s, cpu, A, bank, cyc, runTo } = await openB({ level: LEVEL });
 // work = frame_top .. the flip request (render_frame's end): everything but the peg wait
 let t0 = -1, work = [], far = 0, fars = [], isr = 0, isrs = [], isrAt = -1;
 const meter = cpu.debugInstruction.add((pc, op) => {

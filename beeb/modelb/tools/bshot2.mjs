@@ -1,18 +1,13 @@
 // Screenshot: _completeFb8 is RGBA, 1024x625, one byte a channel.
-import { findJsbeeb } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
-import { pathToFileURL } from "node:url";
+import { openB } from "./bopen.mjs";
 import { writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
-import path from "node:path";
 const cycles = parseInt(process.argv[2] ?? "14000000");
 const out = process.argv[3] ?? "build/shot.png";
 const X0 = parseInt(process.argv[4] ?? "180"), X1 = parseInt(process.argv[5] ?? "860");
 const Y0 = parseInt(process.argv[6] ?? "0"), Y1 = parseInt(process.argv[7] ?? "625");
-const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
-const s = new MachineSession("B-DFS1.2");
-await s.initialise(); await s.boot(30);
-s.loadDisc(path.resolve("build/cleob.ssd"));
-s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
+const LEVEL = parseInt(process.argv[8] ?? "0");
+const { s } = await openB({ level: LEVEL, keys: true });
 await s.runFor(cycles);
 const cpu = s._machine.processor;
 console.log(`pc=$${cpu.pc.toString(16)} romsel=$${cpu.readmem(0xf4).toString(16)}`);

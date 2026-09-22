@@ -56,7 +56,17 @@ start6:
         iny
         cpy #<__LOWCODE_SIZE__
         bne @lc
-        jmp to7                     ; the switch to bank 7 runs from low RAM (low.s)
+        ldx #@to7end-@to7-1         ; the switch to bank 7 runs from the stack page,
+:       lda @to7,x                  ; as the entry's did: a bank cannot page itself out
+        sta $0100,x
+        dex
+        bpl :-
+        jmp $0100
+@to7:   lda #BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jmp start7
+@to7end:
 
         .segment "LGCCODE"
 start7:
@@ -81,5 +91,5 @@ start7:
         jsr build_sections
         stz curbuf
         jsr take_over
-        jsr music_start             ; the title menu would have
-        jmp game_main
+        jsr disc_init               ; a 1770 board: reset, and the head found
+        jmp game_main               ; the title menu loads its overlay and starts the tune
