@@ -89,6 +89,7 @@ start7:
         sta seed
         lda #$12
         sta seed+1
+        jsr blank_palette           ; nothing on the screen is a picture until the title
         jsr crtc_init
         ; both buffers' chains, for a blank window at the origin (ringS, barq, wfine
         ; are the zeros above), before the interrupt can walk one

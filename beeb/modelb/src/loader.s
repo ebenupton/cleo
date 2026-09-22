@@ -85,7 +85,17 @@ start:
         lda #22                     ; MODE 1 first: the OS sets the ULA and the screen size
         jsr OSWRCH                  ; latch, the game reprograms only the CRTC -- and the
         lda #1                      ; main-RAM pieces below land in what is now screen
-        jsr OSWRCH
+        jsr OSWRCH                  ; memory, so the palette goes black before they do
+        ldx #15
+:       txa
+        asl
+        asl
+        asl
+        asl
+        ora #7
+        sta $FE21
+        dex
+        bpl :-
         ; ---- the pieces: BANKS is a count, then (bank, address, length) x count, then
         ; the pieces in that order; bank 0 means main RAM (no paging).  The whole file
         ; is loaded at once (OSFILE: a byte at a time through OSGBPB took the 1770 DFS

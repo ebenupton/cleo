@@ -50,7 +50,8 @@ fcret:  tax                         ; the target's A
 ; in around them.  The step's timing (VS2T_DEFAULT) allows for the ~30 cycles that
 ; takes, in place of the hold loop the Master's handler has.  The title tune's
 ; player is in the menu overlay (bank 5): the vsync work leaves MUSON set only
-; while the overlay is there, and it is stepped from here, between the banks.
+; while the overlay is there, and it is stepped from here, between the banks, once
+; a frame -- the vsync's sound_tick raises MUSTICK; the T1 steps are this same stub.
 irq_handler:
         stx irq_x
         sty irq_y
@@ -60,8 +61,10 @@ irq_handler:
         sta ROMSEL_CPY
         sta ROMSEL
         jsr isr_body
-        lda MUSON
-        beq @nomus
+        lda MUSTICK                 ; the vsync's sound_tick, while the tune plays; the
+        beq @nomus                  ; T1 steps come through here too and must not count
+        lda #0
+        sta MUSTICK
         lda #BANK_TILES
         sta ROMSEL_CPY
         sta ROMSEL
@@ -144,6 +147,7 @@ sprtab:   .res 2                    ; the sprite directory: bank 6, just above t
 mapshr:   .res 1                    ; 8 - lw (maprow, maprow5)
 MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
 MUSON:    .res 1                    ; the tune plays: the interrupt stub steps it
+MUSTICK:  .res 1                    ; a frame's step is due: the vsync's sound_tick says so
 GLYPHBUF: .res 8                    ; one font glyph, for the menus (bank 5 both sides)
 title_res: .res 1                   ; the menu overlay and the title pack are in banks 5
                                     ; and 6 (a level load replaces both; menu.s reads it)

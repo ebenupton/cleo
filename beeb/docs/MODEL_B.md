@@ -103,6 +103,24 @@ prologue.  Wrong trade: the tiles are the picture.  Bank 5 is nearly all tiles n
 and a display row paid for the main RAM -- 22 ring slots, 20 visible, which also
 makes the rings whole pages and the fold a byte compare again.
 
+**The 8271 latches "not ready".**  The title's idle let the controller unload the
+head (DFS's specify says after a few index pulses), so the level's first read came
+back $10 at once -- and every retry after it, for ever: the ready bits in the drive
+input register are latched low and only a *read drive status* reloads them.  A read
+on a stopped drive does not start it either.  DFS's cure is the driver's now: write
+special register $23 (select + load head: the motor), read drive status (an
+immediate command -- poll busy and read the result; it raises no interrupt), then
+read.  The harness never saw it because it patches the title out and loads the level
+while the drive is still spinning from the boot.
+
+**The interrupt stub stepped the tune per interrupt, not per frame.**  Six T1 rupture
+steps a frame come through the same stub as the vsync; the tune ran five times too
+fast.  The vsync's sound_tick raises a flag the stub takes once.
+
+**Nothing is a picture until the title.**  The boot loader selects MODE 1 and then
+OSFILE-loads BANKS into what is now screen memory with the MOS palette live: the
+whole load showed.  Black first, in the loader and again at the game's start.
+
 **A merge is only lossless if the game agrees.**  Two tiles with identical bytes can
 differ in the attribute and altitude class the logic reads by id; merging them on
 pixels alone put a wall's altitude on a floor and lock step diverged in eight

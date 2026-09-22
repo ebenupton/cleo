@@ -122,13 +122,36 @@ read_sectors:
         sta LD_DONE
         lda dsk_type
         bne @wd
-        ; ---- 8271: read data, multi-record, 256-byte sectors
+        ; ---- 8271: read data, multi-record, 256-byte sectors -- after two commands
+        ; DFS also sends.  The drive control output (special register $23): select +
+        ; load head is the motor, which the 8271 stops after a few idle index pulses
+        ; (DFS's specify), and a read on a stopped drive is "not ready" ($10) at once,
+        ; without starting it.  And the 8271 LATCHES not ready: only a read drive
+        ; status clears it, so the retry below would fail for ever without one
+        ; (it did: the title's idle stops the motor, and the level never loaded).
         jsr i_idle
         lda #$40                    ; bits 7,6 select the drive: $40 = 0, $80 = 1
         ldx dsk_drv
         beq :+
         asl
-:       ora #$13
+:       tax                         ; (the helpers keep X)
+        ora #$3A                    ; write special register
+        sta FDC8271_CMD
+        lda #$23
+        jsr i_param
+        txa
+        ora #$08                    ; select + load head
+        jsr i_param
+        jsr i_idle
+        txa
+        ora #$2C                    ; read drive status: an immediate command, no
+        sta FDC8271_CMD             ; interrupt -- its result (the status) is read to
+        jsr i_idle                  ; clear it
+        lda FDC8271_PAR
+        lda #0                      ; (and the stub's flag, should a controller
+        sta LD_DONE                 ; interrupt after all)
+        txa
+        ora #$13                    ; read data
         sta FDC8271_CMD
         lda ld_trk
         jsr i_param
@@ -137,13 +160,11 @@ read_sectors:
         lda ld_cnt
         ora #$20
         jsr i_param
-        ldx #5                      ; a retry or two on a soft error
-:       lda LD_DONE
-        beq :-
+        jsr wait_done
         lda LD_RES
         and #$1E
         beq @next
-        jmp @track                  ; try the run again
+        jmp @track                  ; try the run again: not ready, or a soft error
         ; ---- 1770: seek if the head is elsewhere, then read multiple
 @wd:    lda ld_trk
         cmp w_trk
@@ -183,6 +204,7 @@ read_sectors:
         jmp @track
 @done:  rts
 
+        .segment "LGCLO"            ; (the helpers: below the records, where there is room)
 i_idle: lda FDC8271_CMD             ; the 8271 takes a command when not busy
         bmi i_idle
         rts
@@ -193,6 +215,12 @@ i_param:                            ; and a parameter when the register is free
         bne :-
         pla
         sta FDC8271_PAR
+        rts
+wait_done:                          ; the stub's completion flag, taken
+        lda LD_DONE
+        beq wait_done
+        lda #0
+        sta LD_DONE
         rts
 w_wait: ldx #20
 :       dex

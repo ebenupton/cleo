@@ -113,10 +113,13 @@ banks freely.  Both controllers raise NMI for every byte, so the transfer routin
 copied to $0D00 for a load (a jump there picks the controller's stub) and keeps its
 state in that page.  The boot loader (loader.s, under the MOS) reads BANKS -- the
 fixed pieces of the four banks and the main-RAM block, with a table -- into place
-(MODE 1 first: the block is screen memory), asks DFS which drive is current (OSGBPB 6: a Gotek on drive 1 works after `*DRIVE 1`), decides the
+(MODE 1 first, palette black: the block is screen memory and the load would show), asks DFS which drive is current (OSGBPB 6: a Gotek on drive 1 works after `*DRIVE 1`), decides the
 controller from the DFS ROM's version (0.x/1.x are Acorn's 8271 DFSs; 2.x the 1770
 one; hold W or I at boot to say so instead), and jumps into bank 7.  The 8271 keeps
-the step rate DFS specified; the 1770 board is reset and its head restored once.
+the step rate DFS specified, but not its motor: after an idle spell (the title) the
+head has unloaded, a read finds "not ready" -- which the 8271 latches -- so each run
+first loads the head (special register $23) and reads the drive status, as DFS does;
+the 1770 board is reset and its head restored once.
 
 The disc (`build.sh`, 28 files):
 

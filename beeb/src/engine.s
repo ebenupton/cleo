@@ -3152,7 +3152,7 @@ render_frame:                       ; is render_core in bank 5
         ror
         sta wcy
   .if MODELB
-        farjsr F_RENDCORE
+        jsr render_core
   .else
         jsr calc_ring
         jsr match_sprites
@@ -3192,24 +3192,28 @@ wait_flip:
         lda flipreq
         bne wait_flip
         rts
+
   .if MODELB
-        .segment "TILCODE"          ; the ring work, in the tile blitter's bank
-render_core:
+        .segment "LGCCODE"          ; the ring work: bank 7 drives it, bank 5 (the tiles)
+render_core:                        ; gets two far calls a frame, main RAM the rest
         jsr select_backbuf          ; draw into the buffer the flip is leaving
         jsr calc_ring
         jsr match_sprites
         jsr erase_old
-        jsr scroll_validate
-        jsr draw_dirty
+        farjsr F_RENDER5            ; scroll_validate, draw_dirty
         jsr draw_sprites
         jsr copy_partial
         jsr blank_below
         jmp mirror_copy             ; the straddling row's copy (display.s)
+        .segment "TILCODE"
+render5:
+        jsr scroll_validate
+        jmp draw_dirty
   .endif
 
 
-        PLACE "LOW", "TILCODE"     ; render-time helpers in the NMI page ($0D03..),
-                                   ; copied there at init
+        PLACE "LOW", "MRXCODE"     ; render-time helpers in the NMI page ($0D03..),
+                                   ; copied there at init; Model B: main RAM
 ; ============================================================================
 drawrect_clip:
         ; rows
@@ -3839,8 +3843,10 @@ sound_tick:
         jsr sndwrite
 @music:
   .if MODELB
-        rts                         ; the tune is stepped by the interrupt stub (low.s):
-  .endif                            ; its player is in bank 5's menu overlay
+        lda MUSON                   ; the tune is stepped by the interrupt stub (low.s):
+        sta MUSTICK                 ; its player is in bank 5's menu overlay.  Only from
+        rts                         ; here, the vsync: the chain's T1 steps share the stub
+  .endif
   .ifdef DBGSND                     ; diagnostic build (DBGSND=1 sh build.sh): while no
         lda MUSON                   ; music plays, re-silence one of the channels play
         bne :+                      ; never writes -- channel 0, channel 1, noise, in
