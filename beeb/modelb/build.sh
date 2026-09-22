@@ -31,7 +31,7 @@ for pass in 1 2 3; do
 import re
 want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE','FLATTAB',
-        'half0','half1','half2','halfhi','HPAIR0','HPAIR1',
+        'half0','half1','half2','halfhi','halfsub','HPAIR0','HPAIR1',
         'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG']
 addr = {}
 for l in open('build/labels.txt'):
@@ -58,10 +58,9 @@ EOF
     python3 - <<'EOF'
 import os
 pieces = [(4, 0x8000, 'b4c.bin'), (4, 0x8300, 'b4t.bin'), (4, 0xBBE0, 'b4x.bin'),
-          (5, 0x8000, 'b5c.bin'), (5, 0xBB40, 'b5x.bin'),
+          (5, 0x8000, 'b5c.bin'), (5, 0xB620, 'b5x.bin'),         # (B5X in cleo_b.cfg)
           (6, 0x8000, 'b6c.bin'), (6, 0x8040, 'b6l.bin'), (6, 0x8400, 'b6t.bin'), (6, 0xBD60, 'b6x.bin'),
-          (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin'),
-          (0, 0x7C00, 'mrx.bin')]                          # main RAM: the code every bank calls
+          (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin')]
 tab, body = bytearray([len(pieces)]), bytearray()
 for bank, addr, fn in pieces:
     d = open(os.path.join('build', fn), 'rb').read()

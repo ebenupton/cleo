@@ -54,8 +54,8 @@ B6_SWAP = (0x8300, 0x8400)                  #   the page SWAPTAB would take: dat
 B6_TOP = 0xBD60                             #   the row loop and copy blitter above this
 MAP6 = 0x8800                               #   the map, then the directory, then images
 TILES_BASE = 0x8100                         # bank 5: the tiles from here (page aligned)
-B5X = 0xBB40                                #   up to the row loop's region (cleo_b.cfg)
-TILE_ROOM = (B5X - TILES_BASE) // 64        # 233: the Master's largest level (L4B) exactly
+B5X = 0xB620                                #   up to the row loop's region (cleo_b.cfg)
+TILE_ROOM = 233                             # the Master's largest level (L4B): no level folds past its set
 
 SPRFILE_SPR, SPRFILE_AND, SPRFILE_BOX = 0, 1, 2   # the loader's source file ids
 
@@ -320,9 +320,12 @@ def pack_level(lv, sub):
     halfpair = bytearray()
     for r, stored, pr in hlist:
         halfpair += pr
-    # the room: full tiles, the halves from the next page, their pairs after them
-    HALFBASE = TILES_BASE + ((NTILES * 64 + 255) & ~255)
-    assert HALFBASE + NHALF * 32 + len(halfpair) <= B5X, (name, NTILES, NHALF)
+    # the room: full tiles, the halves from the 32-byte slot after them (the gather
+    # counts slots from the page the first is in, HALFPAGE, so the loader stores
+    # half0 - HALFOFF for its subtraction), their pairs after them
+    HALFPAGE = TILES_BASE + ((NTILES * 64) & ~255)
+    HALFOFF = ((NTILES * 64) & 255) // 32
+    assert HALFPAGE + (HALFOFF + NHALF) * 32 + len(halfpair) <= B5X, (name, NTILES, NHALF)
     # the tile list: for each level id, the tile's index in the set's file (TILESO/I)
     setidx = {c: i for i, c in enumerate(m.tileset[gset])}
     tilelist = bytearray()
@@ -346,7 +349,7 @@ def pack_level(lv, sub):
     hdr.append(gset)
     hdr.append(NTILES)
     hdr.append(8 - L['lw'])                 # maprow's shift: row * 2^lw = (row << 8) >> (8 - lw)
-    hdr += bytes([NHALF, half0, half1, half2, HALFBASE >> 8])   # +23..+27: the halves
+    hdr += bytes([NHALF, half0, half1, half2, HALFPAGE >> 8, HALFOFF])   # +23..+28: the halves
     hdr = hdr.ljust(32, b'\0')
     objs = bytearray()
     reach = m.enemy_reach(L['objs'])

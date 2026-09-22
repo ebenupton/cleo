@@ -277,6 +277,10 @@ lv_load:
         sta cnt
         lda LV_HDR+27
         sta cnt+1
+        lda LV_HDR+24               ; the gather's subtraction: half0 less the first
+        sec                         ; half's slot in its page (the halves follow the
+        sbc LV_HDR+28               ; full tiles at once, not from the next page)
+        sta dst                     ; (dst: free until set below)
         lda #BANK_TILES
         sta ROMSEL_CPY
         sta ROMSEL
@@ -288,10 +292,17 @@ lv_load:
         sta half2
         lda cnt+1
         sta halfhi
+        lda dst
+        sta halfsub
         lda #BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
-        lda #0
+        lda LV_HDR+28               ; the halves start slot HALFOFF into their page
+        asl
+        asl
+        asl
+        asl
+        asl
         sta dst
         lda LV_HDR+27
         sta dst+1
@@ -338,9 +349,15 @@ lv_load:
 @halves_done:
         lda #9                      ; the pairs, right after the halves
         jsr section
+        lda LV_HDR+28               ; the fill indexes them by the slot from the page,
+        asl                         ; two bytes each: the operands sit 2*HALFOFF below
+        sta tmp                     ; the table
         lda dst                     ; (dst is where the halves ended)
+        sec
+        sbc tmp
         pha
         lda dst+1
+        sbc #0
         pha
         lda LV_HDR+23               ; two bytes a half
         asl

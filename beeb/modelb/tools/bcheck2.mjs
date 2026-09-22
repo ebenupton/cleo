@@ -13,11 +13,10 @@ if (lab.TILES === undefined) lab.TILES = lab.MENU_BASE;
   const tiles = Buffer.alloc(64 * nt); inbank(5, () => { for (let i = 0; i < tiles.length; i++) tiles[i] = cpu.readmem(lab.TILES + i); });
   const map = Buffer.alloc(1 << (lw + lh)); inbank(6, () => { for (let i = 0; i < map.length; i++) map[i] = cpu.readmem(lab.MAP6 + i); });
   writeFileSync("build/tiles.bin", tiles); writeFileSync("build/map.bin", map);
-  const flat = Array.from({ length: 32 }, (_, i) => cpu.readmem(lab.FLATTAB + i));   // main RAM: the flat pairs
-  const hv = inbank(5, () => ({ nhalf: cpu.readmem(lab.LV_HDR + 23) }));   // (LV_HDR is bank 7's: read below)
-  const [nhalf, half0, half1, half2, halfhi] = inbank(7, () => [23, 24, 25, 26, 27].map(o => cpu.readmem(lab.LV_HDR + o)));
-  const halves = Buffer.alloc(32 * nhalf), hpair = Buffer.alloc(2 * nhalf);
-  inbank(5, () => { for (let i = 0; i < halves.length; i++) halves[i] = cpu.readmem((halfhi << 8) + i); for (let i = 0; i < hpair.length; i++) hpair[i] = cpu.readmem((halfhi << 8) + halves.length + i); });
+  const flat = inbank(5, () => Array.from({ length: 32 }, (_, i) => cpu.readmem(lab.FLATTAB + i)));   // bank 5: the flat pairs
+  const [nhalf, half0, half1, half2, halfhi, halfoff] = inbank(7, () => [23, 24, 25, 26, 27, 28].map(o => cpu.readmem(lab.LV_HDR + o)));
+  const halves = Buffer.alloc(32 * nhalf), hpair = Buffer.alloc(2 * nhalf), hbase = (halfhi << 8) + halfoff * 32;
+  inbank(5, () => { for (let i = 0; i < halves.length; i++) halves[i] = cpu.readmem(hbase + i); for (let i = 0; i < hpair.length; i++) hpair[i] = cpu.readmem(hbase + halves.length + i); });
   writeFileSync("build/halves.bin", halves);
   writeFileSync("build/level.json", JSON.stringify({ MAPW: 1 << lw, MAPH: 1 << lh, NTILES: nt, level: LEVEL, flat, nhalf, half0, half1, half2, hpair: Array.from(hpair) })); }
 // 'pre': stop at draw_sprites (bank 5), where the current buffer's ring is pure map
@@ -32,8 +31,9 @@ h.remove();
 const b = Buffer.alloc(0x8000); for (let a = 0; a < 0x8000; a++) b[a] = cpu.readmem(a);
 writeFileSync("build/ram.bin", b);
 const r16 = (a) => cpu.readmem(a) | (cpu.readmem(a + 1) << 8);
+const b5 = inbank(5, () => ({ bufcx: [r16(lab.BUF_CX), r16(lab.BUF_CX + 2)], bufcy: [cpu.readmem(lab.BUF_CY), cpu.readmem(lab.BUF_CY + 1)] }));   // the buffers' windows: bank 5's
 const st = inbank(7, () => ({ wcx: r16(lab.wcx), wcy: cpu.readmem(lab.wcy), wfine: cpu.readmem(lab.wfine), curbuf: cpu.readmem(lab.curbuf),
-  bufcx: [r16(lab.BUF_CX), r16(lab.BUF_CX + 2)], bufcy: [cpu.readmem(lab.BUF_CY), cpu.readmem(lab.BUF_CY + 1)],
+  ...b5,
   valid: [cpu.readmem(lab.BUF_VALID), cpu.readmem(lab.BUF_VALID + 1)],
   px: r16(lab.px), py: r16(lab.py), frame: cpu.readmem(lab.frame), wcxm: cpu.readmem(0xe5), mrow: cpu.readmem(0xe4),
   // the records of the buffer being drawn, with KEEP: a kept sprite's pixels stay in the ring

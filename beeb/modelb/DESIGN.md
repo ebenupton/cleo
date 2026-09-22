@@ -19,26 +19,24 @@ $0000-$00EF  zero page      the Master's layout unchanged ($00-$A1 engine + logi
 $0100-$013F  stack          64 bytes
 $0140-$0203  low BSS        SPRLIST, the digit cache, the chain's state, the mirror's,
                             the level's shape (sprtab, mapshr, MAPSTRIDE), MUSON,
-                            GLYPHBUF, title_res
+                            title_res, and the buffers' state bank 7 reads too
+                            (BUF_VALID, PART_LO/HI, BUF_BARQ, spbank, DIRTYCNT)
 $0206-$02FF  low code       farcall, the interrupt stub, maprow/mapbyte/mapput
                             (the Master's own), maprow5/mapstrip/dirfetch
 $0300-$07FF  status bar     2 rows, loaded into place at every level, never redrawn
-$0800-$087F  hole           the ring row table, the buffers' state (FRAG1)
-$0880-$0AFF  mirror A       a copy of ring A's last slot row (below)
-$0B00-$41FF  ring A         22 slots x 640: page aligned at both ends
-$4200-$427F  hole           the dirty lists, the menus' sprite record (FRAG2)
-$4280-$44FF  mirror B
-$4500-$7BFF  ring B
-$7C00-$7FFF  MRX            the code every bank calls: drawrect's head and clip,
-                            ringaddr, match_sprites, erase_old, select_backbuf,
-                            build_ring, mark_dirty, mirdirty, sext, and the small
-                            tables (sprmul5, the row multiples, the ring modulus)
+$0800-$0A7F  mirror A       a copy of ring A's last slot row (below)
+$0A80-$43FF  ring A         23 slots x 640
+$4400-$467F  mirror B
+$4680-$7FFF  ring B
 ```
 
-The 22nd ring slot is a display row given up: 21 visible rows would leave 768 bytes
-of main RAM, and the full game needs about 2K of code and state that every bank
-reaches (below).  22 x 640 is $3700, whole pages, so both rings are page aligned at
-both ends and `ringup` folds on the high byte alone, as the Master's does.
+Everything from the bar up is display: 23 slots (21 visible, the composed
+fine-scroll row, the bottom straddle).  23 x 640 is not a whole number of pages, so
+`ringup` folds 16 bits wide on this target; both ring ends are page aligned, so its
+test stays a byte compare against the buffer's `ringehi`, and both bases are at
+xx80, so the low byte folds by a constant.  Nothing else is in main RAM: the code
+every bank once called from a block at $7C00 (a display row's worth, with two holes
+of state) is bank 5's now, and the little of its state bank 7 reads is in low BSS.
 
 While a level loads the display is black and $0D00-$7BFF is the loader's: the NMI
 transfer routine at $0D00, the load-time program at $0E00, a shared file staged at
@@ -51,16 +49,22 @@ because they are copied while it is still being read).
 | Bank | Fixed | Per level (the loader's) | During the menus |
 |---|---|---|---|
 | 4 | the far table, SWAPTAB + MASKTAB0..3 at $8300, the sprite row loop at $BBE0 (`SPRITE_LOOPS 1, 0`) | images and masks $8800-$BBDF, masks alone in the hole $8040-$82FF | (untouched) |
-| 5 | the far table; the tile blitter's row loop and scroll_validate at $BB40, the gather and the half tiles' variables above them | the full tiles from $8100 (up to 193: L4B), the half tiles' stored rows from the next page (32 bytes each, up to 34), their pair table after them | the menu overlay from $8100: menu.s, the tune and its player, the font |
+| 5 | the far table, then init5 + take_over in the low corner ($8040, once only); from $B620 the tile blitter (drawrect, its clip, the row loop, the gather), ringaddr and the ring modulus, select_backbuf and build_ring, scroll_validate, the dirty lists and mark/draw_dirty, copy_partial, blank_below, mirdirty, and the buffers' state (RINGLO/HI, BUF_CX/CY, PART_CY/F, FLATTAB) | the full tiles from $8100 (up to 193: L4B), the half tiles' stored rows from the 32-byte slot after them (up to 34), their pair table after those | the menu overlay from $8100: menu.s, the tune and its player, the font |
 | 6 | the far table, the start-up and the low-RAM image at $8040, MASKTAB0..3 at $8400, the row loop without the mirrored blitter at $BD60 (`SPRITE_LOOPS 0, 1`) | the map at $8800 (up to 8K), the sprite directory above it (`sprtab`), the rest of the sprites, more in the hole $8180-$8300 and the page SWAPTAB would take | the title pack at $8900, over the map |
-| 7 | the far table, the entry vector, the sprite records below $8300, the logic, the game loop, `render_frame` and `render_core`, the sprite prologue and SPRMASK, draw_sprites, copy_partial, blank_below, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state | the level's tables at $8300: attr, altcls, the header | (untouched) |
+| 7 | the far table, the entry vector, the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue and SPRMASK, draw_sprites, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
 Every bank starts with the same far table at $8000 (banks.s `COMMON_TABLES`), so the
-thunk in low RAM reads it whatever bank is paged in; the small tables more than one
-bank indexes (sprmul5, the row multiples, the ring modulus) are assembled into main
-RAM at MRX, so one copy serves.  The ring modulus table is RINGROWS x 5 entries and
-the `ringmod` macro brings a row (0..255) under that with two subtractions.  The
-mask tables are assembled too.
+thunk in low RAM reads it whatever bank is paged in -- all 21 entries of it are
+taken.  The small tables are assembled in the bank of the code that indexes them:
+sprmul5 and the row multiples in bank 7 (the prologue, the records, the chain), the
+ring modulus in bank 5 (ringaddr; RINGROWS x 5 entries, the `ringmod` macro brings
+a row under that with two subtractions) -- bank 7's one use, calc_ring, subtracts
+instead (`ringmod7`).  What crosses between the two each frame: render_core (bank
+7) makes three far calls into bank 5 -- select_backbuf; scroll_validate, draw_dirty
+and blank_below; copy_partial -- erase_old one per rect it redraws (drawrect_clip),
+the sprite prologue one per sprite for its ring address (ringaddr7), and the logic
+one per tile it changes (m_mark_dirty, which parks X in `farx` because the thunk
+takes X).  The mask tables are assembled too.
 
 Bank 5 is nearly all tiles because the level's tile count is the Master's own (no
 folding beyond the set fold convert.py already does): L4B's 233 tiles would be 14.9K.
@@ -184,9 +188,9 @@ and BINMAX are the maxima over every level (24, 18); OBJN is the Master's 149.
 
 ## Menus on this target
 
-menu.s is assembled under MODELB into the overlay: `clear_ring` clears the bar, both
-mirrors and both rings around the two main-RAM holes (whose ring table the title
-pieces are then drawn through), `clear_items` stops at the ring's 22 slots, the font
+menu.s is assembled under MODELB into the overlay: `clear_ring` clears main RAM from
+the bar up (the bar, both mirrors and both rings), `clear_items` stops at the ring's
+23 slots, the font
 comes from the overlay itself, and the screens are laid out for 80 px of window (the
 Master's 108): the help lines 10 px apart, the level list centred on the window, the
 scores under big Cleo.  What the menus call in bank 7 (the palette, the flip, the disc, the
@@ -204,8 +208,8 @@ freezes the game; ESCAPE again resumes, RETURN leaves for the title.
 - `PLACE "CODE", "TILCODE"`: the segment a routine goes in, Master name first.
 - `ringup p` folds `p` 16 bits wide against the buffer's end; `select_backbuf` sets
   `ringbhi/ringehi/ringe3/ringneg` and rebuilds RINGLO/HI from the buffer's base.
-- `drawrect` splits at its row loop: the head in main RAM, the rows in bank 5 behind
-  `F_DRAWROWS`; the map fetch is `maprow5` + `mapstrip`; the gather is arithmetic.
+- `drawrect` is whole in bank 5 (erase_old reaches its clip through `F_DRAWRECT`);
+  the map fetch is `maprow5` + `mapstrip`; the gather is arithmetic.
 - `drawsprite`: no bank switching in the prologue; the directory entry via `dirfetch`
   from `sprtab`; the dispatch index goes in `sp_disp` and the loop copy patches its
   own jump; the hand-over to the row loop is a far call chosen by `sp_dbank`.
@@ -244,7 +248,7 @@ Y (the one site with Y live is `ldazy`), `bitimm` keeps A.
 
 ## Known differences from the Master
 
-20 visible rows against 30 (80 game px: the world's in-range decisions follow
-VISLINES, which is why the reference for the lock-step test is a 20-row Master).  The
+21 visible rows against 30 (84 game px: the world's in-range decisions follow
+VISLINES, which is why the reference for the lock-step test is a 21-row Master).  The
 picture starts 72 lines after vsync, 4 scanlines below where a MODE 2 frame's centre
 would put it.  The pause menu is a freeze.  The tiles are the Master's, unfolded.

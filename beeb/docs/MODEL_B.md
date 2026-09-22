@@ -101,7 +101,21 @@ tiles on the big outdoor levels to fit a bank that also held the blitter and the
 prologue.  Wrong trade: the tiles are the picture.  Bank 5 is nearly all tiles now
 (L4B fills it to the byte), the code around them went to bank 7 and to main RAM,
 and a display row paid for the main RAM -- 22 ring slots, 20 visible, which also
-makes the rings whole pages and the fold a byte compare again.
+makes the rings whole pages and the fold a byte compare again.  (Bought back the
+same day, below.)
+
+**The row came back once the tiles shrank.**  Half and flat tiles freed 2.5K of bank
+5 on L4B; the 1.1K of code and state that had sat in main RAM went above the tiles
+with the row loop (bank 5, from $B620), the small of it bank 7 must read (the
+records' matcher and eraser, sext, sprmul5, the row multiples, a second mirdirty)
+into bank 7, and the five bytes of state both read into low BSS.  Three far calls a
+frame plus one per erased rect, drawn sprite and changed tile: +4% on the frame.
+Two ways it bit: a scan of who uses what counted a macro's text, not its
+expansions, so bank 7's calc_ring lost its ring-modulus table (whole rows landed in
+the wrong slot); and the boot loader's piece table still loaded bank 5's code at
+its old address (the first jsr into it went to $0000).  The half tiles had to give
+up their page alignment for L4B to fit: they follow the full tiles at once, and the
+gather counts slots from the page they start in.
 
 **The 8271 latches "not ready".**  The title's idle let the controller unload the
 head (DFS's specify says after a few index pulses), so the level's first read came
@@ -144,7 +158,7 @@ against the neighbours (zero of Cleo's tiles are exact mirrors of another once
 dithered, 11-17 are at the source-art level); its 4-bit palette-indexed sprites
 would free ~8-10K of the sprite banks, which is not where the pressure is.
 
-**A whole-span clear must know about holes.**  The menus' `clear_ring` swept the
+**A whole-span clear must know about holes.**  (Moot since the holes went.)  The menus' `clear_ring` swept the
 display from the bar to the ring end; with the ring tables and the buffers' state
 living in two holes inside that span, the title piece was drawn through a zeroed
 row table straight into zero page ($F4 among the victims).  Anything that walks

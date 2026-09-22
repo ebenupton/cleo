@@ -25,9 +25,7 @@
 VSPEG     = 3                       ; vsyncs a rendered frame, as the Master
 
 FARTAB    = $8000                   ; every bank carries the same far table here
-                                    ; (banks.s); the small tables more than one bank
-                                    ; indexes (sprmul5, the row multiples, the ring
-                                    ; modulus) are in main RAM at MRX
+                                    ; (banks.s)
 SWAPTAB   = $8300                   ; static in bank 4: dot reversal (bank 6 draws
 MASKTAB0  = $8400                   ; nothing mirrored, so that page holds data there);
 MASKTAB1  = MASKTAB0 + $100         ; the four mask-phase pages in both sprite banks
@@ -42,7 +40,6 @@ LV_MAP    = MAP6                    ; bank 6, $8800: row major, up to 8K; the sp
 LV_OBJS   = $7800                   ; the level's objects, 6 bytes each: main RAM (the
                                     ; display, black while they are read: level_init
                                     ; reads them once, before the first render)
-MRX       = $7C00                   ; main RAM: the code and tables every bank calls
 
 ; ---------------------------------------------------------------- zero page
 ; The Master's zero page: engine.s's .zeropage ends at $A1, the logic's temps are
@@ -101,9 +98,9 @@ FDC1770_DAT = $FE87
 ; rows, and the rare rest.  A goes in and comes back, Y survives, X does not.
 F_SPRLOOP4  = 0*3                   ; the sprite row loop   bank 4
 F_SPRLOOP6  = 1*3                   ;                       bank 6
-F_DRAWROWS  = 2*3                   ; drawrect's row loop   bank 5 (from the head in main RAM)
-F_RENDER5   = 3*3                   ; scroll_validate + draw_dirty, bank 5
-F_BLANK5    = 4*3                   ; (unused: blank_below is bank 7's again)
+F_DRAWRECT  = 2*3                   ; drawrect_clip         bank 5 (erase_old's rects)
+F_RENDER5   = 3*3                   ; scroll_validate + draw_dirty + blank_below, bank 5
+F_SELBB     = 4*3                   ; select_backbuf        bank 5
 F_TITLE     = 5*3                   ; the menus: bank 5's overlay, present only while
 F_HELP      = 6*3                   ;   title_res says so
 F_LEVELSEL  = 7*3
@@ -111,12 +108,14 @@ F_WINLOSE   = 8*3
 F_BUILDSECT = 9*3                   ; build_sections, bank 7 (the menus call it)
 F_BLANKPAL  = 10*3                  ; blank_palette   bank 7
 F_SETPAL    = 11*3                  ; set_palette     bank 7
-F_WAITFLIP  = 12*3                  ; wait_flip       bank 7
-F_LOADTITLE = 13*3                  ; load_title      bank 7: the overlay and the pack
-F_MUSSTART  = 14*3                  ; music_start     bank 7
-F_MUSSTOP   = 15*3                  ; music_stop      bank 7
-F_DIV10     = 16*3                  ; div10_16        bank 7
-F_DRAWSPR   = 17*3                  ; drawsprite      bank 7 (the menus' title pieces)
-F_CALCRING  = 18*3                  ; calc_ring       bank 7 (the menus)
-NFAR        = 19
+F_LOADTITLE = 12*3                  ; load_title      bank 7: the overlay and the pack
+F_MUSSTOP   = 13*3                  ; music_stop      bank 7
+F_DIV10     = 14*3                  ; div10_16        bank 7
+F_DRAWSPR   = 15*3                  ; drawsprite      bank 7 (the menus' title pieces)
+F_CALCRING  = 16*3                  ; calc_ring       bank 7 (the menus)
+F_COPYPART  = 17*3                  ; copy_partial    bank 5
+F_RINGADDR  = 18*3                  ; ringaddr        bank 5 (the sprite prologue)
+F_MARKDIRTY = 19*3                  ; mark_dirty      bank 5 (the logic; X in farx)
+F_INIT5     = 20*3                  ; init5 + take_over, bank 5's low corner (start-up)
+NFAR        = 21                    ; (the table is full: $40 bytes)
 .assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"

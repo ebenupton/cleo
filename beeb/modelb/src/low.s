@@ -148,6 +148,5 @@ mapshr:   .res 1                    ; 8 - lw (maprow, maprow5)
 MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
 MUSON:    .res 1                    ; the tune plays: the interrupt stub steps it
 MUSTICK:  .res 1                    ; a frame's step is due: the vsync's sound_tick says so
-GLYPHBUF: .res 8                    ; one font glyph, for the menus (bank 5 both sides)
 title_res: .res 1                   ; the menu overlay and the title pack are in banks 5
                                     ; and 6 (a level load replaces both; menu.s reads it)

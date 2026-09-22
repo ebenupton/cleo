@@ -1,4 +1,4 @@
-// Lock-step differential test: the Master (a 21-row MODE 1 build, build/ref_mode1_20)
+// Lock-step differential test: the Master (a 21-row MODE 1 build, build/ref_mode1_21)
 // and the Model B run the same level with the same keys at every frame_top, and the
 // whole logic state -- the player, the level counters and all 16 object arrays -- is
 // compared after every frame.  The first difference is reported with its frame.
@@ -11,7 +11,7 @@ const BEEB = "/Users/ebenupton/cleo/beeb";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 
 // ---- the Master
-const M = await openMaster({ disc: `${BEEB}/build/ref_mode1_20/cleo.ssd`, labels: `${BEEB}/build/ref_mode1_20/labels.txt`, level: LEVEL });
+const M = await openMaster({ disc: `${BEEB}/build/ref_mode1_21/cleo.ssd`, labels: `${BEEB}/build/ref_mode1_21/labels.txt`, level: LEVEL });
 const MA = M.A, mcpu = M.cpu;
 if (MA.LV_OBJST === undefined) MA.LV_OBJST = 0xb000;   // a constant on the Master (engine.s)
 // ---- the Model B: booted from its disc, the title skipped and the level chosen by the

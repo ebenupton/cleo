@@ -6,10 +6,10 @@ st=json.load(open('build/state.json'))
 ram=open('build/ram.bin','rb').read(); tiles=open('build/tiles.bin','rb').read(); mp=open('build/map.bin','rb').read(); halves=open('build/halves.bin','rb').read()
 inc=json.load(open('build/level.json'))          # bcheck2.mjs dumps the level's shape with its tiles and map
 MAPW=int(inc['MAPW']); MAPH=int(inc['MAPH'])
-RINGROWS, RINGCHARS = 22, 22*80
+RINGROWS, RINGCHARS = 23, 23*80
 print(st)
 only = st['curbuf'] if len(sys.argv)>1 and sys.argv[1]=='cur' else None
-for buf,base in ((0,0x0b00),(1,0x4500)):
+for buf,base in ((0,0x0a80),(1,0x4680)):
     if only is not None and buf!=only: continue
     if not st['valid'][buf]: print(f'buffer {buf}: never drawn'); continue
     wcx, wcy = st['bufcx'][buf], st['bufcy'][buf]
@@ -17,7 +17,7 @@ for buf,base in ((0,0x0b00),(1,0x4500)):
     kept=[k for k in st.get('kept',[]) if k['keep'] and buf==st['curbuf']]
     def inkept(cx,cy):
         return any(k['cx']<=cx<k['cx']+k['w'] and k['cy']<=cy<k['cy']+k['h'] for k in kept)
-    for r in range(21):                      # the 20 visible rows and the composed one
+    for r in range(22):                      # the 21 visible rows and the composed one
         cy=wcy+r
         for c in range(80):
             cx=wcx+c; tx,ty=cx>>2,cy>>1

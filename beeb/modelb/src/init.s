@@ -70,13 +70,7 @@ start6:
 
         .segment "LGCCODE"
 start7:
-        lda #0
-        ldx #$7F                    ; the two main-RAM holes below the mirrors: the
-:       sta $0800,x                 ; buffers' state and the dirty lists (the Master
-        sta $4200,x                 ; zeroes its tables at start too)
-        dex
-        bpl :-
-        jsr init5                   ; the records, spbank, the buffers' state
+        jsr lvreset                 ; the records, the buffers' state
         ; what the Master's init_tables sets that is this bank's or the zero page's
         stz MUSON
         stz SFXREQ
@@ -97,6 +91,6 @@ start7:
         inc curbuf
         jsr build_sections
         stz curbuf
-        jsr take_over
+        farjsr F_INIT5              ; bank 5's state, spbank, then the interrupt takeover
         jsr disc_init               ; a 1770 board: reset, and the head found
         jmp game_main               ; the title menu loads its overlay and starts the tune

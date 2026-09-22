@@ -5,7 +5,8 @@ from the plan below: no level folds a tile beyond the Master's set fold (the
 plan's item 4 was dropped as a wrong trade), so bank 5 is nearly all tiles and the
 prologue, the records, copy_partial and calc_ring went to bank 7 and the shared
 render code to a main-RAM block bought with one display row (20 visible rows, not
-21); the objects are read from main RAM by level_init rather than kept in bank 7;
+21) -- and later that day, once half tiles had shrunk the tile sets, the block went
+into bank 5 and the row came back (21); the objects are read from main RAM by level_init rather than kept in bank 7;
 the disc holds 28 files, LDPROG by the boot files rather than last.*
 
 The one-level demo (modelb/, DESIGN.md) becomes the whole game: title, help, level

@@ -16,9 +16,9 @@
         .assert * = FARTAB, error, "the far table must be at FARTAB in every bank"
         FAR BANK_SPR,   spr4::ds_entry      ; F_SPRLOOP4
         FAR BANK_MAP,   spr6::ds_entry      ; F_SPRLOOP6
-        FAR BANK_TILES, drawrect_rows       ; F_DRAWROWS
+        FAR BANK_TILES, drawrect_clip       ; F_DRAWRECT  (erase_old's rects)
         FAR BANK_TILES, render5             ; F_RENDER5
-        FAR BANK_LVL,   blank_below         ; F_BLANK5 (unused)
+        FAR BANK_TILES, select_backbuf      ; F_SELBB
         FAR BANK_TILES, title_menu          ; F_TITLE     (the menu overlay)
         FAR BANK_TILES, help_screen         ; F_HELP
         FAR BANK_TILES, level_select        ; F_LEVELSEL
@@ -26,13 +26,15 @@
         FAR BANK_LVL,   build_sections      ; F_BUILDSECT
         FAR BANK_LVL,   blank_palette       ; F_BLANKPAL
         FAR BANK_LVL,   set_palette         ; F_SETPAL
-        FAR BANK_LVL,   wait_flip           ; F_WAITFLIP
         FAR BANK_LVL,   load_title_b        ; F_LOADTITLE
-        FAR BANK_LVL,   music_start         ; F_MUSSTART
         FAR BANK_LVL,   music_stop          ; F_MUSSTOP
         FAR BANK_LVL,   div10_16            ; F_DIV10
         FAR BANK_LVL,   drawsprite          ; F_DRAWSPR
         FAR BANK_LVL,   calc_ring           ; F_CALCRING
+        FAR BANK_TILES, copy_partial        ; F_COPYPART
+        FAR BANK_TILES, ringaddr            ; F_RINGADDR  (the sprite prologue)
+        FAR BANK_TILES, mark_dirty_x        ; F_MARKDIRTY (the logic)
+        FAR BANK_TILES, init5               ; F_INIT5     (start-up: with take_over)
         .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"
         .res $40 - 3*NFAR
 .endmacro
@@ -45,10 +47,11 @@
         .segment "COMMON7"
         COMMON_TABLES
 
-; ---------------------------------------------------------------- main RAM: the small tables
-; The Master builds these at start-up; here they are assembled, in the main RAM block
-; every bank sees (MRX), beside the code that indexes them from wherever it runs.
-        .segment "MRXCODE"
+; ---------------------------------------------------------------- the small tables
+; The Master builds these at start-up; here they are assembled, each in the bank of
+; the code that indexes it: the sprite multiples and the row multiples are bank 7's
+; (the prologue, the records, the chain), the ring modulus bank 5's (ringaddr).
+        .segment "LGCDATA"
 sprmul5:
 .repeat MAXSPR, i
         .byte i*5
@@ -61,6 +64,7 @@ mulrowhi:
 .repeat RINGROWS, i
         .byte >(i*ROWCHARS)
 .endrepeat
+        .segment "TILCODE"
 ringmodtab:                         ; A = a map char row (brought under RINGROWS*5 by
 .repeat RINGROWS*5, i               ; the ringmod macro) -> its ring slot
         .byte i .mod RINGROWS
@@ -105,11 +109,11 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
 ; follows, X = the last (0..79).  Those chars sit in the last slot row at wcxm on;
 ; only the ones up to char 79 are in it (the rest wrapped to slot row 0), and only
 ; those from wcxm are ever read (display.s).  Called by the tile blitter's head and
-; the sprite prologue, so it is in main RAM.
-        .segment "FRAG2"
+; copy_partial (bank 5: mirdirty5) and the sprite prologue (bank 7: mirdirty): one
+; body, twice.
+        .segment "TILBSS"
 menurec:   .res 10                  ; the menus' one sprite record (the prologue writes it)
-        .segment "MRXCODE"
-mirdirty:
+.macro MIRDIRTY_BODY
         clc
         adc wcxm
         cmp #ROWCHARS
@@ -135,17 +139,34 @@ mirdirty:
         sta mirhi,y
 :       rts
 @out:   rts
-
-; the once-only part of the Master's init_tables that is this bank's, falling into
-; the per-level clear its load_level does (the records are bank 7's, the buffers'
-; state main RAM's)
+.endmacro
+        .segment "TILCODE"
+mirdirty5:
+        MIRDIRTY_BODY
         .segment "LGCCODE"
+mirdirty:
+        MIRDIRTY_BODY
+
+; the once-only part of the Master's init_tables that is bank 5's or low RAM's,
+; then the interrupt takeover -- in bank 5's low corner, where once-only code costs
+; the level nothing.  Bank 7's per-level clear (lvreset) is load_level's.
+        .import __TILBSS_RUN__: absolute, __TILBSS_SIZE__: absolute
+        .segment "TILLOW"
 init5:
+        .assert __TILBSS_SIZE__ < 256, error, "init5 zeroes TILBSS with an 8-bit index"
+        ldx #0
+        txa
+:       sta __TILBSS_RUN__,x        ; the ring work's state: zero, as the Master's tables
+        inx
+        cpx #<__TILBSS_SIZE__
+        bne :-
         lda #BANK_SPR
         sta spbank
         lda #$FF
         sta BUF_BARQ
         sta BUF_BARQ+1
+        jmp take_over
+        .segment "LGCCODE"
 lvreset:
         stz BUF_VALID
         stz BUF_VALID+1
