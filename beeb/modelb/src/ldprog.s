@@ -555,7 +555,7 @@ lv_load:
         beq :+
         jmp @dir
 :
-        ; ---- the flat tiles' pairs, into main RAM for the blitter's fill
+        ; ---- the flat tiles' pairs, into bank 5 with the blitter's fill
         lda #7
         jsr section
         lda #<FLATTAB
@@ -566,7 +566,7 @@ lv_load:
         sta cnt
         lda #0
         sta cnt+1
-        ldx #BANK_LVL
+        ldx #BANK_TILES
         jsr bcopy
         ; ---- the bar template, straight into place
         lda #<BARADDR

@@ -119,7 +119,11 @@ gather counts slots from the page they start in.  Grinding the crossings after -
 bank 7's own arithmetic ringaddr, a direct-switch thunk with a common entry vector
 at $BFFD in banks 4/5/6 for the sprite loop and the erased rect, mapstrip paging
 bank 5 back outright -- took the far calls a frame from 19 to 3 and the frame from
-99.5k to 98.7k cycles: the thunk was never the cost, the drawing is.
+99.5k to 98.7k cycles: the thunk was never the cost, the drawing is.  And a check that
+reads its expectation from the thing it checks proves nothing: the loader still
+copied FLATTAB into bank 7 after the table moved to bank 5, the sky was black, and
+the ring check read the zeroed table from bank 5 and agreed with the zeroed ring.
+The screenshot caught it; bring2 now asserts the two solid pairs.
 
 **The 8271 latches "not ready".**  The title's idle let the controller unload the
 head (DFS's specify says after a few index pulses), so the level's first read came

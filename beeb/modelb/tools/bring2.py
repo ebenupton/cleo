@@ -8,6 +8,7 @@ inc=json.load(open('build/level.json'))          # bcheck2.mjs dumps the level's
 MAPW=int(inc['MAPW']); MAPH=int(inc['MAPH'])
 RINGROWS, RINGCHARS = 23, 23*80
 print(st)
+assert inc['flat'][28:32] == [0x0F, 0x0F, 0, 0], ('FLATTAB in bank 5 is not the packer\'s: the solids are wrong', inc['flat'][28:32])
 only = st['curbuf'] if len(sys.argv)>1 and sys.argv[1]=='cur' else None
 for buf,base in ((0,0x0a80),(1,0x4680)):
     if only is not None and buf!=only: continue
