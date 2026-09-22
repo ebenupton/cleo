@@ -51,9 +51,9 @@ because they are copied while it is still being read).
 | Bank | Fixed | Per level (the loader's) | During the menus |
 |---|---|---|---|
 | 4 | the far table, SWAPTAB + MASKTAB0..3 at $8300, the sprite row loop at $BBE0 (`SPRITE_LOOPS 1, 0`) | images and masks $8800-$BBDF, masks alone in the hole $8040-$82FF | (untouched) |
-| 5 | the far table; the tile blitter's row loop, scroll_validate, draw_dirty and blank_below at $BB40, the gather above them | the tiles from $8100, the Master's own count for the level (up to 233: L4B fills the bank to the byte) | the menu overlay from $8100: menu.s, the tune and its player, the font |
+| 5 | the far table; the tile blitter's row loop, scroll_validate and draw_dirty at $BB40, the gather above them | the tiles from $8100, the Master's own count for the level less its flat ones (up to 227: L4B) | the menu overlay from $8100: menu.s, the tune and its player, the font |
 | 6 | the far table, the start-up and the low-RAM image at $8040, MASKTAB0..3 at $8400, the row loop without the mirrored blitter at $BD60 (`SPRITE_LOOPS 0, 1`) | the map at $8800 (up to 8K), the sprite directory above it (`sprtab`), the rest of the sprites, more in the hole $8180-$8300 and the page SWAPTAB would take | the title pack at $8900, over the map |
-| 7 | the far table, the entry vector, the sprite records below $8300, the logic, the game loop, `render_frame` and `render_core`, the sprite prologue and SPRMASK, draw_sprites, copy_partial, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state | the level's tables at $8300: attr, altcls, the header | (untouched) |
+| 7 | the far table, the entry vector, the sprite records below $8300, the logic, the game loop, `render_frame` and `render_core`, the sprite prologue and SPRMASK, draw_sprites, copy_partial, blank_below, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
 Every bank starts with the same far table at $8000 (banks.s `COMMON_TABLES`), so the
 thunk in low RAM reads it whatever bank is paged in; the small tables more than one
@@ -63,15 +63,20 @@ the `ringmod` macro brings a row (0..255) under that with two subtractions.  The
 mask tables are assembled too.
 
 Bank 5 is nearly all tiles because the level's tile count is the Master's own (no
-folding beyond the set fold convert.py already does): L4B's 233 tiles are 14.9K.
-So only the tile blitter's row loop and the three routines that call it run there,
+folding beyond the set fold convert.py already does): L4B's 233 tiles would be 14.9K.
+So only the tile blitter's row loop and the two routines that call it run there,
 and the tiles' addresses are arithmetic (64 bytes each from $8100, page aligned)
-rather than a table beside them; the two solid ids carry their fill in the gathered
-high byte (bit 6 fill, bit 4 cyan).  drawrect's head -- the mirror and partial-row
+rather than a table beside them.  A *flat* tile -- one colour's dither, which in
+MODE 1 is the same two bytes alternating down every char -- is not stored at all:
+it gets an id from FLAT0 (240) and two bytes in FLATTAB (main RAM, the loader's),
+the two solids being the table's last entries, and the row loop fills a run of them
+from the pair (the gather flags a fill in the high byte's bit 6 and indexes the pair
+with the low byte).  Every level has five to seven such tiles, 62 bytes each --
+Commando's `drawfill`, from the other port.  drawrect's head -- the mirror and partial-row
 notes, the per-rect invariants, the ring address, the map row pointer -- is main
 RAM's, and the rows are one far call; the sprite prologue and its records went to
 bank 7 with the logic that queues the sprites; match_sprites and erase_old are main
-RAM's and run with bank 7 paged (the records).  A frame is two far calls into bank
+RAM's and run with bank 7 paged (the records).  A frame is one far call into bank
 5, one per tile rectangle, one per sprite.
 
 A far call (`farjsr`, low.s) pushes the caller's bank, a return into `fcret` and the
@@ -115,9 +120,10 @@ The disc (`build.sh`, 28 files):
     TITLE                  the title pack
     L0..L15                per level (tools/assets.py): a table of section offsets,
                            the header, the objects, attr and altcls by tile id, the
-                           tile list (set-file index per level tile id), the sprite
+                           tile list (set-file index per stored tile id), the sprite
                            placement list (item, bank, address, mask address), the
-                           RLE map (c < 128: c+1 literals; c >= 128: a byte c-126 times)
+                           RLE map (c < 128: c+1 literals; c >= 128: a byte c-126
+                           times), the flat tiles' pairs
 
 Sector numbers are baked in by `mkdfs.py table` (files.inc); the build runs twice
 so they settle, and a third time to check that they have.
@@ -135,8 +141,9 @@ A level load, palette black, interrupts off (`load_level_b`):
    file: SPRAND images keep their masks in SPR)
 5. the directory is built into bank 6 from the template (`sprdir.bin`: the
    Master's entries less their pointers, which become the item and its kind), the
-   pointer and the bank-6 flag filled in from the placement; SPRMASK (bank 7) likewise
-6. the bar template is read to $0300
+   pointer and the bank-6 flag filled in from the placement; SPRMASK (bank 7,
+   the ids below the boxes) likewise
+6. the flat tiles' pairs go to FLATTAB; the bar template is read to $0300
 7. back in bank 7, the game's `load_level` goes on from the header as on the Master
 
 The title's load (`load_title_b`) is the same machinery: the overlay to bank 5 at
@@ -152,8 +159,9 @@ most of it is seeks, which the disc order keeps short.
 
 `tools/assets.py` packs all sixteen levels and prints a fit report.  Per level it
 picks the tiles the map (and the animations) can show -- the Master's own set, no
-level folds a tile the Master shows (the room is 233, which L4B fills exactly) --
-numbers them, writes attr/altcls by that numbering,
+level folds a tile the Master shows -- gives the flat ones ids from FLAT0 and the
+rest ids from 0 (the room is 233; L4B stores 227), writes attr/altcls by that
+numbering,
 and places the level's sprites in banks 4 and 6 largest first: mirrored images to
 bank 4 (SWAPTAB is there), box stars and trampolines to bank 6 (the copy blitter
 is there), the rest wherever they fit, a mask always in its image's bank.  MAXSPR
@@ -189,9 +197,8 @@ freezes the game; ESCAPE again resumes, RETURN leaves for the title.
 - the mirror's bookkeeping: three MODELB blocks (drawrect, drawsprite, copy_partial)
   call `mirdirty` with the window columns written to the row the mirror follows;
   `mirror_copy` copies only those.
-- `render_frame`'s ring work is `render_core`, bank 7's: two far calls into bank 5
-  (`render5` = scroll_validate + draw_dirty, and blank_below), the rest main RAM's
-  or its own; the chain and the mirror are built here; `bar_bg` only resets the
+- `render_frame`'s ring work is `render_core`, bank 7's: one far call into bank 5
+  (`render5` = scroll_validate + draw_dirty), the rest main RAM's or its own; the chain and the mirror are built here; `bar_bg` only resets the
   digit cache.
 - `init_maprows`, `music_init` are nothing; the `t_`/`m_` bridges are names or
   `FARSUB`s.

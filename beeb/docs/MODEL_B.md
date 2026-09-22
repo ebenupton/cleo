@@ -103,6 +103,17 @@ prologue.  Wrong trade: the tiles are the picture.  Bank 5 is nearly all tiles n
 and a display row paid for the main RAM -- 22 ring slots, 20 visible, which also
 makes the rings whole pages and the fold a byte compare again.
 
+**Flat tiles are two bytes.**  Commando's `drawfill`, read across from the other
+port: a tile that is one colour's dither is, in MODE 1, the same two bytes down
+every char, so it is an id and a pair in a table, and the row loop fills a run of
+them instead of copying 64 bytes.  Cleo's art is textured, so it is only five to
+seven tiles a level (~400 bytes of bank 5), but it is lossless and the check tools
+(`bring2.py`) render from the pair table too.  The other Commando ideas were
+measured and left: a flip bit per cell would flip the ordered dither's phase
+against the neighbours (zero of Cleo's tiles are exact mirrors of another once
+dithered, 11-17 are at the source-art level); its 4-bit palette-indexed sprites
+would free ~8-10K of the sprite banks, which is not where the pressure is.
+
 **A whole-span clear must know about holes.**  The menus' `clear_ring` swept the
 display from the bar to the ring end; with the ring tables and the buffers' state
 living in two holes inside that span, the title piece was drawn through a zeroed

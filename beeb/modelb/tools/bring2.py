@@ -24,7 +24,8 @@ for buf,base in ((0,0x0b00),(1,0x4500)):
             if inkept(cx,cy): continue
             if ty>=MAPH or tx>=MAPW: continue
             t=mp[ty*MAPW+tx]
-            if t>=254: exp=bytes([0x0F if t==254 else 0])*8
+            if t>=240:                          # a flat tile (the solids among them): two
+                p=inc['flat'][(t-240)*2:(t-240)*2+2]; exp=bytes(p*4)   # bytes alternating
             else:
                 o=t*64+(cy&1)*32+(cx&3)*8; exp=tiles[o:o+8]
             rc=((cy%RINGROWS)*80+cx)%RINGCHARS

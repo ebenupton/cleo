@@ -401,6 +401,8 @@ PART_LO:   .res 2
 PART_HI:   .res 2
 BUF_BARQ:  .res 2
 spbank:    .res 1
+FLATTAB:   .res 32                  ; the level's flat tiles: (even line, odd line) by
+                                    ; id - FLAT0, the loader's; the solids are the last two
         .segment "FRAG2"            ; main RAM ($4200): the dirty lists
 DIRTYLIST: .res 2*2*16
 DIRTYCNT:  .res 2
@@ -649,11 +651,13 @@ drawrect_rows:
 @gl:
   .if MODELB
         ; the tiles are contiguous from TILES (page aligned, 64 bytes each), so the
-        ; address is arithmetic: no table beside them.  The two solid ids carry a fill
-        ; in the high byte: bit 6 says fill, bit 4 cyan over black.
+        ; address is arithmetic: no table beside them.  Ids from FLAT0 are fills -- a
+        ; flat tile is two bytes alternating down every char (FLATTAB, the loader's;
+        ; the two solids are the last two entries) -- flagged by bit 6 of the high
+        ; byte, the low byte indexing the pair.
         lda MAPBUF,y
-        cmp #SOLID_CYAN
-        bcs @gsolid
+        cmp #FLAT0
+        bcs @gflat
         tax
         lsr
         lsr
@@ -669,12 +673,10 @@ drawrect_rows:
         dey
         bpl @gl
         bmi @gdone
-@gsolid:
-        ldx #$D0                    ; cyan
-        cmp #SOLID_BLACK
-        bne :+
-        ldx #$C0                    ; black
-:       txa
+@gflat: sbc #FLAT0                  ; (C is set)
+        asl
+        sta GATHERL,y
+        lda #$C0
         sta GATHERH,y
         dey
         bpl @gl
@@ -913,10 +915,13 @@ drawrect_rows:
         rts
         ; ---- solid tile: store one constant, no bank switch, no source pointer
   .if MODELB
-@solid: lda GATHERH,x               ; bit 4 of the fill byte: cyan
+@solid: ldy GATHERL,x               ; the flat pair: even lines from tp, odd from tp+1
+        lda FLATTAB,y               ; (tp is otherwise unused on this path)
+        sta tp
+        lda FLATTAB+1,y
+        sta tp+1
   .else
 @solid: lda GATHERL,x
-  .endif
         and #$10
         beq :+
   .if MODE1
@@ -925,6 +930,7 @@ drawrect_rows:
         lda #$3C                    ; both pixels colour 6 (cyan); else 0 = black
   .endif
 :       sta tp                      ; fill value (tp is otherwise unused on this path)
+  .endif
         lda #4
         sec
         sbc rc_subc
@@ -950,9 +956,30 @@ drawrect_rows:
         adc #(256 - >RINGEND)
         bcs @fslow
   .endif
+  .if MODELB
+:       lda tp+1                    ; the entries are odd lines
+  .else
 :       lda tp
+  .endif
         jmpx @ft-2
 @ft:    .word @f7, @f15, @f23, @f31
+  .if MODELB                        ; the pair alternates down the lines: each entry
+.macro FIL1 k                       ; is an odd line, so the cascade's parity is fixed
+        ldy #k
+        lda tp+1
+        sta (sp),y
+.endmacro
+.macro FILN                         ; the next line down is even: tp
+        dey
+        lda tp
+        sta (sp),y
+.endmacro
+.macro FILO                         ; and the one below odd: tp+1
+        dey
+        lda tp+1
+        sta (sp),y
+.endmacro
+  .else
 .macro FIL1 k
         ldy #k
         sta (sp),y
@@ -961,42 +988,61 @@ drawrect_rows:
         dey
         sta (sp),y
 .endmacro
+.macro FILO
+        dey
+        sta (sp),y
+.endmacro
+  .endif
 @f31:   FIL1 31
         FILN
+        FILO
         FILN
+        FILO
         FILN
-        FILN
-        FILN
-        FILN
+        FILO
         FILN
 @f23:   FIL1 23
         FILN
+        FILO
         FILN
+        FILO
         FILN
-        FILN
-        FILN
-        FILN
+        FILO
         FILN
 @f15:   FIL1 15
         FILN
+        FILO
         FILN
+        FILO
         FILN
-        FILN
-        FILN
-        FILN
+        FILO
         FILN
 @f7:    FIL1 7
         FILN
+        FILO
         FILN
+        FILO
         FILN
-        FILN
-        FILN
-        FILN
+        FILO
+  .if MODELB
+        lda tp                      ; line 0 is even
+  .endif
         staz sp                     ; line 0 non-indexed
         jmp @advsp
 @fslow: lda rc_n
         sta tmp2
-@fsc:   lda tp
+@fsc:
+  .if MODELB
+        FIL1 7
+        FILN
+        FILO
+        FILN
+        FILO
+        FILN
+        FILO
+        lda tp
+  .else
+        lda tp
         ldy #7
         sta (sp),y
         dey
@@ -1011,6 +1057,7 @@ drawrect_rows:
         sta (sp),y
         dey
         sta (sp),y
+  .endif
         staz sp                     ; line 0 non-indexed
 :                                   ; KEPT, unreferenced, so the anonymous-label
         ; count through drawrect is unchanged
@@ -2519,7 +2566,7 @@ copy_partial:
 ; the map's bottom row it is whatever that never-drawn slot last held.  So when the
 ; window sits on the bottom row, blank the slot, once per buffer per arrival.
 ; ============================================================================
-        PLACE "CODE", "TILCODE"     ; Model B: bank 5 (F_BLANK5)
+        PLACE "CODE", "LGCCODE"     ; Model B: bank 7 (drawrect's head is main RAM's)
 blank_below:
         lda wfine
         bne @no

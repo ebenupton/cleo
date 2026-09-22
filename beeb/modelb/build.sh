@@ -30,7 +30,7 @@ for pass in 1 2 3; do
     python3 - <<'EOF'
 import re
 want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
-        'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE',
+        'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE','FLATTAB',
         'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG']
 addr = {}
 for l in open('build/labels.txt'):

@@ -18,7 +18,7 @@
         FAR BANK_MAP,   spr6::ds_entry      ; F_SPRLOOP6
         FAR BANK_TILES, drawrect_rows       ; F_DRAWROWS
         FAR BANK_TILES, render5             ; F_RENDER5
-        FAR BANK_TILES, blank_below         ; F_BLANK5
+        FAR BANK_LVL,   blank_below         ; F_BLANK5 (unused)
         FAR BANK_TILES, title_menu          ; F_TITLE     (the menu overlay)
         FAR BANK_TILES, help_screen         ; F_HELP
         FAR BANK_TILES, level_select        ; F_LEVELSEL
@@ -136,9 +136,16 @@ mirdirty:
 :       rts
 @out:   rts
 
-; the per-level clear the Master's load_level does in main RAM: bank 7's here (the
-; records are its, the buffers' state is main RAM's)
+; the once-only part of the Master's init_tables that is this bank's, falling into
+; the per-level clear its load_level does (the records are bank 7's, the buffers'
+; state main RAM's)
         .segment "LGCCODE"
+init5:
+        lda #BANK_SPR
+        sta spbank
+        lda #$FF
+        sta BUF_BARQ
+        sta BUF_BARQ+1
 lvreset:
         stz BUF_VALID
         stz BUF_VALID+1
@@ -147,15 +154,6 @@ lvreset:
         stz DIRTYCNT
         stz DIRTYCNT+1
         rts
-
-; and the once-only part of its init_tables that is this bank's
-init5:
-        lda #BANK_SPR
-        sta spbank
-        lda #$FF
-        sta BUF_BARQ
-        sta BUF_BARQ+1
-        jmp lvreset
 
 ; ---------------------------------------------------------------- bank 7: the level
         .segment "LGCLVL"           ; the level's tables, loaded by ldprog.s (the
@@ -180,8 +178,9 @@ LV_BNEXT:   .res 256                ; to 255 of them, as the Master's tables
 LV_BINSTAR: .res BINMAX
 LV_BINOTH:  .res BINMAX
         .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"
-SPRMASK:    .res 2*118              ; mask plane address by sprite id: the loader's,
-                                    ; read by the prologue (this bank)
+SPRMASK:    .res 2*BOXID0           ; mask plane address by sprite id (the boxes, from
+                                    ; BOXID0, have none): the loader's, read by the
+                                    ; prologue (this bank)
 
 ; ---------------------------------------------------------------- bank 5: the menu overlay
         .segment "MNUDATA"

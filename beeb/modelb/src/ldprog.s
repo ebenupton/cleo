@@ -371,9 +371,12 @@ lv_load:
         lda (lp),y
         ora #$10
         sta (dst),y
-:       lda #BANK_LVL               ; SPRMASK is bank 7's, with the prologue
-        sta ROMSEL_CPY
+:       lda #BANK_LVL               ; SPRMASK is bank 7's, with the prologue; the
+        sta ROMSEL_CPY              ; box ids (the last 15) have no entry
         sta ROMSEL
+        lda nt
+        cmp #16
+        bcc @dnext
         ldy #4
         lda (src),y
         ldy #0
@@ -394,6 +397,9 @@ lv_load:
         lda #BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
+        lda nt
+        cmp #16
+        bcc @dnext
         lda #0
         tay
         sta (ent),y
@@ -424,6 +430,19 @@ lv_load:
         beq :+
         jmp @dir
 :
+        ; ---- the flat tiles' pairs, into main RAM for the blitter's fill
+        lda #7
+        jsr section
+        lda #<FLATTAB
+        sta dst
+        lda #>FLATTAB
+        sta dst+1
+        lda #32
+        sta cnt
+        lda #0
+        sta cnt+1
+        ldx #BANK_LVL
+        jsr bcopy
         ; ---- the bar template, straight into place
         lda #<BARADDR
         sta dst
@@ -434,7 +453,7 @@ lv_load:
         rts                         ; (the tile addresses are arithmetic: drawrect's gather)
 
 ; ---- helpers
-section:                            ; A = section 0..6 -> src = its start in the staged file
+section:                            ; A = section 0..7 -> src = its start in the staged file
         asl
         tay
         lda STAGE_LVL,y
