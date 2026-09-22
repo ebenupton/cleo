@@ -3,38 +3,46 @@
 ; and the 65C02 spellings (src/cpu.inc).  The engine, the logic, the game loop and
 ; the menus are ../src/engine.s, logic.s, game.s and menu.s, assembled with MODELB=1.
 ;
-; Main RAM is the display: $0300-$7FFF is the bar, two mirrors and two 23-slot rings
-; (engine.s, screen shape).  What is left is zero page and $0100-$02FF: the stack, the
-; far-call thunk, the interrupt stub, the map helpers and the sprite list.  The code
-; lives in four sideways banks, each with the data its inner loops read:
+; Main RAM is the display: $0300-$7BFF is the bar, two mirrors and two 22-slot rings
+; (engine.s, screen shape).  What is left is zero page, $0100-$02FF (the stack, the
+; far-call thunk, the interrupt stub, the map helpers, the sprite list), $7C00-$7FFF
+; (the code every bank calls: the tile blitter's head, ringaddr, the record scans,
+; select_backbuf, mark_dirty, and the small tables) and two holes below the mirrors
+; (the buffers' state, the dirty lists).  The code lives in four sideways banks, each
+; with the data its inner loops read:
 ;   4  most of the sprite images and masks, the mask tables, the sprite row loop
-;   5  the tile blitter, the sprite prologue and the records, then from MENU_BASE
-;      either the level's tiles or the menu overlay (the menus, the tune, the font)
+;   5  the level's tiles (the Master's own count, up to 233) with the tile blitter's
+;      row loop, scroll_validate, draw_dirty and blank_below above them; the menu
+;      overlay (the menus, the tune, the font) goes over the tiles for the menus
 ;   6  the map, the sprite directory and the rest of the sprites with their own copy
 ;      of the row loop; the title pack sits over the map during the menus
-;   7  the logic, the game loop, the level's tables, the display driver, the
-;      interrupt's work, the sound, the HUD, the disc driver
+;   7  the logic, the game loop, the level's tables, the sprite prologue and its
+;      records, copy_partial, the display driver, the interrupt's work, the sound,
+;      the HUD, the disc driver
 ; Every level is gathered from the disc into the banks by the loader (ldprog.s),
 ; which runs in main RAM while the palette is black.  docs/PLAN_MODELB_FULL.md.
 ; ============================================================================
 VSPEG     = 3                       ; vsyncs a rendered frame, as the Master
 
-FARTAB    = $8000                   ; every bank carries the same far table here,
-sprmul5   = $8040                   ; and these small tables (banks.s COMMON_TABLES)
-mulrowlo  = $8060
-mulrowhi  = $8078
-ringmodtab = $8090                  ; 256 entries: a 128-tile map has 256 char rows
-COMMON_END = $8190
+FARTAB    = $8000                   ; every bank carries the same far table here
+                                    ; (banks.s); the small tables more than one bank
+                                    ; indexes (sprmul5, the row multiples, the ring
+                                    ; modulus) are in main RAM at MRX
 SWAPTAB   = $8300                   ; static in bank 4: dot reversal (bank 6 draws
 MASKTAB0  = $8400                   ; nothing mirrored, so that page holds data there);
 MASKTAB1  = MASKTAB0 + $100         ; the four mask-phase pages in both sprite banks
 MASKTAB2  = MASKTAB0 + $200
 MASKTAB3  = MASKTAB0 + $300
-BANKCODE  = $8190                   ; bank 7's entry vector, where the loader jumps
-MENU_BASE = $9500                   ; bank 5: the tiles, or the menu overlay
-TILES     = MENU_BASE               ; this level's tiles, 64 bytes each, by tile id
+BANKCODE  = $8040                   ; bank 7's entry vector, where the loader jumps
+TILES     = $8100                   ; bank 5: this level's tiles, 64 bytes each, by id,
+                                    ; page aligned (drawrect's gather is arithmetic)
+MENU_BASE = TILES                   ; or the menu overlay, over them
 LV_MAP    = MAP6                    ; bank 6, $8800: row major, up to 8K; the sprite
                                     ; directory follows it (sprtab, set by the loader)
+LV_OBJS   = $7800                   ; the level's objects, 6 bytes each: main RAM (the
+                                    ; display, black while they are read: level_init
+                                    ; reads them once, before the first render)
+MRX       = $7C00                   ; main RAM: the code and tables every bank calls
 
 ; ---------------------------------------------------------------- zero page
 ; The Master's zero page: engine.s's .zeropage ends at $A1, the logic's temps are
@@ -73,8 +81,10 @@ VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36
 ; ---------------------------------------------------------------- the loader
 NMIPAGE   = $0D00                   ; the disc transfer routine, while a load runs
 LDPROG    = $0E00                   ; the load-time program (ldprog.s), read there
-STAGE     = $1C00                   ; a shared file staged here, 16K at most ($5B80)
-STAGE_LVL = $6000                   ; the level's own file, 8K at most
+STAGE     = $1C00                   ; a shared file staged here, 16K at most ($5BFF)
+STAGE_LVL = $5C00                   ; the level's own file, under 7K (tools/assets.py
+                                    ; asserts it): the objects go to LV_OBJS ($7800)
+                                    ; while it is still being read
 FDC8271_CMD = $FE80                 ; the 8271: command/status, parameter/result, data
 FDC8271_PAR = $FE81
 FDC8271_DAT = $FE84
@@ -86,27 +96,27 @@ FDC1770_DAT = $FE87
 
 ; ---------------------------------------------------------------- far calls
 ; The index of a (bank, address-1) entry in FARTAB (modelb/src/banks.s).  Everything
-; that crosses a bank boundary goes through one of these: once a frame for the
-; render, once a sprite for its row loop, and the rare rest.  A goes in and comes
-; back, Y survives, X does not.
-F_RENDCORE  = 0*3                   ; render_frame's middle: the ring work, bank 5
-F_SPRLOOP4  = 1*3                   ; the sprite row loop   bank 4
-F_SPRLOOP6  = 2*3                   ;                       bank 6
-F_MARKDIRTY = 3*3                   ; mark_dirty            bank 5 (A = tx, Y = ty)
-F_LVRESET   = 4*3                   ; the records and dirty lists cleared, bank 5
-F_INIT5     = 5*3                   ; bank 5's start-up
-F_TITLE     = 6*3                   ; the menus: bank 5's overlay, present only while
-F_HELP      = 7*3                   ;   title_res says so
-F_LEVELSEL  = 8*3
-F_WINLOSE   = 9*3
-F_BUILDSECT = 10*3                  ; build_sections, bank 7 (the menus call it)
-F_BLANKPAL  = 11*3                  ; blank_palette   bank 7
-F_SETPAL    = 12*3                  ; set_palette     bank 7
-F_WAITFLIP  = 13*3                  ; wait_flip       bank 7
-F_LOADTITLE = 14*3                  ; load_title      bank 7: the overlay and the pack
-F_MUSSTART  = 15*3                  ; music_start     bank 7
-F_MUSSTOP   = 16*3                  ; music_stop      bank 7
-F_DIV10     = 17*3                  ; div10_16        bank 7
-F_DRAWSPR   = 18*3                  ; drawsprite      bank 5 (bank 7's HUD never needs
-NFAR        = 19                    ;   it; the menus, in bank 5, call it directly)
-.assert 3*NFAR <= sprmul5 - FARTAB, error, "the far table has outgrown its page"
+; that crosses a bank boundary goes through one of these: two a frame for the ring
+; work in bank 5, one a sprite for its row loop, one a rect for the tile blitter's
+; rows, and the rare rest.  A goes in and comes back, Y survives, X does not.
+F_SPRLOOP4  = 0*3                   ; the sprite row loop   bank 4
+F_SPRLOOP6  = 1*3                   ;                       bank 6
+F_DRAWROWS  = 2*3                   ; drawrect's row loop   bank 5 (from the head in main RAM)
+F_RENDER5   = 3*3                   ; scroll_validate + draw_dirty, bank 5
+F_BLANK5    = 4*3                   ; blank_below           bank 5
+F_TITLE     = 5*3                   ; the menus: bank 5's overlay, present only while
+F_HELP      = 6*3                   ;   title_res says so
+F_LEVELSEL  = 7*3
+F_WINLOSE   = 8*3
+F_BUILDSECT = 9*3                   ; build_sections, bank 7 (the menus call it)
+F_BLANKPAL  = 10*3                  ; blank_palette   bank 7
+F_SETPAL    = 11*3                  ; set_palette     bank 7
+F_WAITFLIP  = 12*3                  ; wait_flip       bank 7
+F_LOADTITLE = 13*3                  ; load_title      bank 7: the overlay and the pack
+F_MUSSTART  = 14*3                  ; music_start     bank 7
+F_MUSSTOP   = 15*3                  ; music_stop      bank 7
+F_DIV10     = 16*3                  ; div10_16        bank 7
+F_DRAWSPR   = 17*3                  ; drawsprite      bank 7 (the menus' title pieces)
+F_CALCRING  = 18*3                  ; calc_ring       bank 7 (the menus)
+NFAR        = 19
+.assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"

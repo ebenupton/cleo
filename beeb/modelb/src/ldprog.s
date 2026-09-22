@@ -153,8 +153,8 @@ lv_load:
 :       dex
         bne :--
 @objdone:
-        lda #<LV_OBJS
-        sta dst
+        lda #<LV_OBJS               ; main RAM (level_init reads them once, before
+        sta dst                     ; the first render)
         lda #>LV_OBJS
         sta dst+1
         ldx #BANK_LVL
@@ -371,7 +371,7 @@ lv_load:
         lda (lp),y
         ora #$10
         sta (dst),y
-:       lda #BANK_TILES
+:       lda #BANK_LVL               ; SPRMASK is bank 7's, with the prologue
         sta ROMSEL_CPY
         sta ROMSEL
         ldy #4
@@ -391,7 +391,7 @@ lv_load:
 :       sta (dst),y
         dey
         bpl :-
-        lda #BANK_TILES
+        lda #BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         lda #0
@@ -431,11 +431,7 @@ lv_load:
         sta dst+1
         lda #FI_BAR
         jsr readfile
-        ; ---- the tile address table, in bank 5 with the tiles
-        lda #BANK_TILES
-        sta ROMSEL_CPY
-        sta ROMSEL
-        jmp build_tileaddr          ; ends in pagelogic: bank 7, and its rts is ours
+        rts                         ; (the tile addresses are arithmetic: drawrect's gather)
 
 ; ---- helpers
 section:                            ; A = section 0..6 -> src = its start in the staged file

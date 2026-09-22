@@ -149,15 +149,49 @@ pairtab: .byte $00, $05, $0A, $0F
 
 ; ---------------------------------------------------------------- menu screen helpers
 ; clear the current back buffer ring ($3000-$7FFF) to black
+  .if MODELB
+; Model B: the bar, both mirrors and both rings -- around the two main-RAM holes
+; below the mirrors, which hold the ring tables and the buffers' state (engine.s,
+; FRAG1/FRAG2): each mirror's page is cleared from its second half only.
+        .assert (<MIRR_A) = $80 && (<MIRR_B) = $80, error, "the mirrors start mid-page"
+clear_ring:
+        lda #>BARADDR
+        ldx #(>MIRR_A - >BARADDR)   ; the bar's pages
+        jsr @pages
+        lda #>MIRR_A
+        jsr @half                   ; the half page mirror A starts in
+        lda #>MIRR_A + 1
+        ldx #(>RINGEND_A - >MIRR_A - 1)
+        jsr @pages                  ; the rest of mirror A and ring A
+        lda #>MIRR_B
+        jsr @half
+        lda #>MIRR_B + 1
+        ldx #(>RINGEND_B - >MIRR_B - 1)
+@pages: sta w16+1                   ; X pages from page A
+        lda #0
+        sta w16
+        tay
+@l:     sta (w16),y
+        iny
+        bne @l
+        inc w16+1
+        dex
+        bne @l
+        rts
+@half:  sta w16+1                   ; the top half of page A
+        lda #0
+        sta w16
+        ldy #$80
+@h:     sta (w16),y
+        iny
+        bne @h
+        rts
+  .else
 clear_ring:
         stz w16
         lda #>BARADDR               ; from the bar, not the ring base: the bar sits below
         sta w16+1                   ; $3000 now and the menu still wants it black
-  .if MODELB
-        ldx #((RINGEND_B - BARADDR) >> 8)   ; the bar, both mirrors and both rings
-  .else
         ldx #((RINGEND - BARADDR) >> 8)
-  .endif
         ldy #0
         tya
 @l:     sta (w16),y
@@ -167,6 +201,7 @@ clear_ring:
         dex
         bne @l
         rts
+  .endif
 
 ; load the title pack into bank 6 unless it is still there (a level load replaces it);
 ; the palette goes black first so neither the disc load nor the screen build-up shows

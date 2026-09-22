@@ -12,14 +12,13 @@
 .macro FAR bank, target
         .byte bank, <(target-1), >(target-1)
 .endmacro
-.macro COMMON_TABLES full           ; the far table alone in banks 4 and 6, whose
+.macro COMMON_TABLES                ; the far table: the same $40 bytes in every bank
         .assert * = FARTAB, error, "the far table must be at FARTAB in every bank"
-        FAR BANK_TILES, render_core         ; F_RENDCORE
         FAR BANK_SPR,   spr4::ds_entry      ; F_SPRLOOP4
         FAR BANK_MAP,   spr6::ds_entry      ; F_SPRLOOP6
-        FAR BANK_TILES, mark_dirty_far      ; F_MARKDIRTY
-        FAR BANK_TILES, lvreset             ; F_LVRESET
-        FAR BANK_TILES, init5               ; F_INIT5
+        FAR BANK_TILES, drawrect_rows       ; F_DRAWROWS
+        FAR BANK_TILES, render5             ; F_RENDER5
+        FAR BANK_TILES, blank_below         ; F_BLANK5
         FAR BANK_TILES, title_menu          ; F_TITLE     (the menu overlay)
         FAR BANK_TILES, help_screen         ; F_HELP
         FAR BANK_TILES, level_select        ; F_LEVELSEL
@@ -32,42 +31,40 @@
         FAR BANK_LVL,   music_start         ; F_MUSSTART
         FAR BANK_LVL,   music_stop          ; F_MUSSTOP
         FAR BANK_LVL,   div10_16            ; F_DIV10
-        FAR BANK_TILES, drawsprite          ; F_DRAWSPR
+        FAR BANK_LVL,   drawsprite          ; F_DRAWSPR
+        FAR BANK_LVL,   calc_ring           ; F_CALCRING
         .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"
-  .if full
-        .res sprmul5 - FARTAB - 3*NFAR
-        .assert * = sprmul5, error
+        .res $40 - 3*NFAR
+.endmacro
+        .segment "COMMON4"
+        COMMON_TABLES
+        .segment "COMMON5"
+        COMMON_TABLES
+        .segment "COMMON6"
+        COMMON_TABLES
+        .segment "COMMON7"
+        COMMON_TABLES
+
+; ---------------------------------------------------------------- main RAM: the small tables
+; The Master builds these at start-up; here they are assembled, in the main RAM block
+; every bank sees (MRX), beside the code that indexes them from wherever it runs.
+        .segment "MRXCODE"
+sprmul5:
 .repeat MAXSPR, i
         .byte i*5
 .endrepeat
-        .res $20 - MAXSPR
-        .assert * = mulrowlo, error
+mulrowlo:
 .repeat RINGROWS, i
         .byte <(i*ROWCHARS)
 .endrepeat
-        .res $18 - RINGROWS
-        .assert * = mulrowhi, error
+mulrowhi:
 .repeat RINGROWS, i
         .byte >(i*ROWCHARS)
 .endrepeat
-        .res $18 - RINGROWS
-        .assert * = ringmodtab, error
-.repeat 256, i                      ; A = a map char row -> its ring slot: 256 rows
-        .byte i .mod RINGROWS       ; is the tallest map (128 tiles: L3B, L7B)
+ringmodtab:                         ; A = a map char row (brought under RINGROWS*5 by
+.repeat RINGROWS*5, i               ; the ringmod macro) -> its ring slot
+        .byte i .mod RINGROWS
 .endrepeat
-        .assert * = COMMON_END, error
-  .else
-        .res $40 - 3*NFAR
-  .endif
-.endmacro
-        .segment "COMMON4"
-        COMMON_TABLES 0
-        .segment "COMMON5"
-        COMMON_TABLES 1
-        .segment "COMMON6"
-        COMMON_TABLES 0
-        .segment "COMMON7"
-        COMMON_TABLES 1
 
 ; ---------------------------------------------------------------- the sprite banks
 ; MASKTAB0..3 at the same address in both banks that hold sprite data, so the
@@ -103,17 +100,15 @@
         .segment "SPR6MASK"
         MASK_TABLES
 
-; ---------------------------------------------------------------- bank 5: the tile bank
-        .segment "TILBSS"
-LV_PAGE0:  .res 512                 ; tile id -> address (build_tileaddr)
-SPRMASK:   .res 2*118               ; mask plane address by sprite id: the loader's
-menurec:   .res 10                  ; the menus' one sprite record (the prologue writes it)
-
+; ---------------------------------------------------------------- main RAM: the mirror's notes
 ; the mirror's range: A = the first window column written of the row the mirror
 ; follows, X = the last (0..79).  Those chars sit in the last slot row at wcxm on;
 ; only the ones up to char 79 are in it (the rest wrapped to slot row 0), and only
-; those from wcxm are ever read (display.s).
-        .segment "TILCODE"
+; those from wcxm are ever read (display.s).  Called by the tile blitter's head and
+; the sprite prologue, so it is in main RAM.
+        .segment "FRAG2"
+menurec:   .res 10                  ; the menus' one sprite record (the prologue writes it)
+        .segment "MRXCODE"
 mirdirty:
         clc
         adc wcxm
@@ -141,7 +136,9 @@ mirdirty:
 :       rts
 @out:   rts
 
-; the per-level clear the Master's load_level does in main RAM
+; the per-level clear the Master's load_level does in main RAM: bank 7's here (the
+; records are its, the buffers' state is main RAM's)
+        .segment "LGCCODE"
 lvreset:
         stz BUF_VALID
         stz BUF_VALID+1
@@ -161,10 +158,8 @@ init5:
         jmp lvreset
 
 ; ---------------------------------------------------------------- bank 7: the level
-        .segment "LGCLVL"           ; the level's tables, loaded by ldprog.s
-LV_OBJS:    .res 6*OBJN             ; 6 bytes an object (page aligned: <LV_OBJS = 0
-        .align 256                  ;   is what the logic assumes)
-LV_ATTR0:   .res 256                ; attribute (kill/push) by tile id
+        .segment "LGCLVL"           ; the level's tables, loaded by ldprog.s (the
+LV_ATTR0:   .res 256                ; objects go to main RAM: LV_OBJS, defs.inc)
 LV_ALTCLS:  .res 256                ; alt class by tile id
 LV_ATTR1 = LV_ALTCLS
 LV_HDR:     .res 32                 ; header: lw, lh, start, exit, nobj, the special
@@ -185,6 +180,8 @@ LV_BNEXT:   .res 256                ; to 255 of them, as the Master's tables
 LV_BINSTAR: .res BINMAX
 LV_BINOTH:  .res BINMAX
         .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"
+SPRMASK:    .res 2*118              ; mask plane address by sprite id: the loader's,
+                                    ; read by the prologue (this bank)
 
 ; ---------------------------------------------------------------- bank 5: the menu overlay
         .segment "MNUDATA"

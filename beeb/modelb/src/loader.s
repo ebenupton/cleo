@@ -8,7 +8,6 @@
         .setcpu "6502"
         .include "defs_ld.inc"      ; BANKCODE, dsk_type, dsk_drv (build.sh)
 OSFILE  = $FFDD
-OSFIND  = $FFCE
 OSGBPB  = $FFD1
 OSBYTE  = $FFF4
 OSWRCH  = $FFEE
@@ -17,6 +16,7 @@ ROMSELC = $F4
 BUF     = $2000
 zsrc    = $70
 zdst    = $72
+ztab    = $74
 
         .segment "CODE"
 start:
@@ -82,72 +82,55 @@ start:
         sta ROMSELC
         sta ROMSEL
 @fdcdone:
-        ; ---- the bank pieces: BANKS is a count, then (bank, address, length) x count,
-        ; then the pieces in that order
-        lda #$40                    ; open for input
-        ldx #<fname
-        ldy #>fname
-        jsr OSFIND
-        sta gbpb2                   ; the handle
-        lda #1
-        sta gbpb2+5                 ; one byte: the count
-        lda #<BUF
-        sta gbpb2+1
-        lda #>BUF
-        sta gbpb2+2
-        jsr rd
+        lda #22                     ; MODE 1 first: the OS sets the ULA and the screen size
+        jsr OSWRCH                  ; latch, the game reprograms only the CRTC -- and the
+        lda #1                      ; main-RAM pieces below land in what is now screen
+        jsr OSWRCH
+        ; ---- the pieces: BANKS is a count, then (bank, address, length) x count, then
+        ; the pieces in that order; bank 0 means main RAM (no paging).  The whole file
+        ; is loaded at once (OSFILE: a byte at a time through OSGBPB took the 1770 DFS
+        ; twenty seconds) into what is now screen memory, and the pieces copied out.
+        lda #$FF                    ; OSFILE 255: load, address from the block
+        ldx #<block
+        ldy #>block
+        jsr OSFILE
         lda BUF
         sta npieces
-        asl                         ; * 5
+        lda #<(BUF+1)               ; the table
+        sta ztab
+        lda #>(BUF+1)
+        sta ztab+1
+        lda npieces                 ; the first piece follows the table: BUF + 1 + 5n
+        asl
         asl
         adc npieces
-        sta gbpb2+5
-        lda #<ptab
-        sta gbpb2+1
-        lda #>ptab
-        sta gbpb2+2
-        jsr rd
-        ldx #0
-@piece: stx idx
-        txa
-        asl
-        asl
-        adc idx                     ; * 5
-        tay
-        lda ptab+3,y
-        sta gbpb2+5
-        lda ptab+4,y
-        sta gbpb2+6
-        lda #<BUF
-        sta gbpb2+1
-        lda #>BUF
-        sta gbpb2+2
-        lda ptab,y
-        sta pbank
-        lda ptab+1,y
-        sta zdst
-        lda ptab+2,y
-        sta zdst+1
-        jsr rd
-        lda #<BUF
+        sec                         ; (+1)
+        adc #<BUF
         sta zsrc
         lda #>BUF
+        adc #0
         sta zsrc+1
-        ldy idx                     ; the length again, for the copy
-        lda idx
-        asl
-        asl
-        adc idx
-        tay
-        lda ptab+3,y
+@piece: ldy #0
+        lda (ztab),y
+        sta pbank
+        iny
+        lda (ztab),y
+        sta zdst
+        iny
+        lda (ztab),y
+        sta zdst+1
+        iny
+        lda (ztab),y
         sta plen
-        lda ptab+4,y
+        iny
+        lda (ztab),y
         sta plen+1
         sei                         ; the copy: an interrupt that pages a ROM in
         lda pbank                   ; restores from $F4, and would otherwise take ours out
+        beq :+                      ; (main RAM: no paging)
         sta ROMSELC
         sta ROMSEL
-        ldy #0
+:       ldy #0
 @cp:    lda plen
         ora plen+1
         beq @cpdone
@@ -169,15 +152,16 @@ start:
         sta ROMSELC
         sta ROMSEL
         cli
-        ldx idx
-        inx
-        cpx npieces
+        lda ztab
+        clc
+        adc #5
+        sta ztab
+        bcc :+
+        inc ztab+1
+:       dec npieces
         beq :+
         jmp @piece
 :
-        lda #0                      ; close it
-        ldy gbpb2
-        jsr OSFIND
         ; ---- the driver's configuration, into bank 7
         sei
         lda #7
@@ -191,22 +175,12 @@ start:
         sta ROMSELC
         sta ROMSEL
         cli
-        lda #22                     ; MODE 1: the OS sets the ULA and the screen size
-        jsr OSWRCH                  ; latch; the game reprograms only the CRTC
-        lda #1
-        jsr OSWRCH
         sei
         lda #7
         sta ROMSELC
         sta ROMSEL
         jmp BANKCODE                ; bank 7's entry vector
 
-rd:     lda #4                      ; OSGBPB 4: read bytes from the file's pointer
-        ldx #<gbpb2
-        ldy #>gbpb2
-        jmp OSGBPB
-
-idx:      .byte 0
 oldbank:  .byte 0
 npieces:  .byte 0
 pbank:    .byte 0
@@ -218,8 +192,9 @@ gbpb:     .byte 0                   ; OSGBPB 6: the data address is all it reads
           .word drvname, $FFFF
           .res 8
 drvname:  .res 8                    ; <len> "<drive>" <len> <boot option>
-gbpb2:    .byte 0                   ; handle
-          .word 0, $FFFF            ; data address
-          .word 0, 0                ; bytes
-          .word 0, 0                ; pointer (unused for call 4)
-ptab:     .res 5*16                 ; the piece table
+block:    .word fname
+          .dword $FFFF0000 | BUF    ; load address: the $FFFF names the I/O
+                                    ; processor, and DFS wants it even with no tube
+          .dword $00000000          ; exec address: 0 here means "use the one above"
+          .dword $00000000
+          .dword $00000000

@@ -16,7 +16,7 @@ if (lab.TILES === undefined) lab.TILES = lab.MENU_BASE;
   writeFileSync("build/level.json", JSON.stringify({ MAPW: 1 << lw, MAPH: 1 << lh, NTILES: nt, level: LEVEL })); }
 // 'pre': stop at draw_sprites (bank 5), where the current buffer's ring is pure map
 const pre = (process.argv[4] || "") === "pre";
-const stopAt = pre ? lab.draw_sprites : lab.frame_top, stopBank = pre ? 5 : 7;
+const stopAt = pre ? lab.draw_sprites : lab.frame_top, stopBank = 7;   // (draw_sprites is bank 7's now)
 const h = cpu.debugInstruction.add((p) => p === stopAt && cpu.readmem(0xf4) === stopBank);
 for (let f = 0; f < frames; f++) {
   cpu.writemem(lab.keys, keys);
@@ -26,7 +26,7 @@ h.remove();
 const b = Buffer.alloc(0x8000); for (let a = 0; a < 0x8000; a++) b[a] = cpu.readmem(a);
 writeFileSync("build/ram.bin", b);
 const r16 = (a) => cpu.readmem(a) | (cpu.readmem(a + 1) << 8);
-const st = inbank(5, () => ({ wcx: r16(lab.wcx), wcy: cpu.readmem(lab.wcy), wfine: cpu.readmem(lab.wfine), curbuf: cpu.readmem(lab.curbuf),
+const st = inbank(7, () => ({ wcx: r16(lab.wcx), wcy: cpu.readmem(lab.wcy), wfine: cpu.readmem(lab.wfine), curbuf: cpu.readmem(lab.curbuf),
   bufcx: [r16(lab.BUF_CX), r16(lab.BUF_CX + 2)], bufcy: [cpu.readmem(lab.BUF_CY), cpu.readmem(lab.BUF_CY + 1)],
   valid: [cpu.readmem(lab.BUF_VALID), cpu.readmem(lab.BUF_VALID + 1)],
   px: r16(lab.px), py: r16(lab.py), frame: cpu.readmem(lab.frame), wcxm: cpu.readmem(0xe5), mrow: cpu.readmem(0xe4),

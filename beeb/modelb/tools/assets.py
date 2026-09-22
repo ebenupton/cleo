@@ -39,7 +39,7 @@ def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
 SOLID_CYAN, SOLID_BLACK = 254, 255
-VISLINES = 168                              # 21 rows (engine.s, MODELB)
+VISLINES = 160                              # 20 rows (engine.s, MODELB)
 
 # ---------------------------------------------------------------- the banks' fixed shape
 # Code sits at the top of banks 4 and 6 and the data below it can be any size; the
@@ -51,10 +51,9 @@ B6_HOLE = (0x8180, 0x8300)                  # bank 6: below the tables, above th
 B6_SWAP = (0x8300, 0x8400)                  #   the page SWAPTAB would take: data here
 B6_TOP = 0xBD60                             #   the row loop and copy blitter above this
 MAP6 = 0x8800                               #   the map, then the directory, then images
-B5_TILES_END = 0xC000
-B5_CODE_TOP = 0x8100 + 0x0D00               # bank 5's code and BSS: cleo_b.cfg holds them
-                                            # to this, so TILES starts at $8E00
-TILE_ROOM = (B5_TILES_END - B5_CODE_TOP) // 64     # 200 tiles
+TILES_BASE = 0x8100                         # bank 5: the tiles from here (page aligned)
+B5X = 0xBB40                                #   up to the row loop's region (cleo_b.cfg)
+TILE_ROOM = (B5X - TILES_BASE) // 64        # 233: the Master's largest level (L4B) exactly
 
 SPRFILE_SPR, SPRFILE_AND, SPRFILE_BOX = 0, 1, 2   # the loader's source file ids
 
@@ -392,6 +391,7 @@ def pack_level(lv, sub):
         o = off + len(body)
         table += bytes([o & 255, o >> 8])
         body += data
+    assert off + len(body) <= 0x7800 - 0x5C00, (name, off + len(body))   # STAGE_LVL..LV_OBJS (defs.inc)
     out('L%d' % (lv * 2 + sub), table + body)
     stats = dict(name=name, ntiles=NTILES, folded=len(extra), damage=dmg, w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],

@@ -62,7 +62,7 @@ load_level:
         sbc #0
         sta maxwy+1
   .if MODELB
-        farjsr F_LVRESET            ; the records and the dirty lists are bank 5's
+        jsr lvreset                 ; the records (bank 7) and the buffers' state (main RAM)
   .else
         stza BUF_VALID
         stza BUF_VALID+1

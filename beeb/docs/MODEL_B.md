@@ -96,6 +96,26 @@ Master's music ever moves.
 byte order had to stay.  The B's own sector table is in its load-time program
 (`ldprog.s`), generated the same way (`mkdfs.py table`).
 
+**Nothing the Master shows is folded away.**  The first full-game build folded a few
+tiles on the big outdoor levels to fit a bank that also held the blitter and the
+prologue.  Wrong trade: the tiles are the picture.  Bank 5 is nearly all tiles now
+(L4B fills it to the byte), the code around them went to bank 7 and to main RAM,
+and a display row paid for the main RAM -- 22 ring slots, 20 visible, which also
+makes the rings whole pages and the fold a byte compare again.
+
+**A whole-span clear must know about holes.**  The menus' `clear_ring` swept the
+display from the bar to the ring end; with the ring tables and the buffers' state
+living in two holes inside that span, the title piece was drawn through a zeroed
+row table straight into zero page ($F4 among the victims).  Anything that walks
+the display as one run needs the layout, not the bounds.
+
+**A staging area and a destination can overlap in time.**  The level file staged at
+$6000 ran past $7800, where its own objects were copied while its map, at the end of
+the file, was still to be decoded: the last two rows of L4B's map were garbage, and
+lock step passed because the player never reached them.  The byte-for-byte compare
+of the banks against the packer's data caught it; the file is staged lower now and
+the packer asserts the bound.
+
 **The menus assume the Master's window.**  `clear_items` cleared ring rows to 27
 through RINGLO/HI, tables 23 entries long on the B: the stores landed on zero page,
 one of them on the ROMSEL copy.  The screens' y positions assume 108 px of window;
@@ -104,14 +124,15 @@ sources" includes the parts that were never assembled for the other target.
 
 ## Verification that stands
 
-- B logic: `modelb/tools/bdiff.mjs frames seed level` -- a 21-row Master
-  (`-D VISROWSDEF=21`, `build/ref_mode1_21`) and the B in lock step, all logic
+- B logic: `modelb/tools/bdiff.mjs frames seed level` -- a 20-row Master
+  (`VISROWSDEF=20`, `build/ref_mode1_20`) and the B in lock step, all logic
   state compared after every frame; `BMODEL=B1770` for the 1770 machine.  600
-  frames on L0B (8271) and L1B (1770) at the time of writing.
+  frames on L0B (8271), L1B (1770), L7B, L4B (1770) and 400 on L0A at the time
+  of writing.
 - B loading: `modelb/tools/bcheck2.mjs` dumps the level's tiles and map from the
   banks (compared against the packer's files), `bring2.py` the ring against them
   and the mirror against the ring; a scratch script compared every placed image,
   mask, directory entry and SPRMASK entry against the shared files: all exact.
 - B cost: `modelb/tools/bwork2.mjs frames seed level`: L0B median 77k cycles a
-  frame, p90 145k; L1B 70k / 122k.
+  frame, p90 146k; L4B 92k / 154k (11-13 far calls a frame).
 - Both controllers and both drives boot to the title under jsbeeb (`bboot.mjs`).

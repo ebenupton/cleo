@@ -75,7 +75,7 @@ irq_handler:
         rti
 
 ; ---------------------------------------------------------------- the tile blitter's map
-; drawrect runs in bank 5 and reads the map in bank 6: the row pointer is arithmetic
+; drawrect's row loop runs in bank 5 and reads the map in bank 6: the row pointer is arithmetic
 ; (a map is 32, 64, 128 or 256 tiles wide: row * 2^lw is row * 256 shifted right by
 ; mapshr = 8 - lw, which the loader sets from the header) and the strip copy is the
 ; one bank switch a tile row costs.
@@ -102,7 +102,9 @@ maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 <<
         sta ptr+1
         rts
 
-mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF
+mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; the caller's bank back
+        lda ROMSEL_CPY
+        pha
         lda #BANK_MAP
         sta ROMSEL_CPY
         sta ROMSEL
@@ -111,13 +113,13 @@ mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF
         sta MAPBUF,y
         dey
         bpl :-
-        lda #BANK_TILES
+        pla
         sta ROMSEL_CPY
         sta ROMSEL
         rts
 
 ; the sprite directory (and the title pack's) is in bank 6 and the prologue in bank
-; 5: an entry's eight bytes come across here, and ptr is left pointing at the copy.
+; 7: an entry's eight bytes come across here, and ptr is left pointing at the copy.
 ; (mapstrip's loop, with its count: rc_nt is drawrect's, which is not running.)
 dirfetch:                           ; ptr -> the entry in bank 6
         lda #7

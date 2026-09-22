@@ -29,7 +29,7 @@ for pass in 1 2 3; do
     # what the loaders need from the game: its addresses
     python3 - <<'EOF'
 import re
-want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst','build_tileaddr',
+want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE',
         'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG']
 addr = {}
@@ -46,7 +46,7 @@ with open('build/defs_ld.inc', 'w') as f:
             f.write('; %s: not in labels.txt (a constant?)\n' % n)
 EOF
     # the constants ld65 does not list
-    grep -E '^(MENU_BASE|TILES|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE)\s*=' src/defs.inc build/assets.inc \
+    grep -E '^(MENU_BASE|TILES|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE|LV_OBJS)\s*=' src/defs.inc build/assets.inc \
         | sed 's/^[^:]*://; s/;.*//' >> build/defs_ld.inc
     echo 'BARADDR = $0300' >> build/defs_ld.inc
     ca65 --cpu 6502 -I build -I src -o build/ldprog.o src/ldprog.s -l build/ldprog.lst
@@ -57,9 +57,10 @@ EOF
     python3 - <<'EOF'
 import os
 pieces = [(4, 0x8000, 'b4c.bin'), (4, 0x8300, 'b4t.bin'), (4, 0xBBE0, 'b4x.bin'),
-          (5, 0x8000, 'b5c.bin'), (5, 0x8190, 'b5.bin'),
+          (5, 0x8000, 'b5c.bin'), (5, 0xBB40, 'b5x.bin'),
           (6, 0x8000, 'b6c.bin'), (6, 0x8040, 'b6l.bin'), (6, 0x8400, 'b6t.bin'), (6, 0xBD60, 'b6x.bin'),
-          (7, 0x8000, 'b7a.bin'), (7, 0x8A00, 'b7.bin')]
+          (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin'),
+          (0, 0x7C00, 'mrx.bin')]                          # main RAM: the code every bank calls
 tab, body = bytearray([len(pieces)]), bytearray()
 for bank, addr, fn in pieces:
     d = open(os.path.join('build', fn), 'rb').read()

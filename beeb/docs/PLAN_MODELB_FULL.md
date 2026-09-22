@@ -1,10 +1,12 @@
 # Cleo on the Model B: the full game
 
-*Built 22 Sep 2026; modelb/DESIGN.md describes what was built.  Two departures
-from the plan below: the sprite prologue stayed in bank 5 (the menu overlay goes
-over the tiles only, so bank 5's code serves both images and nothing needs to be
-assembled twice), which leaves 172 tiles of room; and the disc holds 28 files,
-LDPROG by the boot files rather than last.*
+*Built 22 Sep 2026; modelb/DESIGN.md describes what was built.  The departures
+from the plan below: no level folds a tile beyond the Master's set fold (the
+plan's item 4 was dropped as a wrong trade), so bank 5 is nearly all tiles and the
+prologue, the records, copy_partial and calc_ring went to bank 7 and the shared
+render code to a main-RAM block bought with one display row (20 visible rows, not
+21); the objects are read from main RAM by level_init rather than kept in bank 7;
+the disc holds 28 files, LDPROG by the boot files rather than last.*
 
 The one-level demo (modelb/, DESIGN.md) becomes the whole game: title, help, level
 select, all sixteen levels loaded from disc between levels, win/lose, hi-score.  The

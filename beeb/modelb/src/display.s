@@ -406,7 +406,7 @@ build_sections:
 :       rts
 
 ; ---------------------------------------------------------------- the mirror
-        .segment "TILCODE"          ; bank 5: render_core's last step
+        .segment "LGCCODE"          ; bank 7: render_core's last step
 ; A copy of the ring's last slot row sits immediately below the ring base, so the
 ; one displayed row that straddles the ring end can be read as a single run.  Only
 ; the chars that row takes from it -- wcxm..79 -- need to be right, and when the

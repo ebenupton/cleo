@@ -70,7 +70,13 @@ start6:
 
         .segment "LGCCODE"
 start7:
-        farjsr F_INIT5              ; bank 5's records, spbank, the tile address table
+        lda #0
+        ldx #$7F                    ; the two main-RAM holes below the mirrors: the
+:       sta $0800,x                 ; buffers' state and the dirty lists (the Master
+        sta $4200,x                 ; zeroes its tables at start too)
+        dex
+        bpl :-
+        jsr init5                   ; the records, spbank, the buffers' state
         ; what the Master's init_tables sets that is this bank's or the zero page's
         stz MUSON
         stz SFXREQ

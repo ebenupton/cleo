@@ -60,7 +60,8 @@ transitions and the "BONUS LEVEL" banner sprite.
 `modelb/` builds the same game for a Model B with 64K of sideways RAM (four banks)
 from these sources with `MODELB=1`: `sh modelb/build.sh` writes `modelb/build/cleob.ssd`.
 All sixteen levels, loaded from the disc by the game's own driver (8271 or Acorn 1770,
-decided at boot), 21 visible rows, the menus in an overlay.  `modelb/DESIGN.md`.
+decided at boot), the Master's tiles unfolded, 20 visible rows, the menus in an
+overlay.  `modelb/DESIGN.md`.
 
 ## Layout
 
