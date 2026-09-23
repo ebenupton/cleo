@@ -3183,6 +3183,9 @@ render_frame:                       ; is render_core in bank 5
         jsr render_core
   .else
         jsr calc_ring
+  .ifdef PARALLAX
+        jsr pl_erase                ; the buffer still holds the line drawn into it
+  .endif                            ; two frames ago: take it out before anything else
         jsr match_sprites
         jsr erase_old
         jsr scroll_validate
@@ -3190,6 +3193,9 @@ render_frame:                       ; is render_core in bank 5
         jsr draw_sprites
         jsr copy_partial
         jsr blank_below
+  .ifdef PARALLAX
+        jsr pl_draw                 ; last, behind the sprites: sky pixels only
+  .endif
   .endif
         stza NSPR
   .if MODELB
@@ -3221,6 +3227,159 @@ wait_flip:
         bne wait_flip
         rts
 
+  .ifdef PARALLAX
+; ============================================================================
+; Parallax experiment (-D PARALLAX, Master): a 1:1 diagonal across the window, drawn
+; into the sky.  Window line L carries dot L: a dot right per scanline is 45 degrees
+; in game pixels (a game pixel is 2 dots by 2 lines).  Only a sky pixel takes the
+; line: the cell's map tile must be the solid sky fill and the pixel itself cyan --
+; the cyan holes in a sprite's box take it too, which puts the line behind the
+; sprite, and a sprite's own pixels stop it.  The line is in screen space and the
+; buffer in map space, so each buffer remembers the window the line was drawn at
+; and pl_erase walks that path first, turning its yellow back to cyan.  The buffer
+; is untouched between the two, so the old path is exact.
+; ============================================================================
+        .segment "TABLES"           ; the walker's cursor (zero page is full; only the
+pl_cx = w16                         ;  pointer needs it, and ringaddr's own w16 serves
+pl_cy:    .res 1                  ; map char row of the cell under the cursor
+pl_ln:    .res 1                  ; scanline within the cell, 0..7
+pl_dot:   .res 1                  ; dot within the byte, 0..3
+pl_l:     .res 1                  ; window lines left
+pl_mode:  .res 1                  ; bit 7: 1 = draw, 0 = erase
+pl_tile:  .res 1                  ; the map tile under the cursor
+        .code
+pl_state:                           ; per buffer: valid, wcx lo, wcx hi, wcy, wfine
+pl_valid: .byte 0, 0
+pl_ocxl:  .byte 0, 0
+pl_ocxh:  .byte 0, 0
+pl_ocy:   .byte 0, 0
+pl_ofine: .byte 0, 0
+pl_hi:    .byte $80, $40, $20, $10 ; a dot's high bit (yellow = both, cyan = low only)
+pl_lo:    .byte $08, $04, $02, $01
+pl_both:  .byte $88, $44, $22, $11
+pl_nothi: .byte $7F, $BF, $DF, $EF
+
+pl_erase:
+        ldx curbuf
+        lda pl_valid,x
+        beq @no
+        lda pl_ocxl,x
+        sta pl_cx
+        lda pl_ocxh,x
+        sta pl_cx+1
+        lda pl_ocy,x
+        sta pl_cy
+        lda pl_ofine,x
+        sta pl_ln
+        stz pl_mode
+        jmp pl_walk
+@no:    rts
+
+pl_draw:
+        ldx curbuf
+        lda wcx
+        sta pl_cx
+        sta pl_ocxl,x
+        lda wcx+1
+        sta pl_cx+1
+        sta pl_ocxh,x
+        lda wcy
+        sta pl_cy
+        sta pl_ocy,x
+        lda wfine
+        sta pl_ln
+        sta pl_ofine,x
+        lda #1
+        sta pl_valid,x
+        lda #$80
+        sta pl_mode
+        ; fall through
+; walk the path from (pl_cx, pl_cy, line pl_ln) for VISLINES lines
+pl_walk:
+        lda ROMSEL_CPY              ; maprow/mapbyte leave bank 7 paged: put back
+        pha                         ; whatever the render had
+        lda #VISLINES
+        sta pl_l
+        stz pl_dot
+        jsr @cell
+@line:  lda pl_tile
+        cmp #SOLID_CYAN
+        bne @skip
+        ldx pl_dot
+        lda (sp)
+        and pl_both,x
+        bit pl_mode
+        bmi @draw
+        cmp pl_both,x               ; erase: yellow -> cyan
+        bne @skip
+        lda (sp)
+        and pl_nothi,x
+        sta (sp)
+        bra @skip
+@draw:  cmp pl_lo,x                 ; draw: cyan -> yellow
+        bne @skip
+        lda (sp)
+        ora pl_hi,x
+        sta (sp)
+@skip:  dec pl_l
+        beq @done
+        inc pl_dot
+        lda pl_dot
+        cmp #4
+        bne :+
+        stz pl_dot
+        inc pl_cx
+        bne :+
+        inc pl_cx+1
+:       inc pl_ln
+        lda pl_ln
+        cmp #8
+        beq @newrow
+        inc sp                      ; the next line of the same cell: 8 bytes from
+        bne :+                      ; a multiple of 8, so no fold inside a cell
+        inc sp+1
+:       lda pl_dot
+        bne @line
+        lda sp                      ; a new column: its cell is 8 bytes on
+        clc
+        adc #8
+        sta sp
+        lda sp+1
+        adc #0
+        ringup sp
+        sta sp+1
+        jsr @tile
+        bra @line
+@newrow:
+        stz pl_ln
+        inc pl_cy
+        jsr @cell
+        bra @line
+@done:  pla
+        sta ROMSEL_CPY
+        sta ROMSEL
+        rts
+@cell:  lda pl_cy                   ; sp = screen address of (cx, cy) line ln (cx is
+        jsr ringaddr                ; w16 already), and the map row of cy
+        lda sp
+        clc
+        adc pl_ln
+        sta sp
+        bcc :+
+        inc sp+1
+:       lda pl_cy
+        lsr
+        jsr maprow
+@tile:  lda pl_cx+1                 ; tile column = cx >> 2 (a tile is four chars)
+        lsr
+        lda pl_cx
+        ror
+        lsr
+        tay
+        jsr mapbyte
+        sta pl_tile
+        rts
+  .endif
   .if MODELB
         .segment "LGCCODE"          ; the ring work: bank 7 drives it, and what reads the
 render_core:                        ; records stays here; bank 5 (the tiles, the ring

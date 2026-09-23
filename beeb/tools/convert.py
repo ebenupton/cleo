@@ -391,11 +391,52 @@ def parse_level(lv, sub):
     return dict(lw=lw, lh=lh, w=w, h=h, map=m, start=(sx, sy), exit=(ex, ey), objs=objs)
 
 
+# PARALLAX=1: level 0's sand dunes become sky, for the parallax experiments (the engine
+# draws its own background into the sky under -D PARALLAX).  A dune is a region of
+# sand-only tiles (the two faces and the sky-edge silhouettes) that the sky can reach
+# in the rows above the ground band; the row bound keeps the flood out of the pits,
+# whose sand walls are the same tiles.
+PARALLAX = os.environ.get('PARALLAX', '0') == '1'
+_DUNE_SKY = (136, 238, 255)
+_DUNE_SAND = {(255, 204, 85), (187, 119, 51), (221, 170, 85)}
+_DUNE_MAXROW = 22
+_DUNE_SKYTILE = 4                    # a pure-sky tile
+def strip_dunes(m):
+    from collections import deque
+    tidx, trgb, _ = load_indexed('til.png')
+    def kind(t):
+        c = {tuple(int(v) for v in trgb[i]) for i in np.unique(tidx[t * 8:t * 8 + 8])}
+        return 'sky' if c == {_DUNE_SKY} else 'sand' if c <= _DUNE_SAND | {_DUNE_SKY} else 'other'
+    kinds = {int(t): kind(int(t)) for t in np.unique(m) if t >= 0}
+    h, w = m.shape
+    seen = np.zeros((h, w), bool)
+    q = deque()
+    for y in range(h):
+        for x in range(w):
+            if m[y, x] >= 0 and kinds[int(m[y, x])] == 'sky':
+                seen[y, x] = True
+                q.append((y, x))
+    m = m.copy()
+    n = 0
+    while q:
+        y, x = q.popleft()
+        for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+            if (0 <= ny <= min(h - 1, _DUNE_MAXROW) and 0 <= nx < w and not seen[ny, nx]
+                    and m[ny, nx] >= 0 and kinds[int(m[ny, nx])] == 'sand'):
+                seen[ny, nx] = True
+                m[ny, nx] = _DUNE_SKYTILE
+                n += 1
+                q.append((ny, nx))
+    print('PARALLAX: %d dune cells -> sky' % n)
+    return m
+
 levels = {}
 used = set()
 for lv in range(8):
     for sub in (0, 1):
         L = parse_level(lv, sub)
+        if PARALLAX and lv == 0:
+            L['map'] = strip_dunes(L['map'])
         levels[(lv, sub)] = L
         used |= set(int(t) for t in np.unique(L['map']))
 used |= set(range(366, 374))   # vanishing block animation
