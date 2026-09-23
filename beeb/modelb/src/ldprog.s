@@ -24,6 +24,10 @@ PB_SPR     = PBANK
 PB_TILES   = PBANK + 1
 PB_MAP     = PBANK + 2
 PB_LVL     = PBANK + 3
+; A Solidisk or Watford board takes the bank a store goes to from a register of its own
+; (defs.inc BOARD_*): the game's code was patched for it at boot, this program reads
+; PBOARD and does it by hand -- pgbank pages the bank in A (X, Y kept), wrx sets the
+; write bank to the socket in X.  Not hot: a load makes a few dozen switches.
 ; zero page: the logic's transient temps, which a load may clobber
 src   = $A8                         ; 2
 dst   = $AA                         ; 2
@@ -104,6 +108,7 @@ plcopy: ldy #1
 ; copy cnt bytes from src (main RAM) to dst in bank X (a socket); bank 7 back afterwards
 bcopy:  stx ROMSEL_CPY
         stx ROMSEL
+        jsr wrx                     ; the write bank too (A is free here)
         ldy #0
         ldx cnt+1
         beq @tail
@@ -123,8 +128,29 @@ bcopy:  stx ROMSEL_CPY
         dex
         bne :-
 @done:  lda PB_LVL
-        sta ROMSEL_CPY
+        jsr pgbank
+        rts
+
+pgbank: sta ROMSEL_CPY              ; A = the socket to page (and to write to)
         sta ROMSEL
+        pha
+        txa
+        pha
+        tsx
+        lda $0102,x                 ; the socket again
+        tax
+        jsr wrx
+        pla
+        tax
+        pla
+        rts
+wrx:    lda PBOARD                  ; X = the socket a store should reach
+        beq @r
+        cmp #BOARD_SOLIDISK
+        beq @s
+        sta WRSEL_WATFORD,x         ; Watford: the address is the bank, the value nothing
+@r:     rts
+@s:     stx WRSEL_SOLIDISK          ; Solidisk: the bank on port B (the loader set DDRB)
         rts
 
 ; ---------------------------------------------------------------- a level
@@ -295,8 +321,7 @@ lv_load:
         sbc LV_HDR+28               ; full tiles at once, not from the next page)
         sta dst                     ; (dst: free until set below)
         lda PB_TILES
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         lda tmp
         sta half0
         lda tmp2
@@ -308,8 +333,7 @@ lv_load:
         lda dst
         sta halfsub
         lda PB_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         lda LV_HDR+28               ; the halves start slot HALFOFF into their page
         asl
         asl
@@ -380,9 +404,8 @@ lv_load:
         sta cnt+1
         ldx PB_TILES
         jsr bcopy
-        lda PB_TILES                 ; the fill reads them through two patched operands
-        sta ROMSEL_CPY
-        sta ROMSEL
+        lda PB_TILES
+        jsr pgbank
         pla
         sta HPAIR0+1
         sta HPAIR1+1
@@ -394,8 +417,7 @@ lv_load:
         bcc :+
         inc HPAIR1+1
 :       lda PB_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         ; ---- the sprites: each source file staged in turn, the placement list walked
         lda #0
         sta fnum
@@ -479,8 +501,7 @@ lv_load:
         jsr findplace               ; src -> the placement entry, or C set
         bcs @dnone
         lda PB_MAP
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         ldy #2
         lda (src),y
         ldy #0
@@ -503,9 +524,8 @@ lv_load:
         lda (lp),y
         ora #$10
         sta (dst),y
-:       lda PB_LVL                   ; SPRMASK is bank 7's, with the prologue; the
-        sta ROMSEL_CPY              ; box ids (the last 15) have no entry
-        sta ROMSEL
+:       lda PB_LVL
+        jsr pgbank              ; box ids (the last 15) have no entry
         lda nt
         cmp #16
         bcc @dnext
@@ -519,16 +539,14 @@ lv_load:
         sta (ent),y
         jmp @dnext
 @dnone: lda PB_MAP
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         lda #0
         ldy #7
 :       sta (dst),y
         dey
         bpl :-
         lda PB_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         lda nt
         cmp #16
         bcc @dnext
@@ -538,8 +556,7 @@ lv_load:
         iny
         sta (ent),y
 @dnext: lda PB_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         lda lp
         clc
         adc #8
@@ -674,9 +691,8 @@ findplace:                          ; item -> src = the placement entry; C = 1 i
 @found: clc
         rts
 unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c+1
-        lda PB_MAP                   ; literals follow; c >= 128 = the next byte c-126 times
-        sta ROMSEL_CPY
-        sta ROMSEL
+        lda PB_MAP
+        jsr pgbank
 @c:     lda dst+1
         cmp #>(MAP6 + $2000)        ; the map is 8K at most: stop there whatever the
         bcs @end                    ; stream says
@@ -715,8 +731,7 @@ unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c
         inc dst+1
 :       rts
 @end:   lda PB_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pgbank
         rts
 
 ; ---------------------------------------------------------------- the menus

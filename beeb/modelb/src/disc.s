@@ -12,7 +12,7 @@
 dsk_type: .res 1                    ; 0 = 8271, 1 = 1770 (loader.s decides at boot)
 dsk_drv:  .res 1                    ; 0 or 1: the drive DFS had current
 dsk_banks: .res 4                   ; the physical bank of each of banks 4..7 (loader.s;
-                                    ; start7 copies them to PBANK)
+dsk_board: .res 1                   ; start7 copies them to PBANK) and the board (PBOARD)
 ld_sec:   .res 2                    ; read_sectors: first sector, count, destination
 ld_n:     .res 1
 ld_dst:   .res 2

@@ -34,15 +34,19 @@ farcall:
         lda FARTAB,x
         sta ROMSEL_CPY
         sta ROMSEL
+        tax                         ; (X is reloaded below)
+        wrselx 0
         tsx
         lda $0106,x                 ; A as it came in
         rts
-fcret:  tax                         ; the target's A
-        pla
-        sta ROMSEL_CPY              ; the caller's bank
-        sta ROMSEL
+fcret:  sta fcA                     ; the target's A (Y must survive, X carries the bank)
+        pla                         ; the caller's bank
+        tax
+        stx ROMSEL_CPY
+        stx ROMSEL
+        wrselx 0
         pla                         ; (the A that went in)
-        txa
+        lda fcA
         rts
 
 ; ---------------------------------------------------------------- interrupts
@@ -57,9 +61,7 @@ irq_handler:
         sty irq_y
         lda ROMSEL_CPY
         pha
-        bankimm lda, BANK_LVL, 0
-        sta ROMSEL_CPY
-        sta ROMSEL
+        jsr pagelogic               ; bank 7, write bank too (VS2T_DEFAULT allows for it)
         jsr isr_body
         lda MUSTICK                 ; the vsync's sound_tick, while the tune plays; the
         beq @nomus                  ; T1 steps come through here too and must not count
@@ -68,10 +70,12 @@ irq_handler:
         bankimm lda, BANK_TILES, 0
         sta ROMSEL_CPY
         sta ROMSEL
-        jsr music_tick
+        jsr music_tick              ; (sets its own write bank: it is disc-loaded code)
 @nomus: pla
         sta ROMSEL_CPY
         sta ROMSEL
+        tax                         ; the interrupted code may store next
+        wrselx 0
         ldy irq_y
         ldx irq_x
         lda $FC
@@ -102,8 +106,8 @@ mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; bank 5 back (th
         sta MAPBUF,y
         dey
         bpl :-
-        bankimm lda, BANK_TILES, 0
-        sta ROMSEL_CPY
+        bankimm lda, BANK_TILES, 0  ; (the write bank: drawrect sets it after the call;
+        sta ROMSEL_CPY              ;  dirfetch goes on to pagelogic)
         sta ROMSEL
         rts
 
@@ -125,9 +129,9 @@ dirfetch:                           ; ptr -> the entry in bank 6
 ; table: page the bank, call its entry vector -- BANKENTRY, the same address in
 ; banks 4, 5 and 6: the sprite row loop in 4 and 6, drawrect_clip in 5 -- and page
 ; bank 7 back (pagelogic).  ~30 cycles against the thunk's ~90.
-callbank:                           ; A = the bank
-        sta ROMSEL_CPY
-        sta ROMSEL
+callbank:                           ; A = the bank (the write bank is set by the
+        sta ROMSEL_CPY              ; entry itself: ds_entry, drawrect_clip -- A still
+        sta ROMSEL                  ; holds the bank there)
         jsr BANKENTRY
         jmp pagelogic
 

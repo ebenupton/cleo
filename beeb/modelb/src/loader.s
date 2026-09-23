@@ -12,7 +12,8 @@
 ; four bytes this leaves in bank 7 (dsk_banks).
 ; ============================================================================
         .setcpu "6502"
-        .include "defs_ld.inc"      ; BANKCODE, dsk_type, dsk_drv, dsk_banks (build.sh)
+        .include "defs_ld.inc"      ; BANKCODE, dsk_type, dsk_drv, dsk_banks, dsk_board,
+                                    ; BOARD_*, WRSEL_* (build.sh)
 OSFILE  = $FFDD
 OSGBPB  = $FFD1
 OSBYTE  = $FFF4
@@ -158,6 +159,8 @@ start:
         lda map-4,x
         sta ROMSELC
         sta ROMSEL
+        tax
+        jsr wrx                     ; and the write bank, on a board that has one
 :       ldy #0
 @cp:    lda plen
         ora plen+1
@@ -197,6 +200,8 @@ start:
         lda map-4,x
         sta ROMSELC
         sta ROMSEL
+        tax
+        jsr wrx
         iny
         lda (zsrc),y
         sta zdst
@@ -222,10 +227,78 @@ start:
         inc zsrc+1
         jmp @fix
 @fixdone:
-        ; ---- the driver's configuration and the banks themselves, into bank 7
+        ; ---- the write-bank stores: (bank, address, kind) x n, $FF, after the $FF above.
+        ; Each is a `sta $FE30` in the code, a harmless second write of the bank on a
+        ; plain machine and left alone there.  Watford: `sta $FF30+socket` for a constant
+        ; bank (kind 4..7 says which), `sta $FF30,x` (opcode $9D) where the code has the
+        ; bank in X (kind $FE); Solidisk: `sta $FE60` either way.
+        inc zsrc
+        bne @wfix
+        inc zsrc+1
+@wfix:  ldy #0
+        lda (zsrc),y
+        cmp #$FF
+        beq @wfixdone
+        ldx board
+        beq @wnext                  ; plain: as assembled
+        tax
+        lda map-4,x
+        sta ROMSELC
+        sta ROMSEL
+        tax
+        jsr wrx
+        iny
+        lda (zsrc),y
+        sta zdst
+        iny
+        lda (zsrc),y
+        sta zdst+1
+        iny
+        lda (zsrc),y                ; the kind
+        tax
+        lda board
+        cmp #BOARD_SOLIDISK
+        beq @wsol
+        cpx #$FE
+        beq @wdyn
+        lda map-4,x                 ; Watford, a constant bank: sta $FF30 + its socket
+        ora #<WRSEL_WATFORD
+        ldy #1
+        sta (zdst),y
+        lda #>WRSEL_WATFORD
+        iny
+        sta (zdst),y
+        jmp @wnext
+@wdyn:  lda #$9D                    ; Watford, the bank in X: sta $FF30,x
+        ldy #0
+        sta (zdst),y
+        lda #<WRSEL_WATFORD
+        iny
+        sta (zdst),y
+        lda #>WRSEL_WATFORD
+        iny
+        sta (zdst),y
+        jmp @wnext
+@wsol:  lda #<WRSEL_SOLIDISK        ; Solidisk: sta $FE60, the bank being in A
+        ldy #1
+        sta (zdst),y
+        lda #>WRSEL_SOLIDISK
+        iny
+        sta (zdst),y
+@wnext: lda zsrc
+        clc
+        adc #4
+        sta zsrc
+        bcc @wfix
+        inc zsrc+1
+        jmp @wfix
+@wfixdone:
+        ; ---- the driver's configuration, the banks themselves and the board, into bank 7
         lda map+3
         sta ROMSELC
         sta ROMSEL
+        ldx map+3
+        jsr wrx
         lda fdc
         sta dsk_type
         lda drive
@@ -235,7 +308,21 @@ start:
         sta dsk_banks,x
         dex
         bpl :-
+        lda board
+        sta dsk_board
         jmp BANKCODE                ; bank 7's entry vector (bank 7 is paged)
+
+; ---------------------------------------------------------------- the write bank
+; X = a socket: make it the one a store reaches, on a board that chooses that apart
+; from ROMSEL.  A is destroyed.
+wrx:    lda board
+        beq @r
+        cmp #BOARD_SOLIDISK
+        beq @s
+        sta WRSEL_WATFORD,x         ; Watford: the address says which, the value nothing
+@r:     rts
+@s:     stx WRSEL_SOLIDISK          ; Solidisk: port B bits 0-3 (DDRB was set by findram)
+        rts
 
 ; ---------------------------------------------------------------- the sideways RAM
 ; Which sockets hold RAM, and which four the game gets.  The test is the one Stuart
@@ -243,7 +330,13 @@ start:
 ; the bank through $F4 and ROMSEL, flip bit 0 of the ROM type byte at $8006 and see
 ; whether it stuck, put it back.  A floating bus fails it (both reads see the same
 ; value), a write-protected board fails it too -- it looks like ROM, and the message
-; says so.  Every bank then gets a class: 0, RAM with no ROM image in it; 1, RAM with
+; says so.  First the board: the test is run over the 16 banks writing through ROMSEL
+; alone, then again selecting the write bank the Watford way ($FF30 + bank), then the
+; Solidisk way (user VIA port B, bits 0-3 made outputs); the board is the way that
+; finds the MOST banks (a board's write latch rests on some bank, usually 0, so the
+; plain test "finds" that one bank on a board machine too), plain winning a tie; and
+; every write below goes through wrx.  A machine with RAM of two kinds gets the kind
+; with more.  Every bank then gets a class: 0, RAM with no ROM image in it; 1, RAM with
 ; an image the MOS is not running (no entry in its table at $02A1: left there by an
 ; earlier load); 2, RAM holding a ROM the MOS recognised -- taken only when nothing
 ; else is left, which is safe here because nothing calls the MOS once the pieces go
@@ -253,20 +346,47 @@ start:
 ; numbers dropped.  The four are the lowest-numbered of the best class.
 findram:
         sei
+        lda #BOARD_STD
+        sta board
+        jsr @count
+        sta best                    ; (plain wins a tie)
+        lda #BOARD_STD
+        sta bestb
+        lda #BOARD_WATFORD
+        sta board
+        jsr @count
+        cmp best
+        bcc :+
+        beq :+
+        sta best
+        lda #BOARD_WATFORD
+        sta bestb
+:       lda #$0F                    ; Solidisk: port B bits 0-3 as outputs
+        sta $FE62
+        lda #BOARD_SOLIDISK
+        sta board
+        jsr @count
+        cmp best
+        bcc :+
+        beq :+
+        sta best
+        lda #BOARD_SOLIDISK
+        sta bestb
+:       lda bestb
+        sta board
+        cmp #BOARD_SOLIDISK         ; not a Solidisk: give the user port back
+        beq @classify
+        lda #0
+        sta $FE62
+@classify:
         ldx #15
 @b:     stx ROMSELC
         stx ROMSEL
+        jsr wrx
         lda #$FF                    ; not RAM until proven
         sta score,x
-        lda $8006
-        tay
-        eor #1
-        sta $8006
-        cmp $8006
-        php
-        sty $8006
-        plp
-        bne @bnext
+        jsr @flip
+        bcc @bnext
         lda ROMTYPE,x               ; a ROM the MOS is using
         beq :+
         lda #2
@@ -298,6 +418,7 @@ findram:
         bmi @snext
         stx ROMSELC
         stx ROMSEL
+        jsr wrx
         lda $8007
         sta saved,x
         txa
@@ -324,6 +445,7 @@ findram:
         beq @rnext
         stx ROMSELC
         stx ROMSEL
+        jsr wrx
         lda saved,x
         sta $8007
 @rnext: inx
@@ -357,11 +479,57 @@ findram:
         rts
 @found: clc
         rts
+        ; --- A = how many of the 16 banks take a write, the board being as set
+@count: lda #0
+        sta want                    ; (want is free until the choice below)
+        ldx #15
+:       stx ROMSELC
+        stx ROMSEL
+        jsr wrx
+        jsr @flip
+        bcc :+
+        inc want
+:       dex
+        bpl :--
+        lda oldbank
+        sta ROMSELC
+        sta ROMSEL
+        lda want
+        rts
+        ; --- C = 1 if the bank paged (and selected for writing) takes a write: flip bit 0
+        ; of the ROM type byte, look, put it back
+@flip:  lda $8006
+        tay
+        eor #1
+        sta $8006
+        cmp $8006
+        php
+        sty $8006
+        plp
+        bne @no
+        sec
+        rts
+@no:    clc
+        rts
 
 ; not enough: say what was found and return to the MOS (MODE 7 still: this runs
 ; before the mode change)
 noram:  ldx #0
 :       lda msg1,x
+        beq :+
+        jsr OSWRCH
+        inx
+        bne :-
+:       ldx board                   ; how the writes were tried: the board found
+        lda boardmsg,x
+        tax
+:       lda msgs,x
+        beq :+
+        jsr OSWRCH
+        inx
+        bne :-
+:       ldx #0
+:       lda msg1b,x
         beq :+
         jsr OSWRCH
         inx
@@ -395,6 +563,9 @@ plen:     .word 0
 fdc:      .byte 0
 drive:    .byte 0
 want:     .byte 0
+board:    .byte 0                   ; BOARD_STD / BOARD_WATFORD / BOARD_SOLIDISK
+best:     .byte 0                   ; findram: the most banks any way found, and which
+bestb:    .byte 0
 map:      .res 4                    ; the socket of each of banks 4..7
 score:    .res 16                   ; per socket: 0..2 as above, $FE an alias, $FF not RAM
 saved:    .res 16
@@ -411,11 +582,13 @@ block:    .word fname
           .dword $00000000
 msg1:     .byte 13, 10
           .byte "Cleo needs 64K of sideways RAM: four", 13, 10
-          .byte "16K banks it can write through &FE30,", 13, 10
-          .byte "in any sockets.  Writable banks found:", 13, 10, 0
+          .byte "16K banks in any sockets, writable", 13, 10, 0
+boardmsg: .byte msg_std-msgs, msg_wat-msgs, msg_sol-msgs
+msgs:
+msg_std:  .byte "through &FE30", 0
+msg_wat:  .byte "the Watford way (&FF3x)", 0
+msg_sol:  .byte "the Solidisk way (&FE60)", 0
+msg1b:    .byte ".  Found:", 13, 10, 0
 msg2:     .byte 13, 10, 13, 10
           .byte "Write-protected RAM reads as ROM: turn", 13, 10
-          .byte "it off and press SHIFT-BREAK.", 13, 10
-          .byte "Boards that choose the bank to write", 13, 10
-          .byte "through another register (Solidisk,", 13, 10
-          .byte "Watford) are not supported.", 13, 10, 0
+          .byte "it off and press SHIFT-BREAK.", 13, 10, 0

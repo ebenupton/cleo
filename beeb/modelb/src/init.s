@@ -39,21 +39,14 @@ start6:
         inx
         cpx #$C4
         bne :-
-        ; the low-RAM image is copied down to $0206
-        lda #<__LOWCODE_LOAD__
-        sta w16
-        lda #>__LOWCODE_LOAD__
-        sta w16+1
-        lda #<__LOWCODE_RUN__
-        sta w16b
-        lda #>__LOWCODE_RUN__
-        sta w16b+1
+        ; the low-RAM image is copied down to $0206 -- absolute indexed, the image being
+        ; under a page (14 bytes shorter than two pointers: this bank's corner is full)
         .assert __LOWCODE_SIZE__ < 256, error, "the low-RAM image is copied a byte at a time"
-        ldy #0                      ; exactly its length: the bar starts at $0300
-@lc:    lda (w16),y
-        sta (w16b),y
-        iny
-        cpy #<__LOWCODE_SIZE__
+        ldx #0                      ; exactly its length: the bar starts at $0300
+@lc:    lda __LOWCODE_LOAD__,x
+        sta __LOWCODE_RUN__,x
+        inx
+        cpx #<__LOWCODE_SIZE__
         bne @lc
         ldx #@to7end-@to7-1         ; the switch to bank 7 runs from the stack page,
 :       lda @to7,x                  ; as the entry's did: a bank cannot page itself out
@@ -69,8 +62,10 @@ start6:
 
         .segment "LGCCODE"
 start7:
-        ldx #3                      ; the physical banks, from where the loader put them
-@pb:    lda dsk_banks,x             ; (start6 has just zeroed the low BSS)
+        wrsel BANK_LVL, BANK_LVL    ; (A = the bank from the stub: the write bank too)
+        .assert dsk_board = dsk_banks + 4 && PBOARD = PBANK + 4, error, "the board byte follows the banks"
+        ldx #4                      ; the physical banks and the board, from where the
+@pb:    lda dsk_banks,x             ; loader put them (start6 has just zeroed the low BSS)
         sta PBANK,x
         dex
         bpl @pb

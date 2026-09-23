@@ -26,7 +26,7 @@ MODELB = 0
 ; XJSR name, idx: a call that stays in main RAM on the Master and crosses a bank on
 ; the Model B (idx names the far-table entry).
 .macro XJSR name, idx
-  .if MODELB
+  .if ::MODELB
         farjsr idx
   .else
         jsr name
@@ -36,7 +36,7 @@ MODELB = 0
 ; PLACE a, b: the segment a routine goes in -- a on the Master, b on the Model B,
 ; whose code is split across four sideways banks by the data it reads.
 .macro PLACE mseg, bseg
-  .if MODELB
+  .if ::MODELB
         .segment bseg
   .else
         .segment mseg
@@ -62,11 +62,11 @@ MODELB = 0
 ; would end the enclosing routine's @ scope; so two sites in one routine need
 ; different names (bankimm's is the operation and the bank -- a clash is a duplicate
 ; symbol at assembly, not a silent miss).
-  .if MODELB
+  .if ::MODELB
         .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute
   .endif
 .macro BANKREF name, b
-  .if MODELB
+  .if ::MODELB
         .ident(.concat("@bf_", name)):
         .pushseg
         .segment "BANKFIX"
@@ -81,7 +81,7 @@ MODELB = 0
   .endif
 .endmacro
 .macro bankimm op, n, b, tag
-  .if MODELB
+  .if ::MODELB
     .if .blank(b)
         .error "bankimm: the Model B needs the bank the code is in"
     .endif
@@ -97,16 +97,63 @@ MODELB = 0
         bankimm lda, n, b, tag      ; the IRQ handler restores from -- nothing ever read
         sta ROMSEL_CPY              ; the private copy this used to keep as well
         sta ROMSEL
+        wrsel n, b, tag             ; (Model B: the write bank too)
+.endmacro
+
+; ---------------------------------------------------------------- the write bank
+; Solidisk and Watford boards choose the bank a STORE goes to with a register of their
+; own -- Solidisk: user VIA port B bits 0-3 ($FE62 = $0F, then $FE60 = bank); Watford:
+; a store to $FF30 + bank -- and read through ROMSEL like everyone else.  So every
+; switch that a store into sideways RAM may follow carries a companion store, assembled
+; as a second `sta ROMSEL` (harmless: A holds the bank) and listed in the WRFIX segment
+; for the boot loader to rewrite by board: Watford `sta $FF3n` (n the socket) or, where
+; the bank is in X as well, `sta $FF30,x`; Solidisk `sta $FE60`.  A switch that only
+; READS the bank it pages (mapbyte, mapstrip's way in) needs none.  On the Master the
+; macros are empty.
+;   wrsel n, b [, tag]   after a switch to the constant bank n (A = n), in bank b's
+;                        image (0 = the low-RAM image, as BANKREF)
+;   wrselx b             after a switch to the bank in A AND X
+.macro WRREC kind, b, name          ; (the record: the image's bank, the store's address,
+  .if ::MODELB                        ;  the kind: 4..7 a constant bank, $FE "in X")
+        .ident(.concat("@wr_", name)):
+        .pushseg
+        .segment "WRFIX"
+    .if b = 0
+        .byte BANK_MAP
+        .word .ident(.concat("@wr_", name)) - 3 - __LOWCODE_RUN__ + __LOWCODE_LOAD__
+    .else
+        .byte b
+        .word .ident(.concat("@wr_", name)) - 3
+    .endif
+        .byte kind
+        .popseg
+  .endif
+.endmacro
+.macro wrsel n, b, tag
+  .if ::MODELB
+        sta ROMSEL
+    .if .blank(tag)
+        WRREC n, b, .sprintf("s_%d", n)
+    .else
+        WRREC n, b, .sprintf("s_%d_%d", n, tag)
+    .endif
+  .endif
+.endmacro
+.macro wrselx b
+  .if ::MODELB
+        sta ROMSEL
+        WRREC $FE, b, "x"
+  .endif
 .endmacro
 .macro ldpbank op, n
-  .if MODELB
+  .if ::MODELB
         op PBANK + (n - 4)
   .else
         op #n
   .endif
 .endmacro
 
-  .if .not MODELB
+  .if .not ::MODELB
         .setcpu "65C02"
 .macro jmpx tab
         jmp (tab,x)

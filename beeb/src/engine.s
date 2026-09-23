@@ -417,6 +417,8 @@ DIRTYCNT:  .res 2                   ; (the game loop)
 farx:      .res 1                   ; X across a far call (farcall needs X: m_mark_dirty)
 PBANK:     .res 4                   ; the physical bank of each of banks 4..7 (the loader's:
                                     ; cpu.inc -- read by what the loader cannot patch)
+PBOARD:    .res 1                   ; and the board: BOARD_STD / WATFORD / SOLIDISK (defs.inc),
+                                    ; right after PBANK (start7 copies the five together)
         .segment "LGCLOBSS"         ; bank 7, below the level's tables: the sprite
 SPRREC:    .res 2*MAXREC*10         ; prologue's records
 RECCNT:    .res 2
@@ -664,7 +666,8 @@ drawrect:
 @rowy:
   .if MODELB
         jsr mapstrip                ; the row's rc_nt+1 map bytes into MAPBUF, likewise
-  .endif
+        wrsel BANK_TILES, BANK_TILES ; (mapstrip comes back with A = this bank: the
+  .endif                            ;  write bank too, done here rather than in low RAM)
         ldy rc_nt
 @gl:
   .if MODELB
@@ -2310,12 +2313,13 @@ pnext:  lda sp_lim
 ; prologue; on the Model B it is assembled once into EACH sprite data bank (the loop
 ; reads image bytes, so it must be resident with them) and reached by a far call
 ; from the prologue, which lives with the directory in bank 5.
-.macro SPRITE_LOOPS withmirror, withcopy   ; withmirror = 0: a copy for a bank whose
-  .if ::MODELB                      ; images are never drawn mirrored (no sprFM, no
-                                    ; SWAPTAB); withcopy = 0: none drawn by the copy
-                                    ; blitter (no sprFC)
+.macro SPRITE_LOOPS withmirror, withcopy, bank   ; withmirror = 0: a copy for a bank
+  .if ::MODELB                      ; whose images are never drawn mirrored (no sprFM,
+                                    ; no SWAPTAB); withcopy = 0: none drawn by the copy
+                                    ; blitter (no sprFC); bank: the one this copy is in
 ds_entry:                           ; the far entry: the dispatch jump is patched here,
-        ldx sp_disp                 ; in the bank that owns it
+        wrsel bank, bank            ; in the bank that owns it -- so the write bank is
+        ldx sp_disp                 ; set here, not in low RAM's callbank (A = the bank)
         lda sprdisp_tab,x
         sta ds_dispatch+1
         lda sprdisp_tab+1,x
@@ -2477,7 +2481,7 @@ mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit
   .if ::MODELB
         .segment "SPR4CODE"
         .scope spr4
-        SPRITE_LOOPS 1, ::SPR4_COPY ; (assets.inc: the packer puts the box stars in one
+        SPRITE_LOOPS 1, ::SPR4_COPY, ::BANK_SPR   ; (assets.inc: the packer puts the box stars in one
         .if ::SPR4_COPY             ;  bank and no mirrored image in the other)
         SPRFULL sprFC, 0, 1
         .endif
@@ -2486,13 +2490,13 @@ mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit
         jmp spr4::ds_entry          ; for low RAM's callbank
         .segment "SPR6CODE"
         .scope spr6
-        SPRITE_LOOPS ::SPR6_MIRROR, 1
+        SPRITE_LOOPS ::SPR6_MIRROR, 1, ::BANK_TIL1
         SPRFULL sprFC, 0, 1
         .endscope
         .segment "SPR6END"
         jmp spr6::ds_entry
-        .segment "TIL5END"          ; and bank 5's, for erase_old's rects
-        jmp drawrect_clip
+        .segment "TIL5END"          ; and bank 5's, for erase_old's rects: through
+        jmp bank5_entry             ; the stub that sets the write bank (banks.s)
         PLACE "CODE", "TILCODE"
   .else
         SPRITE_LOOPS 1, 1
@@ -4123,6 +4127,17 @@ sndwrite_m:
         SNDWRITE_BODY
   .endif
 music_tick:
+  .if MODELB                        ; the overlay comes off the disc, so the loader
+        ldx PBOARD                  ; cannot patch a companion in: the write bank by hand
+        beq @wr                     ; (A = this bank's socket, from the interrupt stub;
+        cpx #BOARD_SOLIDISK         ;  MUSDUR, MUSNOTE and MUSPTR below are this bank's)
+        beq @sol
+        ldx PBANK+1                 ; Watford: a store to $FF30 + bank 5's socket
+        sta WRSEL_WATFORD,x
+        jmp @wr
+@sol:   sta WRSEL_SOLIDISK          ; Solidisk: the socket on port B
+@wr:
+  .endif
         lda MUSON
         beq @done
         dec MUSDUR
@@ -4607,6 +4622,7 @@ mapput: pha
         bankimm lda, BANK_MAP, 0
         sta ROMSEL_CPY
         sta ROMSEL
+        wrsel BANK_MAP, 0           ; (a store follows)
         pla
         sta (mapptr),y
         jmp pagelogic
@@ -4788,6 +4804,7 @@ pagelogic:                          ; A, X, Y and the carry all come through int
         bankimm lda, BANK_LVL, 0
         sta ROMSEL_CPY
         sta ROMSEL
+        wrsel BANK_LVL, 0           ; (the write bank too: bank 7's code stores)
         pla
         rts
   .if .not MODELB

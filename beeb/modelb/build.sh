@@ -32,7 +32,7 @@ import re
 want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE','FLATTAB',
         'half0','half1','half2','halfhi','halfsub','HPAIR0','HPAIR1',
-        'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','dsk_banks']
+        'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
 addr = {}
 for l in open('build/labels.txt'):
     p = l.split()
@@ -47,7 +47,7 @@ with open('build/defs_ld.inc', 'w') as f:
             f.write('; %s: not in labels.txt (a constant?)\n' % n)
 EOF
     # the constants ld65 does not list
-    grep -E '^(MENU_BASE|TILES|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE|LV_OBJS)\s*=' src/defs.inc build/assets.inc \
+    grep -E '^(MENU_BASE|TILES|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE|LV_OBJS|BOARD_STD|BOARD_WATFORD|BOARD_SOLIDISK|WRSEL_WATFORD|WRSEL_SOLIDISK)\s*=' src/defs.inc build/assets.inc \
         | sed 's/^[^:]*://; s/;.*//' >> build/defs_ld.inc
     echo 'BARADDR = $0300' >> build/defs_ld.inc
     ca65 --cpu 6502 -I build -I src -o build/ldprog.o src/ldprog.s -l build/ldprog.lst
@@ -58,7 +58,8 @@ EOF
     # byte of the pieces that holds a bank number, cpu.inc BANKREF) ending in $FF: the
     # boot loader rewrites those bytes to the banks it found RAM in.  Each entry is
     # checked against the pieces here: a wrong bank on a bankimm would land outside
-    # them or on a byte that is no bank number.
+    # them or on a byte that is no bank number.  Then the write-bank store list (cpu.inc
+    # wrsel: bank, address, kind; every entry must sit on a `sta $FE30`), ending in $FF.
     python3 - <<'EOF'
 import os
 pieces = [(4, 0x8000, 'b4c.bin'), (4, 0x8300, 'b4t.bin'), (4, 0xBBE0, 'b4x.bin'),
@@ -71,15 +72,24 @@ for bank, addr, fn in pieces:
     tab += bytes([bank, addr & 255, addr >> 8, len(d) & 255, len(d) >> 8])
     body += d
     img[(bank, addr)] = d
+def piece_bytes(bank, addr, n):
+    hit = [d[addr - a:addr - a + n] for (b, a), d in img.items() if b == bank and a <= addr and addr + n <= a + len(d)]
+    assert len(hit) == 1, 'patch %d:$%04X is in no piece' % (bank, addr)
+    return hit[0]
 fix = open('build/bankfix.bin', 'rb').read()
 assert len(fix) % 3 == 0, 'bankfix.bin is not whole entries'
 for i in range(0, len(fix), 3):
     bank, addr = fix[i], fix[i + 1] | (fix[i + 2] << 8)
-    hit = [d[addr - a] for (b, a), d in img.items() if b == bank and a <= addr < a + len(d)]
-    assert len(hit) == 1, 'bank patch %d:$%04X is in no piece' % (bank, addr)
-    assert 4 <= (hit[0] & 15) <= 7, 'bank patch %d:$%04X names byte $%02X, no bank number' % (bank, addr, hit[0])
-open('build/BANKS', 'wb').write(tab + body + fix + b'\xff')
-print('BANKS: %d pieces, %d bytes, %d bank patches' % (len(pieces), len(tab) + len(body), len(fix) // 3))
+    v = piece_bytes(bank, addr, 1)[0]
+    assert 4 <= (v & 15) <= 7, 'bank patch %d:$%04X names byte $%02X, no bank number' % (bank, addr, v)
+wr = open('build/wrfix.bin', 'rb').read()
+assert len(wr) % 4 == 0, 'wrfix.bin is not whole entries'
+for i in range(0, len(wr), 4):
+    bank, addr, kind = wr[i], wr[i + 1] | (wr[i + 2] << 8), wr[i + 3]
+    assert piece_bytes(bank, addr, 3) == b'\x8d\x30\xfe', 'write-bank store %d:$%04X is not sta $FE30' % (bank, addr)
+    assert kind in (4, 5, 6, 7, 0xFE), 'write-bank store %d:$%04X: kind $%02X' % (bank, addr, kind)
+open('build/BANKS', 'wb').write(tab + body + fix + b'\xff' + wr + b'\xff')
+print('BANKS: %d pieces, %d bytes, %d bank patches, %d write-bank stores' % (len(pieces), len(tab) + len(body), len(fix) // 3, len(wr) // 4))
 EOF
 done
 python3 ../tools/mkdfs.py build build/cleob.ssd CLEOB \

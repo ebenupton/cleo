@@ -134,9 +134,33 @@ back (Elite compares the banks' bytes, which would call four blank banks one).  
 four lowest sockets of the best class win; the game's own DFS bank is fair game as
 the last resort because nothing calls the MOS once the pieces are down (interrupts
 stay off from the load on).  With fewer than four the loader says so, lists the
-writable banks it saw, and returns to the MOS.  Boards that select the bank to
-write through another register (Solidisk's user-port latch, Watford's $FF30) are
-not supported: every bank switch in the game would need the second write.
+writable banks it saw and how it wrote them, and returns to the MOS.
+
+Solidisk and Watford boards choose the bank a STORE reaches with a register of their
+own -- Solidisk: user VIA port B bits 0-3 ($FE62 = $0F, then $FE60 = bank); Watford:
+a store to $FF30 + bank -- and read through ROMSEL like everyone else.  The probe is
+run three ways (through ROMSEL alone, the Watford way, the Solidisk way) and the way
+that finds the most banks is the board: a board's latch rests on some bank, so the
+plain test "finds" that one bank on a board machine too.  Then every bank switch that
+a store into sideways RAM may follow carries a companion store, assembled as a second
+`sta ROMSEL` (harmless: A holds the bank) and listed in the WRFIX segment (cpu.inc
+`wrsel`, `wrselx`), which build.sh appends to BANKS after the bank-number list; the
+loader rewrites each by board -- Watford `sta $FF3n` for a constant bank, `sta
+$FF30,x` where the bank is in X, Solidisk `sta $FE60` -- and leaves them alone on a
+plain machine.  Setting the write bank does not change what is readable, so the
+companion need not sit beside the switch in low RAM, which is full to the byte: the
+direct switch `callbank` has none, and the bank it enters sets its own -- `ds_entry`
+in banks 4 and 6, the `bank5_entry` stub (bank 5's low corner) that BANKENTRY jumps
+to before drawrect_clip; drawrect sets it after `jsr mapstrip` brings bank 5 back;
+the tune's `music_tick`, disc-loaded and so unpatchable, reads PBOARD and does it by
+hand, as ldprog.s does for the level loads.  Low RAM keeps the ones that cannot move:
+pagelogic, farcall/fcret, the interrupt's exit, mapput.  The interrupt stub enters
+bank 7 through pagelogic now (the write bank too), 23 cycles it and the vsync's T1
+restart each pay, which VS2T_DEFAULT takes back (tools/bcrtc.mjs: R9 still lands at
+char 41-53 of the section's first scanline).  Cost: about 135 switches a frame at 4
+cycles each.  A machine with RAM of two kinds gets the kind with more; two boards at
+once are not handled.  jsbeeb models neither board: `BBOARD=watford|solidisk` makes
+the tools wrap the CPU's store (bopen.mjs `boardEmu`), and bdiff passes on both.
 
 The code is assembled for banks 4..7.  Every byte of it that holds a bank number --
 the immediates of the switches, the far table's bank bytes in all four copies -- is

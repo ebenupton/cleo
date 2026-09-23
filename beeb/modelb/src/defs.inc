@@ -65,6 +65,7 @@ sp_mh    = $E9
 sp_mrp   = $EA                      ; 2
 sp_mbase = $EC                      ; 2
 menuptr  = $EE                      ; 2: the menus' list pointer
+fcA      = $A7                      ; fcret's A across the bank switch (low.s)
 .assert menuptr + 2 <= $F0, error, "zero page runs into the MOS's"
 
 ; ---------------------------------------------------------------- display
@@ -75,8 +76,21 @@ CRTCB_B   = RING_B / 8
 ; CA1 fires at the end of the 2-line vsync pulse.  -35 would put each step ~5 us INTO
 ; its section; the further -36 puts it ~30 us BEFORE the restart, so the shape
 ; registers land early in the section's first scanline.  The interrupt stub's bank
-; switch (~30 cycles) replaces the hold the Master's handler had.
-VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36
+; switch (~30 cycles) replaces the hold the Master's handler had; since the switch went
+; through pagelogic (the write bank too) both the vsync's T1 restart and every step are
+; ~23 cycles later -- 46 in all, 23 ticks -- and the -23 takes that back: tools/bcrtc.mjs
+; shows R9 landing at char 41-53 of the section's first scanline, as before.
+VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 23
+
+; ---------------------------------------------------------------- sideways RAM boards
+; Which register chooses the bank a store goes to (the loader finds out: findram).  The
+; game's own code is patched for it at boot (cpu.inc wrsel); what comes off the disc
+; reads PBOARD (ldprog.s).
+BOARD_STD      = 0                  ; through ROMSEL, as reads
+BOARD_WATFORD  = 1                  ; a store to $FF30 + bank
+BOARD_SOLIDISK = 2                  ; user VIA port B bits 0-3: $FE62 = $0F, $FE60 = bank
+WRSEL_WATFORD  = $FF30
+WRSEL_SOLIDISK = $FE60
 
 ; ---------------------------------------------------------------- the loader
 NMIPAGE   = $0D00                   ; the disc transfer routine, while a load runs

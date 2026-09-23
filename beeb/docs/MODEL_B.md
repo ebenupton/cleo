@@ -201,6 +201,24 @@ a duplicate-symbol error, never a silent miss).  jsbeeb's Model B has RAM in
 sockets 0-7, so even the default emulator run now exercises the remap (the game
 lands in 0-3); the tools take the code's bank numbers and map them.
 
+**The write bank is not the read bank on every board.**  Solidisk and Watford
+sideways RAM take the bank a store reaches from a register of their own (the user
+port; $FF30 + bank), so the socket probe alone left them out.  Supporting them meant
+a companion store after every switch a bank store may follow -- about 135 a frame,
+found by tools/audit.mjs, in all four banks: the blitters' state, the logic's, the
+sprite loops' patched operands -- and low RAM, where the hot switches live, had three
+bytes.  Two wrong turns first: companions at every switch overflowed it by ten bytes;
+parking pagelogic in the bottom of the stack page to make room put it under the
+stack, which wrapped and wrote MUSON at $01FF, and the tune's player ran into an
+overlay the test harness never loads.  The way through: the write-select register
+changes nothing readable, so the companion can live in the bank the switch ENTERS --
+the sprite loops' entry, a stub before drawrect_clip, the line after `jsr mapstrip`
+-- and only what returns to a caller (pagelogic, fcret, the interrupt's exit) needs
+low RAM.  Disc-loaded code (the overlay's music_tick, ldprog) cannot be patched and
+reads the board byte instead.  The probe has to pick the board by how MANY banks each
+way finds: a board's latch rests on bank 0, so writing through ROMSEL "works" for
+that one bank.  Never put code in the stack page.
+
 ## Verification that stands
 
 - B logic: `modelb/tools/bdiff.mjs frames seed level` -- a 20-row Master

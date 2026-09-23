@@ -8,12 +8,37 @@ import { findJsbeeb, loadLabels } from "/Users/ebenupton/cleo/beeb/tools/harness
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
+// Emulate a write-select sideways RAM board on a jsbeeb Model B: reads page through
+// ROMSEL as ever, a store into $8000-$BFFF goes to the bank the board's register names
+// -- Watford: the last store to $FF30-$FF3F (its low nibble); Solidisk: user VIA port B
+// bits 0-3 (ORB & DDRB).  Both start at bank 0, as a fresh machine would, more or less.
+export function boardEmu(cpu, kind) {
+  if (kind !== "watford" && kind !== "solidisk") throw new Error(`BBOARD: ${kind}?`);
+  const orig = cpu.writemem.bind(cpu);
+  let wr = 0, orb = 0, ddrb = 0;
+  cpu.writemem = function (addr, b) {
+    addr &= 0xffff;
+    if (addr >= 0x8000 && addr < 0xc000) {
+      if (cpu._debugWrite) cpu._debugWrite(addr, b);
+      const bank = kind === "solidisk" ? (orb & ddrb & 15) : wr;
+      if (cpu.model.swram[bank]) cpu.ramRomOs[cpu.romOffset + bank * 16384 + (addr - 0x8000)] = b;
+      return;
+    }
+    if (kind === "watford" && (addr & 0xfff0) === 0xff30) wr = addr & 15;
+    if (kind === "solidisk") { if ((addr & 0xffef) === 0xfe60) orb = b; else if ((addr & 0xffef) === 0xfe62) ddrb = b; }
+    return orig(addr, b);
+  };
+}
+
 export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2", disc = "build/cleob.ssd", labels = "build/labels.txt", keys = false } = {}) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);
   const s = new MachineSession(model);
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const cpu = s._machine.processor;
+  // BBOARD=watford|solidisk: a sideways RAM board whose write bank is its own register
+  // (jsbeeb has none; this wraps the CPU's store)
+  if (process.env.BBOARD) boardEmu(cpu, process.env.BBOARD);
   // the banks: the code is assembled for banks 4..7 and the boot loader puts them in
   // the lowest four sockets it finds RAM in -- jsbeeb's Model B has RAM in sockets
   // 0-7, so bank 7 is socket 3 here.  BSWRAM="8,9,10,11" (any sockets, no ROMs in

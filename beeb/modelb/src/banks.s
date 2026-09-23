@@ -150,6 +150,12 @@ mirdirty:
 ; the level nothing.  Bank 7's per-level clear (lvreset) is load_level's.
         .import __TILBSS_RUN__: absolute, __TILBSS_SIZE__: absolute
         .segment "TILLOW"
+; callbank's way into this bank (BANKENTRY jumps here): the write bank first -- A is
+; the bank, as callbank left it -- then drawrect_clip, which bank 5's own draw_dirty
+; also calls directly (with A something else, so the companion cannot sit there).
+bank5_entry:
+        wrsel BANK_TILES, BANK_TILES
+        jmp drawrect_clip
 init5:
         .assert __TILBSS_SIZE__ < 256, error, "init5 zeroes TILBSS with an 8-bit index"
         ldx #0

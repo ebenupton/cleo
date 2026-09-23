@@ -4,6 +4,7 @@
 // compared after every frame.  The first difference is reported with its frame.
 //   node tools/bdiff.mjs [frames] [seed] [level 0..15]
 import { findJsbeeb, loadLabels, open as openMaster } from "/Users/ebenupton/cleo/beeb/tools/harness.mjs";
+import { boardEmu } from "./bopen.mjs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 const frames = parseInt(process.argv[2] ?? "300"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "2");
@@ -21,6 +22,7 @@ const BA = loadLabels("build/labels.txt");
 const bs = new MachineSession(process.env.BMODEL ?? "B-DFS1.2");
 await bs.initialise(); await bs.boot(30); bs.loadDisc(path.resolve("build/cleob.ssd"));
 const bcpu = bs._machine.processor;
+if (process.env.BBOARD) boardEmu(bcpu, process.env.BBOARD);   // a Watford or Solidisk board (bopen.mjs)
 // the Model B's banks are the lowest four sockets the boot loader finds RAM in (jsbeeb:
 // 0-3, or BSWRAM="a,b,c,d" -- see bopen.mjs); bank() maps the code's 4..7 to them.
 // The Master's banks are its own (the harness pages 7 itself).
