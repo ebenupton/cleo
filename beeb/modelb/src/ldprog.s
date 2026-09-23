@@ -14,10 +14,16 @@
         .include "files.inc"        ; the disc's sector table (mkdfs.py table)
 ROMSEL     = $FE30
 ROMSEL_CPY = $F4
-BANK_SPR   = 4
-BANK_TILES = 5
-BANK_MAP   = 6
-BANK_LVL   = 7
+; The banks are whichever sockets the boot loader found RAM in: it left their numbers
+; in PBANK (low BSS, one byte per bank 4..7).  This program comes off the disc at
+; every load, so the loader cannot patch it as it does the banks' code: every switch
+; here reads the physical bank from PBANK, and the placement lists' bank bytes
+; (4 or 6, the packer's) go through it too.
+BANK_MAP   = 6                      ; (the placement lists' number for bank 6)
+PB_SPR     = PBANK
+PB_TILES   = PBANK + 1
+PB_MAP     = PBANK + 2
+PB_LVL     = PBANK + 3
 ; zero page: the logic's transient temps, which a load may clobber
 src   = $A8                         ; 2
 dst   = $AA                         ; 2
@@ -88,7 +94,14 @@ readfile:
         sta ld_dst+1
         jmp read_sectors
 
-; copy cnt bytes from src (main RAM) to dst in bank X; bank 7 back afterwards
+; copy cnt bytes from src (main RAM) to dst in the bank the placement entry (lp) names
+; -- the packer's number, 4 or 6, for the socket that is that bank here
+plcopy: ldy #1
+        lda (lp),y
+        tax
+        lda PBANK-4,x
+        tax
+; copy cnt bytes from src (main RAM) to dst in bank X (a socket); bank 7 back afterwards
 bcopy:  stx ROMSEL_CPY
         stx ROMSEL
         ldy #0
@@ -109,7 +122,7 @@ bcopy:  stx ROMSEL_CPY
         iny
         dex
         bne :-
-@done:  lda #BANK_LVL
+@done:  lda PB_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         rts
@@ -135,7 +148,7 @@ lv_load:
         sta dst
         lda #>LV_HDR
         sta dst+1
-        ldx #BANK_LVL
+        ldx PB_LVL
         jsr bcopy
         lda #1
         jsr section                 ; the objects: 6 a piece, nobj of them
@@ -157,7 +170,7 @@ lv_load:
         sta dst                     ; the first render)
         lda #>LV_OBJS
         sta dst+1
-        ldx #BANK_LVL
+        ldx PB_LVL
         jsr bcopy
         lda #2
         jsr section
@@ -246,7 +259,7 @@ lv_load:
         sta cnt
         lda #0
         sta cnt+1
-        ldx #BANK_TILES
+        ldx PB_TILES
         jsr bcopy                   ; (dst runs on by 64 itself: bcopy's tail loop
         ldy tmp2                    ;  leaves dst where it started -- step it)
         lda dst
@@ -281,7 +294,7 @@ lv_load:
         sec                         ; half's slot in its page (the halves follow the
         sbc LV_HDR+28               ; full tiles at once, not from the next page)
         sta dst                     ; (dst: free until set below)
-        lda #BANK_TILES
+        lda PB_TILES
         sta ROMSEL_CPY
         sta ROMSEL
         lda tmp
@@ -294,7 +307,7 @@ lv_load:
         sta halfhi
         lda dst
         sta halfsub
-        lda #BANK_LVL
+        lda PB_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         lda LV_HDR+28               ; the halves start slot HALFOFF into their page
@@ -334,7 +347,7 @@ lv_load:
         sta cnt
         lda #0
         sta cnt+1
-        ldx #BANK_TILES
+        ldx PB_TILES
         jsr bcopy
         ldy tmp2
         lda dst
@@ -365,9 +378,9 @@ lv_load:
         lda #0
         rol
         sta cnt+1
-        ldx #BANK_TILES
+        ldx PB_TILES
         jsr bcopy
-        lda #BANK_TILES             ; the fill reads them through two patched operands
+        lda PB_TILES                 ; the fill reads them through two patched operands
         sta ROMSEL_CPY
         sta ROMSEL
         pla
@@ -380,7 +393,7 @@ lv_load:
         sta HPAIR1
         bcc :+
         inc HPAIR1+1
-:       lda #BANK_LVL
+:       lda PB_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         ; ---- the sprites: each source file staged in turn, the placement list walked
@@ -412,10 +425,7 @@ lv_load:
         iny
         lda (lp),y
         sta dst+1
-        ldy #1
-        lda (lp),y
-        tax
-        jsr bcopy
+        jsr plcopy                  ; to the placement's bank
 @mask:  ldy #5
         lda (ent),y
         cmp fnum
@@ -433,10 +443,7 @@ lv_load:
         iny
         lda (lp),y
         sta dst+1
-        ldy #1
-        lda (lp),y
-        tax
-        jsr bcopy
+        jsr plcopy                  ; to the placement's bank
 @plnext:
         lda lp
         clc
@@ -471,7 +478,7 @@ lv_load:
         beq @dnone
         jsr findplace               ; src -> the placement entry, or C set
         bcs @dnone
-        lda #BANK_MAP
+        lda PB_MAP
         sta ROMSEL_CPY
         sta ROMSEL
         ldy #2
@@ -496,7 +503,7 @@ lv_load:
         lda (lp),y
         ora #$10
         sta (dst),y
-:       lda #BANK_LVL               ; SPRMASK is bank 7's, with the prologue; the
+:       lda PB_LVL                   ; SPRMASK is bank 7's, with the prologue; the
         sta ROMSEL_CPY              ; box ids (the last 15) have no entry
         sta ROMSEL
         lda nt
@@ -511,7 +518,7 @@ lv_load:
         ldy #1
         sta (ent),y
         jmp @dnext
-@dnone: lda #BANK_MAP
+@dnone: lda PB_MAP
         sta ROMSEL_CPY
         sta ROMSEL
         lda #0
@@ -519,7 +526,7 @@ lv_load:
 :       sta (dst),y
         dey
         bpl :-
-        lda #BANK_LVL
+        lda PB_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         lda nt
@@ -530,7 +537,7 @@ lv_load:
         sta (ent),y
         iny
         sta (ent),y
-@dnext: lda #BANK_LVL
+@dnext: lda PB_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         lda lp
@@ -566,7 +573,7 @@ lv_load:
         sta cnt
         lda #0
         sta cnt+1
-        ldx #BANK_TILES
+        ldx PB_TILES
         jsr bcopy
         ; ---- the bar template, straight into place
         lda #<BARADDR
@@ -594,7 +601,7 @@ copy256:                            ; src -> dst (bank 7), 256 bytes
         sta cnt
         lda #1
         sta cnt+1
-        ldx #BANK_LVL
+        ldx PB_LVL
         jmp bcopy
 stage:                              ; file A -> STAGE
         ldx #<STAGE
@@ -667,7 +674,7 @@ findplace:                          ; item -> src = the placement entry; C = 1 i
 @found: clc
         rts
 unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c+1
-        lda #BANK_MAP               ; literals follow; c >= 128 = the next byte c-126 times
+        lda PB_MAP                   ; literals follow; c >= 128 = the next byte c-126 times
         sta ROMSEL_CPY
         sta ROMSEL
 @c:     lda dst+1
@@ -707,7 +714,7 @@ unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c
         bne :+
         inc dst+1
 :       rts
-@end:   lda #BANK_LVL
+@end:   lda PB_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         rts
@@ -728,7 +735,7 @@ title_load:
         sta cnt
         lda #F_MENU_N
         sta cnt+1
-        ldx #BANK_TILES
+        ldx PB_TILES
         jsr bcopy
         lda #FI_TITLE
         jsr stage
@@ -744,7 +751,7 @@ title_load:
         sta cnt
         lda #F_TITLE_N
         sta cnt+1
-        ldx #BANK_MAP
+        ldx PB_MAP
         jmp bcopy
 
 ; ---------------------------------------------------------------- the packer's tables

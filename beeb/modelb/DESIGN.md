@@ -121,11 +121,38 @@ the 8271 the Model B was born with and for the Acorn 1770 board -- and the loade
 that gathers a level into the banks (ldprog.s) runs in main RAM, where it can page
 banks freely.  Both controllers raise NMI for every byte, so the transfer routine is
 copied to $0D00 for a load (a jump there picks the controller's stub) and keeps its
-state in that page.  The boot loader (loader.s, under the MOS) reads BANKS -- the
-fixed pieces of the four banks and the main-RAM block, with a table -- into place
-(MODE 1 first, palette black: the block is screen memory and the load would show), asks DFS which drive is current (OSGBPB 6: a Gotek on drive 1 works after `*DRIVE 1`), decides the
+state in that page.  The boot loader (loader.s, under the MOS) first finds the RAM:
+the game needs four 16K banks it can write through ROMSEL, and takes them from
+whatever sockets they are in.  The probe is the one Stuart McConnachie's sideways
+RAM Elite loader used (1988, in Mark Moxon's commentary): page each of the 16 banks
+through $F4 and $FE30, flip bit 0 of the ROM type byte at $8006, see whether it
+stuck, put it back.  Write-protected RAM fails it and so does a floating bus.  Each
+RAM bank is then classed -- empty; holding a ROM image the MOS is not running (no
+entry in its table at $02A1); holding a ROM the MOS recognised -- and two socket
+numbers that reach the same RAM are found by a signature written to each and read
+back (Elite compares the banks' bytes, which would call four blank banks one).  The
+four lowest sockets of the best class win; the game's own DFS bank is fair game as
+the last resort because nothing calls the MOS once the pieces are down (interrupts
+stay off from the load on).  With fewer than four the loader says so, lists the
+writable banks it saw, and returns to the MOS.  Boards that select the bank to
+write through another register (Solidisk's user-port latch, Watford's $FF30) are
+not supported: every bank switch in the game would need the second write.
+
+The code is assembled for banks 4..7.  Every byte of it that holds a bank number --
+the immediates of the switches, the far table's bank bytes in all four copies -- is
+recorded at assembly (cpu.inc `bankimm`/`setbank`/`BANKREF`, which take the bank the
+code sits in; the low-RAM image's entries point into bank 6's copy of it) into the
+BANKFIX segment, which build.sh appends to BANKS after the pieces and checks against
+them.  Having copied the pieces, the loader walks the list and rewrites each byte's
+low nibble to the socket found, so the hot paths cost nothing.  What comes off the
+disc later -- LDPROG, the menu overlay -- cannot be patched that way and reads the
+socket from PBANK (low BSS, four bytes indexed by bank - 4, filled by start7 from the
+copy the loader leaves in bank 7 beside dsk_type); the level files' placement lists
+name the packer's bank, 4 or 6, and LDPROG translates it.  Then BANKS' pieces (MODE
+1 first, palette black: the load lands in screen memory and would show), which drive
+DFS has current (OSGBPB 6: a Gotek on drive 1 works after `*DRIVE 1`), the
 controller from the DFS ROM's version (0.x/1.x are Acorn's 8271 DFSs; 2.x the 1770
-one; hold W or I at boot to say so instead), and jumps into bank 7.  The 8271 keeps
+one; hold W or I at boot to say so instead), and the jump into bank 7.  The 8271 keeps
 the step rate DFS specified, but not its motor: after an idle spell (the title) the
 head has unloaded, a read finds "not ready" -- which the 8271 latches -- so each run
 first loads the head (special register $23) and reads the drive status, as DFS does;

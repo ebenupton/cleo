@@ -21,9 +21,17 @@ const BA = loadLabels("build/labels.txt");
 const bs = new MachineSession(process.env.BMODEL ?? "B-DFS1.2");
 await bs.initialise(); await bs.boot(30); bs.loadDisc(path.resolve("build/cleob.ssd"));
 const bcpu = bs._machine.processor;
-const bank = (cpu, b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
+// the Model B's banks are the lowest four sockets the boot loader finds RAM in (jsbeeb:
+// 0-3, or BSWRAM="a,b,c,d" -- see bopen.mjs); bank() maps the code's 4..7 to them.
+// The Master's banks are its own (the harness pages 7 itself).
+const SW = process.env.BSWRAM ? process.env.BSWRAM.split(",").map(Number) : null;
+if (SW) bcpu.model.swram = Array.from({ length: 16 }, (_, i) => SW.includes(i));
+const P = bcpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
+const PB = (cpu, b) => (cpu === bcpu && b >= 4 && b <= 7 ? P[b - 4] : b);
+const bank = (cpu, b, f) => { b = PB(cpu, b); const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
 bs.keyDown(16); bs.reset(true); await bs.runFor(2_000_000); bs.keyUp(16);
 async function runToB(pc, b, budget = 6000) {
+  b = PB(bcpu, b);
   const h = bcpu.debugInstruction.add((p) => p === pc && bcpu.readmem(0xf4) === b);
   try { for (let i = 0; i < budget; i++) { await bs.runFor(20000); if (bcpu.pc === pc && bcpu.readmem(0xf4) === b) return; } }
   finally { h.remove(); }

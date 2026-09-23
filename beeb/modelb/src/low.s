@@ -57,7 +57,7 @@ irq_handler:
         sty irq_y
         lda ROMSEL_CPY
         pha
-        lda #BANK_LVL
+        bankimm lda, BANK_LVL, 0
         sta ROMSEL_CPY
         sta ROMSEL
         jsr isr_body
@@ -65,7 +65,7 @@ irq_handler:
         beq @nomus                  ; T1 steps come through here too and must not count
         lda #0
         sta MUSTICK
-        lda #BANK_TILES
+        bankimm lda, BANK_TILES, 0
         sta ROMSEL_CPY
         sta ROMSEL
         jsr music_tick
@@ -94,7 +94,7 @@ maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 <<
         rts
 
 mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; bank 5 back (the row
-        lda #BANK_MAP               ; loop's: dirfetch, the other caller, restores its own)
+        bankimm lda, BANK_MAP, 0    ; loop's: dirfetch, the other caller, restores its own)
         sta ROMSEL_CPY
         sta ROMSEL
         ldy rc_nt
@@ -102,7 +102,7 @@ mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; bank 5 back (th
         sta MAPBUF,y
         dey
         bpl :-
-        lda #BANK_TILES
+        bankimm lda, BANK_TILES, 0
         sta ROMSEL_CPY
         sta ROMSEL
         rts

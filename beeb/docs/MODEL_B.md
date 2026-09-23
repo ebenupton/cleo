@@ -185,6 +185,22 @@ one of them on the ROMSEL copy.  The screens' y positions assume 108 px of windo
 the B has 84.  Both are `.if MODELB` in menu.s now; the lesson is that "the same
 sources" includes the parts that were never assembled for the other target.
 
+**The banks are wherever the RAM is.**  The first report from a real machine was
+"no joy": its sideways RAM sat in even sockets, and the loader wrote banks 4..7
+blind.  Now it probes (the sideways RAM Elite loader's test: flip a bit of $8006
+and see if it stuck), classes the banks, drops aliases by signature, takes the lowest
+four, and explains itself when it cannot.  The game's bank numbers are patched at
+boot from a list the assembler makes (`bankimm`, `setbank`, `BANKREF` in cpu.inc,
+which need the bank the code is in: get it wrong and build.sh's check against the
+pieces catches most of it, and a run with `BSWRAM=8,9,10,11` catches the rest); what
+loads later reads PBANK.  Two ca65 facts cost an hour: 2.18 has no `.bank()`, and
+*any* symbol definition -- `.local`, `=`, `.set`, a generated name -- ends the
+enclosing `@` label scope, so the only marker a macro can plant in someone else's
+routine is a cheap label of its own, named to be unique (`@bf_lda_7`; a clash is
+a duplicate-symbol error, never a silent miss).  jsbeeb's Model B has RAM in
+sockets 0-7, so even the default emulator run now exercises the remap (the game
+lands in 0-3); the tools take the code's bank numbers and map them.
+
 ## Verification that stands
 
 - B logic: `modelb/tools/bdiff.mjs frames seed level` -- a 20-row Master

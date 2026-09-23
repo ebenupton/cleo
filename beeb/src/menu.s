@@ -254,11 +254,11 @@ menu_keys:
 ; draw a title piece: A = piece index, spx/spy = position (top-left)
 draw_piece:
         pha
-        lda #BANK_MAP               ; the title pack sits where the map goes
-        sta spbank
-        pla
+        ldpbank lda, BANK_MAP       ; the title pack sits where the map goes (the
+        sta spbank                  ; overlay comes off the disc: the loader cannot
+        pla                         ; patch it, so the physical bank is read)
         jsr m_drawsprite
-        lda #BANK_SPR
+        ldpbank lda, BANK_SPR
         sta spbank
         rts
 

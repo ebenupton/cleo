@@ -32,7 +32,7 @@ import re
 want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE','FLATTAB',
         'half0','half1','half2','halfhi','halfsub','HPAIR0','HPAIR1',
-        'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG']
+        'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','dsk_banks']
 addr = {}
 for l in open('build/labels.txt'):
     p = l.split()
@@ -54,20 +54,32 @@ EOF
     ld65 -C ldprog.cfg -o build/LDPROG build/ldprog.o
     ca65 --cpu 6502 -I build -I src -o build/loader.o src/loader.s
     ld65 -C loader.cfg -o build/LOADER build/loader.o
-    # BANKS: the fixed pieces with their table
+    # BANKS: the fixed pieces with their table, then the bank-number patch list (every
+    # byte of the pieces that holds a bank number, cpu.inc BANKREF) ending in $FF: the
+    # boot loader rewrites those bytes to the banks it found RAM in.  Each entry is
+    # checked against the pieces here: a wrong bank on a bankimm would land outside
+    # them or on a byte that is no bank number.
     python3 - <<'EOF'
 import os
 pieces = [(4, 0x8000, 'b4c.bin'), (4, 0x8300, 'b4t.bin'), (4, 0xBBE0, 'b4x.bin'),
           (5, 0x8000, 'b5c.bin'), (5, 0xB620, 'b5x.bin'),         # (B5X in cleo_b.cfg)
           (6, 0x8000, 'b6c.bin'), (6, 0x8040, 'b6l.bin'), (6, 0x8400, 'b6t.bin'), (6, 0xBD60, 'b6x.bin'),
           (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin')]
-tab, body = bytearray([len(pieces)]), bytearray()
+tab, body, img = bytearray([len(pieces)]), bytearray(), {}
 for bank, addr, fn in pieces:
     d = open(os.path.join('build', fn), 'rb').read()
     tab += bytes([bank, addr & 255, addr >> 8, len(d) & 255, len(d) >> 8])
     body += d
-open('build/BANKS', 'wb').write(tab + body)
-print('BANKS: %d pieces, %d bytes' % (len(pieces), len(tab) + len(body)))
+    img[(bank, addr)] = d
+fix = open('build/bankfix.bin', 'rb').read()
+assert len(fix) % 3 == 0, 'bankfix.bin is not whole entries'
+for i in range(0, len(fix), 3):
+    bank, addr = fix[i], fix[i + 1] | (fix[i + 2] << 8)
+    hit = [d[addr - a] for (b, a), d in img.items() if b == bank and a <= addr < a + len(d)]
+    assert len(hit) == 1, 'bank patch %d:$%04X is in no piece' % (bank, addr)
+    assert 4 <= (hit[0] & 15) <= 7, 'bank patch %d:$%04X names byte $%02X, no bank number' % (bank, addr, hit[0])
+open('build/BANKS', 'wb').write(tab + body + fix + b'\xff')
+print('BANKS: %d pieces, %d bytes, %d bank patches' % (len(pieces), len(tab) + len(body), len(fix) // 3))
 EOF
 done
 python3 ../tools/mkdfs.py build build/cleob.ssd CLEOB \

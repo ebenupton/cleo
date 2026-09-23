@@ -923,7 +923,7 @@ game_frame:
         sta wy+1
         jsr m_clamp_window
 @cam:
-        setbank BANK_LVL
+        setbank BANK_LVL, BANK_LVL
         ; ---- bucket range (16-bit >> 6)
         lda wx+1                    ; shr6 inlined: the t16 staging and the jsr/rts
         asl                         ; were most of its cost, and wx/wy can be read
@@ -1057,7 +1057,7 @@ game_frame:
 @full:  stz BINOK                   ; more objects than a list holds: process this one
         sty obj                     ; now and rebuild next step rather than lose it
         jsr process_object
-        setbank BANK_LVL
+        setbank BANK_LVL, BANK_LVL, 2
 @skip:  ldx bent
 @sk2:   lda LV_BNEXT,x
         bra @walk
@@ -1982,7 +1982,7 @@ process_object:
         tax
         jsr @call
         ; store back
-        setbank BANK_LVL
+        setbank BANK_LVL, BANK_LVL
         ldy obj
         lda fa
         sta O_AL,y
@@ -3215,7 +3215,7 @@ bar_digit:
         dey
         bpl :-
   .if .not MODELB
-        setbank BANK_LVL
+        setbank BANK_LVL, BANK_LVL
   .endif
 bd_same:
         rts

@@ -43,6 +43,69 @@ MODELB = 0
   .endif
 .endmacro
 
+; ---------------------------------------------------------------- bank numbers
+; The Model B's four banks are whichever sockets the boot loader finds RAM in
+; (modelb/src/loader.s).  The code is assembled for banks 4..7 (BANK_SPR, BANK_TILES,
+; BANK_MAP, BANK_LVL) and every byte of it that holds a bank number is recorded here,
+; with the bank whose image holds the byte, for the loader to patch before the game
+; starts (the BANKFIX table, at the end of BANKS).  Code that comes off the disc later
+; -- the level loader, the menu overlay -- is not patched: it reads the physical
+; bank from PBANK (low BSS, four bytes indexed by bank - 4).  On the Master all of
+; this is the plain instruction.
+;   bankimm op, n, b   op #n, the operand a bank number: in bank b's image (0 = the
+;                      low-RAM image, which is copied down from bank 6's); a fourth
+;                      argument tells two alike sites in one routine apart
+;   setbank n, b       page bank n in, from code in bank b (A destroyed); likewise
+;   ldpbank op, n      op #n from code the loader cannot patch: PBANK's byte instead
+;   BANKREF name, b    the byte just emitted is a bank number (data: the far table)
+; The site is marked with a cheap label, @bf_<name>, because any other kind of symbol
+; would end the enclosing routine's @ scope; so two sites in one routine need
+; different names (bankimm's is the operation and the bank -- a clash is a duplicate
+; symbol at assembly, not a silent miss).
+  .if MODELB
+        .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute
+  .endif
+.macro BANKREF name, b
+  .if MODELB
+        .ident(.concat("@bf_", name)):
+        .pushseg
+        .segment "BANKFIX"
+    .if b = 0
+        .byte BANK_MAP
+        .word .ident(.concat("@bf_", name)) - 1 - __LOWCODE_RUN__ + __LOWCODE_LOAD__
+    .else
+        .byte b
+        .word .ident(.concat("@bf_", name)) - 1
+    .endif
+        .popseg
+  .endif
+.endmacro
+.macro bankimm op, n, b, tag
+  .if MODELB
+    .if .blank(b)
+        .error "bankimm: the Model B needs the bank the code is in"
+    .endif
+  .endif
+        op #n
+  .if .blank(tag)
+        BANKREF .sprintf("%s_%d", .string(op), n), b
+  .else
+        BANKREF .sprintf("%s_%d_%d", .string(op), n, tag), b
+  .endif
+.endmacro
+.macro setbank n, b, tag            ; ROMSEL_CPY is the MOS's own shadow of ROMSEL, which
+        bankimm lda, n, b, tag      ; the IRQ handler restores from -- nothing ever read
+        sta ROMSEL_CPY              ; the private copy this used to keep as well
+        sta ROMSEL
+.endmacro
+.macro ldpbank op, n
+  .if MODELB
+        op PBANK + (n - 4)
+  .else
+        op #n
+  .endif
+.endmacro
+
   .if .not MODELB
         .setcpu "65C02"
 .macro jmpx tab

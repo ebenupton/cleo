@@ -14,11 +14,21 @@ export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2
   const s = new MachineSession(model);
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const cpu = s._machine.processor;
-  const bank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
+  // the banks: the code is assembled for banks 4..7 and the boot loader puts them in
+  // the lowest four sockets it finds RAM in -- jsbeeb's Model B has RAM in sockets
+  // 0-7, so bank 7 is socket 3 here.  BSWRAM="8,9,10,11" (any sockets, no ROMs in
+  // them) puts the RAM elsewhere.  bank() and runTo() take the code's numbers.
+  const SW = process.env.BSWRAM ? process.env.BSWRAM.split(",").map(Number) : null;
+  if (SW) cpu.model.swram = Array.from({ length: 16 }, (_, i) => SW.includes(i));
+  const P = cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
+  if (P.length < 4) throw new Error("B: fewer than four sideways RAM sockets");
+  const PB = (b) => (b >= 4 && b <= 7 ? P[b - 4] : b);
+  const bank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, PB(b)); cpu.writemem(0xfe30, PB(b)); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
   const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
   async function runTo(pc, b, budget = 3000) {
-    const h = cpu.debugInstruction.add((p) => p === pc && cpu.readmem(0xf4) === b);
-    try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (cpu.pc === pc && cpu.readmem(0xf4) === b) return; } }
+    const pb = PB(b);
+    const h = cpu.debugInstruction.add((p) => p === pc && cpu.readmem(0xf4) === pb);
+    try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (cpu.pc === pc && cpu.readmem(0xf4) === pb) return; } }
     finally { h.remove(); }
     throw new Error(`B: runTo ${pc.toString(16)} timed out`);
   }
@@ -35,6 +45,6 @@ export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2
   await runToB(A.level_init, 7, 60000);          // the disc load: seeks at DFS's step rate
   if (!keys) bank(7, () => cpu.writemem(A.scan_keys, 0x60));   // inputs from the tool only
   await runToB(A.frame_top, 7);
-  return { s, cpu, A, bank, cyc, runTo };
+  return { s, cpu, A, bank, cyc, runTo, PB };
   async function runToB(pc, b, budget) { return runTo(pc, b, budget); }
 }

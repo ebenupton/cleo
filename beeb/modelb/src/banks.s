@@ -9,39 +9,41 @@
 ; than one bank's code indexes (sprmul5, the row multiples, the ring modulus).  The
 ; Master builds these at start-up; here they are assembled.
 ; ============================================================================
-.macro FAR bank, target
-        .byte bank, <(target-1), >(target-1)
+.macro FAR bank, target, in        ; (in: the bank this copy of the table is in --
+        .byte bank                  ;  the bank byte is patched by the loader, cpu.inc)
+        BANKREF .sprintf("far_%s_%d", .string(target), in), in
+        .byte <(target-1), >(target-1)
 .endmacro
-.macro COMMON_TABLES                ; the far table: the same $40 bytes in every bank
+.macro COMMON_TABLES in             ; the far table: the same $40 bytes in every bank
         .assert * = FARTAB, error, "the far table must be at FARTAB in every bank"
-        FAR BANK_TILES, render5             ; F_RENDER5
-        FAR BANK_TILES, select_backbuf      ; F_SELBB
-        FAR BANK_TILES, title_menu          ; F_TITLE     (the menu overlay)
-        FAR BANK_TILES, help_screen         ; F_HELP
-        FAR BANK_TILES, level_select        ; F_LEVELSEL
-        FAR BANK_TILES, winlose             ; F_WINLOSE
-        FAR BANK_LVL,   build_sections      ; F_BUILDSECT
-        FAR BANK_LVL,   blank_palette       ; F_BLANKPAL
-        FAR BANK_LVL,   set_palette         ; F_SETPAL
-        FAR BANK_LVL,   load_title_b        ; F_LOADTITLE
-        FAR BANK_LVL,   music_stop          ; F_MUSSTOP
-        FAR BANK_LVL,   div10_16            ; F_DIV10
-        FAR BANK_LVL,   drawsprite          ; F_DRAWSPR
-        FAR BANK_LVL,   calc_ring           ; F_CALCRING
-        FAR BANK_TILES, copy_partial        ; F_COPYPART
-        FAR BANK_TILES, mark_dirty_x        ; F_MARKDIRTY (the logic)
-        FAR BANK_TILES, init5               ; F_INIT5     (start-up: with take_over)
+        FAR BANK_TILES, render5, in                 ; F_RENDER5
+        FAR BANK_TILES, select_backbuf, in          ; F_SELBB
+        FAR BANK_TILES, title_menu, in              ; F_TITLE     (the menu overlay)
+        FAR BANK_TILES, help_screen, in             ; F_HELP
+        FAR BANK_TILES, level_select, in            ; F_LEVELSEL
+        FAR BANK_TILES, winlose, in                 ; F_WINLOSE
+        FAR BANK_LVL, build_sections, in            ; F_BUILDSECT
+        FAR BANK_LVL, blank_palette, in             ; F_BLANKPAL
+        FAR BANK_LVL, set_palette, in               ; F_SETPAL
+        FAR BANK_LVL, load_title_b, in              ; F_LOADTITLE
+        FAR BANK_LVL, music_stop, in                ; F_MUSSTOP
+        FAR BANK_LVL, div10_16, in                  ; F_DIV10
+        FAR BANK_LVL, drawsprite, in                ; F_DRAWSPR
+        FAR BANK_LVL, calc_ring, in                 ; F_CALCRING
+        FAR BANK_TILES, copy_partial, in            ; F_COPYPART
+        FAR BANK_TILES, mark_dirty_x, in            ; F_MARKDIRTY (the logic)
+        FAR BANK_TILES, init5, in                   ; F_INIT5     (start-up: with take_over)
         .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"
         .res $40 - 3*NFAR
 .endmacro
         .segment "COMMON4"
-        COMMON_TABLES
+        COMMON_TABLES BANK_SPR
         .segment "COMMON5"
-        COMMON_TABLES
+        COMMON_TABLES BANK_TILES
         .segment "COMMON6"
-        COMMON_TABLES
+        COMMON_TABLES BANK_MAP
         .segment "COMMON7"
-        COMMON_TABLES
+        COMMON_TABLES BANK_LVL
 
 ; ---------------------------------------------------------------- the small tables
 ; The Master builds these at start-up; here they are assembled, each in the bank of
@@ -156,7 +158,7 @@ init5:
         inx
         cpx #<__TILBSS_SIZE__
         bne :-
-        lda #BANK_SPR
+        bankimm lda, BANK_SPR, BANK_TILES
         sta spbank
         lda #$FF
         sta BUF_BARQ

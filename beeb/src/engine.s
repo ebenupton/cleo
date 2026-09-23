@@ -415,6 +415,8 @@ BUF_BARQ:  .res 2
 spbank:    .res 1
 DIRTYCNT:  .res 2                   ; (the game loop)
 farx:      .res 1                   ; X across a far call (farcall needs X: m_mark_dirty)
+PBANK:     .res 4                   ; the physical bank of each of banks 4..7 (the loader's:
+                                    ; cpu.inc -- read by what the loader cannot patch)
         .segment "LGCLOBSS"         ; bank 7, below the level's tables: the sprite
 SPRREC:    .res 2*MAXREC*10         ; prologue's records
 RECCNT:    .res 2
@@ -452,12 +454,6 @@ curR7:     .res 1
         PLACE "CODE", "TILCODE"
 
 ; ---------------------------------------------------------------- macros
-.macro setbank n                    ; ROMSEL_CPY is the MOS's own shadow of ROMSEL, which
-        lda #n                      ; the IRQ handler restores from -- nothing ever read
-        sta ROMSEL_CPY              ; the private copy this used to keep as well
-        sta ROMSEL
-.endmacro
-
 .macro crtc reg, val
         lda #reg
         sta CRTC_IDX
@@ -1393,7 +1389,7 @@ erase_old:                          ; redraws are bank 5's tile blitter: a far c
         lda (rp),y
         sta rc_y
   .if MODELB
-        lda #BANK_TILES             ; bank 5's, by low RAM's direct switch (its
+        bankimm lda, BANK_TILES, BANK_LVL   ; bank 5's, by low RAM's direct switch (its
         jsr callbank                ; BANKENTRY is drawrect_clip)
   .else
         jsr drawrect_clip
@@ -1526,7 +1522,7 @@ drawsprite:
         asl
         rol ptr+1
         ldx spbank
-        cpx #BANK_SPR
+        bankimm cpx, BANK_SPR, BANK_LVL
         bne @titledir
   .if .not MODELB               ; (Model B: the directory is in this bank)
         ldx #BANK_LVL           ; SPR_TABLE is in bank 7; the whole prologue reads
@@ -1551,13 +1547,13 @@ drawsprite:
         ldy #6
         lda (ptr),y
         sta sp_flags
-        ldx #BANK_SPR
+        bankimm ldx, BANK_SPR, BANK_LVL
         bitimm 4
         beq :+
-        ldx #(BANK_SPR|$80)
+        bankimm ldx, (BANK_SPR|$80), BANK_LVL
 :       bitimm $10              ; A still holds the flags byte
         beq :+
-        ldx #BANK_TIL1
+        bankimm ldx, BANK_TIL1, BANK_LVL
 :       stx sp_dbank            ; wanted later: the directory is still being read
   .if MODE1
         lda sp_id
@@ -4600,7 +4596,7 @@ maprow: tay
 
 ; A = (mapptr),y ; Y preserved
 mapbyte:
-        lda #BANK_MAP
+        bankimm lda, BANK_MAP, 0
         sta ROMSEL_CPY
         sta ROMSEL
         lda (mapptr),y
@@ -4608,7 +4604,7 @@ mapbyte:
 
 ; store A at (mapptr),y ; Y preserved
 mapput: pha
-        lda #BANK_MAP
+        bankimm lda, BANK_MAP, 0
         sta ROMSEL_CPY
         sta ROMSEL
         pla
@@ -4789,7 +4785,7 @@ sext:   and #$80
         PLACE "LOW2", "LOWCODE"
 pagelogic:                          ; A, X, Y and the carry all come through intact:
         pha                         ; these sit in the middle of calls that return values
-        lda #BANK_LVL
+        bankimm lda, BANK_LVL, 0
         sta ROMSEL_CPY
         sta ROMSEL
         pla

@@ -16,15 +16,14 @@ entry:  ldx #@stubend-@stub-1
         dex
         bpl :-
         jmp $0100
-@stub:  lda #BANK_MAP
+@stub:  bankimm lda, BANK_MAP, BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
         jmp start6
 @stubend:
 
         .segment "MAPLO"            ; bank 6
-        .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute
-        .import __LOWCODE_SIZE__: absolute
+        .import __LOWCODE_SIZE__: absolute   ; (LOAD and RUN: cpu.inc, for the bank patches)
 start6:
         sei
         ldx #$3F                    ; the stack is 64 bytes: $0100-$013F
@@ -62,7 +61,7 @@ start6:
         dex
         bpl :-
         jmp $0100
-@to7:   lda #BANK_LVL
+@to7:   bankimm lda, BANK_LVL, BANK_MAP
         sta ROMSEL_CPY
         sta ROMSEL
         jmp start7
@@ -70,6 +69,11 @@ start6:
 
         .segment "LGCCODE"
 start7:
+        ldx #3                      ; the physical banks, from where the loader put them
+@pb:    lda dsk_banks,x             ; (start6 has just zeroed the low BSS)
+        sta PBANK,x
+        dex
+        bpl @pb
         jsr lvreset                 ; the records, the buffers' state
         ; what the Master's init_tables sets that is this bank's or the zero page's
         stz MUSON
