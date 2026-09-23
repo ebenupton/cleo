@@ -497,7 +497,10 @@ mirror_copy:
 ; ---------------------------------------------------------------- the CRTC
         .segment "LGCLO"
 crtc_init:                          ; start the chain at the bar and let vsync re-phase
-        ldx #10
+        ldx #8                      ; no interlace: the MOS's MODE 1 leaves interlace sync
+        lda #0                      ; on, which puts every other field's vsync half a
+        jsr @w                      ; scanline later and the whole chain with it (the
+        ldx #10                     ; Master's crtc_init writes 0 too)
         lda #$20                    ; the MOS's cursor off
         jsr @w
         ldx #9
