@@ -1,0 +1,37 @@
+--- Video.cpp.orig	2026-09-24 00:32:37
++++ Video.cpp	2026-09-24 00:32:37
+@@ -1102,7 +1102,10 @@
+ }
+ 
+ /*-------------------------------------------------------------------------------------------------------------*/
++FILE *VideoLog = nullptr;           // headless harness: CRTC restarts and register writes
++static int vlLines = 0;
+ void VideoDoScanLine(void) {
++  if (VideoLog) vlLines++;
+   int l;
+   // DebugTrace("CharLine=%d InCharLineUp=%d\n", VideoState.CharLine, VideoState.InCharLineUp);
+   if (VideoState.IsTeletext) {
+@@ -1192,6 +1195,7 @@
+       VideoState.PixmapLine=0;
+       VideoState.IsNewTVFrame = true;
+ 
++      if (VideoLog) fprintf(VideoLog, "VSYNC row=%d cyc=%lld\n", VideoState.CharLine, (long long)TotalCycles);
+       SysVIATriggerCA1Int(1);
+       VideoState.VSyncState=(CRTC_SyncWidth>>4);
+     }
+@@ -1243,6 +1247,7 @@
+     // RTW - neater way of detecting the end of the PAL frame, which doesn't require making a special case
+     // of the vertical total adjust period.
+     if (VideoState.CharLine>CRTC_VerticalTotal && VideoState.InCharLineUp>=CRTC_VerticalTotalAdjust) {
++      if (VideoLog) { fprintf(VideoLog, "RESTART lines=%d next=%04X R4=%d R6=%d R7=%d R9=%d interlace=%d cyc=%lld\n", vlLines, (CRTC_ScreenStartHigh << 8 | CRTC_ScreenStartLow) * 8, CRTC_VerticalTotal, CRTC_VerticalDisplayed, CRTC_VerticalSyncPos, CRTC_ScanLinesPerChar, (int)VideoState.InterlaceFrame, (long long)TotalCycles); vlLines = 0; }
+       VScreenAdjust=0;
+       if (!FrameNum && VideoState.IsNewTVFrame) {
+         VideoAddCursor();
+@@ -1318,6 +1323,7 @@
+ 
+ void CRTCWrite(int Address, unsigned char Value)
+ {
++  if (VideoLog && (Address & 1)) fprintf(VideoLog, "  W R%d=%d row=%d line=%d cyc=%lld\n", CRTCControlReg, Value, VideoState.CharLine, VideoState.InCharLineUp, (long long)TotalCycles);
+   if (Address & 1)
+   {
+     #if ENABLE_LOG

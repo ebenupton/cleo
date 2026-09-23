@@ -219,6 +219,24 @@ reads the board byte instead.  The probe has to pick the board by how MANY banks
 way finds: a board's latch rests on bank 0, so writing through ROMSEL "works" for
 that one bank.  Never put code in the stack page.
 
+**BeebEm can be lock-stepped.**  Its Windows source has a portable core; `tools/hbeebem`
+builds it headless (a shim windows.h, a stub BeebWin whose line buffer is the picture,
+stubs for the peripherals) with a harness that boots the disc as bopen.mjs does and
+prints the game's state at every frame_top, while `tools/bdump.mjs` prints jsbeeb's.
+Over 960 frames on four levels the two agree on every byte of logic state and every
+CRTC register, and their pictures agree cell for cell in 47 of 48 samples with the
+committed disc -- the 48th is the two emulators flipping buffers one field apart, a
+timing difference that dirty-rectangle rendering shows as the moved sprites alone.
+With the disc from before the R8 fix, BeebEm's sections run 81 scanlines for 80 and 4
+for 2 (its interlace stretch, once per restart), the chain is out of phase from the
+second frame, and 10 of 24 pictures show the reporter's band of misplaced rows under
+the bar.  Three traps in building the comparison: snapshot a picture at the game's own
+vsync (a mid-field snapshot mixes two fields; the two emulators' vsyncs are the only
+shared clock); compare pictures at fixed integer scales (a bounding box that includes
+one stray line stretches the other picture into a fake shift); and after any header
+change rebuild every object, or two files disagree about a class layout and read
+garbage.
+
 ## Verification that stands
 
 - B logic: `modelb/tools/bdiff.mjs frames seed level` -- a 20-row Master
