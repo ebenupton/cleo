@@ -3680,6 +3680,15 @@ irq_handler:
         ; then land about 40, 60 and 80 cycles in, with the rest behind them.  Writing
         ; R4 third put it at ~140 for a 2-line P2: that section never ended, Q's R6
         ; hit never came, and both borders lit up on every scroll frame.
+        ; R12/R13 go LAST, after the T1 reload and the index bookkeeping, so they land
+        ; on scanline 1 (measured: ~140-175 cycles in).  Written straight after R7 they
+        ; fell at ~105-125, across the end of scanline 0 -- and on a partial (R4 = 0,
+        ; written on row 0 = its last row) some 6845s end the frame at once, the VL6845
+        ; among them (Tom Seddon's r4-3), and reload the start address as that scanline
+        ; ends: a Master with such a chip lost the R12 write and showed the playfield
+        ; from A's high byte with P's low byte, 256 chars adrift, a 16-char tear down
+        ; every row whenever the fine scroll was not 0.  Two-line sections still have
+        ; 80 cycles in hand before the next restart.
         ; ACCCON D is different again: it is the memory map, sampled by every fetch,
         ; so it must be in place BEFORE the boundary -- the bar's T1 fires a further
         ; BARLEAD us early so D lands in the horizontal blanking of the bar's last line.
@@ -3710,14 +3719,6 @@ irq_handler:
         lda SECTAB+5,x
         sta CRTC_DAT
         sta curR7                   ; the vsync handler re-phases the frame from this
-        lda #12
-        sta CRTC_IDX
-        lda SECTAB,x
-        sta CRTC_DAT
-        lda #13
-        sta CRTC_IDX
-        lda SECTAB+1,x
-        sta CRTC_DAT
         lda SECTAB+6,x
         sta VIA_T1LL
         lda SECTAB+7,x
@@ -3728,12 +3729,20 @@ irq_handler:
         ; section's R7 is 30, so C = 1 on the way past, as the adc below needs.
         lda curR7                   ; R7, just written
         cmp #QVSYNC
-        beq @stay
+        beq :+
         txa
-        adc #7                      ; cpy #0 always leaves C set, so this adds 8
-        sta SECIDX                  ; X is dead: @exit restores it from irq_x
-@stay:  ldy irq_y                   ; @exit inlined: no jmp on the chain-step path
-        ldx irq_x                   ; (X is still SECIDX here, so nothing to store)
+        adc #7                      ; C is set (30 >= QVSYNC), so this adds 8
+        sta SECIDX                  ; (X still indexes this entry for R12/R13 below)
+:       lda #12                     ; the next section's address, last: see above
+        sta CRTC_IDX
+        lda SECTAB,x
+        sta CRTC_DAT
+        lda #13
+        sta CRTC_IDX
+        lda SECTAB+1,x
+        sta CRTC_DAT
+        ldy irq_y                   ; @exit inlined: no jmp on the chain-step path
+        ldx irq_x
         lda $FC
         rti
 @notT1:

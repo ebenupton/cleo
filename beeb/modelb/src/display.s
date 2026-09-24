@@ -38,14 +38,6 @@ isr_body:
         lda SECTAB+5,x
         sta CRTC_DAT
         sta curR7                   ; the vsync handler re-phases the frame from this
-        lda #12
-        sta CRTC_IDX
-        lda SECTAB,x
-        sta CRTC_DAT
-        lda #13
-        sta CRTC_IDX
-        lda SECTAB+1,x
-        sta CRTC_DAT
         lda SECTAB+6,x
         sta VIA_T1LL
         lda SECTAB+7,x
@@ -53,11 +45,19 @@ isr_body:
         lda VIA_T1CL                ; clear the T1 flag
         lda curR7                   ; the chain stops at Q, the only section whose R7
         cmp #QVSYNC                 ; is the vsync row: a late vsync must not walk it
-        beq @exit                   ; off the end of SECTAB
+        beq :+                      ; off the end of SECTAB
         txa
         clc
         adc #8
-        sta SECIDX
+        sta SECIDX                  ; (X still indexes this entry for R12/R13 below)
+:       lda #12                     ; the next section's address LAST, so it lands on
+        sta CRTC_IDX                ; scanline 1: written straight after R7 it fell
+        lda SECTAB,x                ; across the end of scanline 0, where a 6845 that
+        sta CRTC_DAT                ; ends a partial (R4 = 0 on row 0) at once -- the
+        lda #13                     ; VL6845 -- reloads its start address and lost the
+        sta CRTC_IDX                ; R12 write (engine.s @t1arm has the story)
+        lda SECTAB+1,x
+        sta CRTC_DAT
 @exit:  rts
 
 ; ---- vsync: restart T1 first (constant latency), counter = vsync -> the bar
