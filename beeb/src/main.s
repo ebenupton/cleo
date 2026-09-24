@@ -1,9 +1,6 @@
 ; ============================================================================
 ; CLEO - main program: init, loading, game
 ; ============================================================================
-        .ifndef MODE1
-MODE1 = 0                           ; ca65 -D MODE1=1: MODE 1 build (assets from
-        .endif                      ; MODE=1 convert.py): 4 colours, opaque sprites
         .include "cpu.inc"
         .code
         jmp start
@@ -37,7 +34,7 @@ start:
         iny
         cpy #<(__LOW_LAST__ - __LOW_START__)
         bne :-
-        ; LOW2 follows LOW in the file; its home ($0300) is VDU workspace until MODE 2 has
+        ; LOW2 follows LOW in the file; its home ($0300) is VDU workspace until MODE 1 has
         ; been selected and the screen clear wipes the file image, so stage it in SPRREC
         lda #<(__MAIN_LAST__ + __LOW_LAST__ - __LOW_START__)
         sta ptr
@@ -56,7 +53,7 @@ start:
         cli
         lda #22
         jsr OSWRCH
-        lda #2-MODE1
+        lda #1
         jsr OSWRCH
         sei
         ldy #0
@@ -131,8 +128,6 @@ start:
         .segment "LOGIC"
 SPR_TABLE:
         .incbin "build/SPRTAB"
-  .if MODE1
 SPRMASK:                            ; mask plane address by sprite id (MODE 1)
         .incbin "build/SPRMASK"
-  .endif
         .code

@@ -2,7 +2,7 @@
 """Cleo tile dither editor.
 
 Shows a level zoomed 2x, lets you click a tile to select it, view its dithered
-MODE 2 state and paint the pixels by hand.  Hand edits are saved to
+dithered state and paint the pixels by hand.  Hand edits are saved to
 build/tile_edits.json, which convert.py reads and uses in place of the automatic
 dither for those tiles (re-run ./build.sh to bake them into the disc).
 
@@ -24,8 +24,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 import convert  # noqa: E402  (runs the converter once; gives us dither + level data)
 
 ZOOM = 2
-TILE_W, TILE_H = 16, 16          # a tile shown as 16x16 px (8 MODE2 px * 2 wide, 16 scanlines)
-# editor cell: MODE 2 pixels are 2:1 (twice as wide as a scanline is tall).
+TILE_W, TILE_H = 16, 16          # a tile shown as 16x16 px (8 game px * 2 wide, 16 scanlines)
+# editor cell: a game pixel is 2:1 on a scanline (twice as wide as a scanline is tall).
 # The grid is 8 pixels wide x 16 scanlines tall; a game pixel is two scanlines.
 CW, CH = 26, 13
 PALETTE_NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']

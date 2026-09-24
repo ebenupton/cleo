@@ -104,7 +104,7 @@ ones. The `partial` loop, `SPRLINE2` (half-res, title only) and the box-star cop
 
 ## 5. What has to change, in order
 
-1. `convert.py`: `pack_mode2` output post-processed — both-opaque bytes re-tagged (bit 7,
+1. `convert.py`: the packer's output post-processed — both-opaque bytes re-tagged (bit 7,
    black as 0, RUN bit from the run test), `$80` → `$44`. Same routine for the title
    pack (`rect_image`) and the box stars, so one encoder feeds every blitter.
 2. `engine.s` table init: `IDENT` → `ORTAB` contents plus the four patched entries.

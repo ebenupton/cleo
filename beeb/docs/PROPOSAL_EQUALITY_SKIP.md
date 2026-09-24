@@ -151,7 +151,7 @@ vertically repeating ones (28% of cells instead of 17%), but does not change the
 amortisation arithmetic above.
 
 Kept from the exercise: the `LOW2` code area ($0206–$03FF, 506 bytes, staged through
-`SPRREC` around the MODE 2 call), the init-only and dirty-tile routines living there, and
+`SPRREC` around the MODE call), the init-only and dirty-tile routines living there, and
 `drawrect` taking its map-row pointer from the level's row tables instead of a shift
 loop. CODE has 384 bytes free again.
 

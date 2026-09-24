@@ -78,7 +78,6 @@ load_level:
 ; File table.  Five parallel arrays rather than five-byte records: there are more
 ; than fifty files now and index * 5 does not fit in a byte.
         .include "files.inc"
-        .assert VMODE = 2 - MODE1, error, "assets were converted for the other MODE: rerun tools/convert.py"
 FTMODE .set 0
 .macro FILE sec, n, bank, dest
 .if FTMODE = 0

@@ -133,7 +133,7 @@ for (lv, sub), L in sorted(levels.items()):
     for force, sub_dir in ((True, ''), (False, 'orig')):
         img, n = render(m, force)
         im = Image.fromarray(img)
-        im = im.resize((im.width * 2, im.height), Image.NEAREST)     # MODE 2 pixels are 2:1
+        im = im.resize((im.width * 2, im.height), Image.NEAREST)     # a game px on a scanline is 2:1
         im.save(os.path.join(out, sub_dir, name + '.png'))
         if force:
             print('%s: %dx%d tiles, %d (%.0f%%) forced black' % (name, m.shape[1], m.shape[0], n, 100 * n / m.size))

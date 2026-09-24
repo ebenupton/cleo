@@ -117,7 +117,7 @@ constants — gravity `+80`, drag `*31>>5`, jump `−1280`, etc.). Every place t
 ## 5. Tooling that paid for itself
 
 - `tools/convert.py` — the one-shot asset pipeline (levels → packs with per-row page
-  tables, tiles/sprites → MODE 2 with the ordered dither, bar/font/title). Re-run it by
+  tables, tiles/sprites → screen bytes with the CMYK dither, bar/font/title). Re-run it by
   hand: `build.sh` does not.
 - `tools/javadis.py` — bytecode disassembler (see §2).
 - Headless jsbeeb harnesses (`tools/profile.mjs`, `spawncheck.mjs`, `spritelog.mjs`,

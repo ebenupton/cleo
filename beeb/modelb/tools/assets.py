@@ -3,7 +3,7 @@
 
    python3 tools/assets.py            (all sixteen levels; prints a fit report)
 
-The Master's convert.py is imported for its tables (MODE=1).  The shared files (SPR,
+The Master's convert.py is imported for its tables.  The shared files (SPR,
 SPRAND, BOX, TILESO, TILESI, TITLE, MUSIC) go on the disc as convert.py wrote them;
 the game's own loader (ldprog.s) stages one at a time in display RAM and copies the
 pieces a level needs into the banks, where the packer here decided they go.  What
@@ -24,7 +24,6 @@ this writes to build/:
 import os, sys, io, contextlib, importlib.util
 import numpy as np
 
-os.environ['MODE'] = '1'
 HERE = os.path.dirname(os.path.abspath(__file__))
 BEEB = os.path.dirname(os.path.dirname(HERE))
 os.chdir(BEEB)
@@ -163,7 +162,7 @@ def level_fold(cm, live_reps, usage, room):
         for k in ids[:i]:
             if k in m._nomerge or m.alt_class[k] != m.alt_class[c]:
                 continue
-            d = _bits(m.tiles_mode2[c], m.tiles_mode2[k])
+            d = _bits(m.tiles_bytes[c], m.tiles_bytes[k])
             if d <= 96:
                 cand.append((usage.get(c, 0) * _flatdiff(c, k), d, c, k))
     cand.sort()
@@ -277,7 +276,7 @@ def pack_level(lv, sub):
             a |= 0x80
         return a
     def ident(r):
-        return (bytes(m.tiles_mode2[r]), attr_of(r), m.alt_class[r])
+        return (bytes(m.tiles_bytes[r]), attr_of(r), m.alt_class[r])
     bybytes = {}
     for r in reps:
         bybytes.setdefault(ident(r), r)
@@ -285,7 +284,7 @@ def pack_level(lv, sub):
     ureps = sorted(set(canon.values()))
     flats, halves, fulls = [], {'top': [], 'bot': [], 'pair': []}, []
     for r in ureps:
-        t = m.tiles_mode2[r]
+        t = m.tiles_bytes[r]
         fp = flat_pair(t)
         if fp is not None:
             flats.append((r, fp)); continue
@@ -333,7 +332,7 @@ def pack_level(lv, sub):
         tilelist.append(setidx[r])
     halflist = bytearray()                  # per half: the set index and the stored row
     for r, stored, pr in hlist:
-        halflist += bytes([setidx[r], 0 if stored == bytes(m.tiles_mode2[r][:32]) else 1])
+        halflist += bytes([setidx[r], 0 if stored == bytes(m.tiles_bytes[r][:32]) else 1])
     lut = np.zeros(len(m.compact), dtype=np.uint8)
     for c, t in local.items():
         lut[c] = t

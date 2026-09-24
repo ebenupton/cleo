@@ -291,7 +291,7 @@ Y (the one site with Y live is `ldazy`), `bitimm` keeps A.
 ## Verification
 
 - `tools/bdiff.mjs N seed level`: the 20-row Master (`../build/ref_mode1_20`, the
-  Master built with `VISROWSDEF=20 MODE1=1 ./build.sh`) and this build, same keys at every
+  Master built with `VISROWSDEF=20 ./build.sh`) and this build, same keys at every
   `frame_top`, all of the logic state compared each frame.  `BMODEL=B1770` runs the
   1770 machine.  The title is patched out and the level chosen the way the Master
   harness does it (`tools/bopen.mjs`, shared by the tools below).
@@ -307,5 +307,5 @@ Y (the one site with Y live is `ldazy`), `bitimm` keeps A.
 
 21 visible rows against 30 (84 game px: the world's in-range decisions follow
 VISLINES, which is why the reference for the lock-step test is a 21-row Master).  The
-picture starts 72 lines after vsync, 4 scanlines below where a MODE 2 frame's centre
+picture starts 72 lines after vsync, 4 scanlines below where a standard frame's centre
 would put it.  The pause menu is a freeze.  The tiles are the Master's, unfolded.

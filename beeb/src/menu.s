@@ -141,11 +141,7 @@ draw_glyph_rows:
         beq :+
         jmp @row                    ; (the 6502 spellings put @row out of a branch's reach)
 :       rts
-  .if MODE1
 pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game px
-  .else
-pairtab: .byte $00, $05, $0A, $0F
-  .endif
 
 ; ---------------------------------------------------------------- menu screen helpers
 ; clear the current back buffer ring ($3000-$7FFF) to black

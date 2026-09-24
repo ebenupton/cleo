@@ -1,6 +1,6 @@
 #!/bin/sh
 # Cleo, Model B target: the Master's sources (../src) assembled with MODELB=1 and
-# MODE1=1, this directory's own files, every level packed by tools/assets.py, and a
+# this directory's own files, every level packed by tools/assets.py, and a
 # disc the game loads itself from (docs/PLAN_MODELB_FULL.md).
 set -e
 cd "$(dirname "$0")"
@@ -23,7 +23,7 @@ for pass in 1 2 3; do
     python3 ../tools/mkdfs.py table build/files.inc $DISC
     [ $pass = 3 ] && { cmp -s build/files.inc build/files.prev || { echo "files.inc did not settle"; exit 1; }; break; }
     # the include order matters: this target's build/ and src/ before the Master's src/
-    ca65 -g --cpu 6502 -D MODELB=1 -D MODE1=1 -I build -I src -I ../src \
+    ca65 -g --cpu 6502 -D MODELB=1 -I build -I src -I ../src \
          -o build/main.o src/main.s -l build/main.lst
     ld65 -C cleo_b.cfg -o build/unused.bin build/main.o -m build/map.txt -Ln build/labels.txt
     # what the loaders need from the game: its addresses

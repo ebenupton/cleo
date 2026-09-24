@@ -2,7 +2,7 @@
 
 `beeb/modelb` builds the whole game for a Model B with 64K of sideways RAM from the
 same `src/engine.s`, `src/logic.s`, `src/game.s` and `src/menu.s` as the Master,
-assembled with `MODELB=1` (and `MODE1=1`): every level is gathered from the disc by
+assembled with `MODELB=1`: every level is gathered from the disc by
 the game's own loader, the menus live in an overlay over the tiles.  The Master's
 behaviour is unchanged by every conditional in them (the one-level demo's build was
 byte-identical to `build/ref_mode1`; the full game's shared edits -- a branch made a
@@ -33,9 +33,9 @@ macro.  All are macros now (`cmpz`, `ldaz`); the assembler with `--cpu 6502`
 rejects any that come back.
 
 **ca65 scopes do not see globals in `.if`.**  A macro expanded inside a `.scope`
-(the sprite row loop, assembled once per sprite bank) cannot test `MODE1`: the
+(the sprite row loop, assembled once per sprite bank) cannot test `MODELB`: the
 symbol is taken as a not-yet-defined scope local and the `.if` fails as
-non-constant.  Inside such macros the globals are written `::MODE1`, `::MODELB`.
+non-constant.  Inside such macros the globals are written `::MODELB`, `::BANK_SPR`.
 Zero-page symbols resolve correctly inside scopes (the addressing mode stays zp).
 
 **A bank cannot page itself out and carry on.**  The instruction after `sta $FE30`

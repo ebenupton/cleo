@@ -33,7 +33,7 @@ buffer being shown.
 | 27 visible rows (108 px) | **30 visible rows (120 px)**; 32 - 30 = 1 partial-compose row + 1 spare |
 
 Row budget for 30 visible: bar 2 + playfield 30 = 32 displayed rows, Q 7 rows -- exactly a
-standard MODE 2 frame (R6 = 32, R4 = 38). Vsync at Q row 1 keeps the existing 48-line
+standard 20K-mode frame (R6 = 32, R4 = 38). Vsync at Q row 1 keeps the existing 48-line
 vsync-to-T constant. 31 visible is possible (Q = 6, vsync at Q row 0) with zero slack; not
 first.
 
@@ -178,7 +178,7 @@ the copy's dest can straddle `$8000`, so it folds on the page crossing like the 
 (an offset under 8 on an 8-aligned pointer keeps page crossings on the real char
 boundaries; a negative one does not), and the unrolled copy runs its line pairs in
 descending order so the entry point still selects by `wfine`. `QROWS = 7`, `QVSYNC = 3`:
-32 lines vsync-to-bar, 24 below. That is where the Master MOS's own MODE 2 puts its
+32 lines vsync-to-bar, 24 below. That is where the Master MOS's own graphics modes put the
 picture (measured: R7 = 35, lit scanlines 32-287 in jsbeeb's frame; I had assumed the
 Model B's R7 = 34). The bar-drawing window is 2048 cycles now, and the bar probe shows
 0 unstable frames on L0/L3/L6.

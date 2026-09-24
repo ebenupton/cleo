@@ -1,6 +1,6 @@
 # Cleo for the BBC Master 128
 
-A MODE 2 port of the 2004 J2ME platformer *Cleo* (High Energy Magic), built from the
+A MODE 1 port of the 2004 J2ME platformer *Cleo* (High Energy Magic), built from the
 game data and decompiled logic in the two original JARs.
 
 ## Running it
@@ -22,10 +22,11 @@ The original JAR contents are expected in `../v500/` (unzipped `CleoV500.jar`).
 
 ## How it works
 
-* **Display**: MODE 2, each square game pixel becomes two vertically adjacent MODE 2
-  pixels (1 MODE 2 pixel wide, 2 scanlines tall). Colours are approximated with a 2x4
-  ordered dither over the 8-colour palette (`tools/convert.py`), sized so it is
-  invariant under the 2-pixel horizontal scroll step.
+* **Display**: MODE 1, each square game pixel becomes a 2x2 block of MODE 1 pixels
+  (2 pixels wide, 2 scanlines tall). Colours are approximated by choosing, per game
+  pixel, the four cyan/magenta/yellow/black inks nearest the source colour and laying
+  them in a fixed kernel order (`tools/convert.py`), so the pattern is invariant under
+  the 2-pixel horizontal scroll step.
 * **Double buffering**: the main-RAM screen and the shadow RAM (LYNNE) at &3000-&7FFF
   are alternated with the ACCCON D bit; the CPU draws into the other one via the X bit.
 * **Scrolling**: each 20K buffer is a linear ring of 32 character rows. Horizontal

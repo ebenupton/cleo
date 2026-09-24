@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert the Cleo J2ME assets into BBC Master MODE 2 data files.
+"""Convert the Cleo J2ME assets into BBC MODE 1 data files.
 
 Outputs (in build/):
   SPR      bank 4 image: sprite table, font, bar, digits, sprite data, sfx
@@ -32,209 +32,16 @@ def load_indexed(name):
     return idx, rgb, tr
 
 # ---------------------------------------------------------------------------
-# Ordered dither: independent per-channel thresholding against an ordered
-# matrix (the original scheme).  The only changes from the first version are a
-# 2x4 kernel instead of 4x4 (square on screen and invariant under the 2 px
-# horizontal scroll step, and it collapses to a vertical sub-pixel pair at a
-# 50% level) and the sky being forced to solid cyan (done at the palette level).
-# ---------------------------------------------------------------------------
+# The dither.
 GAMMA = 1.35   # compromise: pure sRGB thresholding is too bright, linear too dark
 
-# 2x4 ordered matrix (values 0..7).  Arranged so a 50% level lights alternate
-# scanlines (rows 1 & 3) -> a vertical sub-pixel pair; 25%/75% are dispersed.
-BAYER = np.array([[6, 4],
-                  [0, 2],
-                  [5, 7],
-                  [3, 1]], dtype=np.float32)
-
-# 8x8 blue-noise (void-and-cluster, toroidal, generated once with sigma 1.5 seed 0):
-# an ordered threshold mask with no long runs at any level, so a flat mid-tone dithers
-# to a high-frequency stipple instead of the 2x4 Bayer's alternating-scanline stripes.
-# It is 8x8 = a tile, and every tile dithers at phase 0, so it tiles seamlessly and the
-# baked pattern is scroll-invariant.  The three channels use rolled copies so a grey
-# does not collapse to a coordinated black/white pattern.  MODE 2 only (dither is
-# reassigned to dither_cmyk in MODE 1).
-BLUE8 = np.array([[47, 34, 3, 20, 56, 13, 62, 4], [22, 43, 59, 26, 42, 9, 30, 16],
-                  [57, 10, 15, 38, 2, 49, 53, 35], [1, 28, 52, 33, 61, 19, 25, 40],
-                  [63, 48, 5, 23, 11, 45, 6, 14], [44, 18, 37, 41, 54, 29, 58, 32],
-                  [7, 27, 60, 8, 17, 0, 50, 21], [55, 12, 51, 31, 46, 36, 24, 39]], dtype=np.float32)
-BLUE_OFF = [(0, 0), (0, 0), (0, 0)]   # one shared mask: a region orders as a density stipple
-USE_BLUE = os.environ.get('DITHER2', 'bayer') == 'blue'   # DITHER2=blue for the blue-noise look
-
-
-def dither(rgb_img, alpha, x0=0, y0=0, full=True):
-    """rgb_img: (h,w,3) uint8 ; alpha: (h,w) bool.
-    Returns MODE 2 colour indices (h2, w) with h2 = 2h if full else h.
-    Transparent -> 0, opaque black -> 8.  Ordered 2x4 Bayer dither per channel."""
-    h, w, _ = rgb_img.shape
-    v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
-    if full:
-        v = np.repeat(v, 2, axis=0)
-        alpha = np.repeat(alpha, 2, axis=0)
-    hh = v.shape[0]
-    yb = (2 * y0 if full else y0)
-    if USE_BLUE:
-        bits = np.empty((hh, w, 3), np.uint8)
-        for ch in range(3):
-            oy, ox = BLUE_OFF[ch]
-            m = np.roll(np.roll(BLUE8, oy, 0), ox, 1)
-            yy = (np.arange(hh) + yb) % 8
-            xx = (np.arange(w) + x0) % 8
-            thr = (m[yy][:, xx] + 0.5) / 64.0
-            bits[:, :, ch] = (v[:, :, ch] > thr).astype(np.uint8)
-    else:
-        kh, kw = BAYER.shape
-        yy = (np.arange(hh) + yb) % kh
-        xx = (np.arange(w) + x0) % kw
-        thr = (BAYER[yy][:, xx] + 0.5) / float(BAYER.max() + 1)
-        bits = (v > thr[:, :, None]).astype(np.uint8)
-    col = bits[:, :, 0] | (bits[:, :, 1] << 1) | (bits[:, :, 2] << 2)
-    col = np.where(col == 0, 8, col).astype(np.uint8)
-    col = np.where(alpha, col, 0).astype(np.uint8)
-    return col
-
-
-# ---------------------------------------------------------------------------
-# Luma-preserving ordered dither (Yliluoma-style palette mixing + an HVS luma-
-# variance penalty).  For each source colour we pre-compute the best two-palette
-# mixture: the cost is the mix's average error (luma weighted far above chroma,
-# in linear light) PLUS lambda * the luma spread of the two colours.  The spread
-# term is what rejects "1/8 black in a pale wall" -- a right-average, ruinous-luma
-# mix -- in favour of e.g. yellow+white (chroma only, invisible) or green+magenta
-# for a grey.  The plan is sorted by luma so the threshold matrix places luma-
-# neighbours next to each other.  MODE 2 only.
-# ---------------------------------------------------------------------------
-def _wspace(x):
-    return (np.asarray(x, float) / 255.0) ** GAMMA   # the space Bayer dithers in
-def _lab(g):
-    """working-space colour (gamma^GAMMA) -> CIELAB via sRGB.  (h,3) or (3,)"""
-    srgb = np.clip(np.asarray(g, float), 0, 1) ** (1.0 / GAMMA)
-    lin = np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
-    M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
-    xyz = lin @ M.T / np.array([0.95047, 1.0, 1.08883])
-    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16.0 / 116)
-    L = 116 * f[..., 1] - 16
-    a = 500 * (f[..., 0] - f[..., 1]); b = 200 * (f[..., 1] - f[..., 2])
-    return np.stack([L, a, b], -1)
-_PLIN = _wspace(BEEB_RGB.astype(float))
-_PL = _lab(_PLIN)[:, 0]                              # each palette colour's L*
-YLI_K = os.environ.get('YLI_K', '4x4')            # placement: 2x4 (alternate scanlines at 50%) or 4x4 (checkerboard)
-if YLI_K == '4x4':
-    _YMAT = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]])
-else:
-    _YMAT = BAYER.astype(int)
-YLI_N = int(_YMAT.size)
-YLI_WL = float(os.environ.get('YLI_WL', '1'))        # weight on the mix's average L* error
-YLI_WC = float(os.environ.get('YLI_WC', '1'))        # weight on its average a*b* (hue/chroma) error
-YLI_LAM = float(os.environ.get('YLI_LAM', '0.08'))   # penalty on the mix's L* variance (luma noise)
-# every 8-cell plan = a multiset of 8 palette colours: 6435 of them; Bayer's own
-# outputs (e.g. wwyyyyrr) are all in here, so a good metric can match or beat it
-def _all_plans(n=YLI_N, k=8):
-    out = []
-    def rec(i, left, cur):
-        if i == k - 1:
-            out.append(cur + [left]); return
-        for c in range(left, -1, -1):
-            rec(i + 1, left - c, cur + [c])
-    rec(0, n, [])
-    return np.array(out, np.int16)
-_CNT = _all_plans()                                  # (6435, 8) counts per colour
-_AVG = (_CNT.astype(float) @ _PLIN) / YLI_N          # working-space average
-_LABM = _lab(_AVG)                                    # its Lab
-_lm = (_CNT.astype(float) @ _PL) / YLI_N
-_LVAR = (_CNT.astype(float) @ (_PL ** 2)) / YLI_N - _lm ** 2   # L* variance of the plan
-_yli_cache = {}
-def _yli_plan(t):
-    key = tuple(int(v) for v in t)
-    if key in _yli_cache:
-        return _yli_cache[key]
-    tl = _lab(_wspace(t))
-    dL2 = (_LABM[:, 0] - tl[0]) ** 2
-    dC2 = (_LABM[:, 1] - tl[1]) ** 2 + (_LABM[:, 2] - tl[2]) ** 2
-    cost = YLI_WL * dL2 + YLI_WC * dC2 + YLI_LAM * _LVAR
-    best = int(np.argmin(cost))
-    plan = np.repeat(np.arange(8), _CNT[best])
-    plan = np.array(sorted(plan, key=lambda k: _PL[k]), np.uint8)   # luma order for the matrix
-    _yli_cache[key] = plan
-    return plan
-
-def dither_yli(rgb_img, alpha, x0=0, y0=0, full=True):
-    h, w, _ = rgb_img.shape
-    img = np.repeat(rgb_img, 2, axis=0) if full else rgb_img
-    al = np.repeat(alpha, 2, axis=0) if full else alpha
-    hh = img.shape[0]
-    # Bayer rank 0..N-1 per cell (the 2x4 matrix values already are 0..7)
-    kh, kw = _YMAT.shape
-    yy = (np.arange(hh) + (2 * y0 if full else y0)) % kh
-    xx = (np.arange(w) + x0) % kw
-    rank = _YMAT[yy][:, xx].astype(int)
-    out = np.empty((hh, w), np.uint8)
-    flat = img.reshape(-1, 3)
-    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
-    plans = np.stack([_yli_plan(c) for c in uniq])       # (U, N)
-    cid = inv.reshape(hh, w)
-    out = plans[cid, rank]
-    out = np.where(out == 0, 8, out).astype(np.uint8)     # 0 = opaque black -> 8
-    return np.where(al, out, 0).astype(np.uint8)
-
-def dither_cpc(rgb_img, alpha, x0=0, y0=0, full=True):
-    """DITHER=cpc: a 1x2 dither to the CPC's 27 colours.  Each channel is quantised to
-    0, 1/2 or 1 (in the same gamma space as the Bayer path) and a half channel lights one
-    of the pixel's two scanlines -- which one alternating with x, so a run of one colour
-    is a checker rather than stripes -- with a pixel's half channels spread across both
-    lines so the pair is as close in brightness as it can be (olive is red over green,
-    not yellow over black).  Nothing is dithered ACROSS pixels: every source pixel is its
-    own CPC colour.  Half-res images (one line per pixel: the bar) get the same mix as a
-    horizontal checker instead."""
-    h, w, _ = rgb_img.shape
-    v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
-    lev = np.clip(np.rint(v * 2), 0, 2).astype(np.uint8)
-    fullc = lev == 2
-    halfc = lev == 1
-    rank = np.cumsum(halfc, axis=2) - 1                 # k-th half channel of the pixel
-    p = ((np.arange(w) + x0) & 1)[None, :, None]
-    lineA = fullc | (halfc & (((p + rank) & 1) == 0))
-    lineB = fullc | (halfc & (((p + rank) & 1) == 1))
-    pack = lambda b: (b[:, :, 0] | (b[:, :, 1] << 1) | (b[:, :, 2] << 2)).astype(np.uint8)
-    if full:
-        col = np.empty((2 * h, w), np.uint8)
-        col[0::2] = packcol(lineA)
-        col[1::2] = packcol(lineB)
-        alpha = np.repeat(alpha, 2, axis=0)
-    else:
-        yy = ((np.arange(h) + y0) & 1)[:, None]
-        col = np.where(yy == 0, packcol(lineA), packcol(lineB))
-    col = np.where(col == 0, 8, col).astype(np.uint8)
-    col = np.where(alpha, col, 0).astype(np.uint8)
-    return col
-
-DITHER = os.environ.get('DITHER', 'bayer')   # bayer (default), cpc, or yli (luma-preserving)
-if DITHER == 'cpc':
-    dither = dither_cpc
-elif DITHER == 'yli':
-    dither = dither_yli
-elif DITHER != 'bayer':
-    sys.exit('DITHER must be bayer, cpc or yli')
-# KERNEL=1x2 / 2x2 / 2x4 (default): the ordered matrix.  1x2 is the CPC quantisation
-# with every half level on the same scanline (stripes); 2x2 alternates it with x.
-KERNEL = os.environ.get('KERNEL', '2x4')
-if KERNEL == '1x2':
-    BAYER = np.array([[0], [1]], dtype=np.float32)
-elif KERNEL == '2x2':
-    BAYER = np.array([[0, 1], [1, 0]], dtype=np.float32)
-elif KERNEL != '2x4':
-    sys.exit('KERNEL must be 1x2, 2x2 or 2x4')
-
-# MODE=1: a MODE 1 build.  Same memory layout (80 bytes a row, a byte = 2 game px) but
-# 4 colours and 4 dots a byte, so a game pixel is a 2x2 block of dots, each one of
-# C, M, Y or K (logical 1, 2, 3, 0).  The 2x2 kernel IS the pixel: per pixel the ink
-# counts nearest its colour are chosen, then laid in kernel order.  A col entry is one
-# game px on one scanline: (left dot << 2) | right dot, so 0 is black -- and also
-# transparent, which is why MODE 1 sprites are opaque boxes drawn by the copy blitters,
-# and why no tile or sprite byte may carry a tag: every bit is a pixel.
-MODE = int(os.environ.get('MODE', '2'))
-if MODE not in (1, 2):
-    sys.exit('MODE must be 1 or 2')
+# MODE 1: 80 bytes a row, a byte = 2 game px, 4 colours and 4 dots a byte, so a game
+# pixel is a 2x2 block of dots, each one of C, M, Y or K (logical 1, 2, 3, 0).  The 2x2
+# kernel IS the pixel: per pixel the ink counts nearest its colour are chosen, then laid
+# in kernel order.  A col entry is one game px on one scanline: (left dot << 2) | right
+# dot, so 0 is black -- and also transparent, which is why the sprites are opaque boxes
+# drawn by the copy blitters, and why no tile or sprite byte may carry a tag: every bit
+# is a pixel.
 _CMYK_RGB = np.array([[0, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 0]], np.float32)   # K C M Y
 def _cmyk_tables():
     res = {}
@@ -248,7 +55,7 @@ def _cmyk_tables():
 _CMYK = _cmyk_tables()
 
 
-def dither_cmyk(rgb_img, alpha, x0=0, y0=0, full=True):
+def dither(rgb_img, alpha, x0=0, y0=0, full=True):
     h, w, _ = rgb_img.shape
     v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
     crgb, seq = _CMYK[4]                               # always the 4-dot combinations:
@@ -269,8 +76,8 @@ def dither_cmyk(rgb_img, alpha, x0=0, y0=0, full=True):
     return np.where(alpha, col, 0).astype(np.uint8)
 
 
-def pack_mode1(col):
-    """col: (lines, w) dot pairs (w even). Returns (lines, w//2) MODE 1 bytes: dot i's
+def packcol(col):
+    """col: (lines, w) dot pairs (w even). Returns (lines, w//2) screen bytes: dot i's
     colour bit 1 in bit 7-i, bit 0 in bit 3-i."""
     lines, w = col.shape
     assert w % 2 == 0
@@ -283,70 +90,15 @@ def pack_mode1(col):
     return out.astype(np.uint8)
 
 
-if MODE == 1:
-    dither = dither_cmyk
-CYAN_COL = 6 if MODE == 2 else 5          # a col entry that is all cyan
-strip = (lambda c: c & 7) if MODE == 2 else (lambda c: c)   # drop MODE 2's opaque-black 8
-OPAQUE_BLACK = 8 if MODE == 2 else 0      # what a col entry of forced black is (8 is M over K in MODE 1)
+CYAN_COL = 5                      # a col entry that is all cyan
+OPAQUE_BLACK = 0                  # a col entry of forced black
 
-
-def pack_mode2(col):
-    """col: (lines, w) colour indices (w even). Returns (lines, w//2) bytes."""
-    lines, w = col.shape
-    assert w % 2 == 0
-    l = col[:, 0::2].astype(np.uint16)
-    r = col[:, 1::2].astype(np.uint16)
-
-    def spread(c, shift):
-        # bit k of c -> bit (2k+shift)
-        return (((c & 1) << shift) | (((c >> 1) & 1) << (2 + shift)) |
-                (((c >> 2) & 1) << (4 + shift)) | (((c >> 3) & 1) << (6 + shift)))
-    return (spread(l, 1) | spread(r, 0)).astype(np.uint8)
-
-
-packcol = pack_mode2 if MODE == 2 else pack_mode1
 
 
 def encode_sprite(col, packed, blanks=True):
-    """Sprite byte encoding for the blitters (col: (lines, 2W) indices, 0 = transparent,
-    8 = opaque black; packed = packcol(col)).
-      bit 7 set        : both pixels opaque. Left colour in bits 5,3,1, right in 4,2,0,
-                         black as 0 (the palette shows nibbles 8-15 as 0-7, so the tag
-                         and the RUN bit are invisible on screen).
-      bit 6 (RUN)      : with bit 7: this byte and the next 7 of the column are all
-                         both-opaque -> the blitter copies the whole char cell.
-      $41              : this byte and the next 7 are all fully transparent -> the
-                         blitter leaves the whole char cell alone.  A right-hand pixel
-                         of colour 9 would encode as $41 and nothing else does, since
-                         only colour 8 (opaque black) ever sets that bit.
-      < $80            : one pixel opaque, decoded through MASKTAB/ORTAB: the old nibble
-                         codes, except left-black-only ($80 would clash) -> $44.
-    """
-    if MODE == 1:                    # every bit is a pixel: nothing to tag
-        return packed
-    l = col[:, 0::2].astype(np.uint16)
-    r = col[:, 1::2].astype(np.uint16)
-    both = (l != 0) & (r != 0)
-    lc, rc = l & 7, r & 7
-    bits = ((lc & 1) << 1) | (((lc >> 1) & 1) << 3) | (((lc >> 2) & 1) << 5) | \
-           (rc & 1) | (((rc >> 1) & 1) << 2) | (((rc >> 2) & 1) << 4)
-    run = np.zeros(both.shape, bool)
-    lines = both.shape[0]
-    for i in range(lines - 7):
-        run[i] = both[i:i + 8].all(axis=0)
-    out = np.where(both, 0x80 | bits | (run.astype(np.uint16) << 6), packed.astype(np.uint16))
-    single_left_black = (~both) & (l == 8)
-    out = np.where(single_left_black, 0x44, out)
-    # and the same trick for empty space: a byte that starts eight transparent ones
-    blank = (l == 0) & (r == 0)
-    brun = np.zeros(blank.shape, bool)
-    for i in range(lines - 7):
-        brun[i] = blank[i:i + 8].all(axis=0)
-    if blanks:                       # the half-res blitter, which draws the title
-        encode_sprite.blank_runs += int(brun.sum())   # pieces, does not decode the tag
-        encode_sprite.cells += int(blank.size)
-        out = np.where(brun, 0x41, out)
-    return out.astype(np.uint8)
+    """The sprite bytes as the blitters want them: every bit is a pixel, so the packed
+    bytes go as they are (col: (lines, 2W) indices, 0 = transparent)."""
+    return packed
 
 
 encode_sprite.blank_runs = 0
@@ -354,12 +106,8 @@ encode_sprite.cells = 0
 
 
 def col_to_rgb(col):
-    if MODE == 1:                    # the mean of the two dots
-        c = _CMYK_RGB[col >> 2] + _CMYK_RGB[col & 3]
-        return (c * 127.5).astype(np.uint8)
-    rgb = BEEB_RGB[np.clip(col & 7, 0, 7)]
-    rgb[col == 0] = [40, 40, 40]
-    return rgb
+    c = _CMYK_RGB[col >> 2] + _CMYK_RGB[col & 3]      # the mean of the two dots
+    return (c * 127.5).astype(np.uint8)
 
 
 # ----------------------------------------------------------------------------
@@ -450,7 +198,7 @@ til_idx, til_rgb0, _ = load_indexed('til.png')
 
 # ----------------------------------------------------------------------------
 # Tile source-colour overrides.  Keyed by the source RGB in til.png:
-#   TIL_SOLID   source colour -> a solid MODE 2 colour, no dither  (0 blk 1 red
+#   TIL_SOLID   source colour -> a solid colour, no dither  (0 blk 1 red
 #               2 grn 3 yel 4 blu 5 mag 6 cyn 7 wht)
 #   TIL_NOBLACK source colour -> the colour that replaces BLACK in its dither
 #               (kills black speckle in wall/ground textures; 3 yellow, 7 white)
@@ -463,50 +211,20 @@ TIL_NOBLACK = {
     # (85, 68, 68): 3,   # example: this wall brown's black dither -> yellow
 }
 #   TIL_RECOLOR source colour -> a new source colour (still dithered normally): a
-#               hand-tune of the palette before the dither picks MODE 2 inks
+#               hand-tune of the palette before the dither picks its inks
 TIL_RECOLOR = {
     (187, 119, 51): (221, 162, 68),   # dark (left) dune sand: halfway up to the light
                                       # (255,204,85) face, so the shadow side is brighter
 }
-if MODE == 2:
-    # colour 5, the pale outdoor wall: its Bayer dither was YWWWYKWW, one black cell.
-    # Any colour with R,G in 244..255 (all eight cells lit) and B in 194..218 (six lit)
-    # dithers naturally to YWWWWYWW -- no black, the two yellows sheared into opposite
-    # columns.  This one sits mid-window so a gamma tweak cannot tip it back.
-    TIL_RECOLOR[(238, 221, 187)] = (246, 246, 200)
-
 til_rgb = til_rgb0.copy()
 # hand-painted tile overrides from the tile editor (tools/tile_editor.py):
-#   { original_tile_id: 16x8 MODE2 colour array }.  These replace the auto dither.
+#   { original_tile_id: 16x8 colour array }.  These replace the auto dither.
 TILE_EDITS = {}
 _edits_path = os.path.join(os.path.dirname(__file__), '..', 'tile_edits.json')
 if os.path.exists(_edits_path):
     TILE_EDITS = {int(k): np.array(v, np.uint8) for k, v in json.load(open(_edits_path)).items()}
-#   TIL_PATTERN (MODE 2 only) source colour -> fn(x, line) giving the MODE 2 colour of
-#               screen pixel (x, line) of the tile (x 0..7, line 0..15: two lines a
-#               game pixel): a hand-laid pattern in place of the dither.  A screen
-#               pixel is 2:1 on screen, so a checkerboard of them is a 2:1 checker.
-#               The dark dune sand is a 50% red/yellow checkerboard of screen pixels
-#               with one red in four replaced by black, on a dispersed period-4
-#               lattice so it tiles across the 8 px / 16 line grid.
-TIL_PATTERN = {}
-if MODE == 2:
-    def _dune_dark(x, line):
-        if (x & 3, line & 3) in ((0, 0), (2, 2)):
-            return 8                                   # opaque black
-        return 1 if ((x + line) & 1) == 0 else 3       # red / yellow checker
-    TIL_PATTERN[(187, 119, 51)] = _dune_dark
-    # the anti-aliased join between the two dune faces (six pixels along the wiggle):
-    # the same checker in the same phase, with no black, so the lattice stops at the
-    # dark face and Bayer's stray black cannot double up against it
-    TIL_PATTERN[(221, 170, 85)] = lambda x, line: 1 if ((x + line) & 1) == 0 else 3
-    # colour 1, the mid outdoor wall: its Bayer dither was RYWWRKYW, one black.  The
-    # wanted YWRWWYWB (scan order over the 2x4 kernel; B black) is not any colour's natural
-    # dither -- its red and black sit on the kernel's first-lighting cells -- so it is laid by
-    # hand, in the same tile-local phase as the Bayer kernel.
-    _C1 = {'Y': 3, 'W': 7, 'R': 1, 'B': 8}                  # B = opaque black
-    TIL_PATTERN[(221, 187, 119)] = lambda x, line: _C1['YWRWWYWB'[(line & 3) * 2 + (x & 1)]]
-noblack_idx = {}                 # palette index -> replacement MODE2 colour
+TIL_PATTERN = {}                 # source colour -> fn(x, line): a hand-laid pattern in place of the dither
+noblack_idx = {}                 # palette index -> replacement colour
 pattern_idx = {}                 # palette index -> pattern function
 for _i, _c in enumerate(til_rgb0):
     _t = tuple(int(v) for v in _c)
@@ -579,7 +297,7 @@ blackened = {}                  # compact id -> tile image with its backdrop bla
 for cid, orig in enumerate(compact):
     col = tile_preview[cid]
     bg = bg_mask(orig)
-    if not bg.any() or np.all(strip(col) == 0):
+    if not bg.any() or np.all(col == 0):
         continue
     src = til_idx[orig * 8:orig * 8 + 8, :]
     frac = float(np.mean(wall_pal[src][bg[::2]]))
@@ -630,12 +348,9 @@ print('blackened %d tiles; %d texture-keeping twins for %d filler cells'
       % (len(blackened), len(twin_of),
          sum(len(c) for c in hole_cells.values())))
 
-tiles_mode2 = []
+tiles_bytes = []
 for cid in range(len(compact)):
-    col = strip(tile_preview[cid])
-                             # black = 0 not 8: bits 7/6 of every tile byte stay free (bit 6
-                             # hides the music, tools/embed_music.py; bit 7 flags periodic cells)
-    b = packcol(col)   # (16, 4)
+    b = packcol(tile_preview[cid])   # (16, 4)
     # Beeb layout: char row 0 (lines 0-7): chars 0..3 each 8 bytes ; then char row 1
     data = bytearray()
     for crow in range(2):
@@ -643,12 +358,7 @@ for cid in range(len(compact)):
             for ra in range(8):
                 data.append(int(b[crow * 8 + ra, cx]))
     assert len(data) == 64
-    # bit 7 of a char cell's first byte: lines 4..7 repeat lines 0..3 (the 2x4 dither makes
-    # this true of most flat-ish cells), so drawrow copies the cell with 4 loads and 8 stores
-    for c in range(0, 64, 8) if MODE == 2 else ():   # MODE 1: bit 7 is a pixel
-        if data[c + 4:c + 8] == data[c:c + 4]:
-            data[c] |= 0x80
-    tiles_mode2.append(bytes(data))
+    tiles_bytes.append(bytes(data))
 
 # star backgrounds: a star whose 2x2 tile neighbourhood is all sky (solid cyan) or all
 # 'dark' (mostly black: noisy low-intensity indoor backgrounds count) is drawn as a
@@ -658,9 +368,9 @@ tile_class = []
 # being copied: flagged in the page-table entry (hi bit 6 = solid, lo bit 4 = cyan)
 tile_solid = {}
 for cid, col in enumerate(tile_preview):
-    if np.all(strip(col) == CYAN_COL):
+    if np.all(col == CYAN_COL):
         tile_solid[cid] = 1
-    elif np.all(strip(col) == 0):
+    elif np.all(col == 0):
         tile_solid[cid] = 2
 # a star is drawn as a pre-composited box only where its whole 2x2 tile
 # neighbourhood is exactly one colour, so the box's background matches the map
@@ -790,7 +500,7 @@ NDATA = sum(1 for c in range(len(compact)) if c not in tile_solid or c in _keep)
 assert NDATA <= 512, 'tiles with data (%d) no longer fit two banks' % NDATA
 compact = [compact[o] for o in _order]
 tile_preview = [tile_preview[o] for o in _order]
-tiles_mode2 = [tiles_mode2[o] for o in _order]
+tiles_bytes = [tiles_bytes[o] for o in _order]
 tile_class = [tile_class[o] for o in _order]
 tile_solid = {_newid[c]: v for c, v in tile_solid.items()}
 orig2compact = {t: _newid[c] for t, c in orig2compact.items()}
@@ -916,7 +626,7 @@ for g in (0, 1):
             f[0, :] = f[-1, :] = f[:, 0] = f[:, -1] = True
             return f
         def _flatdiff(c, k):
-            a = strip(np.asarray(tile_preview[c])); b = strip(np.asarray(tile_preview[k]))
+            a = np.asarray(tile_preview[c]); b = np.asarray(tile_preview[k])
             d = (a != b); d = d[0::2] | d[1::2]
             return int((d & _flatmask(_art(c))).sum())
         cand = []
@@ -926,7 +636,7 @@ for g in (0, 1):
             for k in ids[:i]:
                 if k in _nomerge or alt_class[k] != alt_class[c]:
                     continue
-                d = _bits(tiles_mode2[c], tiles_mode2[k])
+                d = _bits(tiles_bytes[c], tiles_bytes[k])
                 if d <= 64:
                     cand.append((usage.get(c, 0) * _flatdiff(c, k), d, c, k))
         cand.sort()
@@ -957,7 +667,7 @@ for g in (0, 1):
           % (SETNAME[g], len(ids), len(keep), thr, len(keep) * 64))
 for g in (0, 1):
     open(os.path.join(OUT, 'TILES' + SETNAME[g]), 'wb').write(
-        b''.join(tiles_mode2[c] for c in tileset[g]))
+        b''.join(tiles_bytes[c] for c in tileset[g]))
 
 # Isolated black cells read as holes punched in the foreground.  A hole is black
 # that is NOT part of the backdrop: a 4-connected component of solid-black cells of
@@ -966,7 +676,7 @@ for g in (0, 1):
 # hole, however textured its floor neighbours are.  Each hole is filled with the
 # majority tile among the component's textured neighbours; on a tie, the neighbour
 # whose art is nearest the hole's own (so a doorframe never wins over a wall).  Keyed
-# on this mode's solid-black set, so MODE 2, which shows these tiles, is left alone.
+# on the solid-black set.
 def _tile_mean(c):
     o = [oo for oo, cc in orig2compact.items() if cc == c]
     return til_rgb0[til_idx[o[0] * 8:o[0] * 8 + 8, :]].reshape(-1, 3).mean(0) if o else np.zeros(3)
@@ -1157,14 +867,13 @@ print('refy snapped:', snapped)
 SPR_FONT   = 0x8000
 SPR_DIGITS = 0x8140
 SPR_BAR    = 0x83C0
-SPR_DATA   = 0x88C0
-if MODE == 1:                     # the mask planes need the room: the font, digits and
-    SPR_DATA = 0x8000             # bar spans go to bank 6 behind the box stars (below)
+SPR_DATA   = 0x8000               # the mask planes need the room: the font, digits and
+                                  # bar spans go to bank 6 behind the box stars (below)
 SPR_ANDY   = 0x8000                     # ANDY 4K RAM, paged at $8000 with ROMSEL bit7
 BANK4_END  = 0xC000
 ANDY_END   = 0x9000
 
-# pack each unique image (column-major MODE2 bytes); assign to bank4 or ANDY
+# pack each unique image (column-major bytes); assign to bank4 or ANDY
 #
 # An odd-width image leaves one transparent pixel of padding, and it can sit at either
 # end: both give the same ceil(w/2) columns, but they pair art columns into bytes
@@ -1209,7 +918,7 @@ print('sprite padding phase: %d of %d images pad on the left, %d fewer masked by
 
 
 def mask_plane(alpha):
-    """MODE 1 sprite mask: one bit per game pixel, 1 = opaque.  A data byte's two pixels
+    """A sprite mask: one bit per game pixel, 1 = opaque.  A data byte's two pixels
     are a 2-bit pair (left in bit 1), four horizontally adjacent columns pack into one
     byte (column 4g+j in bits 7-2j, 6-2j), and the plane is column-group-major: for
     group g, h consecutive bytes, one per pixel row -- the shape of the data itself, so
@@ -1229,29 +938,28 @@ def mask_plane(alpha):
     return bytes(out)
 
 img_mask = []
-if MODE == 1:
-    for (im, full, src), shift in zip(images, img_shift):
-        h, w = im.shape
-        W = (w + 1) // 2
-        padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
-        padded[:, shift:shift + w] = im
-        img_mask.append(mask_plane(padded != spr_tr))
+for (im, full, src), shift in zip(images, img_shift):
+    h, w = im.shape
+    W = (w + 1) // 2
+    padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
+    padded[:, shift:shift + w] = im
+    img_mask.append(mask_plane(padded != spr_tr))
 
 # greedy assignment: fill bank4 data region first (largest sprites there), rest to ANDY
 order = sorted(range(len(images)), key=lambda j: -len(img_bytes[j]))
 img_addr = [None] * len(images)         # (base_addr, region: 0 bank 4, 1 ANDY, 2 bank 6)
 b4 = SPR_DATA
 an = SPR_ANDY
-SPILL_BASE, SPILL_END = 0xBE00, 0xC000  # MODE 1 only: a few small images (with their
+SPILL_BASE, SPILL_END = 0xBE00, 0xC000  # a few small images (with their
 b6 = SPILL_BASE                          # masks) in bank 6 above the HUD blobs, flag bit 4
-data_end = BANK4_END - sum(len(m) for m in img_mask)   # MODE 1: the masks take the top
+data_end = BANK4_END - sum(len(m) for m in img_mask)   # the masks take the top
 for j in order:
     n = len(img_bytes[j])
     if b4 + n <= data_end:
         img_addr[j] = (b4, 0); b4 += n
     elif an + n <= ANDY_END:
         img_addr[j] = (an, 1); an += n
-    elif MODE == 1 and b6 + n + len(img_mask[j]) <= SPILL_END:
+    elif b6 + n + len(img_mask[j]) <= SPILL_END:
         img_addr[j] = (b6, 2); b6 += n + len(img_mask[j])
     else:
         raise SystemExit('sprite data overflow: no room for image %d (%d bytes)' % (j, n))
@@ -1261,20 +969,19 @@ print('sprite images', len(images),
       'ANDY %d/%d bytes' % (an - SPR_ANDY, ANDY_END - SPR_ANDY),
       '(%d imgs in ANDY)' % n_andy)
 mask_addr = [None] * len(images)
-if MODE == 1:
-    for j in range(len(images)):
-        n = len(img_mask[j])
-        if img_addr[j][1] == 2:                       # bank 6 spill: mask right after its data
-            mask_addr[j] = img_addr[j][0] + len(img_bytes[j])
-            continue
-        if b4 + n > BANK4_END:
-            raise SystemExit('mask plane overflow: no room for image %d (%d bytes, %d over)'
-                             % (j, n, b4 + n - BANK4_END))
-        assert not img_addr[j][1] or b4 >= 0x9000, j    # ANDY sprite: mask above ANDY's window
-        mask_addr[j] = b4
-        b4 += n
-    print('mask planes %d bytes; bank 4 %d/%d used; %d images (%d bytes) spilled to bank 6 $BE00'
-          % (sum(len(m) for m in img_mask), b4 - 0x8000, 0x4000, sum(1 for a in img_addr if a[1] == 2), b6 - SPILL_BASE))
+for j in range(len(images)):
+    n = len(img_mask[j])
+    if img_addr[j][1] == 2:                       # bank 6 spill: mask right after its data
+        mask_addr[j] = img_addr[j][0] + len(img_bytes[j])
+        continue
+    if b4 + n > BANK4_END:
+        raise SystemExit('mask plane overflow: no room for image %d (%d bytes, %d over)'
+                         % (j, n, b4 + n - BANK4_END))
+    assert not img_addr[j][1] or b4 >= 0x9000, j    # ANDY sprite: mask above ANDY's window
+    mask_addr[j] = b4
+    b4 += n
+print('mask planes %d bytes; bank 4 %d/%d used; %d images (%d bytes) spilled to bank 6 $BE00'
+      % (sum(len(m) for m in img_mask), b4 - 0x8000, 0x4000, sum(1 for a in img_addr if a[1] == 2), b6 - SPILL_BASE))
 
 # box stars: each spin frame (34..39) composited over cyan and over black in a box just
 # wide enough to cover its own art AND the previous frame's, so drawing frame N erases
@@ -1295,18 +1002,16 @@ for f in range(6):
     if mirror:
         padded = padded[:, ::-1]
         rx = (2 * W - 1) - rx
-    col = strip(dither(spr_rgb[padded], padded != spr_tr, full=True))
+    col = dither(spr_rgb[padded], padded != spr_tr, full=True)
     assert h == BOX_H and ry == 8, (f, ry, h)
     x0 = 6 - rx
     assert 0 <= x0 and x0 + 2 * W <= FIELD, (f, x0, W)
     box_art.append((col, x0))
     box_alpha.append(np.repeat(padded != spr_tr, 2, axis=0))
 
-# The mask is the art's alpha in both modes.  (MODE 2 used to take "col != 0", but
-# strip() has already turned opaque black into 0 there, so every black star pixel --
-# the whole dark outline -- was painted with the box colour instead: invisible on a
-# black box, a star with no dark bits on a cyan one.)  The copy blitter copies the
-# field verbatim, so black as colour 0 in it is simply black.
+# The mask is the art's alpha, not "col != 0": black star pixels -- the whole dark
+# outline -- are part of the star.  The copy blitter copies the field verbatim, so
+# black as colour 0 in it is simply black.
 _boxmask = lambda f: box_alpha[f]
 def _span(f):                   # opaque pixel range of one frame, in field px
     col, x0 = box_art[f]
@@ -1360,7 +1065,7 @@ for _i in TRAMP_IDS:
     _W = (_w + 1) // 2
     _pad = np.full((_h, _W * 2), spr_tr, dtype=_im.dtype)
     _pad[:, :_w] = _im
-    _col = strip(dither(spr_rgb[_pad], _pad != spr_tr, full=True))
+    _col = dither(spr_rgb[_pad], _pad != spr_tr, full=True)
     _x0 = TRAMP_HOT - _rx
     assert 0 <= _x0 and _x0 + 2 * _W <= TRAMP_FIELD, (_i, _x0, _W)
     tramp_art.append((_col, _x0))
@@ -1528,7 +1233,7 @@ spill = bytearray(SPILL_END - SPILL_BASE)
 # The bar is a black background (opaque black = $C0) with a few icon spans, so store it
 # as span records (offset16, len, bytes...) ended by $FFFF, not the full 1280 bytes --
 # bar_bg fills black and lays the spans, freeing the rest of the region for sprite code.
-BARFILL = 0xC0 if MODE == 2 else 0      # what 'black' packs to
+BARFILL = 0                       # what 'black' packs to
 barspans = bytearray()
 i = 0
 while i < len(barbytes):
@@ -1544,23 +1249,15 @@ barspans += bytes([0xFF, 0xFF])
 print('bar: %d span bytes vs %d raw (%d free in bank 4)'
       % (len(barspans), len(barbytes), len(barbytes) - len(barspans)))
 
-if MODE == 2:
-    bank4[SPR_FONT - 0x8000:SPR_FONT - 0x8000 + len(font)] = font
-    bank4[SPR_BAR - 0x8000:SPR_BAR - 0x8000 + len(barspans)] = barspans
-    bank4[SPR_DIGITS - 0x8000:SPR_DIGITS - 0x8000 + len(digits)] = digits
-    assert len(font) <= SPR_DIGITS - SPR_FONT and len(digits) <= SPR_BAR - SPR_DIGITS
-    assert len(barspans) <= SPR_DATA - SPR_BAR
-    HUD_BANK = 4
-    boxfile = b''.join(allbox_bytes)
-else:                             # bank 6, in the box-star file, behind the boxes
-    boxfile = b''.join(allbox_bytes)
-    SPR_FONT = BOX_BASE + len(boxfile); boxfile += font
-    SPR_DIGITS = BOX_BASE + len(boxfile); boxfile += digits
-    SPR_BAR = BOX_BASE + len(boxfile); boxfile += barspans
-    HUD_BANK = 6
-    assert BOX_BASE + len(boxfile) <= SPILL_BASE, len(boxfile)
-    if b6 > SPILL_BASE:                           # spilled images at $BE00: pad up to them
-        boxfile = boxfile.ljust(SPILL_BASE - BOX_BASE, b'\0') + bytes(spill[:b6 - SPILL_BASE])
+# bank 6, in the box-star file, behind the boxes
+boxfile = b''.join(allbox_bytes)
+SPR_FONT = BOX_BASE + len(boxfile); boxfile += font
+SPR_DIGITS = BOX_BASE + len(boxfile); boxfile += digits
+SPR_BAR = BOX_BASE + len(boxfile); boxfile += barspans
+HUD_BANK = 6
+assert BOX_BASE + len(boxfile) <= SPILL_BASE, len(boxfile)
+if b6 > SPILL_BASE:                           # spilled images at $BE00: pad up to them
+    boxfile = boxfile.ljust(SPILL_BASE - BOX_BASE, b'\0') + bytes(spill[:b6 - SPILL_BASE])
 open(os.path.join(OUT, 'BOX'), 'wb').write(boxfile)
 for j in range(len(images)):
     base, region = img_addr[j]
@@ -1571,15 +1268,14 @@ for j in range(len(images)):
         spill[mask_addr[j] - SPILL_BASE:mask_addr[j] - SPILL_BASE + len(img_mask[j])] = img_mask[j]
     else:
         bank4[base - 0x8000:base - 0x8000 + len(img_bytes[j])] = img_bytes[j]
-    if MODE == 1 and region != 2:
+    if region != 2:
         m = mask_addr[j]
         bank4[m - 0x8000:m - 0x8000 + len(img_mask[j])] = img_mask[j]
-if MODE == 1:
-    sprmask = bytearray()
-    for i in range(103 + 15):                     # box ids draw by copy: no mask
-        a = mask_addr[entry[i][0]] if i < 103 and entry[i] is not None else 0
-        sprmask += bytes([a & 255, a >> 8])
-    open(os.path.join(OUT, 'SPRMASK'), 'wb').write(sprmask)
+sprmask = bytearray()
+for i in range(103 + 15):                         # box ids draw by copy: no mask
+    a = mask_addr[entry[i][0]] if i < 103 and entry[i] is not None else 0
+    sprmask += bytes([a & 255, a >> 8])
+open(os.path.join(OUT, 'SPRMASK'), 'wb').write(sprmask)
 open(os.path.join(OUT, 'SPR'), 'wb').write(bank4)
 # ANDY 4K sprite overflow (loaded with ROMSEL bit7 set)
 an_used = max((b - SPR_ANDY + len(img_bytes[j]) for j,(b,a) in enumerate(img_addr) if a), default=0)
@@ -1605,7 +1301,7 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     data = bytearray()
     for c in range(W):
         data += pk[:, c].tobytes()
-    mask = mask_plane(alpha) if (MODE == 1 and not opaque) else b''
+    mask = mask_plane(alpha) if not opaque else b''
     return W, (2 * h if full else h), h, data, col, mask
 
 TITLE_ADDR = 0x8900               # bank 6, where the map and the box stars go during a level
@@ -1615,7 +1311,7 @@ pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38
 for f in range(9):                  # full-res like everything else: a half-res image
     pieces.append(('cleo%d' % f, (f % 3) * 26, 85 + (f // 3) * 32, 26, 31, True))   # dithers per line, and looked it
 tpreview = []
-TDIR = 0x80 if MODE == 2 else 0xA0      # MODE 1: a mask-address table at +$80, 2 bytes a piece
+TDIR = 0xA0                       # a mask-address table at +$80, 2 bytes a piece, then the directory
 for (name, x, y, w, h, full) in pieces:
     opaque = name.startswith('cleo')
     W, lines, hpx, data, col, mask = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=opaque)
@@ -1623,18 +1319,17 @@ for (name, x, y, w, h, full) in pieces:
     title += data
     mptr = TITLE_ADDR + TDIR + len(title) if mask else 0
     title += mask
-    flags = (2 if full else 0) | (8 if (MODE == 1 and opaque) else 0)   # MODE 1: opaque pieces copy
+    flags = (2 if full else 0) | (8 if opaque else 0)   # opaque pieces copy
     tdir.append((name, ptr, W, hpx, lines, flags, mptr))
     tpreview.append(col)
 # directory at &8000: 8 bytes per piece: ptr lo, hi, W, h, refx, refy (0: the prologue
-# is the sprite one), flags, lines.  MODE 1: mask addresses at +$80, two bytes a piece.
+# is the sprite one), flags, lines.  Mask addresses at +$80, two bytes a piece.
 tdirbytes = bytearray()
 for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
     tdirbytes += bytes([ptr & 255, ptr >> 8, W, hpx, 0, 0, flags, lines])
 tdirbytes = tdirbytes.ljust(0x80, b'\0')
-if MODE == 1:
-    for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
-        tdirbytes += bytes([mptr & 255, mptr >> 8])
+for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
+    tdirbytes += bytes([mptr & 255, mptr >> 8])
 titlefile = tdirbytes.ljust(TDIR, b'\0') + title
 TITLE_END = 0xB800                # the title pack may overwrite the box stars (reloaded at
 assert len(titlefile) <= TITLE_END - TITLE_ADDR, len(titlefile)   # level start), not the music
@@ -1647,7 +1342,6 @@ print('sprite blank runs: %d tagged bytes of %d' % (encode_sprite.blank_runs, en
 # ----------------------------------------------------------------------------
 with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by convert.py\n')
-    f.write('VMODE = %d\n' % MODE)
     f.write('NTILES = %d\n' % len(compact))
     f.write('TSET_O = %d\nTSET_I = %d\n' % (len(tileset[0]), len(tileset[1])))
     f.write('BOX_BASE = $%04X\n' % BOX_BASE)
@@ -1671,7 +1365,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
 # previews
 # ----------------------------------------------------------------------------
 def save_preview(cols, path, cols_per_row=16, scale=2):
-    # each col array (lines, w); lines are MODE2 scanlines (aspect 2:1 wide) -> render each byte pixel as 2x1
+    # each col array (lines, w); a col entry is one game px on one scanline -> render it 2x1
     cellw = max(c.shape[1] for c in cols)
     cellh = max(c.shape[0] for c in cols)
     rows = (len(cols) + cols_per_row - 1) // cols_per_row

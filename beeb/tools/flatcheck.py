@@ -2,15 +2,14 @@
 neighbour, within its tile or across into the adjacent tile of the level bitmap --
 must render as that colour's own dither at that phase.  Ordered dithering gives this
 by construction; anything that edits pixels afterwards can break it.  Reports each
-level's violations by cause.   MODE=2 python3 tools/flatcheck.py"""
+level's violations by cause.   python3 tools/flatcheck.py"""
 import os, io, contextlib, importlib.util, numpy as np
 spec = importlib.util.spec_from_file_location('c', os.path.join(os.path.dirname(__file__), 'convert.py'))
 m = importlib.util.module_from_spec(spec)
 with contextlib.redirect_stdout(io.StringIO()):
     spec.loader.exec_module(m)
-strip = m.strip
 flat_col = {}
-def expect(pi):                      # palette index -> the flat dither (16, 8), stripped
+def expect(pi):                      # palette index -> the flat dither (16, 8)
     if pi not in flat_col:
         c = m.til_rgb[pi]
         col = m.dither(np.tile(c, (8, 8, 1)).astype(np.uint8), np.ones((8, 8), bool), full=True)
@@ -19,7 +18,7 @@ def expect(pi):                      # palette index -> the flat dither (16, 8),
             for yy in range(8):
                 for xx in range(8):
                     col[2 * yy, xx] = fn(xx, 2 * yy); col[2 * yy + 1, xx] = fn(xx, 2 * yy + 1)
-        flat_col[pi] = strip(col)
+        flat_col[pi] = col
     return flat_col[pi]
 total = {}
 for (lv, sub), cm in sorted(m.maps.items()):
@@ -39,7 +38,7 @@ for (lv, sub), cm in sorted(m.maps.items()):
             c = int(cm[y, x]); r = rm.get(c)
             if r == m.SOLID_CYAN:   got = np.full((16, 8), m.CYAN_COL & 7, np.uint8)
             elif r == m.SOLID_BLACK: got = np.zeros((16, 8), np.uint8)
-            else:                    got = strip(np.asarray(m.tile_preview[fo.get(c, c)]))
+            else:                    got = np.asarray(m.tile_preview[fo.get(c, c)])
             f = flat[y*8:y*8+8, x*8:x*8+8]
             if not f.any():
                 continue

@@ -1,5 +1,5 @@
 ; ============================================================================
-; CLEO - BBC Master 128 MODE 2 port : display engine
+; CLEO - BBC Micro port : display engine
 ;   - main + shadow RAM double buffered 20K ring framebuffers
 ;   - vertical rupture: fixed status bar section + hardware scrolled playfield
 ;     with 2-scanline fine vertical scroll, 1-character horizontal scroll
@@ -266,7 +266,6 @@ sp_row:   .res 1
 sp_c:     .res 1
 sp_lim:   .res 1
 sp_cnt:   .res 1                  ; sprite column countdown
-  .if MODE1                       ; the MODE 1 mask blitter (see SPRMSK).  Zero page is
                                   ; full past $A5 -- the MOS's disc code scribbles on
                                   ; $A8-$BF during a load -- so these alias zp the blit
                                   ; no longer needs, and the rest sit in main RAM (mrest)
@@ -274,7 +273,6 @@ mptr    = w16                     ; this column group's mask bytes, one per pixe
 mtab    = tmp3                    ; MASKTAB page for this column's phase (tmp3 = 0, tmp4 = page)
 sp_msk  = tmp4c8                  ; the AND mask of the pair being drawn
 sp_id   = sp_ext                  ; the sprite id, until sp_ext is set a few lines later
-  .endif
 spi:      .res 1
 lcnt:     .res 1
 lidx:     .res 1
@@ -301,7 +299,6 @@ MUSPTR:   .res 2
 ; ---------------------------------------------------------------- tables (uninitialised RAM $0400-$0CFF)
   .if .not MODELB
         .segment "TABLES"
-  .if MODE1
 MASKTAB0:  .res 1024              ; four contiguous pages, one per column phase (SPRMSK):
                                   ; 1K aligned, so phase = page & 3.  SWAPTAB, SECTAB and
                                   ; music_tab move to CODE to make the room.
@@ -309,11 +306,6 @@ MASKTAB1 = MASKTAB0 + $100
 MASKTAB2 = MASKTAB0 + $200
 MASKTAB3 = MASKTAB0 + $300
         .assert (MASKTAB0 & $3FF) = 0, error, "MASKTAB0 must be 1K aligned"
-  .else
-MASKTAB:   .res 256               ; data byte -> AND mask
-SWAPTAB:   .res 256               ; nibble (pixel) swap for mirroring
-IDENT:     .res 256               ; ora IDENT,x == ora X (no temp) -- EXCEPT at $41, $44
-  .endif
                                    ; and $82, which init_tables zeroes on purpose: $41 is
                                    ; the blank-run tag and must leave the screen byte
                                    ; alone, $82 is its mirror, $44 forces a black left
@@ -322,9 +314,6 @@ RINGLO:    .res RINGROWS          ; ring row r -> screen address
 RINGHI:    .res RINGROWS
 GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank (low nibble)
 GATHERH:   .res 24                ;                       tile address hi
-  .if .not MODE1
-SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
-  .endif
 SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
 SPRREC:    .res 2*MAXREC*10       ; per buffer drawn-sprite records: id,xl,xh,yl,yh, cxl,cxh,cy,w,h
 GLYPHBUF:  .res 8                 ; one font glyph, copied out of bank 4 for the menus
@@ -370,9 +359,6 @@ SFXREQ:    .res 1
 SFXDUR:    .res 1
 MUSON:     .res 1
 MUSTMP:    .res 1                 ; musbyte scratch (ISR context: must not touch tmp)
-  .if .not MODE1
-music_tab: .res 144               ; SN76489 periods for MIDI 24..95, decoded at start-up
-  .endif
 MUSDUR:    .res 1
 MUSNOTE:   .res 3
 ISRT1:     .res 1
@@ -878,17 +864,11 @@ drawrect:
 .macro CHARCPY c, per
 .if c = 0
         ldaz tp                     ; line 0 non-indexed
-  .if .not MODE1
-        bmi per
-  .endif
         staz sp
         ldy #1
 .else
         ldy #8*c
         lda (tp),y
-  .if .not MODE1
-        bmi per                     ; MODE 1: bit 7 is a pixel, no periodic cells
-  .endif
         sta (sp),y
         iny
 .endif
@@ -928,23 +908,11 @@ drawrect:
         jmp next
 .endif
 .endmacro
-  .if .not MODE1                    ; MODE 1 has no periodic cells: nothing reaches these
-@t3:    jmp @p3                     ; the periodic blocks are out of branch range: trampolines
-@t2:    jmp @p2
-  .endif
 @b31:   CHARCPY 3, @t3
 @b23:   CHARCPY 2, @t2
 @b15:   CHARCPY 1, @t1
 @b7:    CHARCPY 0, @t0
         jmp @advsp
-  .if .not MODE1
-@t1:    jmp @p1
-@t0:    jmp @p0
-@p3:    CHARPER 3, @b23
-@p2:    CHARPER 2, @b15
-@p1:    CHARPER 1, @b7
-@p0:    CHARPER 0                   ; no trailing jmp: falls into @advsp
-  .endif
 @advsp: lda sp
         adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
@@ -1024,11 +992,7 @@ drawrect:
 @solid: lda GATHERL,x
         and #$10
         beq :+
-  .if MODE1
         lda #$0F                    ; four dots of logical 1 (cyan); else 0 = black
-  .else
-        lda #$3C                    ; both pixels colour 6 (cyan); else 0 = black
-  .endif
 :       sta tp                      ; fill value (tp is otherwise unused on this path)
   .endif
         lda #4                      ; (@fillgo)
@@ -1514,9 +1478,7 @@ drawsprite:
         bcc :+                      ; picture as the ids BOXN below them
         sbc #BOXN
 :
-  .if MODE1
         sta sp_id
-  .endif
         stza ptr+1
         asl                         ; id*8 -> offset
         rol ptr+1
@@ -1558,7 +1520,6 @@ drawsprite:
         beq :+
         bankimm ldx, BANK_TIL1, BANK_LVL
 :       stx sp_dbank            ; wanted later: the directory is still being read
-  .if MODE1
         lda sp_id
         asl
         tax
@@ -1566,7 +1527,6 @@ drawsprite:
         sta sp_mbase
         lda SPRMASK+1,x
         sta sp_mbase+1
-  .endif
         bra @entry2
 @titledir:
         ; ---- title piece: directory + data at TITLE_ADDR of bank(spbank)
@@ -1609,7 +1569,6 @@ drawsprite:
         ldy #6
         lda (ptr),y
         sta sp_flags
-  .if MODE1
         lda sp_id                   ; the mask address table behind the directory
         asl
         tax
@@ -1617,7 +1576,6 @@ drawsprite:
         sta sp_mbase
         lda TITLE_ADDR+$81,x
         sta sp_mbase+1
-  .endif
   .endif
 @entry2:
         ldaz ptr
@@ -1640,10 +1598,8 @@ drawsprite:
         lda (ptr),y
         sta sp_lines
         sta sp_ext
-  .if MODE1
         lsr
         sta sp_mh                   ; mask bytes per column group = pixel rows
-  .endif
         lda sp_flags
         and #2
         bne :+
@@ -1883,7 +1839,6 @@ drawsprite:
 :       dex
         bne @mul
 @mdone: sta sp_col
-  .if MODE1
         stz mtab                    ; the MASKTAB pages are indexed by the mask byte
         lda sp_c
         and #3                      ; phase of the first column drawn, and its page:
@@ -1908,7 +1863,6 @@ drawsprite:
 @mgnc:  dex
         bne @mgrp
 @mgdone:
-  .endif
 @rows:
         lda sp_r0
         sta sp_row
@@ -1953,7 +1907,6 @@ drawsprite:
         lda sp_col+1
         adc w16+1
         sta sp_rp+1
-  .if MODE1
         lda w16+1                   ; the same offset in pixel rows (signed >> 1)
         cmp #$80
         ror w16+1
@@ -1965,7 +1918,6 @@ drawsprite:
         lda sp_mrp+1
         adc w16+1
         sta sp_mrp+1
-  .endif
         lda sp_c1
         sec
         sbc sp_c0
@@ -2189,7 +2141,6 @@ pd:
         .endif
 .endmacro
 
-  .if ::MODE1
 ; ---- MODE 1 masked blitter.  A col entry has no spare bit, so the mask is a plane of
 ; its own: one bit per game pixel, a data byte's two pixels as a 2-bit pair, four
 ; horizontally adjacent columns packed into one byte (column 4g+j in bits 7-2j, 6-2j),
@@ -2308,7 +2259,6 @@ pnext:  lda sp_lim
         jmp sprretPk
   .endif
 .endmacro
-  .endif
 ; The row loop and the inner blocks.  On the Master this is plain code after the
 ; prologue; on the Model B it is assembled once into EACH sprite data bank (the loop
 ; reads image bytes, so it must be resident with them) and reached by a far call
@@ -2334,14 +2284,12 @@ ds_rowloop:
         sta ptr
         lda sp_rp+1
         sta ptr+1
-  .if ::MODE1
         lda sp_mrp
         sta mptr
         lda sp_mrp+1
         sta mptr+1
         lda sp_mpg0
         sta mtab+1
-  .endif
         ; ra range for this row
         stz tmp                     ; ra0' = 0 unless this is the first row
         lda sp_row
@@ -2370,7 +2318,6 @@ sprdisp_tab: .word sprFN, sprFN, sprFN, sprFN
         .word sprFN
   .endif
   .if withmirror
-  .if ::MODE1
 sprretMk:                           ; mask blitter, mirrored: the image column descends,
         dec mtab+1                  ; so the phase (= page & 3) does too; below phase 0
         lda mtab+1                  ; it is the previous group's phase 3
@@ -2388,7 +2335,6 @@ sprretMk:                           ; mask blitter, mirrored: the image column d
         bcs @mk
         dec mptr+1
 @mk:
-  .endif
 sprretM:                            ; next column, mirrored: source pointer - lines
         lda ptr
         sec
@@ -2398,7 +2344,6 @@ sprretM:                            ; next column, mirrored: source pointer - li
         dec ptr+1
         bra sprnext
   .endif
-  .if ::MODE1
 sprretPk:                           ; mask blitter: next phase is the next page; past
         inc mtab+1                  ; phase 3 it is the next group's phase 0
         lda mtab+1
@@ -2415,7 +2360,6 @@ sprretPk:                           ; mask blitter: next phase is the next page;
         bcc @pk
         inc mptr+1
 @pk:
-  .endif
 sprretP:                            ; next column: source pointer + lines
         lda ptr
         clc
@@ -2445,7 +2389,6 @@ ds_rowdone:
         inc sp_rp+1
         clc
 :
-  .if ::MODE1
         lda sp_mrp
         adc #4                      ; C is clear
         sta sp_mrp
@@ -2453,7 +2396,6 @@ ds_rowdone:
         inc sp_mrp+1
         clc
 @mrnc:
-  .endif
         lda sp_rb
         adc #<ROWBYTES
         sta sp_rb
@@ -2464,19 +2406,12 @@ ds_rowdone:
         jmp ds_rowloop
 ds_done: rts
 
-  .if ::MODE1
         SPRMSK sprFN, 0
   .if withmirror
         SPRMSK sprFM, 1
   .endif
 mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit 0 = right):
                                     ; keep what is NOT opaque -- right only opaque keeps the left dots
-  .else
-        SPRFULL sprFN, 0, 0
-  .if withmirror
-        SPRFULL sprFM, 1, 0
-  .endif
-  .endif
 .endmacro
   .if ::MODELB
         .segment "SPR4CODE"
@@ -2500,15 +2435,13 @@ mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit
         PLACE "CODE", "TILCODE"
   .else
         SPRITE_LOOPS 1, 1
-  .if ::MODE1
 sp_mpg0:  .res 1                  ; MASKTAB page of the sprite's first column: >MASKTAB0 | phase
 sp_mh:    .res 1                  ; pixel rows = mask bytes per column group
 sp_mrp:   .res 2                  ; mask pointer for the current row's first column
 sp_mbase: .res 2                  ; the sprite's mask plane
-SWAPTAB:   .res 256               ; four-dot reversal for mirroring (from TABLES in MODE 2)
+SWAPTAB:   .res 256               ; four-dot reversal for mirroring
 SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
 music_tab: .res 144               ; SN76489 periods for MIDI 24..95, decoded at start-up
-  .endif
         SPRFULL sprFC, 0, 1         ; box stars: pre-composited on their background, no mask
   .endif
 
@@ -2749,11 +2682,7 @@ bar_bg:                             ; and never redrawn: only the digit cache is
                                     ; fill black and lay the spans (BARBUF is now the span
         sta ROMSEL_CPY              ; list: offset16, len, bytes... ending $FFFF).
         sta ROMSEL
-  .if MODE1
         lda #0                      ; MODE 1 black is plain 0: no opaque-black tag
-  .else
-        lda #$C0                    ; BARADDR is a constant, so the fill needs no pointer:
-  .endif
         ldx #0                      ; five abs,x stores cover the 5 pages in one pass
 @bf:    sta BARADDR+$000,x
         sta BARADDR+$100,x
@@ -3089,7 +3018,7 @@ QVSYNC = 8                         ; vsync at Q row 8 of 16: the picture starts 
 QVSYNC = 3                         ; vsync at Q row 3 of 7: four rows (32 lines) between the
                                    ; vsync and the bar, which is where the bar is drawn, and
                                    ; three below.  Measured against the Master MOS's own
-                                   ; MODE 2 (R7 = 35): the picture sits exactly where it does.
+                                   ; a standard frame (R7 = 35): the picture sits exactly where it does.
   .endif
 
 ; ============================================================================
@@ -3525,7 +3454,7 @@ calc_ring:
         rts
 
   .if .not MODELB                   ; (Model B: modelb/src/init.s -- its tables are static)
-        .segment "LOW2"            ; MOS vector/VDU pages ($0206..$03FF), copied there after MODE 2:
+        .segment "LOW2"            ; MOS vector/VDU pages ($0206..$03FF), copied there after the MODE change:
                                    ; init-only table builders and the dirty-tile routines
 
 ; ============================================================================
@@ -3533,7 +3462,6 @@ calc_ring:
 ; ============================================================================
         .segment "LOGIC"            ; cold, and main RAM under the screen is full
 init_tables:
-  .if MODE1
         ldx #0
 @mt:    txa                         ; MASKTABk[x] = mask4[(x >> (6 - 2k)) & 3]
         lsr
@@ -3568,28 +3496,8 @@ init_tables:
         sta MASKTAB3,x
         inx
         bne @mt
-  .else
-        jsr init_ident
-  .endif
         ldx #0
 @t:     txa
-  .if .not MODE1
-        and #$AA
-        beq :+
-        lda #0
-        bra :++
-:       lda #$AA
-:       sta tmp
-        txa
-        and #$55
-        beq :+
-        lda #0
-        bra :++
-:       lda #$55
-:       ora tmp
-        sta MASKTAB,x
-  .endif
-  .if MODE1
         ; MODE 1: a byte is four dots, bit 7-i / bit 3-i for dot i; mirroring reverses
         ; them: 7<->4, 6<->5, 3<->0, 2<->1
         txa
@@ -3614,45 +3522,9 @@ init_tables:
         asl
         asl
         ora tmp
-  .else
-        txa
-        and #$AA
-        lsr
-        sta tmp
-        txa
-        and #$55
-        asl
-        ora tmp
-  .endif
         sta SWAPTAB,x
         inx
         bne @t
-  .if .not MODE1
-        ; sprite encoding (convert.py encode_sprite): bit 7 = both pixels opaque and never
-        ; reaches the tables; left-black-only is code $44 (its $80 slot is taken)
-        lda #$55
-        sta MASKTAB+$44             ; keep the right screen pixel
-        stz IDENT+$44               ; left pixel black
-        lda #$44
-        sta SWAPTAB+$40             ; right-black-only <-> left-black-only
-        lda #$40
-        sta SWAPTAB+$44
-        lda #$FF                    ; $41 marks eight transparent bytes; if it reaches
-        sta MASKTAB+$41             ; the tables (a clipped cell, or as a line 1..7)
-        stza IDENT+$41               ; it must leave the screen byte alone.  $82 is its
-        sta MASKTAB+$82             ; mirror image, and unreachable otherwise
-        stz IDENT+$82
-        ; MASKTAB+$80..: the mask of the mirrored byte, so the mirrored blitters do one
-        ; lookup instead of SWAPTAB then MASKTAB (only codes < $80 are ever looked up)
-        ldx #0
-:       ldy SWAPTAB,x
-        lda MASKTAB,y
-        sta MASKTAB+$80,x
-        lda IDENT,y
-        sta IDENT+$80,x             ; and its OR value (differs from SWAPTAB only at \$40)
-        inx
-        bpl :-
-  .endif
         jsr build_ring              ; ring row -> screen address
         ; row slot -> chars
         stz w16
@@ -3706,15 +3578,6 @@ init_tables:
 
 
 ; identity table for the sprite blitter (A | X without a temp store)
-  .if .not MODE1
-init_ident:
-        ldx #0
-:       txa
-        sta IDENT,x
-        inx
-        bne :-
-        rts
-  .endif
   .endif
         PLACE "LOW2", "TILCODE"     ; back to the render helpers
 
@@ -4294,7 +4157,7 @@ take_over:
 ; ============================================================================
   .if .not MODELB                   ; (Model B: modelb/src/display.s)
 crtc_init:
-        ; standard MODE 2 timings, no interlace, cursor off
+        ; standard 20K-mode timings, no interlace, cursor off
         ldx #0
 :       stx CRTC_IDX
         lda crtctab,x
@@ -4316,7 +4179,6 @@ ringmodtab:                         ; only a non-power-of-two ring needs the tab
 
         PLACE "CODE", "LGCCODE"     ; Model B: bank 7 (the menus call it)
 set_palette:
-  .if MODE1
         ; MODE 1: a pixel's two bits land in bits 3 and 1 of the palette index, the other
         ; two bits are don't-cares, so all 16 entries are written: logical 0..3 = K C M Y
         ldx #15
@@ -4343,23 +4205,6 @@ set_palette:
         bpl :-
         rts
 @cmyk:  .byte 0^7, 6^7, 5^7, 3^7    ; physical black, cyan, magenta, yellow (inverted)
-  .else
-        ldx #15
-:       txa
-        asl
-        asl
-        asl
-        asl
-        sta tmp
-        txa
-        and #7
-        eor #7
-        ora tmp
-        sta ULA_PAL
-        dex
-        bpl :-
-        rts
-  .endif
 
 blank_palette:
         ldx #15
@@ -4436,7 +4281,7 @@ nmi_nd: and #1
 ; 1 (*DRIVE 1, or *DIR :1, then *RUN CLEO) is read from where the game came: drive 0
 ; was hard-coded before.  DFS is asked (OSGBPB 6: current drive name and boot
 ; option) by disc_drive, which main.s calls first thing: the MOS vectors it goes
-; through are overwritten by LOW2 once MODE 2 is up, and the tables are cleared
+; through are overwritten by LOW2 once the mode is up, and the tables are cleared
 ; after that, so the answer lives in the code segment.  Drives 2 and 3 are the
 ; second sides of 0 and 1.
 disc_drive:
