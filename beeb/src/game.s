@@ -230,6 +230,9 @@ new_game:
         sta level
 level_loop:
         jsr blank_palette           ; hide the loading and the first-frame build-up
+  .if .not MODELB
+        jsr load_begin              ; and stop the chain at a frame boundary (engine.s;
+  .endif                            ; the Model B's loader does it itself)
         stza title_res               ; the level's map replaces the title pack
   .if .not MODELB
         lda #FI_BOX                  ; and the title pack replaced the box stars
@@ -237,6 +240,9 @@ level_loop:
   .endif
         ldx level
         jsr load_level
+  .if .not MODELB
+        jsr load_end                ; the next vsync starts the chain again (the Model
+  .endif                            ; B's loader does this itself, before its cli)
         jsr t_level_init
         lda #1                      ; lay the bar template + digits into both buffers on
         sta BARBG                   ; the first two renders (drawing now would hit the

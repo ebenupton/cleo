@@ -357,6 +357,7 @@ OLDIRQ:    .res 2
 OLDIER:    .res 1
 SFXREQ:    .res 1
 SFXDUR:    .res 1
+LOADREQ:   .res 1                 ; 0 running, 1 stop asked, 2 stopped, 3 resume asked (load_begin)
 MUSON:     .res 1
 MUSTMP:    .res 1                 ; musbyte scratch (ISR context: must not touch tmp)
 MUSDUR:    .res 1
@@ -3156,6 +3157,37 @@ wait_flip:
         bne wait_flip
         rts
 
+; ---------------------------------------------------------------- load mode
+; A disc load stops the chain: the Model B's loader runs with interrupts off, the
+; Master's pages banks under it.  Stopped mid-chain the CRTC repeats whatever section
+; it was in -- a few lines over and over, no vsync -- and monitors and capture cards
+; drop out of sync and take seconds to come back, so a level's first moments are
+; missed.  So a load first asks the chain to stop at a frame boundary: the next bar
+; step programs a standard 39-row frame instead of the bar, with the vsync on the
+; row the chain puts it, so the sync never moves, and turns the T1 interrupt off.
+; The palette is black throughout, so what the frame shows does not matter.
+; load_end lets the next vsync re-arm the chain: its re-phase writes R4 = curR7 +
+; QROWS-1-QVSYNC, which with curR7 = LDR7 is the standard frame's own total, and the
+; bar step at that frame's end takes the display back as if it had never stopped.
+LDR4 = BARROWS + VISROWS + QROWS - 1      ; 38: a standard 312-line frame
+LDR7 = BARROWS + VISROWS + QVSYNC         ; the row the chain's vsync is on
+  .if .not MODELB                   ; (the Model B's loader runs with interrupts off and
+                                    ;  does the switch itself: display.s ldstop5)
+load_begin:
+        lda #1
+        sta LOADREQ
+:       lda LOADREQ
+        cmp #2
+        bne :-
+        rts
+load_end:                           ; (with interrupts off on the Model B: disc.s)
+        lda #3                      ; resume asked: the next real vsync arms T1, turns
+        sta LOADREQ                 ; its interrupt on and clears this (curR7 holds
+        lda #$42                    ; LDR7 from the switch); until then a T1 flag is
+        sta VIA_IFR                 ; stale.  A vsync flag raised meanwhile is stale too
+        rts
+  .endif
+
   .ifdef PARALLAX
 ; ============================================================================
 ; Parallax experiment (-D PARALLAX, Master): a 1:1 diagonal across the window, drawn
@@ -3692,7 +3724,10 @@ irq_handler:
         ; ACCCON D is different again: it is the memory map, sampled by every fetch,
         ; so it must be in place BEFORE the boundary -- the bar's T1 fires a further
         ; BARLEAD us early so D lands in the horizontal blanking of the bar's last line.
-        ldx SECIDX
+        lda LOADREQ
+        beq @chain
+        jmp @ldcheck                ; a load asked for, under way or ending: load_begin
+@chain: ldx SECIDX
         cpx DISPSECT                ; the first step is the start of the bar itself, which
         beq @noD                    ; is only main RAM to the CRTC while D = 0: leave it
         lda ACCCON
@@ -3745,6 +3780,41 @@ irq_handler:
         ldx irq_x
         lda $FC
         rti
+@ldcheck:
+        cmp #1
+        bne @ldt1
+        ldx SECIDX                  ; stop asked: only the bar step, a frame boundary,
+        cpx DISPSECT                ; makes the switch
+        beq @ldsw
+        jmp @chain
+@ldsw:  ; ---- this restart is a standard frame, not the bar: see load_begin.  The same
+        ; hold as the bar's, so R4 lands in the first scanline; R9 = 7 and R6 = BARROWS
+        ; are the vsync's pre-arm already, and R12/R13 hold the bar.
+        ldy #5
+@ldhold: dey
+        bne @ldhold
+        lda #4
+        sta CRTC_IDX
+        lda #LDR4
+        sta CRTC_DAT
+        lda #7
+        sta CRTC_IDX
+        lda #LDR7
+        sta CRTC_DAT
+        sta curR7                   ; load_end's first vsync re-phases to LDR4 from this
+        lda #$40
+        sta VIA_IER                 ; T1 off: the chain is stopped
+        lda VIA_T1CL
+        lda #2
+        sta LOADREQ
+        jmp @exit
+@ldt1:  lda VIA_T1CL                ; stopped or ending: T1 runs on with its interrupt
+        jmp @notT1                  ; off, so its flag is stale: was this the vsync?
+@ldvsync:                           ; stopped: the standard frame free-runs; count the
+        inc vsyncs                  ; vsync and keep the keys and the sound alive
+        jsr scan_keys
+        jsr sound_tick
+        jmp @exit
 @notT1:
         lda VIA_IFR
         and #$02
@@ -3760,6 +3830,14 @@ irq_handler:
         sta VIA_T1CH
         lda #$02
         sta VIA_IFR
+        lda LOADREQ                 ; (after the restart: it sets the chain's phase)
+        cmp #2
+        beq @ldvsync                ; stopped: T1 runs on with its interrupt off
+        cmp #3
+        bne :+
+        stz LOADREQ                 ; resume: T1's interrupt on again, below
+:       lda #$C0
+        sta VIA_IER
         ; re-phase: the vsync fired at row curR7, so end this frame at row curR7+5 with
         ; 8-line rows -> T starts exactly 40 lines after the vsync even if the CRTC row
         ; counter had run past its vertical total (which otherwise never recovers)
@@ -3829,7 +3907,7 @@ irq_handler:
 ; CA1 fires at the end of the 2-line vsync pulse.  -35 put every step ~5 us INTO its
 ; section; the further -36 puts it ~30 us before the restart, so that the shape
 ; registers land early in the first scanline -- see the chain step in irq_handler.
-VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36
+VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 8   ; -8: the step's load-flag test
   .endif
 
 ; ---------------------------------------------------------------- keyboard

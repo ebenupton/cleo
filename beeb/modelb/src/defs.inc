@@ -132,5 +132,6 @@ F_CALCRING  = 13*3                  ; calc_ring       bank 7 (the menus)
 F_COPYPART  = 14*3                  ; copy_partial    bank 5
 F_MARKDIRTY = 15*3                  ; mark_dirty      bank 5 (the logic; X in farx)
 F_INIT5     = 16*3                  ; init5 + take_over, bank 5's low corner (start-up)
-NFAR        = 17
+F_LDSTOP    = 17*3                  ; ldstop5: a load's standard frame, bank 5's low corner
+NFAR        = 18
 .assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"

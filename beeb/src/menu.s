@@ -186,9 +186,13 @@ load_title:
         lda title_res
         bne :+
   .if .not MODELB
+        jsr load_begin              ; the chain stops at a frame boundary meanwhile
         lda #FI_TITLE
   .endif
-        jsr m_loadfile              ; (Model B: the overlay and the pack, disc.s)
+        jsr m_loadfile              ; (Model B: the overlay and the pack, disc.s, which
+  .if .not MODELB                   ;  stops the chain itself)
+        jsr load_end
+  .endif
         inc title_res
 :       rts
 
