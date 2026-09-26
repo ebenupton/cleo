@@ -1153,70 +1153,42 @@ drawrect:
 :       jmpx @ft-2
   .endif
 @ft:    .word @f7, @f15, @f23, @f31
-                                    ; the pair alternates down the lines: each entry
-.macro FIL1 k                       ; is an odd line, so the cascade's parity is fixed
-        ldy #k
-        lda tp+1
-        sta (sp),y
-.endmacro
-.macro FILN                         ; the next line down is even: tp
-        dey
+; the pair: even lines tp, odd lines tp+1 -- each byte loaded once a char and stored
+; four times, every store setting its own Y (70 cycles a char, where alternating the
+; loads down a dey chain was 88)
+.macro PCHAR c
         lda tp
+        ldy #8*c+6
         sta (sp),y
-.endmacro
-.macro FILO                         ; and the one below odd: tp+1
-        dey
+        ldy #8*c+4
+        sta (sp),y
+        ldy #8*c+2
+        sta (sp),y
+        ldy #8*c
+        sta (sp),y
         lda tp+1
+        ldy #8*c+7
+        sta (sp),y
+        ldy #8*c+5
+        sta (sp),y
+        ldy #8*c+3
+        sta (sp),y
+        ldy #8*c+1
         sta (sp),y
 .endmacro
 @fslow: lda rc_n
         sta tmp2
-@fsc:   FIL1 7
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN                        ; line 0 (even): Y = 1 -> 0
+@fsc:   PCHAR 0
 :                                   ; KEPT, unreferenced, so the anonymous-label
         ; count through drawrect is unchanged
         spnext
         dec tmp2
         bne @fsc
         jmp @runend
-@f31:   FIL1 31
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-@f23:   FIL1 23
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-@f15:   FIL1 15
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-@f7:    FIL1 7
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN
-        FILO
-        FILN                        ; line 0 (even): Y = 1 -> 0
+@f31:   PCHAR 3
+@f23:   PCHAR 2
+@f15:   PCHAR 1
+@f7:    PCHAR 0
         jmp @advsp
 
 ; @hfill's two loads of a half tile's pair: the table sits above the halves, wherever
