@@ -281,6 +281,12 @@ text_centred:
 ; menu_list: menuptr -> table of string pointers (word), A = count, X = first y, tmp4 = row step
 ; returns A = selected index
 menu_list:
+        ldy menuptr                 ; the table's address into the two loads below: the
+        sty @mt0+1                  ; menu code is in RAM on both targets, and so the
+        sty @mt1+1                  ; pointer needs no zero page
+        ldy menuptr+1
+        sty @mt0+2
+        sty @mt1+2
         sta mcount
         stx mtop
         stz msel
@@ -293,10 +299,10 @@ menu_list:
         txa
         asl
         tay
-        lda (menuptr),y
+@mt0:   lda $FFFF,y                 ; (menuptr, patched in above)
         sta ptr
         iny
-        lda (menuptr),y
+@mt1:   lda $FFFF,y
         sta ptr+1
         jsr item_y                  ; X = the index still: A = X = its y
         jsr text_centred
@@ -680,9 +686,8 @@ l7:         .byte "NEFERTITI", 0
 str_score:  .byte "SCORE", 0
 str_hiscore:.byte "HISCORE", 0
 
-  .if .not MODELB                   ; (Model B: menuptr is in defs.inc, spbank and
-        .zeropage                   ;  menurec in bank 5 with the prologue, title_res
-menuptr:   .res 2                   ;  in low RAM)
+  .if .not MODELB                   ; (Model B: spbank and menurec in bank 5 with the
+        .zeropage                   ;  prologue, title_res in low RAM)
 spbank:    .res 1
         .segment "TABLES"
 menurec:   .res 10
@@ -690,6 +695,8 @@ menurec:   .res 10
         .segment "MNUBSS"
   .endif
 numbuf:    .res 8
+menuptr:   .res 2                  ; menu_list's table (read through its own operands)
+tchar:     .res 1                  ; drawtext's place in the string
 mcount:    .res 1
 mtop:      .res 1
 mstep:     .res 1

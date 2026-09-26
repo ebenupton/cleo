@@ -63,9 +63,11 @@ sp_mpg0  = $E8                      ; (the Master keeps these four in main RAM)
 sp_mh    = $E9
 sp_mrp   = $EA                      ; 2
 sp_mbase = $EC                      ; 2
-menuptr  = $EE                      ; 2: the menus' list pointer
+BINI     = $A5                      ; the Model B's three hottest scalars outside zero page
+curR7    = $EE                      ;  (profiled: 44-64, ~41 and ~35 accesses a frame); the
+SECIDX   = $EF                      ;  menus' menuptr, which had $EE-$EF, went to MNUBSS
 fcA      = $A7                      ; fcret's A across the bank switch (low.s)
-.assert menuptr + 2 <= $F0, error, "zero page runs into the MOS's"
+.assert SECIDX < $F0, error, "zero page runs into the MOS's"
 
 ; ---------------------------------------------------------------- display
 LINE      = 64                      ; T1 ticks in one scanline

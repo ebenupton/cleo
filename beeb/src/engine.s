@@ -215,7 +215,11 @@ wcy:      .res 1                  ; window y in map char rows (wy/4)
 wfine:    .res 1                  ; fine scanline offset 0,2,4,6
 curbuf:   .res 1                  ; buffer being drawn: 0 = main, 1 = shadow
 tset:     .res 1                  ; tile set in bank 5 ($FF = none yet)
-tchar:    .res 1                  ; drawtext's place in the string
+  .if .not MODELB                 ; the Master's three hottest main-RAM scalars (profiled:
+NSPR:     .res 1                  ;  63-91, 44-65 and 31-45 accesses a frame); the Model B
+BINI:     .res 1                  ;  had these in zero page already and has its own three
+sp_mh:    .res 1                  ;  (defs.inc).  The menus' tchar and menuptr went out.
+  .endif
 recp:     .res 2                  ; current buffer's sprite record base
 rp:       .res 2                  ; current record
 
@@ -327,13 +331,17 @@ RINGHI:
   .endrepeat
 GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank (low nibble)
 GATHERH:   .res 24                ;                       tile address hi
-SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
+SPRLIST:                          ; (a label, not an equate: the tools read labels.txt)
+SPR_ID:    .res MAXSPR            ; the sprite draw list, one array per field (index =
+SPR_XL:    .res MAXSPR            ;  the sprite's number, so no stride to multiply by):
+SPR_XH:    .res MAXSPR            ;  id, x lo/hi, y lo/hi in map px
+SPR_YL:    .res MAXSPR
+SPR_YH:    .res MAXSPR
 SPRREC:    .res 2*MAXREC*10       ; per buffer drawn-sprite records: id,xl,xh,yl,yh, cxl,cxh,cy,w,h
 RECCNT:    .res 2
 KEEP:      .res MAXREC
 dpass:     .res 1                 ; draw_sprites pass: 1 = box stars, 0 = the rest
 spclip:    .res 1                 ; drawsprite: the last sprite came off a window edge
-NSPR:      .res 1
 BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
 BUF_CY:    .res 2                 ; (a buffer is invalid when its BUF_CX high byte is $80:
                                   ;  scroll_validate sees |dx| >= 80 and redraws it whole;
@@ -345,7 +353,6 @@ BARDIRTY:  .res 1                 ; one bar, so one flag
 BINR:      .res 4                  ; gx0,gx1,gy,gy1 the cached lists were built for
 NSTARL:    .res 1                  ; entries in the star list
 NOTHL:     .res 1                  ;   and in the other one
-BINI:      .res 1                  ; walk position
 BINOK:     .res 1                  ; 0 = rebuild (level load, or a list overflowed)
 MAPSTRIDE: .res 2                  ; bytes per map row (1 << maplw): drawrect walks the
                                    ; row pointer by this instead of re-deriving it
@@ -415,7 +422,6 @@ spclip:    .res 1
 BINR:      .res 4                   ; the interrupt's
 NSTARL:    .res 1
 NOTHL:     .res 1
-BINI:      .res 1
 BINOK:     .res 1
 BUF_SEC0:  .res 4
 BUF_SEC0T1: .res 4
@@ -430,12 +436,15 @@ MUSNOTE:   .res 3
 ISRT1:     .res 1
 ISRT2:     .res 1
         .segment "LOWBSS"           ; main RAM: what more than one bank touches (the
-SPRLIST:   .res 5*MAXSPR            ; single bytes are in zero page: defs.inc)
+SPRLIST:                          ; (a label, not an equate: the tools read labels.txt)
+SPR_ID:    .res MAXSPR            ; the sprite draw list, one array per field (index =
+SPR_XL:    .res MAXSPR            ;  the sprite's number, so no stride to multiply by):
+SPR_XH:    .res MAXSPR            ;  id, x lo/hi, y lo/hi in map px
+SPR_YL:    .res MAXSPR
+SPR_YH:    .res MAXSPR
 BARCACHE:  .res 16                  ; bar_bg (bank 4) resets it, bar_digit (bank 7) keeps it
 DISPSECT:  .res 1
 NEXTSECT:  .res 1
-SECIDX:    .res 1
-curR7:     .res 1
   .endif
 
         PLACE "CODE", "TILCODE"
@@ -1275,9 +1284,7 @@ match_sprites:
         stz KEEP,x
         cpx cnt
         bcs @next
-        lda sprmul5,x
-        tax
-        lda SPRLIST,x
+        lda SPR_ID,x
         cmpz rp                     ; (zp): offset 0 needs no index register
         beq @same
         ; two box-star frames at the same place overwrite each other exactly -- every
@@ -1301,23 +1308,22 @@ match_sprites:
   .else
         ldy #1
   .endif
-        lda SPRLIST+1,x
+        lda SPR_XL,x
         cmp (rp),y
         bne @next
         iny
-        lda SPRLIST+2,x
+        lda SPR_XH,x
         cmp (rp),y
         bne @next
         iny
-        lda SPRLIST+3,x
+        lda SPR_YL,x
         cmp (rp),y
         bne @next
         iny
-        lda SPRLIST+4,x
+        lda SPR_YH,x
         cmp (rp),y
         bne @next
-        ldx tmp4
-        lda tmp3
+        lda tmp3                    ; (X is still the sprite's number)
         sta KEEP,x                  ; same pixels in the same place: skip the erase
 @next:  lda rp
         clc
@@ -1389,16 +1395,15 @@ addsprite:
         ldx NSPR
         cpx #MAXSPR
         bcs @full
-        ldy sprmul5,x
-        sta SPRLIST,y
+        sta SPR_ID,x
         lda spx
-        sta SPRLIST+1,y
+        sta SPR_XL,x
         lda spx+1
-        sta SPRLIST+2,y
+        sta SPR_XH,x
         lda spy
-        sta SPRLIST+3,y
+        sta SPR_YL,x
         lda spy+1
-        sta SPRLIST+4,y
+        sta SPR_YH,x
         inc NSPR
 @full:  rts
 
@@ -1415,44 +1420,43 @@ draw_sprites:
         sta rp
         lda recp+1
         sta rp+1
-@l:     ldy spi
-        cpy NSPR
+@l:     ldx spi                     ; X = the sprite's number: every field is ,x
+        cpx NSPR
         bcs @endpass
-        ldx sprmul5,y
-        ldy SPRLIST,x               ; Y = id for both compares
+        ldy SPR_ID,x                ; Y = id for both compares
         cpy #BOXID0
         lda dpass
         adc #$FF
         beq @next
         cpy #BOXID0+BOXN            ; a box star the logic says nothing can disturb, and
         bcc @write                  ; the same frame already in the same place: if
-        ldy spi                     ; nothing has been repainted under it, its pixels
-        lda KEEP,y                  ; are still right, so leave it alone
+        lda KEEP,x                  ; nothing has been repainted under it, its pixels
+                                    ; are still right, so leave it alone
         cmp #2
         bne @write
         ldy #9                      ; and it was not cut off at a window edge, so all
         lda (rp),y                  ; of it is on screen and still intact
         bpl @next
 @write: ldy #1
-        lda SPRLIST+1,x
+        lda SPR_XL,x
         sta spx
         sta (rp),y
         iny
-        lda SPRLIST+2,x
+        lda SPR_XH,x
         sta spx+1
         sta (rp),y
         iny
-        lda SPRLIST+3,x
+        lda SPR_YL,x
         sta spy
         sta (rp),y
         iny
-        lda SPRLIST+4,x
+        lda SPR_YH,x
         sta spy+1
         sta (rp),y
         ldy #8
         lda #0
         sta (rp),y
-        lda SPRLIST,x
+        lda SPR_ID,x
         staz rp                     ; sta (rp) - offset 0 needs no index
         jsr drawsprite
 @next:  lda rp
@@ -2499,7 +2503,6 @@ ds_done: rts
   .else
         SPRITE_LOOPS 1, 1
 sp_mpg0:  .res 1                  ; MASKTAB page of the sprite's first column: >MASKTAB0 | phase
-sp_mh:    .res 1                  ; pixel rows = mask bytes per column group
 sp_mrp:   .res 2                  ; mask pointer for the current row's first column
 sp_mbase: .res 2                  ; the sprite's mask plane
 SWAPTAB:                          ; four-dot reversal for mirroring: dot i is bits 7-i and
@@ -4188,10 +4191,6 @@ blank_palette:
   .endif
   .if .not MODELB                   ; (Model B: static tables in main RAM (banks.s),
         .segment "TABLES"           ;  and no disc loader -- modelb/src/disc.s)
-sprmul5:                          ; i * 5: the sprite list's stride
-  .repeat MAXSPR, i
-        .byte i*5
-  .endrepeat
 mulrowlo:                         ; ring row r -> r * 80 chars
   .repeat RINGROWS, r
         .byte <(r*ROWCHARS)

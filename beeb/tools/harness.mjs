@@ -122,7 +122,7 @@ export class Harness {
       ["BUF_CX", A.BUF_CX, 4], ["BUF_CY", A.BUF_CY, 2],
       ["BARDIRTY", A.BARDIRTY, 2],   // (not BARBG: gone, the bar is laid once)
       ["MIRR_R", A.MIRR_R, 2], ["MIRR_LO", A.MIRR_LO, 2],
-      ["NSPR", A.NSPR, 1], ["SPRLIST", A.SPRLIST, 5 * MAXSPR],
+      ["NSPR", A.NSPR, 1], ["SPRLIST", A.SPRLIST, 5 * MAXSPR, "sprites"],
       ["RECCNT", A.RECCNT, 2], ["SPRREC", A.SPRREC, 2 * MAXREC * 10], ["KEEP", A.KEEP, MAXREC],
       ["DIRTYCNT", A.DIRTYCNT, 2], ["DIRTYLIST", A.DIRTYLIST, 2 * 2 * 16],
       ["px", A.px, 2], ["py", A.py, 2], ["vx", A.vx, 2], ["vy", A.vy, 2],
@@ -132,9 +132,12 @@ export class Harness {
   }
   fingerprint() {
     const h = createHash("sha256"), parts = {};
-    for (const [name, addr, len] of this.sceneRanges()) {
+    for (const [name, addr, len, kind] of this.sceneRanges()) {
       const b = Buffer.alloc(len);
-      for (let i = 0; i < len; i++) b[i] = this.rd(addr + i);
+      if (kind === "sprites" && this.A.SPR_XL !== undefined) {   // five arrays: as id,xl,xh,yl,yh records
+        const n = len / 5, F = [this.A.SPR_ID, this.A.SPR_XL, this.A.SPR_XH, this.A.SPR_YL, this.A.SPR_YH];
+        for (let i = 0; i < n; i++) for (let k = 0; k < 5; k++) b[i * 5 + k] = F[k] < 0x10000 ? this.rd(F[k] + i) : 0;
+      } else for (let i = 0; i < len; i++) b[i] = this.rd(addr + i);
       h.update(name); h.update(b);
       parts[name] = b.toString("hex");
     }

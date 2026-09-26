@@ -50,10 +50,6 @@
 ; the code that indexes it: the sprite multiples and the row multiples are bank 7's
 ; (the prologue, the records, the chain), the ring modulus bank 5's (ringaddr).
         .segment "LGCDATA"
-sprmul5:
-.repeat MAXSPR, i
-        .byte i*5
-.endrepeat
 mulrowlo:
 .repeat RINGROWS, i
         .byte <(i*ROWCHARS)
