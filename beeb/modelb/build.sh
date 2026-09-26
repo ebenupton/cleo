@@ -10,8 +10,9 @@ mkdir -p build
 # the disc's file list, in disc order: what every load reads first (LDPROG) by the
 # boot files, the shared files together, the levels after them
 DISC="!BOOT:build/BOOT LOADER:build/LOADER BANKS:build/BANKS LDPROG:build/LDPROG MENU:build/MENU BAR:build/BAR"
-DISC="$DISC SPR:../build/SPR SPRAND:../build/SPRAND BOX:../build/BOX TILESO:../build/TILESO TILESI:../build/TILESI TITLE:../build/TITLE"
+DISC="$DISC SPR:../build/SPR SPRAND:../build/SPRAND BOX:../build/BOX TILESO0:../build/TILESO0 TILESI0:../build/TILESI0 TITLE:../build/TITLE"
 for l in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do DISC="$DISC L$l:build/L$l"; done
+DISC="$DISC TILESO1:../build/TILESO1 TILESI1:../build/TILESI1"
 for f in BOOT LOADER BANKS MENU LDPROG; do [ -f build/$f ] || : > build/$f; done
 printf '*RUN LOADER\r' > build/BOOT
 
@@ -31,7 +32,7 @@ for pass in 1 2 3; do
 import re
 want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE','FLATTAB',
-        'half0','half1','half2','halfhi','halfsub','HPAIR0','HPAIR1',
+        'half0','half1','half2','halfhi','halfsub','mir0','MIRTAB','HPAIR0','HPAIR1',
         'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
 addr = {}
 for l in open('build/labels.txt'):
@@ -47,7 +48,7 @@ with open('build/defs_ld.inc', 'w') as f:
             f.write('; %s: not in labels.txt (a constant?)\n' % n)
 EOF
     # the constants ld65 does not list
-    grep -E '^(MENU_BASE|TILES|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE|LV_OBJS|BOARD_STD|BOARD_WATFORD|BOARD_SOLIDISK|WRSEL_WATFORD|WRSEL_SOLIDISK)\s*=' src/defs.inc build/assets.inc \
+    grep -E '^(MENU_BASE|TILES|NFLAT|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE|LV_OBJS|BOARD_STD|BOARD_WATFORD|BOARD_SOLIDISK|WRSEL_WATFORD|WRSEL_SOLIDISK)\s*=' src/defs.inc build/assets.inc \
         | sed 's/^[^:]*://; s/;.*//' >> build/defs_ld.inc
     echo 'BARADDR = $0300' >> build/defs_ld.inc
     ca65 --cpu 6502 -I build -I src -o build/ldprog.o src/ldprog.s -l build/ldprog.lst

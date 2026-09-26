@@ -38,8 +38,6 @@ def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
 SOLID_CYAN, SOLID_BLACK = 254, 255
-NFLAT = 14                                  # flat tiles a level may have: ids FLAT0..253
-FLAT0 = SOLID_CYAN - NFLAT                  # 240; the solids are the table's last two
 VISLINES = 160                              # 20 rows (engine.s, MODELB)
 
 # ---------------------------------------------------------------- the banks' fixed shape
@@ -52,9 +50,8 @@ B6_HOLE = (0x8180, 0x8300)                  # bank 6: below the tables, above th
 B6_SWAP = (0x8300, 0x8400)                  #   the page SWAPTAB would take: data here
 B6_TOP = 0xBD60                             #   the row loop and copy blitter above this
 MAP6 = 0x8800                               #   the map, then the directory, then images
-TILES_BASE = 0x8100                         # bank 5: the tiles from here (page aligned)
-B5X = 0xB620                                #   up to the row loop's region (cleo_b.cfg)
-TILE_ROOM = 233                             # the Master's largest level (L4B): no level folds past its set
+TILES_BASE, B5X = m.B_TILES, m.B_TILES_END  # bank 5: the tiles from here (page aligned)
+                                            #   up to the row loop's region (cleo_b.cfg)
 
 SPRFILE_SPR, SPRFILE_AND, SPRFILE_BOX = 0, 1, 2   # the loader's source file ids
 
@@ -132,50 +129,6 @@ if not os.path.exists(MUS):
 out('music.bin', open(MUS, 'rb').read())
 
 # ---------------------------------------------------------------- per-level helpers
-def _bits(a, b):
-    return sum(bin(x ^ y).count('1') for x, y in zip(a, b))
-def _art(c):
-    o = m.compact[c]; return m.til_idx[o * 8:o * 8 + 8, :]
-def _flatmask(a):
-    f = np.zeros((8, 8), bool)
-    f[:, 1:] |= a[:, 1:] == a[:, :-1]; f[:, :-1] |= a[:, :-1] == a[:, 1:]
-    f[1:, :] |= a[1:, :] == a[:-1, :]; f[:-1, :] |= a[:-1, :] == a[1:, :]
-    f[0, :] = f[-1, :] = f[:, 0] = f[:, -1] = True
-    return f
-def _flatdiff(c, k):
-    a = m.strip(np.asarray(m.tile_preview[c])); b = m.strip(np.asarray(m.tile_preview[k]))
-    d = (a != b); d = d[0::2] | d[1::2]
-    return int((d & _flatmask(_art(c))).sum())
-
-def level_fold(cm, live_reps, usage, room):
-    """The level image holds `room` tiles.  A level that needs more folds its cheapest
-    pairs by convert.py's own damage metric (cells using the tile x flat pixels whose
-    rendering changes), the same order the set fold uses.  Returns {rep: rep} extra."""
-    extra = {}
-    if len(live_reps) <= room:
-        return extra, 0
-    cand = []
-    ids = sorted(live_reps)
-    for i, c in enumerate(ids):
-        if c in m._nomerge:
-            continue
-        for k in ids[:i]:
-            if k in m._nomerge or m.alt_class[k] != m.alt_class[c]:
-                continue
-            d = _bits(m.tiles_bytes[c], m.tiles_bytes[k])
-            if d <= 96:
-                cand.append((usage.get(c, 0) * _flatdiff(c, k), d, c, k))
-    cand.sort()
-    live, target, dmg = len(ids), set(), 0
-    for damage, d, c, k in cand:
-        if live <= room:
-            break
-        if c in extra or c in target or k in extra:
-            continue
-        extra[c] = k; target.add(k); live -= 1; dmg += damage
-    assert live <= room, 'level will not fold into the tile room'
-    return extra, dmg
-
 def rle(data):
     """PackBits-like: c < 128 = c+1 literal bytes follow; c >= 128 = the next byte
     repeated c-126 times (2..129).  ldprog.s decodes it."""
@@ -222,122 +175,15 @@ def pack_level(lv, sub):
     cm = m.maps[(lv, sub)]
     assert cm.min() >= 0
     gset = m.tileset_of(lv, sub)
-    rep = m.folded[gset]
-    def rep_of(c): return rep.get(c, c)
-    specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
-    inset = set(m.remap[gset])
-    live = set(int(c) for c in np.unique(cm)) | (set(specials) & inset)
-    vals, cnt = np.unique(cm, return_counts=True)
-    usage = {}
-    for v, n in zip(vals, cnt):
-        r = rep_of(int(v)); usage[r] = usage.get(r, 0) + int(n)
-    reps = set(rep_of(c) for c in live if c not in m.tile_solid)
-    extra, dmg = level_fold(cm, reps, usage, TILE_ROOM)
-    def rep2(c):
-        r = rep_of(c); return extra.get(r, r)
-    local = {}                              # compact id -> level tile id
-    for c in sorted(live):
-        if c in m.tile_solid:
-            local[c] = SOLID_CYAN if m.tile_solid[c] == 1 else SOLID_BLACK
-    # a flat tile -- every char the same two bytes alternating down its lines (one
-    # colour's dither) -- is two bytes in FLATTAB and an id from FLAT0, as the two
-    # solids are (the last two entries); the blitter fills it (drawrect's @solid)
-    def flat_pair_row(row):                 # a char row (4 chars) of one 2-byte dither
-        cs = [bytes(row[k * 8:k * 8 + 8]) for k in range(4)]
-        if all(c == cs[0] for c in cs) and all(cs[0][i] == cs[0][i & 1] for i in range(8)):
-            return cs[0][:2]
-        return None
-    def flat_pair(t):
-        a, b = flat_pair_row(t[:32]), flat_pair_row(t[32:])
-        return a if a is not None and a == b else None
-    # A half tile has one char row that is a fill (flat_pair of its four chars) or
-    # equal to the other: only the other row is stored, 32 bytes, in a region above
-    # the full tiles, with the fill's pair in HALFPAIR.  Ids: full tiles from 0,
-    # halves from half0 in three runs (top row fills, bottom row fills, both rows the
-    # same), flats from FLAT0.  Byte-identical tiles (the set fold only merges near
-    # ones) share an id.
-    def half_of(t):
-        top, bot = flat_pair_row(t[:32]), flat_pair_row(t[32:])
-        if top is not None and bot is None:
-            return ('top', t[32:], top)      # the top row is the fill: the bottom stored
-        if bot is not None and top is None:
-            return ('bot', t[:32], bot)
-        if t[:32] == t[32:]:
-            return ('pair', t[:32], b'\0\0')
-        return None
-    reps = sorted(set(rep2(c) for c in sorted(live) if c not in m.tile_solid))
-    # identical tiles share one representative -- identical to the game too: the logic
-    # reads a tile's attribute and altitude class by id, so those are in the key
-    def attr_of(c):
-        a = 3
-        if c in m.push_tiles:
-            a = m.push_tiles[c] + 3
-        if c in m.kill_tiles:
-            a |= 0x80
-        return a
-    def ident(r):
-        return (bytes(m.tiles_bytes[r]), attr_of(r), m.alt_class[r])
-    bybytes = {}
-    for r in reps:
-        bybytes.setdefault(ident(r), r)
-    canon = {r: bybytes[ident(r)] for r in reps}
-    ureps = sorted(set(canon.values()))
-    flats, halves, fulls = [], {'top': [], 'bot': [], 'pair': []}, []
-    for r in ureps:
-        t = m.tiles_bytes[r]
-        fp = flat_pair(t)
-        if fp is not None:
-            flats.append((r, fp)); continue
-        h = half_of(t)
-        if h is not None:
-            halves[h[0]].append((r, h[1], h[2])); continue
-        fulls.append(r)
-    byrep = {}
-    for i, r in enumerate(fulls):
-        byrep[r] = i
-    half0 = len(fulls)
-    hlist = halves['top'] + halves['bot'] + halves['pair']
-    half1 = half0 + len(halves['top'])
-    half2 = half1 + len(halves['bot'])
-    for i, (r, stored, pr) in enumerate(hlist):
-        byrep[r] = half0 + i
-    for i, (r, fp) in enumerate(flats):
-        byrep[r] = FLAT0 + i
-    assert half0 + len(hlist) <= FLAT0, (name, half0, len(hlist))
-    for c in sorted(live):
-        if c not in m.tile_solid:
-            local[c] = byrep[canon[rep2(c)]]
-    NTILES = len(fulls)
-    NHALF = len(hlist)
-    assert NTILES <= TILE_ROOM, (name, NTILES)
-    assert len(flats) <= NFLAT, (name, len(flats))
-    flattab = bytearray()
-    for r, fp in flats:
-        flattab += fp
-    flattab = flattab.ljust(2 * NFLAT, b'\0')
-    flattab += bytes([0x0F, 0x0F, 0x00, 0x00])          # cyan, black: ids 254, 255
-    halfpair = bytearray()
-    for r, stored, pr in hlist:
-        halfpair += pr
-    # the room: full tiles, the halves from the 32-byte slot after them (the gather
-    # counts slots from the page the first is in, HALFPAGE, so the loader stores
-    # half0 - HALFOFF for its subtraction), their pairs after them
-    HALFPAGE = TILES_BASE + ((NTILES * 64) & ~255)
-    HALFOFF = ((NTILES * 64) & 255) // 32
-    assert HALFPAGE + (HALFOFF + NHALF) * 32 + len(halfpair) <= B5X, (name, NTILES, NHALF)
-    # the tile list: for each level id, the tile's index in the set's file (TILESO/I)
-    setidx = {c: i for i, c in enumerate(m.tileset[gset])}
-    tilelist = bytearray()
-    for r in fulls:
-        tilelist.append(setidx[r])
-    halflist = bytearray()                  # per half: the set index and the stored row
-    for r, stored, pr in hlist:
-        halflist += bytes([setidx[r], 0 if stored == bytes(m.tiles_bytes[r][:32]) else 1])
+    # the level's tiles: convert.py pack_tiles, the ids the Master's too
+    T = m.pack_tiles(lv, sub)
+    local = T['local']
     lut = np.zeros(len(m.compact), dtype=np.uint8)
     for c, t in local.items():
         lut[c] = t
     mapb = lut[cm].tobytes()
     h, w = cm.shape
+    specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
 
     # ---- tables
     hdr = bytearray([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1],
@@ -345,11 +191,8 @@ def pack_level(lv, sub):
     for cid in specials:
         hdr.append(local.get(cid, 255))
     assert len(hdr) == 20
-    hdr.append(gset)
-    hdr.append(NTILES)
-    hdr.append(8 - L['lw'])                 # maprow's shift: row * 2^lw = (row << 8) >> (8 - lw)
-    hdr += bytes([NHALF, half0, half1, half2, HALFPAGE >> 8, HALFOFF])   # +23..+28: the halves
-    hdr = hdr.ljust(32, b'\0')
+    hdr += T['B']['hdr']                    # +20..+31: the tiles' shape (pack_tiles)
+    assert len(hdr) == 32
     objs = bytearray()
     reach = m.enemy_reach(L['objs'])
     for (t, x, y, ex) in L['objs']:
@@ -366,14 +209,9 @@ def pack_level(lv, sub):
     assert len(L['objs']) <= 149
     attr = bytearray(256)
     acls = bytearray(256)
-    for c in sorted(live):
+    for c in sorted(local):
         t = local[c]
-        a = 3
-        if c in m.push_tiles:
-            a = m.push_tiles[c] + 3
-        if c in m.kill_tiles:
-            a |= 0x80
-        attr[t] = a
+        attr[t] = m.attr_of(c)
         acls[t] = 0 if c in m.tile_solid else m.alt_class[c]
 
     # ---- the sprite list's bounds (see the old packer: the objects whose cells the
@@ -465,8 +303,8 @@ def pack_level(lv, sub):
     maprle = rle(mapb)
     assert unrle(maprle) == mapb
     secs = [('hdr', hdr), ('objs', objs), ('attr', attr), ('altcls', acls),
-            ('tiles', tilelist), ('place', placement), ('map', maprle), ('flat', flattab),
-            ('halves', halflist), ('hpair', halfpair)]
+            ('tiles', T['B']['tiles']), ('place', placement), ('map', maprle), ('flat', T['flat']),
+            ('halves', T['halves']), ('hpair', T['hpair']), ('mir', T['B']['mir'])]
     off = 2 * len(secs)
     table = bytearray()
     body = bytearray()
@@ -476,7 +314,7 @@ def pack_level(lv, sub):
         body += data
     assert off + len(body) <= 0x7800 - 0x5C00, (name, off + len(body))   # STAGE_LVL..LV_OBJS (defs.inc)
     out('L%d' % (lv * 2 + sub), table + body)
-    stats = dict(name=name, ntiles=NTILES, nflat=len(flats), nhalf=NHALF, folded=len(extra), damage=dmg, w=w, h=h, nobj=len(L['objs']),
+    stats = dict(name=name, ntiles=T['ntiles'], nflat=T['nflat'], nhalf=T['nhalf'], nmir=T['nmir'], w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],
                  maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=off + len(body))
     return stats
@@ -486,16 +324,16 @@ for lv in range(8):
     for sub in (0, 1):
         s = pack_level(lv, sub)
         allstats.append(s)
-        print('%-4s %3d tiles +%2d half +%d flat (%2d folded, damage %4d) map %3dx%2d rle %5d  %3d obj %2d img  '
+        print('%-4s %3d tiles +%2d half +%2d mirror +%d flat map %3dx%2d rle %5d  %3d obj %2d img  '
               'b4 %5d+%3d  b6 %5d+%3d+%3d  spr %2d bin %2d  file %5d'
-              % (s['name'], s['ntiles'], s['nhalf'], s['nflat'], s['folded'], s['damage'], s['w'], s['h'], s['maprle'], s['nobj'], s['nimg'],
+              % (s['name'], s['ntiles'], s['nhalf'], s['nmir'], s['nflat'], s['w'], s['h'], s['maprle'], s['nobj'], s['nimg'],
                  s['r4'], s['h4'], s['r6'], s['h6'], s['s6'], s['maxspr'], s['binmax'], s['size']))
 
 MAXSPR = max(s['maxspr'] for s in allstats)
 BINMAX = max(s['binmax'] for s in allstats)
 with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by modelb/tools/assets.py: the bounds every level fits\n')
-    f.write('SOLID_CYAN = %d\nSOLID_BLACK = %d\nFLAT0 = %d\n' % (SOLID_CYAN, SOLID_BLACK, FLAT0))
+    f.write('SOLID_CYAN = %d\nSOLID_BLACK = %d\nFLAT0 = %d\nNFLAT = %d\nMAXMIR = %d\n' % (SOLID_CYAN, SOLID_BLACK, m.FLAT0, m.NFLAT, m.MAXMIR))
     f.write('BOXID0 = 103\nBOXN = 15\n')
     f.write('TITLE_ADDR = $8900\n')         # bank 6, as the Master: over the map
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
@@ -504,7 +342,6 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
     f.write('SPR6_MIRROR = 0\n')            # bank 6 holds no image that is drawn mirrored
     f.write('SPR4_COPY = 0\n')              # and bank 4 nothing the copy blitter draws
-    f.write('TILE_ROOM = %d\n' % TILE_ROOM)
     f.write('B4_DATA_END = $%04X\nB6_TOP = $%04X\nMAP6 = $%04X\n' % (B4_DATA[1], B6_TOP, MAP6))
     f.write('NIMGTAB = %d\n' % (NIMG + 15))
-print('MAXSPR %d BINMAX %d; tile room %d; imgtab %d entries' % (MAXSPR, BINMAX, TILE_ROOM, NIMG + 15))
+print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))

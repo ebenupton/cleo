@@ -22,7 +22,6 @@ def expect(pi):                      # palette index -> the flat dither (16, 8)
     return flat_col[pi]
 total = {}
 for (lv, sub), cm in sorted(m.maps.items()):
-    g = m.tileset_of(lv, sub); rm = m.remap[g]; fo = m.folded[g]
     raw = m.levels[(lv, sub)]['map']; h, w = cm.shape
     src = np.full((h * 8, w * 8), -1, int)          # source palette index per game pixel
     for y in range(h):
@@ -35,10 +34,10 @@ for (lv, sub), cm in sorted(m.maps.items()):
     counts = {}
     for y in range(h):
         for x in range(w):
-            c = int(cm[y, x]); r = rm.get(c)
-            if r == m.SOLID_CYAN:   got = np.full((16, 8), m.CYAN_COL & 7, np.uint8)
-            elif r == m.SOLID_BLACK: got = np.zeros((16, 8), np.uint8)
-            else:                    got = np.asarray(m.tile_preview[fo.get(c, c)])
+            c = int(cm[y, x]); r = m.tile_solid.get(c)
+            if r == 1:   got = np.full((16, 8), m.CYAN_COL & 7, np.uint8)
+            elif r == 2:             got = np.zeros((16, 8), np.uint8)
+            else:                    got = np.asarray(m.tile_preview[c])
             f = flat[y*8:y*8+8, x*8:x*8+8]
             if not f.any():
                 continue
@@ -52,7 +51,7 @@ for (lv, sub), cm in sorted(m.maps.items()):
                         bad += 1
             if bad:
                 orig = m.compact[c]
-                cause = ('fold' if c in fo else 'solid' if r in (m.SOLID_CYAN, m.SOLID_BLACK)
+                cause = ('solid' if r
                          else 'fill' if int(cm[y, x]) != m.orig2compact[int(raw[y, x])]
                          else 'edit' if orig in m.TILE_EDITS else 'blackened' if c in m.blackened else 'other')
                 counts[cause] = counts.get(cause, 0) + bad

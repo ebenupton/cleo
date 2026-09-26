@@ -59,8 +59,6 @@ start:
         lda #FI_LOGIC               ; the game logic lives in bank 7 above the level
         jsr loadfile                ; tables, so it has to come in before init_tables
         jsr t_init_tables
-        lda #FI_PAGE0               ; tile id -> address, constant for every level
-        jsr loadfile
         lda #FI_SPR
         jsr loadfile
         lda #FI_SPRAND

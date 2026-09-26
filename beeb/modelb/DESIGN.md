@@ -72,13 +72,14 @@ bank 5 -- and bank 7 back through `pagelogic`.  `mapstrip`, the row loop's, page
 bank 5 back directly (dirfetch, the prologue's, restores 7 itself).  The mask
 tables are assembled too.
 
-Bank 5 is nearly all tiles because the level's tile count is the Master's own (no
-folding beyond the set fold convert.py already does): L4B's 233 tiles would be 14.9K.
-So only the tile blitter's row loop and the two routines that call it run there,
-and the tiles' addresses are arithmetic (64 bytes each from $8100, page aligned)
-rather than a table beside them.  A *flat* tile -- one colour's dither, which in
+Bank 5 is nearly all tiles because the level's tiles are the Master's own, none
+folded away: L4B's 253 ids would be 15.8K as full tiles.  So only the tile
+blitter's row loop and the two routines that call it run there, and the tiles'
+addresses are arithmetic (64 bytes each from $8100, page aligned) rather than a
+table beside them.  The ids and the lists that gather a level's tiles come from one
+packer for both targets (`tools/convert.py` pack_tiles), laid out for this bank.  A *flat* tile -- one colour's dither, which in
 MODE 1 is the same two bytes alternating down every char -- is not stored at all:
-it gets an id from FLAT0 (240) and two bytes in FLATTAB (main RAM, the loader's),
+it gets an id from FLAT0 (250) and two bytes in FLATTAB (bank 5, the loader's),
 the two solids being the table's last entries, and the row loop fills a run of them
 from the pair (the gather flags a fill in the high byte's bit 6 and indexes the pair
 with the low byte) -- Commando's `drawfill`, from the other port.  A *half* tile has
@@ -89,9 +90,18 @@ Its id is from `half0`, in three runs -- top row fills, bottom row fills, both r
 the stored one -- and the gather puts the half's flags in the low byte's bottom
 bits (bit 2 a half, bits 0-1 which row fills); the run path, which decides copy or
 fill once per tile and char row anyway, reads them.  Tiles identical in bytes,
-attribute and altitude class share an id.  L4B: 193 full tiles, 34 halves, 4 flats
--- 12.4K where the Master's 233 tiles are 14.9K; every level shows the Master's
-pixels.  drawrect's head -- the mirror and partial-row
+attribute and altitude class share an id.  A *mirrored* tile -- another stored
+tile reversed left to right -- is not stored either, while the bank is short: its id
+is from `mir0`, after the halves, and MIRTAB gives its source's slot; the gather
+marks it kind 3, and the row loop draws its chars right to left, each byte's two
+game pixels swapped, `((b & $33) << 2) | ((b & $CC) >> 2)`.  That is exact: the
+dither is per game pixel with no position term, so a pixel's 2x2 dots move as one.
+It is a char-at-a-time path, so the packer mirrors only what the bank cannot hold,
+the least used first: L2B 11 tiles, L4B 16, no other level.  L4B: 191 full tiles,
+40 halves, 16 mirrors, 4 flats -- 13.5K of the 13.6K.  The set files are 16K each
+(TILESO0/1, TILESI0/1: 256 tiles a file, the tiles most levels use first), staged
+at STAGE in turn, and the tile list says how many of the level's tiles each file
+gives.  Every level shows the Master's pixels.  drawrect's head -- the mirror and partial-row
 notes, the per-rect invariants, the ring address, the map row pointer -- is main
 RAM's, and the rows are one far call; the sprite prologue and its records went to
 bank 7 with the logic that queues the sprites; match_sprites and erase_old are main
@@ -307,4 +317,4 @@ Y (the one site with Y live is `ldazy`), `bitimm` keeps A.
 21 visible rows against 30 (84 game px: the world's in-range decisions follow
 VISLINES, which is why the reference for the lock-step test is a 21-row Master).  The
 picture starts 72 lines after vsync, 4 scanlines below where a standard frame's centre
-would put it.  The tiles are the Master's, unfolded.
+would put it.  The tiles and their ids are the Master's; neither target folds any.

@@ -21,7 +21,7 @@ load_level:
         lda tmp2
         inca
         jsr loadfile
-        jsr load_tiles              ; only the tiles this level's page tables name
+        jsr load_tiles              ; the level's tiles, from its set's files, to bank 5
         ; geometry
         setbank BANK_LVL
   .endif
@@ -95,48 +95,49 @@ FTMODE .set 0
 .endmacro
 .macro FILE_LIST
         FILE F_SPR_SEC,   F_SPR_N,   BANK_SPR,  $8000
-        FILE F_TILESO_SEC, F_TILESO_N, BANK_TIL0, $8000
-        FILE F_TILESI_SEC, F_TILESI_N, BANK_TIL0, $8000
+        FILE F_TILESO0_SEC, F_TILESO0_N, 0, SCREEN   ; the sets' first files: staged in
+        FILE F_TILESI0_SEC, F_TILESI0_N, 0, SCREEN   ; screen RAM (load_tiles)
         FILE F_LOGIC_SEC, <((__LOGIC_LAST__ - __LOGIC_START__ + 255) / 256), BANK_LVL, LOGIC_ADDR
         FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
         FILE F_MUSIC_SEC, F_MUSIC_N, BANK_LVL,  MUSIC_ADDR
         FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTTAB
         FILE F_TITLE_SEC, F_TITLE_N, BANK_MAP,  TITLE_ADDR
-        FILE F_L0A_SEC, LM_L0A, BANK_MAP, LV_MAP
+        FILE F_L0A_SEC, LM_L0A, BANK_MAP, LV_TLIST
         FILE F_L0A_SEC + LM_L0A, F_L0A_N - LM_L0A, BANK_LVL, LV_HDR
-        FILE F_L0B_SEC, LM_L0B, BANK_MAP, LV_MAP
+        FILE F_L0B_SEC, LM_L0B, BANK_MAP, LV_TLIST
         FILE F_L0B_SEC + LM_L0B, F_L0B_N - LM_L0B, BANK_LVL, LV_HDR
-        FILE F_L1A_SEC, LM_L1A, BANK_MAP, LV_MAP
+        FILE F_L1A_SEC, LM_L1A, BANK_MAP, LV_TLIST
         FILE F_L1A_SEC + LM_L1A, F_L1A_N - LM_L1A, BANK_LVL, LV_HDR
-        FILE F_L1B_SEC, LM_L1B, BANK_MAP, LV_MAP
+        FILE F_L1B_SEC, LM_L1B, BANK_MAP, LV_TLIST
         FILE F_L1B_SEC + LM_L1B, F_L1B_N - LM_L1B, BANK_LVL, LV_HDR
-        FILE F_L2A_SEC, LM_L2A, BANK_MAP, LV_MAP
+        FILE F_L2A_SEC, LM_L2A, BANK_MAP, LV_TLIST
         FILE F_L2A_SEC + LM_L2A, F_L2A_N - LM_L2A, BANK_LVL, LV_HDR
-        FILE F_L2B_SEC, LM_L2B, BANK_MAP, LV_MAP
+        FILE F_L2B_SEC, LM_L2B, BANK_MAP, LV_TLIST
         FILE F_L2B_SEC + LM_L2B, F_L2B_N - LM_L2B, BANK_LVL, LV_HDR
-        FILE F_L3A_SEC, LM_L3A, BANK_MAP, LV_MAP
+        FILE F_L3A_SEC, LM_L3A, BANK_MAP, LV_TLIST
         FILE F_L3A_SEC + LM_L3A, F_L3A_N - LM_L3A, BANK_LVL, LV_HDR
-        FILE F_L3B_SEC, LM_L3B, BANK_MAP, LV_MAP
+        FILE F_L3B_SEC, LM_L3B, BANK_MAP, LV_TLIST
         FILE F_L3B_SEC + LM_L3B, F_L3B_N - LM_L3B, BANK_LVL, LV_HDR
-        FILE F_L4A_SEC, LM_L4A, BANK_MAP, LV_MAP
+        FILE F_L4A_SEC, LM_L4A, BANK_MAP, LV_TLIST
         FILE F_L4A_SEC + LM_L4A, F_L4A_N - LM_L4A, BANK_LVL, LV_HDR
-        FILE F_L4B_SEC, LM_L4B, BANK_MAP, LV_MAP
+        FILE F_L4B_SEC, LM_L4B, BANK_MAP, LV_TLIST
         FILE F_L4B_SEC + LM_L4B, F_L4B_N - LM_L4B, BANK_LVL, LV_HDR
-        FILE F_L5A_SEC, LM_L5A, BANK_MAP, LV_MAP
+        FILE F_L5A_SEC, LM_L5A, BANK_MAP, LV_TLIST
         FILE F_L5A_SEC + LM_L5A, F_L5A_N - LM_L5A, BANK_LVL, LV_HDR
-        FILE F_L5B_SEC, LM_L5B, BANK_MAP, LV_MAP
+        FILE F_L5B_SEC, LM_L5B, BANK_MAP, LV_TLIST
         FILE F_L5B_SEC + LM_L5B, F_L5B_N - LM_L5B, BANK_LVL, LV_HDR
-        FILE F_L6A_SEC, LM_L6A, BANK_MAP, LV_MAP
+        FILE F_L6A_SEC, LM_L6A, BANK_MAP, LV_TLIST
         FILE F_L6A_SEC + LM_L6A, F_L6A_N - LM_L6A, BANK_LVL, LV_HDR
-        FILE F_L6B_SEC, LM_L6B, BANK_MAP, LV_MAP
+        FILE F_L6B_SEC, LM_L6B, BANK_MAP, LV_TLIST
         FILE F_L6B_SEC + LM_L6B, F_L6B_N - LM_L6B, BANK_LVL, LV_HDR
-        FILE F_L7A_SEC, LM_L7A, BANK_MAP, LV_MAP
+        FILE F_L7A_SEC, LM_L7A, BANK_MAP, LV_TLIST
         FILE F_L7A_SEC + LM_L7A, F_L7A_N - LM_L7A, BANK_LVL, LV_HDR
-        FILE F_L7B_SEC, LM_L7B, BANK_MAP, LV_MAP
+        FILE F_L7B_SEC, LM_L7B, BANK_MAP, LV_TLIST
         FILE F_L7B_SEC + LM_L7B, F_L7B_N - LM_L7B, BANK_LVL, LV_HDR
         FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
         FILE F_TABLES_SEC, F_TABLES_N, 0, $0400             ; main RAM: bank 0 selects none
-        FILE F_PAGE0_SEC, F_PAGE0_N, BANK_MAP, LV_PAGE0
+        FILE F_TILESO1_SEC, F_TILESO1_N, 0, SCREEN   ; and their second files
+        FILE F_TILESI1_SEC, F_TILESI1_N, 0, SCREEN
 .endmacro
 FTMODE .set 0
 ft_seclo: FILE_LIST
@@ -160,7 +161,8 @@ FI_TITLE = 7
 FI_L0A = 8                        ; two pieces per level: map, bank-7 tables
 FI_SPRAND = 40
 FI_TABLES = 41
-FI_PAGE0 = 42
+FI_TILESO1 = 42
+FI_TILESI1 = 43
 
   .endif
 

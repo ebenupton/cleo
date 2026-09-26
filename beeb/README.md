@@ -39,7 +39,8 @@ The original JAR contents are expected in `../v500/` (unzipped `CleoV500.jar`).
   The partial top row is displayed from a copy of the bottom lines of the first row.
 * **Memory**: engine code and tables live below 12K (&0400-&2FFF). Game logic and
   menus live in HAZEL (8K at &C000, copied there at start). All data is in the four
-  sideways RAM banks: 4 = sprites/font/bar, 5+6 = the 467 distinct 8x8 tiles, 7 = the
+  sideways RAM banks: 4 = sprites/font/bar, 5 = the level's own tiles (gathered at
+  load from its set's files, unfolded: `tools/convert.py` pack_tiles), 6 + 7 = the
   current level (map, page tables, objects, altitude data) and the title pack.
 * **Loading**: after `*RUN CLEO` the MOS is abandoned; a small WD1770 driver reads the
   data files by sector (multi-sector reads under NMI) using a table generated at build
@@ -61,7 +62,7 @@ transitions and the "BONUS LEVEL" banner sprite.
 `modelb/` builds the same game for a Model B with 64K of sideways RAM (four banks)
 from these sources with `MODELB=1`: `sh modelb/build.sh` writes `modelb/build/cleob.ssd`.
 All sixteen levels, loaded from the disc by the game's own driver (8271 or Acorn 1770,
-decided at boot), the Master's tiles unfolded, 21 visible rows, the menus in an
+decided at boot), the Master's tiles and tile ids, 21 visible rows, the menus in an
 overlay.  `modelb/DESIGN.md`.
 
 ## Layout

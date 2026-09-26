@@ -53,8 +53,8 @@ nt    = $B8
 ftab:   FILE "SPR"                  ; 0..2: the sprite sources, in imgtab's numbering
         FILE "SPRAND"
         FILE "BOX"
-        FILE "TILESO"               ; 3, 4: the tile sets
-        FILE "TILESI"
+        FILE "TILESO0"              ; 3, 4: the tile sets' first files
+        FILE "TILESI0"
         FILE "MENU"                 ; 5
         FILE "TITLE"                ; 6
         FILE "BAR"                  ; 7
@@ -74,7 +74,10 @@ ftab:   FILE "SPR"                  ; 0..2: the sprite sources, in imgtab's numb
         FILE "L13"
         FILE "L14"
         FILE "L15"
+        FILE "TILESO1"              ; 24, 25: and their second files
+        FILE "TILESI1"
 FI_TILESO = 3
+FI_TILESO1 = 24
 FI_MENU = 5
 FI_TITLE = 6
 FI_BAR = 7
@@ -231,149 +234,149 @@ lv_load:
         lda #>MAP6
         sta dst+1
         jsr unrle
-        ; ---- the tiles: the set staged, then the level's picked out by its list
-        lda LV_HDR+20
-        clc
+        ; ---- the tiles (convert.py pack_tiles): each of the set's files staged in turn
+        ; and its tiles copied to their slots in bank 5 -- the full tiles by the tile
+        ; list (the file count, each file's count, then each tile's index in its
+        ; file), the half tiles by the half list (index, row | file << 1)
+        lda #4
+        jsr section
+        ldy #0
+        lda (src),y
+        sta nfiles
+        sec                         ; the first index: past the counts
+        adc src
+        sta lp
+        lda src+1
+        adc #0
+        sta lp+1
+        .assert <TILES = 0, error, "TILES page-aligned"
+        sty tbase                   ; the next full slot (Y = 0)
+        lda #>TILES
+        sta tbase+1
+        sty fnum
+@file:  lda fnum
+        beq :+
+        lda #FI_TILESO1-FI_TILESO
+:       clc
+        adc LV_HDR+20               ; the set
         adc #FI_TILESO
         jsr stage
         lda #4
         jsr section
-        sta lp+1                    ; (section returns A = src+1)
-        lda src
-        sta lp
-        lda LV_HDR+21
+        ldy fnum
+        iny
+        lda (src),y                 ; this file's full tiles
         sta nt
-        lda #>TILES
+@tile:  lda nt
+        beq @halves
+        lda tbase
+        sta dst
+        lda tbase+1
         sta dst+1
         ldy #0
-        sty dst                     ; <TILES = 0
-        .assert <TILES = 0, error, "sty dst wants TILES page-aligned"
-        sty cnt+1                   ; 64 bytes a tile: bcopy leaves cnt alone
-        lda #64
-        sta cnt
-@tile:  cpy nt
-        beq @tiles_done
-        sty tmp2
-        lda (lp),y                  ; the tile's index in the set: * 64 from STAGE
-        pha
-        and #3
-        lsr
-        ror
-        ror                         ; (t & 3) << 6
-        sta src
-        pla
-        lsr
-        lsr
+        lda (lp),y
+        clc                         ; (the whole tile)
+        ldx #64
+        jsr tcopy
+        lda tbase
         clc
-        adc #>STAGE
-        sta src+1
-        ldx PB_TILES
-        jsr bcopy                   ; (bcopy leaves dst where it started, and
-        tya                         ;  Y = cnt = 64: step dst by it)
-        clc
-        adc dst
-        sta dst
-        ldy tmp2
+        adc #64
+        sta tbase
         bcc :+
-        inc dst+1
-:       iny
-        bne @tile
-@tiles_done:
-        ; ---- the half tiles: one 32-byte row each, from the page after the full tiles;
-        ; their pair table follows them and the blitter's fill is patched to find it
+        inc tbase+1
+:       inc lp
+        bne :+
+        inc lp+1
+:       dec nt
+        jmp @tile
+@halves:                            ; this file's half tiles, to their slots: HALFOFF
+        lda LV_HDR+28               ; slots into the halves' page
+        asl
+        asl
+        asl
+        asl
+        asl
+        sta hdst
+        lda LV_HDR+27
+        sta hdst+1
+        lda #0
+        sta item
+@half:  lda item
+        cmp LV_HDR+23
+        beq @nextfile
         lda #8
         jsr section
-        sta lp+1                    ; (section returns A = src+1)
-        lda src
-        sta lp
-        lda LV_HDR+23               ; the count (two list bytes a half), the ids' ranges
-        asl                         ; and the halves' page, the packer's, into bank 5's
-        sta nt                      ; variables
-        lda LV_HDR+24               ; (read with bank 7 in: the header is its)
-        sta tmp
-        lda LV_HDR+25
-        pha                         ; LV_HDR+25 (half1)
-        lda LV_HDR+26
-        pha                         ; (half2)
-        ldy LV_HDR+27               ; (halfhi; pgbank keeps Y)
-        lda LV_HDR+24               ; the gather's subtraction: half0 less the first
-        sec                         ; half's slot in its page (the halves follow the
-        sbc LV_HDR+28               ; full tiles at once, not from the next page)
-        tax                         ; (halfsub; pgbank keeps X)
-        lda PB_TILES
-        jsr pgbank
-        lda tmp
-        sta half0
-        pla
-        sta half2
-        pla
-        sta half1
-        sty halfhi
-        stx halfsub
-        lda PB_LVL
-        jsr pgbank
-        lda LV_HDR+28               ; the halves start slot HALFOFF into their page
+        lda item
         asl
-        asl
-        asl
-        asl
-        asl
-        sta dst
-        sty dst+1                   ; (Y = LV_HDR+27 still)
-        ldy #0
-        sty cnt+1                   ; 32 bytes a half (bcopy leaves cnt alone)
-        lda #32
-        sta cnt
-@half:  cpy nt
-        beq @halves_done
-        sty tmp2
-        lda (lp),y                  ; the tile's index in the set ...
-        tax
-        iny
-        lda (lp),y                  ; ... and which of its rows: 0 or 1 (the packer's)
-        lsr                         ; C = the row
-        txa
-        and #3
-        ror
-        ror
-        ror                         ; (t & 3) << 6 | row << 5
-        sta src
-        txa
-        lsr
-        lsr
-        clc
-        adc #>STAGE
-        sta src+1
-        ldx PB_TILES
-        jsr bcopy                   ; (Y = cnt = 32 after: its tail loop's count)
-        tya
-        clc
-        adc dst
-        sta dst
-        bcc :+
-        inc dst+1
-:       ldy tmp2
-        iny
-        iny
-        bne @half
-@halves_done:
-        lda #9                      ; the pairs, right after the halves
-        jsr section
-        lda LV_HDR+28               ; the fill indexes them by the slot from the page,
-        asl                         ; two bytes each: the operands sit 2*HALFOFF below
-        eor #$FF                    ; the table (dst is where the halves ended):
-        sec                         ; dst - 2*HALFOFF, low in X, high in Y
-        adc dst
-        tax
-        lda dst+1
-        sbc #0
         tay
+        iny
+        lda (src),y                 ; the row | the file << 1
+        lsr
+        cmp fnum
+        bne @hnext
+        lda (src),y
+        lsr                         ; C = the row
+        dey
+        lda (src),y                 ; the index
+        ldx hdst
+        stx dst
+        ldx hdst+1
+        stx dst+1
+        ldx #32
+        jsr tcopy
+@hnext: lda hdst
+        clc
+        adc #32
+        sta hdst
+        bcc :+
+        inc hdst+1
+:       inc item
+        jmp @half
+@nextfile:
+        inc fnum
+        lda fnum
+        cmp nfiles
+        beq :+
+        jmp @file
+:
+        ; ---- the halves' fill pairs, where the halves end (hdst): the fill indexes
+        ; them by the slot from the halves' page, so its operands sit 2*HALFOFF below
+        lda #9
+        jsr section
+        lda hdst
+        sta dst
+        lda hdst+1
+        sta dst+1
         lda LV_HDR+23               ; two bytes a half
         asl
         sta cnt
         lda #0
-        rol
         sta cnt+1
+        ldx PB_TILES
+        jsr bcopy                   ; (bank 7 back after it)
+        lda LV_HDR+28
+        asl
+        eor #$FF
+        sec
+        adc hdst                    ; hdst - 2*HALFOFF: low in X, high in Y
+        tax
+        lda hdst+1
+        sbc #0
+        tay
+        ; ---- the tile shape, into bank 5's variables (read here, with bank 7 in)
+        lda LV_HDR+24
+        sta sv_half0
+        clc
+        sbc LV_HDR+28
+        sta sv_halfsub              ; half0 - HALFOFF - 1: the gather's borrow
+        lda LV_HDR+25
+        sta sv_half1
+        lda LV_HDR+26
+        sta sv_half2
+        lda LV_HDR+27
+        sta sv_halfhi
+        lda LV_HDR+29
+        sta sv_mir0
         lda PB_TILES
         jsr pgbank                  ; (X, Y kept)
         stx HPAIR0
@@ -383,8 +386,33 @@ lv_load:
         bne :+
         iny
 :       sty HPAIR1+1
+        lda sv_half0
+        sta half0
+        lda sv_half1
+        sta half1
+        lda sv_half2
+        sta half2
+        lda sv_halfhi
+        sta halfhi
+        lda sv_halfsub
+        sta halfsub
+        lda sv_mir0
+        sta mir0
+        lda PB_LVL
+        jsr pgbank
+        ; ---- MIRTAB: each mirrored tile's source slot
+        lda #10
+        jsr section
+        lda #<MIRTAB
+        sta dst
+        lda #>MIRTAB
+        sta dst+1
+        lda LV_HDR+30
+        sta cnt
+        lda #0
+        sta cnt+1
         ldx PB_TILES
-        jsr bcopy                   ; (bank 7 back after it)
+        jsr bcopy
         ; ---- the sprites: each source file staged in turn, the placement list walked
         lda #0
         sta fnum
@@ -546,7 +574,7 @@ lv_load:
         sta dst
         lda #>FLATTAB
         sta dst+1
-        lda #32
+        lda #2*(NFLAT+2)
         sta cnt
         lda #0
         sta cnt+1
@@ -554,6 +582,39 @@ lv_load:
         jmp bcopy                   ; (the tile addresses are arithmetic: drawrect's gather)
 
 ; ---- helpers
+tcopy:                              ; tile A of the staged file, its row C (or all of it:
+        stx cnt                     ; C = 0, X = 64), X bytes to dst in bank 5
+        ldx #0
+        stx cnt+1
+        tax
+        lda #0
+        ror
+        lsr
+        lsr                         ; the row: 0 or 32
+        sta src
+        txa
+        and #3
+        lsr
+        ror
+        ror                         ; (t & 3) << 6
+        ora src
+        sta src
+        txa
+        lsr
+        lsr
+        clc
+        adc #>STAGE
+        sta src+1
+        ldx PB_TILES
+        jmp bcopy
+nfiles: .res 1                      ; (lv_load's: the set's file count,
+hdst:   .res 2                      ;  the next half's slot,
+sv_half0:   .res 1                  ;  the tile shape on its way to bank 5)
+sv_half1:   .res 1
+sv_half2:   .res 1
+sv_halfhi:  .res 1
+sv_halfsub: .res 1
+sv_mir0:    .res 1
 section:                            ; A = section 0..9 -> src = its start in the staged file
         asl                         ; (C = 0: A < 128)
         tay
