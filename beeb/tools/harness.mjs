@@ -118,7 +118,7 @@ export class Harness {
     const A = this.A, MAXSPR = 32, MAXREC = 32;
     return [
       ["wcx", A.wcx, 2], ["wcy", A.wcy, 1], ["wfine", A.wfine, 1], ["wy", A.wy, 2],
-      ["curbuf", A.curbuf, 1], ["BUF_VALID", A.BUF_VALID, 2],
+      ["curbuf", A.curbuf, 1],   // (not BUF_VALID: the Master encodes it in BUF_CX now)
       ["BUF_CX", A.BUF_CX, 4], ["BUF_CY", A.BUF_CY, 2],
       ["PART_LO", A.PART_LO, 2], ["PART_HI", A.PART_HI, 2],
       ["BARDIRTY", A.BARDIRTY, 2], ["BARBG", A.BARBG, 2],

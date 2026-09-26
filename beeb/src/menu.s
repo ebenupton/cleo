@@ -508,9 +508,10 @@ pause_menu:
         lda #2
         ldx #40
         jsr menu_list
-        ldx #0                      ; invalidate game buffers (A = the result survives)
-        stx BUF_VALID
-        stx BUF_VALID+1
+        ldy #$80                    ; invalidate game buffers: an unreachable window x
+        sty BUF_CX+1                ; (A = the result survives)
+        sty BUF_CX+3
+        ldx #0
         stx RECCNT
         stx RECCNT+1
         inx

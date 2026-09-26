@@ -64,8 +64,9 @@ load_level:
         jsr lvreset                 ; the records (bank 7) and the buffers' state (main RAM)
         sta NSPR                    ; A = 0: lvreset ends with a stz
   .else
-        stza BUF_VALID
-        stza BUF_VALID+1
+        lda #$80                    ; both buffers invalid: an unreachable window x
+        sta BUF_CX+1                ; (scroll_validate redraws them whole)
+        sta BUF_CX+3
         stza RECCNT
         stza RECCNT+1
         stza DIRTYCNT

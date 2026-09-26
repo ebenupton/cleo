@@ -322,8 +322,8 @@ dpass:     .res 1                 ; draw_sprites pass: 1 = box stars, 0 = the re
 spclip:    .res 1                 ; drawsprite: the last sprite came off a window edge
 NSPR:      .res 1
 BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
-BUF_CY:    .res 2
-BUF_VALID: .res 2
+BUF_CY:    .res 2                 ; (a buffer is invalid when its BUF_CX high byte is $80:
+                                  ;  scroll_validate sees |dx| >= 80 and redraws it whole)
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 PART_CY:   .res 2                 ; per buffer: row/fine the partial (A) row was last copied for
 PART_F:    .res 2
@@ -1159,8 +1159,10 @@ HPAIR1  := HPAIR0 + 5
         PLACE "CODE", "TILCODE"     ; Model B: bank 5, with the row loop (F_RENDER5)
 scroll_validate:
         ldx curbuf
-        lda BUF_VALID,x
-        beq @full
+  .if MODELB                        ; (Master: an invalid buffer holds BUF_CX = $80xx, which
+        lda BUF_VALID,x             ;  the |dx| >= 80 test below sends to @full.  The Model B
+        beq @full                   ;  keeps the flag: BUF_CX is bank 5's, and what
+  .endif                            ;  invalidates runs in bank 7, which cannot write it)
 :       txa                         ; (anonymous label kept: it holds the label count)
         asl
         tay
@@ -1262,9 +1264,9 @@ scroll_validate:
         jsr drawrect                ; (falls into @done)
 @done:
         ldx curbuf
+  .if MODELB
         lda #1
         sta BUF_VALID,x
-  .if MODELB
         lsr                         ; A = 0: a byte shorter than stz's lda #0
         sta BUF_BOTOK,x             ; the window moved: the slot below is stale again
   .else
@@ -3615,8 +3617,9 @@ init_tables:
         stz RECCNT+1
         stz DIRTYCNT
         stz DIRTYCNT+1
-        stz BUF_VALID
-        stz BUF_VALID+1
+        lda #$80                    ; both buffers invalid (scroll_validate: an unreachable
+        sta BUF_CX+1                ; window x, so the first render of each is a full one)
+        sta BUF_CX+3
         stz NSPR
         stz SFXREQ
         stz SFXPTR+1
