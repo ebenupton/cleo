@@ -10,7 +10,7 @@
 ; Reached from the stub in low RAM with this bank paged in and X, Y saved.
 isr_body:
         lda VIA_IFR                 ; T1 only when its interrupt is enabled: a load turns
-        and VIA_IER                 ; it off (ldstop5) and T1 runs on, so its flag can be
+        and VIA_IER                 ; it off (@ldsw) and T1 runs on, so its flag can be
         asl                         ; set at the vsync that arms it again
         bmi @t1
         lda VIA_IFR
@@ -22,7 +22,9 @@ isr_body:
         ; and are compared at the start of its last scanline, and R6 from scanline 1
         ; on.  The chain is phased so the step fires ~60 cycles BEFORE the restart;
         ; the stub's bank switch carries the first write past it.
-        ldx SECIDX
+        lda LOADREQ
+        bne @ldsw                   ; a load has asked for the chain to stop
+@chain: ldx SECIDX
         lda #9
         sta CRTC_IDX
         lda SECTAB+3,x
@@ -61,6 +63,25 @@ isr_body:
         lda SECTAB+1,x
         sta CRTC_DAT
 @exit:  rts
+@ldsw:  ldx SECIDX                  ; only the bar step, a frame boundary, makes the switch
+        cpx DISPSECT                ; (engine.s load_begin has the story)
+        beq @sw
+        jmp @chain
+@sw:    lda #4                      ; this restart is a standard frame, not the bar (R9
+        sta CRTC_IDX                ; and R6 are the vsync's pre-arm, R12/R13 the bar's)
+        lda #LDR4
+        sta CRTC_DAT
+        lda #7
+        sta CRTC_IDX
+        lda #LDR7
+        sta CRTC_DAT
+        sta curR7                   ; the first vsync after the load re-phases from this
+        lda #$40
+        sta VIA_IER                 ; T1's interrupt off: the chain is stopped
+        lda VIA_T1CL
+        lda #2
+        sta LOADREQ
+        rts
 
 ; ---- vsync: restart T1 first (constant latency), counter = vsync -> the bar
 vsync_tick:
@@ -70,7 +91,15 @@ vsync_tick:
         sta VIA_T1CH                ; (clears T1's flag)
         lda #$02
         sta VIA_IFR
-        lda #$C0                    ; T1's interrupt on: a load turned it off (ldstop5)
+        lda LOADREQ                 ; (after the restart: it sets the chain's phase)
+        cmp #2
+        bne @vsrun
+        jmp @ldvsync                ; stopped for a load: T1 stays off
+@vsrun: cmp #3
+        bne @vson
+        lda #0
+        sta LOADREQ                 ; resume: T1's interrupt on again, below
+@vson:  lda #$C0
         sta VIA_IER
         lda #9                      ; re-phase: end this frame curR7 + (QROWS-1-QVSYNC)
         sta CRTC_IDX                ; rows from the vsync, whatever the row counter did
@@ -120,44 +149,12 @@ vsync_tick:
         lda #$40
         sta VIA_IFR
         sty SECIDX
-        jsr scan_keys               ; the keyboard and the sound are the interrupt's,
+@tail:  jsr scan_keys               ; the keyboard and the sound are the interrupt's,
         jmp sound_tick              ; as they are on the Master
+@ldvsync:                           ; stopped: the standard frame free-runs; count the
+        inc vsyncs                  ; vsync and keep the keys and the sound alive
+        jmp @tail
 
-; ---------------------------------------------------------------- a load's frame
-; A load runs with interrupts off, so the chain stops -- and stopped mid-chain the CRTC
-; repeats the section it was in, a few lines over and over with no vsync, and monitors
-; and capture cards drop out of sync for seconds (engine.s load_begin is the Master's
-; version).  So a load waits for a vsync with interrupts on (disc.s ld_begin: the
-; handler restarts T1 for the bar step there), turns them off, and comes here to wait
-; for that T1 -- the bar's restart -- and make that frame a standard 39-row one with
-; the vsync on the chain's own row, so the sync never moves.  T1's interrupt goes off;
-; the first vsync after the load arms it again (vsync_tick), its re-phase writes R4 =
-; curR7 + QROWS-1-QVSYNC = LDR4 (disc.s sets curR7), and the bar step at that frame's
-; end takes the display back.  Bank 5's low corner, because bank 7 is full: disc.s
-; reaches it through the far table (F_LDSTOP).
-        .segment "TILLOW"
-ldstop5:
-:       bit VIA_IFR                 ; the bar step's T1 (the handler is not taking it)
-        bvc :-
-        ldy #24                     ; ~120 cycles: past the restart, into its first
-:       dey                         ; scanline (the step fires ~60 cycles before it)
-        bne :-
-        lda #4
-        sta CRTC_IDX
-        lda #LDR4
-        sta CRTC_DAT
-        lda #6
-        sta CRTC_IDX
-        lda #BARROWS                ; (Q left R6 = 0; the palette is black anyway)
-        sta CRTC_DAT
-        lda #7
-        sta CRTC_IDX
-        lda #LDR7
-        sta CRTC_DAT
-        lda #$40
-        sta VIA_IER                 ; T1's interrupt off until the vsync arms it
-        rts
-        .segment "LGCCODE"
 
 ; ---------------------------------------------------------------- the chain
 ; build_sections: fill SECTAB for the current buffer from ringS and wfine.

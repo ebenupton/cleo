@@ -80,7 +80,8 @@ CRTCB_B   = RING_B / 8
 ; through pagelogic (the write bank too) both the vsync's T1 restart and every step are
 ; ~23 cycles later -- 46 in all, 23 ticks -- and the -23 takes that back: tools/bcrtc.mjs
 ; shows R9 landing at char 41-53 of the section's first scanline, as before.
-VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 23
+VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 23 - 12   ; -12: the step's LOADREQ test and
+                                    ; the IER-masked entry, measured (tools/crtclog): R9 lands 43-91 cycles in, R4 by 109 of 128
 
 ; ---------------------------------------------------------------- sideways RAM boards
 ; Which register chooses the bank a store goes to (the loader finds out: findram).  The
@@ -132,6 +133,5 @@ F_CALCRING  = 13*3                  ; calc_ring       bank 7 (the menus)
 F_COPYPART  = 14*3                  ; copy_partial    bank 5
 F_MARKDIRTY = 15*3                  ; mark_dirty      bank 5 (the logic; X in farx)
 F_INIT5     = 16*3                  ; init5 + take_over, bank 5's low corner (start-up)
-F_LDSTOP    = 17*3                  ; ldstop5: a load's standard frame, bank 5's low corner
-NFAR        = 18
+NFAR        = 17
 .assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"

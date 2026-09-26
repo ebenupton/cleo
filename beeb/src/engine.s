@@ -422,6 +422,7 @@ BUF_SEC0:  .res 4
 BUF_SEC0T1: .res 4
 SECTAB:    .res 2*48
 SFXDUR:    .res 1
+LOADREQ:   .res 1                 ; 0 running, 1 stop asked, 2 stopped, 3 resume asked (load_begin)
 KEYSCAN:   .res 1
 VS2T:      .res 2
         .segment "MNUBSS"           ; bank 5's menu overlay: the tune's player lives there
@@ -3206,8 +3207,11 @@ wait_flip:
 ; bar step at that frame's end takes the display back as if it had never stopped.
 LDR4 = BARROWS + VISROWS + QROWS - 1      ; 38: a standard 312-line frame
 LDR7 = BARROWS + VISROWS + QVSYNC         ; the row the chain's vsync is on
-  .if .not MODELB                   ; (the Model B's loader runs with interrupts off and
-                                    ;  does the switch itself: display.s ldstop5)
+; Both targets: the switch is the interrupt handler's bar step (engine.s @ldsw, the
+; Model B's display.s @ldsw), so it happens at the frame boundary however long the
+; handler's other work runs.  (The Model B's first version waited for a vsync, turned
+; interrupts off and polled for the bar's T1: when the vsync's own work ran past that
+; T1, the switch landed one section late and made a short frame.)
 load_begin:
         lda #1
         sta LOADREQ
@@ -3221,7 +3225,6 @@ load_end:                           ; (with interrupts off on the Model B: disc.
         lda #$42                    ; LDR7 from the switch); until then a T1 flag is
         sta VIA_IFR                 ; stale.  A vsync flag raised meanwhile is stale too
         rts
-  .endif
 
   .ifdef PARALLAX
 ; ============================================================================

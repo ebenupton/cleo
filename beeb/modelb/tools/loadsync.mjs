@@ -1,3 +1,6 @@
+// NOTE: the patched title leaves the chain out of phase before the load, so the frames
+// around the switch measure that, not the switch: tools/loadsync2.mjs starts from the real
+// menu, in sync, and is the one to trust.
 // Model B: the frame period across a level load (display.s ldstop5, disc.s ld_begin);
 // the Master's tools/loadsync.mjs, for the Model B disc.  Run from beeb/modelb.
 //   node tools/loadsync.mjs
@@ -39,6 +42,7 @@ console.log('vsync acks:',vs.length,' intervals outside 39936+-160:',bad.length,
 console.log('R4/R6/R7/R12 writes (value@row.line:char):'); console.log(regs.map(e=>`R${e.r}=${e.val}@${e.vc}.${e.sc}:${e.hc}`).join(' '));
 const iv=[]; for(let i=1;i<HV.length;i++) iv.push(HV[i]-HV[i-1]);
 const odd=iv.filter(d=>d!==39936); const sw=regs.filter(e=>e.r===4&&e.val===38); console.log('switch at',sw.length?sw[0].t:'-','resume (next R4 write) at', sw.length? (regs.find(e=>e.r===4&&e.t>sw[0].t+100000)||{}).t : '-', 'forced repaints at', globalThis.FT.join(' '), 'load span frames', HV.filter(t=>sw.length&&t>sw[0].t&&t<((regs.find(e=>e.r===4&&e.t>sw[0].t+100000)||{}).t||0)).length);
-{ const t0=sw.length?sw[0].t:0, t1=(regs.find(e=>e.r===4&&e.t>t0+100000)||{t:0}).t; const inside=[]; for(let i=1;i<HV.length;i++) if(HV[i-1]>=t0-50000 && HV[i]<=t1+100000) inside.push(HV[i]-HV[i-1]); console.log('LOAD WINDOW (switch-1 frame .. resume+2 frames):',inside.length,'frames, period min/max',Math.min(...inside),Math.max(...inside)); }
+{ const t0=sw.length?sw[0].t:0, t1=(regs.find(e=>e.r===4&&e.t>t0+100000)||{t:0}).t; const inside=[]; for(let i=1;i<HV.length;i++) if(HV[i-1]>=t0-50000 && HV[i]<=t1+100000) inside.push(HV[i]-HV[i-1]); { const t0=sw.length?sw[0].t:0, t1=(regs.find(e=>e.r===4&&e.t>t0+100000)||{t:0}).t; for(let i=1;i<HV.length;i++){ const d=HV[i]-HV[i-1]; if(HV[i]>=t0-80000 && HV[i]<=t1+200000 && (d<39900||d>39960)) console.log(`ODD frame ${d} cycles ending ${HV[i]-t0} after the switch, ${HV[i]-t1} after the resume`); } }
+console.log('LOAD WINDOW (switch-1 frame .. resume+2 frames):',inside.length,'frames, period min/max',Math.min(...inside),Math.max(...inside)); }
 console.log('HARDWARE frames:',HV.length,'min/max interval',Math.min(...iv),Math.max(...iv),'forced repaints (a frame with no vsync):',forced,'| intervals not 39936:',odd.length, odd.slice(0,12).join(' '));
 process.exit(0);

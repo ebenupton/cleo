@@ -33,7 +33,6 @@
         FAR BANK_TILES, copy_partial, in            ; F_COPYPART
         FAR BANK_TILES, mark_dirty_x, in            ; F_MARKDIRTY (the logic)
         FAR BANK_TILES, init5, in                   ; F_INIT5     (start-up: with take_over)
-        FAR BANK_TILES, ldstop5, in                 ; F_LDSTOP    (a load: display.s)
         .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"
         .res $40 - 3*NFAR
 .endmacro

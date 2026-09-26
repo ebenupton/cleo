@@ -1,3 +1,4 @@
+// NOTE: tools/loadsync2.mjs starts the load from the real menu, in sync; prefer it.
 // The frame period across a level load (the load mode: engine.s load_begin).  Boots to
 // the title, runs through the load into play, and reports: software vsync acknowledges,
 // the R4/R6/R7 writes with the CRTC row they landed on, and jsbeeb's own frame

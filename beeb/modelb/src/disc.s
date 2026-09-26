@@ -277,30 +277,20 @@ disc_boot:
 load_level_b:
         stx ld_level
         jsr music_stop
-        jsr ld_begin
+        jsr load_begin              ; the chain parks the CRTC in a standard frame first
+        sei                         ; (engine.s load_begin, display.s @ldsw)
+        jsr disc_boot
         ldx ld_level
         jsr LDPROG                  ; lv_load
         jmp ld_resume
 
 ; the menu overlay into bank 5 and the title pack into bank 6
 load_title_b:
-        jsr ld_begin
+        jsr load_begin
+        sei
+        jsr disc_boot
         jsr LDPROG+3                ; title_load
-ld_resume:                          ; (interrupts still off)
-        lda #LDR7                   ; the frame is the standard one: the vsync re-phase
-        sta curR7                   ; keeps it so until the bar step (display.s)
-        lda #$42
-        sta VIA_IFR                 ; a vsync flag raised meanwhile is stale
+ld_resume:                          ; (interrupts still off: a flag raised during the load
+        jsr load_end                ;  is stale, and load_end clears it before the cli)
         cli
         rts
-
-; the display to a standard frame, then the loader in: wait for a vsync (the handler
-; restarts T1 for the bar step), interrupts off, and bank 5's ldstop5 (display.s has
-; the story) takes that T1 and makes the bar's frame the standard one
-ld_begin:
-        lda vsyncs
-:       cmp vsyncs
-        beq :-
-        sei
-        farjsr F_LDSTOP
-        jmp disc_boot
