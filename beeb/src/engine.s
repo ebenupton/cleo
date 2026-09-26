@@ -2558,17 +2558,13 @@ ds_done: rts
         SPRFULL sprFC, 0, 1
         .endif
         .endscope
-        .segment "SPR4END"          ; the same entry address in both banks (BANKENTRY),
-        jmp spr4::ds_entry          ; for low RAM's callbank
+        .assert spr4::ds_entry = BANKENTRY, error, "bank 4's row loop must start the bank"
         .segment "SPR6CODE"
         .scope spr6
         SPRITE_LOOPS ::SPR6_MIRROR, 1, ::BANK_TIL1
         SPRFULL sprFC, 0, 1
         .endscope
-        .segment "SPR6END"
-        jmp spr6::ds_entry
-        .segment "TIL5END"          ; and bank 5's, for erase_old's rects: through
-        jmp bank5_entry             ; the stub that sets the write bank (banks.s)
+        .assert spr6::ds_entry = BANKENTRY, error, "bank 6's row loop must start the bank"
         PLACE "CODE", "TILCODE"
   .else
         SPRITE_LOOPS 1, 1
@@ -3426,9 +3422,17 @@ render5:
   .endif
 
 
-        PLACE "LOW", "TILCODE"     ; render-time helpers in the NMI page ($0D03..),
-                                   ; copied there at init; Model B: bank 5
+        PLACE "LOW", "TIL5ENT"     ; render-time helpers in the NMI page ($0D03..),
+                                   ; copied there at init; banked: the start of bank 5
 ; ============================================================================
+  .if MODELB
+; callbank's way into this bank (BANKENTRY): the write bank first -- A is the bank, as
+; callbank left it -- then drawrect_clip, which bank 5's own draw_dirty also calls
+; directly (with A something else, so the companion cannot be skipped into)
+bank5_entry:
+        .assert * = BANKENTRY, error, "bank5_entry must start bank 5"
+        wrsel BANK_TILES, BANK_TILES
+  .endif
 drawrect_clip:
         ; rows
         lda rc_y

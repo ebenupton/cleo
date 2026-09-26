@@ -28,14 +28,14 @@ VSPEG     = 3                       ; vsyncs a rendered frame, as the Master
 
 FARTAB    = $8000                   ; bank 7: the far table (banks.s; farcall pages
                                     ; bank 7 to read it)
-SWAPTAB   = $8300                   ; static in bank 4: dot reversal (bank 6 draws
-MASKTAB0  = $8400                   ; nothing mirrored, so that page holds data there);
-MASKTAB1  = MASKTAB0 + $100         ; the four mask-phase pages in both sprite banks
+SWAPTAB   = $BB00                   ; static in bank 4, below the mask tables: dot
+MASKTAB0  = $BC00                   ; reversal (bank 6 draws nothing mirrored); the
+MASKTAB1  = MASKTAB0 + $100         ; four mask-phase pages end both sprite banks
 MASKTAB2  = MASKTAB0 + $200
 MASKTAB3  = MASKTAB0 + $300
-BANKENTRY = $BFFD                   ; banks 4, 5 and 6: a jump to the routine bank 7 calls
-                                    ; once a sprite or rect (low.s callbank): the sprite
-                                    ; row loop, drawrect_clip
+BANKENTRY = $8000                   ; banks 4, 5 and 6: the routine bank 7 calls once a
+                                    ; sprite or rect starts the bank (low.s callbank):
+                                    ; the sprite row loop's ds_entry, bank5_entry
 TILES     = $8100                   ; bank 5: this level's tiles, 64 bytes each, by id,
                                     ; page aligned (drawrect's gather is arithmetic)
 MENU_BASE = TILES                   ; or the menu overlay, over them

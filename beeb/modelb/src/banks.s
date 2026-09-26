@@ -136,13 +136,6 @@ mirdirty:
         MIRDIRTY_BODY
   .endif
 
-        .segment "TILCODE"
-; callbank's way into this bank (BANKENTRY jumps here): the write bank first -- A is
-; the bank, as callbank left it -- then drawrect_clip, which bank 5's own draw_dirty
-; also calls directly (with A something else, so the companion cannot sit there).
-bank5_entry:
-        wrsel BANK_TILES, BANK_TILES
-        jmp drawrect_clip
         .segment "LGCCODE"          ; (bank 7's per-level clear: load_level's, and boot's)
 lvreset:
         lda #$80                    ; both buffers invalid: an unreachable window x

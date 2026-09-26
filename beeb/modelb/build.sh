@@ -79,9 +79,9 @@ EOF
     python3 - <<'EOF'
 import os
 BD = os.environ['BD']
-pieces = [(4, 0x8300, 'b4t.bin'), (4, 0xBC40, 'b4x.bin'),
-          (5, 0xB620, 'b5x.bin'),                                 # (B5X in cleo_b.cfg)
-          (6, 0x8400, 'b6t.bin'), (6, 0xBDA0, 'b6x.bin'),
+pieces = [(4, 0x8000, 'b4x.bin'), (4, 0xBB00, 'b4t.bin'),
+          (5, 0x8000, 'b5e.bin'), (5, 0xB620, 'b5x.bin'),         # (B5X in cleo_b.cfg)
+          (6, 0x8000, 'b6x.bin'), (6, 0xBC00, 'b6t.bin'),
           (7, 0x7000, 'boot.bin'),        # main RAM (BOOTRAM): start-up and the low-RAM image
           (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin')]
 if os.environ.get('TARGET') == 'master':

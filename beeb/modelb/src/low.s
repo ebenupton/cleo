@@ -126,8 +126,8 @@ dirfetch:                           ; ptr -> the entry in bank 6
 
 ; ---------------------------------------------------------------- the direct switch
 ; The two crossings that happen once a sprite and once an erased rect skip the far
-; table: page the bank, call its entry vector -- BANKENTRY, the same address in
-; banks 4, 5 and 6: the sprite row loop in 4 and 6, drawrect_clip in 5 -- and page
+; table: page the bank, call its entry -- BANKENTRY, the start of banks 4, 5 and 6:
+; the sprite row loop in 4 and 6, drawrect_clip (behind its write-bank store) in 5 -- and page
 ; bank 7 back (pagelogic).  ~30 cycles against the thunk's ~90.
 callbank:                           ; A = the bank (the write bank is set by the
         sta ROMSEL_CPY              ; entry itself: ds_entry, drawrect_clip -- A still
