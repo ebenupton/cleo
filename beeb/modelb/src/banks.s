@@ -118,8 +118,7 @@ menurec:   .res 10                  ; the menus' one sprite record (the prologue
         cmp #ROWCHARS
         bcs @out
         pha
-        txa
-        clc
+        txa                         ; C clear: bcs @out not taken
         adc wcxm
         cmp #ROWCHARS
         bcc :+
@@ -136,7 +135,7 @@ menurec:   .res 10                  ; the menus' one sprite record (the prologue
         cmp mirhi,y
         bcc :+
         sta mirhi,y
-:       rts
+:
 @out:   rts
 .endmacro
         .segment "TILCODE"
@@ -159,11 +158,10 @@ bank5_entry:
         jmp drawrect_clip
 init5:
         .assert __TILBSS_SIZE__ < 256, error, "init5 zeroes TILBSS with an 8-bit index"
-        ldx #0
-        txa
-:       sta __TILBSS_RUN__,x        ; the ring work's state: zero, as the Master's tables
-        inx
-        cpx #<__TILBSS_SIZE__
+        ldx #<__TILBSS_SIZE__
+        lda #0
+:       dex
+        sta __TILBSS_RUN__,x        ; the ring work's state: zero, as the Master's tables
         bne :-
         bankimm lda, BANK_SPR, BANK_TILES
         sta spbank
@@ -173,12 +171,13 @@ init5:
         jmp take_over
         .segment "LGCCODE"
 lvreset:
-        stz BUF_VALID
-        stz BUF_VALID+1
-        stz RECCNT
-        stz RECCNT+1
-        stz DIRTYCNT
-        stz DIRTYCNT+1
+        lda #0
+        sta BUF_VALID
+        sta BUF_VALID+1
+        sta RECCNT
+        sta RECCNT+1
+        sta DIRTYCNT
+        sta DIRTYCNT+1
         rts
 
 ; ---------------------------------------------------------------- bank 7: the level

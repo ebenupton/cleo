@@ -81,7 +81,10 @@ FI_BAR = 7
 FI_L0 = 8
 
 ; read file A to dst (main RAM)
-readfile:
+readfile:                           ; file A -> dst (page-aligned: its low byte is not read)
+        ldx dst+1
+readpage:                           ; file A -> page X (main RAM)
+        stx ld_dst+1
         sta tmp
         asl
         adc tmp                     ; * 3
@@ -91,20 +94,16 @@ readfile:
         lda ftab+1,x
         sta ld_sec+1
         lda ftab+2,x
-        sta ld_n
-        lda dst
-        sta ld_dst
-        lda dst+1
-        sta ld_dst+1
-        jmp read_sectors
+        sta ld_n                    ; (ld_dst's low byte: 0 from disc_boot, and never
+        .assert <LDPROG = 0, error, "ld_dst's low byte is 0"
+        jmp read_sectors            ;  changed -- every destination is a page)
 
 ; copy cnt bytes from src (main RAM) to dst in the bank the placement entry (lp) names
 ; -- the packer's number, 4 or 6, for the socket that is that bank here
 plcopy: ldy #1
         lda (lp),y
-        tax
-        lda PBANK-4,x
-        tax
+        tay
+        ldx PBANK-4,y               ; (Y: bcopy reloads it)
 ; copy cnt bytes from src (main RAM) to dst in bank X (a socket); bank 7 back afterwards
 bcopy:  stx ROMSEL_CPY
         stx ROMSEL
@@ -146,8 +145,8 @@ pgbank: sta ROMSEL_CPY              ; A = the socket to page (and to write to)
         rts
 wrx:    lda PBOARD                  ; X = the socket a store should reach
         beq @r
-        cmp #BOARD_SOLIDISK
-        beq @s
+        lsr                         ; 1 (Watford) -> C set, 2 (Solidisk) -> C clear
+        bcc @s
         sta WRSEL_WATFORD,x         ; Watford: the address is the bank, the value nothing
 @r:     rts
 @s:     stx WRSEL_SOLIDISK          ; Solidisk: the bank on port B (the loader set DDRB)
@@ -168,82 +167,67 @@ lv_load:
         jsr section                 ; the header
         lda #32
         sta cnt
-        lda #0
-        sta cnt+1
-        lda #<LV_HDR
-        sta dst
+        sty cnt+1                   ; Y = 0: section 0's index
+        .assert <LV_HDR = 0, error, "dst's low byte is Y's 0"
+        sty dst
         lda #>LV_HDR
         sta dst+1
         ldx PB_LVL
         jsr bcopy
         lda #1
         jsr section                 ; the objects: 6 a piece, nobj of them
-        lda #0
-        sta cnt
-        sta cnt+1
+        lda #0                      ; (cnt+1 is 0 still: the header's copy set it)
         ldx LV_HDR+6
         beq @objdone
-:       lda cnt
-        clc
+:       clc
         adc #6
-        sta cnt
         bcc :+
         inc cnt+1
 :       dex
         bne :--
 @objdone:
-        lda #<LV_OBJS               ; main RAM (level_init reads them once, before
-        sta dst                     ; the first render)
-        lda #>LV_OBJS
-        sta dst+1
+        sta cnt
+        .assert <LV_OBJS = 0, error, "dst's low byte is 0 still"
+        lda #>LV_OBJS               ; main RAM (level_init reads them once, before
+        sta dst+1                   ; the first render)
         ldx PB_LVL
         jsr bcopy
         lda #2
         jsr section
-        lda #<LV_ATTR0
-        sta dst
+        .assert <LV_ATTR0 = 0, error, "dst's low byte is 0 still"
         lda #>LV_ATTR0
         sta dst+1
         jsr copy256
-        lda #3
-        jsr section
-        lda #<LV_ALTCLS
-        sta dst
-        lda #>LV_ALTCLS
-        sta dst+1
+                                    ; (src: the copy left it at section 3, which
+                                    ;  follows the 256-byte attr in the file)
+        .assert LV_ALTCLS = LV_ATTR0 + $100, error, "copy256 leaves dst at LV_ALTCLS"
         jsr copy256
         ; ---- the shape: maprow's shift, the row stride, the directory's address
         lda LV_HDR+22
         sta mapshr
+        stx MAPSTRIDE+1             ; X = 0: copy256 ends in bcopy
         ldx LV_HDR                  ; lw: stride = 1 << lw
         lda #1
-        sta MAPSTRIDE
-        lda #0
-        sta MAPSTRIDE+1
-:       asl MAPSTRIDE
+:       asl
         rol MAPSTRIDE+1
         dex
         bne :-
+        sta MAPSTRIDE
         lda LV_HDR                  ; the map is 1 << (lw + lh) bytes, at least 1K
-        clc
-        adc LV_HDR+1
-        sec
-        sbc #8
+        adc LV_HDR+1                ; (C = 0: the stride's last rol shifted out a 0)
+        adc #$F8                    ; - 8 (C = 0: lw + lh < 256)
         tax
         lda #1
 :       asl
         dex
         bne :-
-        clc
-        adc #>MAP6
+        adc #>MAP6                  ; (C = 0: the map is under 32K)
         sta sprtab+1
-        lda #0
-        sta sprtab
+        stx sprtab                  ; X = 0 from the loop
         ; ---- the map, run-length coded, into bank 6
         lda #6
         jsr section
-        lda #<MAP6
-        sta dst
+        .assert <MAP6 = 0, error, "dst's low byte is 0 still"
         lda #>MAP6
         sta dst+1
         jsr unrle
@@ -254,17 +238,19 @@ lv_load:
         jsr stage
         lda #4
         jsr section
+        sta lp+1                    ; (section returns A = src+1)
         lda src
         sta lp
-        lda src+1
-        sta lp+1
         lda LV_HDR+21
         sta nt
-        lda #<TILES
-        sta dst
         lda #>TILES
         sta dst+1
         ldy #0
+        sty dst                     ; <TILES = 0
+        .assert <TILES = 0, error, "sty dst wants TILES page-aligned"
+        sty cnt+1                   ; 64 bytes a tile: bcopy leaves cnt alone
+        lda #64
+        sta cnt
 @tile:  cpy nt
         beq @tiles_done
         sty tmp2
@@ -281,17 +267,13 @@ lv_load:
         clc
         adc #>STAGE
         sta src+1
-        lda #64
-        sta cnt
-        lda #0
-        sta cnt+1
         ldx PB_TILES
-        jsr bcopy                   ; (dst runs on by 64 itself: bcopy's tail loop
-        ldy tmp2                    ;  leaves dst where it started -- step it)
-        lda dst
+        jsr bcopy                   ; (bcopy leaves dst where it started, and
+        tya                         ;  Y = cnt = 64: step dst by it)
         clc
-        adc #64
+        adc dst
         sta dst
+        ldy tmp2
         bcc :+
         inc dst+1
 :       iny
@@ -301,37 +283,33 @@ lv_load:
         ; their pair table follows them and the blitter's fill is patched to find it
         lda #8
         jsr section
+        sta lp+1                    ; (section returns A = src+1)
         lda src
         sta lp
-        lda src+1
-        sta lp+1
         lda LV_HDR+23               ; the count (two list bytes a half), the ids' ranges
         asl                         ; and the halves' page, the packer's, into bank 5's
         sta nt                      ; variables
         lda LV_HDR+24               ; (read with bank 7 in: the header is its)
         sta tmp
         lda LV_HDR+25
-        sta tmp2
+        pha                         ; LV_HDR+25 (half1)
         lda LV_HDR+26
-        sta cnt
-        lda LV_HDR+27
-        sta cnt+1
+        pha                         ; (half2)
+        ldy LV_HDR+27               ; (halfhi; pgbank keeps Y)
         lda LV_HDR+24               ; the gather's subtraction: half0 less the first
         sec                         ; half's slot in its page (the halves follow the
         sbc LV_HDR+28               ; full tiles at once, not from the next page)
-        sta dst                     ; (dst: free until set below)
+        tax                         ; (halfsub; pgbank keeps X)
         lda PB_TILES
         jsr pgbank
         lda tmp
         sta half0
-        lda tmp2
-        sta half1
-        lda cnt
+        pla
         sta half2
-        lda cnt+1
-        sta halfhi
-        lda dst
-        sta halfsub
+        pla
+        sta half1
+        sty halfhi
+        stx halfsub
         lda PB_LVL
         jsr pgbank
         lda LV_HDR+28               ; the halves start slot HALFOFF into their page
@@ -341,46 +319,41 @@ lv_load:
         asl
         asl
         sta dst
-        lda LV_HDR+27
-        sta dst+1
+        sty dst+1                   ; (Y = LV_HDR+27 still)
         ldy #0
+        sty cnt+1                   ; 32 bytes a half (bcopy leaves cnt alone)
+        lda #32
+        sta cnt
 @half:  cpy nt
         beq @halves_done
         sty tmp2
         lda (lp),y                  ; the tile's index in the set ...
-        pha
+        tax
+        iny
+        lda (lp),y                  ; ... and which of its rows: 0 or 1 (the packer's)
+        lsr                         ; C = the row
+        txa
         and #3
-        lsr
         ror
         ror
+        ror                         ; (t & 3) << 6 | row << 5
         sta src
-        pla
+        txa
         lsr
         lsr
         clc
         adc #>STAGE
         sta src+1
-        iny
-        lda (lp),y                  ; ... and which of its rows: 0 or 32 on
-        beq :+
-        lda src
-        clc
-        adc #32
-        sta src
-:       lda #32
-        sta cnt
-        lda #0
-        sta cnt+1
         ldx PB_TILES
-        jsr bcopy
-        ldy tmp2
-        lda dst
+        jsr bcopy                   ; (Y = cnt = 32 after: its tail loop's count)
+        tya
         clc
-        adc #32
+        adc dst
         sta dst
         bcc :+
         inc dst+1
-:       iny
+:       ldy tmp2
+        iny
         iny
         bne @half
 @halves_done:
@@ -388,41 +361,34 @@ lv_load:
         jsr section
         lda LV_HDR+28               ; the fill indexes them by the slot from the page,
         asl                         ; two bytes each: the operands sit 2*HALFOFF below
-        sta tmp                     ; the table
-        lda dst                     ; (dst is where the halves ended)
-        sec
-        sbc tmp
-        pha
+        eor #$FF                    ; the table (dst is where the halves ended):
+        sec                         ; dst - 2*HALFOFF, low in X, high in Y
+        adc dst
+        tax
         lda dst+1
         sbc #0
-        pha
+        tay
         lda LV_HDR+23               ; two bytes a half
         asl
         sta cnt
         lda #0
         rol
         sta cnt+1
-        ldx PB_TILES
-        jsr bcopy
         lda PB_TILES
-        jsr pgbank
-        pla
-        sta HPAIR0+1
-        sta HPAIR1+1
-        pla
-        sta HPAIR0
-        clc
-        adc #1
-        sta HPAIR1
-        bcc :+
-        inc HPAIR1+1
-:       lda PB_LVL
-        jsr pgbank
+        jsr pgbank                  ; (X, Y kept)
+        stx HPAIR0
+        sty HPAIR0+1
+        inx
+        stx HPAIR1
+        bne :+
+        iny
+:       sty HPAIR1+1
+        ldx PB_TILES
+        jsr bcopy                   ; (bank 7 back after it)
         ; ---- the sprites: each source file staged in turn, the placement list walked
         lda #0
         sta fnum
-@sfile: lda fnum
-        jsr stage
+@sfile: jsr stage                   ; (A = fnum both ways in)
         lda #5
         jsr section
         lda src
@@ -435,7 +401,7 @@ lv_load:
         beq @plend
         sta item
         jsr imgent                  ; ent -> imgtab's entry for the item
-        ldy #0
+
         lda (ent),y
         cmp fnum
         bne @mask
@@ -473,7 +439,7 @@ lv_load:
         sta lp
         bcc @pl
         inc lp+1
-        jmp @pl
+        bne @pl                     ; (lp+1 is never 0)
 @plend: inc fnum
         lda fnum
         cmp #3
@@ -493,15 +459,15 @@ lv_load:
         sta lp+1
         lda #118
         sta nt
-@dir:   ldy #0
+@dir:   lda PB_MAP                  ; the directory's bank, for both paths
+        jsr pgbank
+        ldy #0
         lda (lp),y
         sta item
         cmp #$FF
         beq @dnone
         jsr findplace               ; src -> the placement entry, or C set
         bcs @dnone
-        lda PB_MAP
-        jsr pgbank
         ldy #2
         lda (src),y
         ldy #0
@@ -510,7 +476,7 @@ lv_load:
         lda (src),y
         ldy #1
         sta (dst),y
-        ldy #2
+        iny
 :       lda (lp),y
         sta (dst),y
         iny
@@ -524,39 +490,33 @@ lv_load:
         lda (lp),y
         ora #$10
         sta (dst),y
-:       lda PB_LVL
+:       ldy #4                      ; the mask: X = lo, Y = hi
+        lda (src),y
+        tax
+        iny
+        lda (src),y
+        tay
+@dmask: lda PB_LVL
         jsr pgbank              ; box ids (the last 15) have no entry
         lda nt
         cmp #16
         bcc @dnext
-        ldy #4
-        lda (src),y
-        ldy #0
-        sta (ent),y
-        ldy #5
-        lda (src),y
+        tya
         ldy #1
         sta (ent),y
-        jmp @dnext
-@dnone: lda PB_MAP
-        jsr pgbank
-        lda #0
+        txa
+        dey
+        sta (ent),y
+        bcs @dnext                  ; (C set: the cmp)
+@dnone: lda #0
         ldy #7
 :       sta (dst),y
         dey
         bpl :-
-        lda PB_LVL
-        jsr pgbank
-        lda nt
-        cmp #16
-        bcc @dnext
-        lda #0
+        tax                         ; no mask: X = Y = 0
         tay
-        sta (ent),y
-        iny
-        sta (ent),y
-@dnext: lda PB_LVL
-        jsr pgbank
+        beq @dmask
+@dnext:
         lda lp
         clc
         adc #8
@@ -593,31 +553,28 @@ lv_load:
         ldx PB_TILES
         jsr bcopy
         ; ---- the bar template, straight into place
-        lda #<BARADDR
-        sta dst
+        stx dst                     ; (X = 0 from bcopy; <BARADDR = 0)
         lda #>BARADDR
         sta dst+1
         lda #FI_BAR
-        jsr readfile
-        rts                         ; (the tile addresses are arithmetic: drawrect's gather)
+        jmp readfile                ; (the tile addresses are arithmetic: drawrect's gather)
+        .assert <BARADDR = 0, error, "lv_load: BARADDR's low byte"
 
 ; ---- helpers
 section:                            ; A = section 0..9 -> src = its start in the staged file
-        asl
+        asl                         ; (C = 0: A < 128)
         tay
         lda STAGE_LVL,y
-        clc
-        adc #<STAGE_LVL
         sta src
         lda STAGE_LVL+1,y
         adc #>STAGE_LVL
         sta src+1
         rts
+        .assert <STAGE_LVL = 0, error, "section: STAGE_LVL page-aligned"
 copy256:                            ; src -> dst (bank 7), 256 bytes
-        lda #0
-        sta cnt
-        lda #1
-        sta cnt+1
+        stx cnt                     ; (X = 0: bcopy's exit, both callers)
+        inx
+        stx cnt+1
         ldx PB_LVL
         jmp bcopy
 stage:                              ; file A -> STAGE
@@ -633,21 +590,12 @@ imgent:                             ; item -> ent = imgtab + item*10
         asl
         rol ent+1
         asl
-        rol ent+1
-        asl
-        rol ent+1                   ; * 8
-        sta ent
-        lda item
-        asl
+        rol ent+1                   ; * 4 (C = 0)
+        adc item                    ; * 5
         bcc :+
         inc ent+1
-        clc
-:       adc ent                     ; + * 2
-        sta ent
-        bcc :+
-        inc ent+1
-:       lda ent
-        clc
+:       asl
+        rol ent+1                   ; * 10 (C = 0)
         adc #<imgtab
         sta ent
         lda ent+1
@@ -656,13 +604,13 @@ imgent:                             ; item -> ent = imgtab + item*10
         rts
 srccnt:                             ; (ent),Y = offset lo, hi, length lo, hi -> src, cnt
         lda (ent),y
-        clc
-        adc #<STAGE
-        sta src
+        sta src                     ; (<STAGE = 0)
         iny
         lda (ent),y
+        clc
         adc #>STAGE
         sta src+1
+        .assert <STAGE = 0, error, "srccnt: STAGE's low byte"
         iny
         lda (ent),y
         sta cnt
@@ -686,10 +634,8 @@ findplace:                          ; item -> src = the placement entry; C = 1 i
         bcc :-
         inc src+1
         bne :-
-@none:  sec
-        rts
 @found: clc
-        rts
+@none:  rts                         ; (C = 1 from the cmp #$FF)
 unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c+1
         lda PB_MAP
         jsr pgbank
@@ -698,28 +644,24 @@ unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c
         bcs @end                    ; stream says
         ldy #0
         lda (src),y
-        tax                         ; (the control byte's sign, after the step: inc
-        jsr @next                   ;  sets the flags from the pointer)
-        txa
+        jsr @next                   ; (A untouched)
+        tax                         ; X = the count, N = the control byte's sign
         bmi @run
-        clc
-        adc #1
-        sta tmp
+        inx                         ; c+1 literals
 @lit:   lda (src),y
         jsr @next
         sta (dst),y
         jsr @dnext
-        dec tmp
+        dex
         bne @lit
         beq @c
-@run:   sec
-        sbc #126
-        sta tmp
+@run:   sbc #125                    ; (C = 0 from the bcs) c - 126
+        tax
         lda (src),y
         jsr @next
 @r:     sta (dst),y
         jsr @dnext
-        dec tmp
+        dex
         bne @r
         beq @c
 @next:  inc src                     ; (A untouched)
@@ -731,43 +673,34 @@ unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c
         inc dst+1
 :       rts
 @end:   lda PB_LVL
-        jsr pgbank
-        rts
+        jmp pgbank
 
 ; ---------------------------------------------------------------- the menus
 title_load:
         lda #FI_MENU
-        jsr stage
-        lda #<STAGE
+        jsr stage                   ; (dst = STAGE: its lo 0 = <MENU_BASE)
+        lda #0                      ; <STAGE = 0, cnt lo = 0
         sta src
+        sta cnt
         lda #>STAGE
         sta src+1
-        lda #<MENU_BASE
-        sta dst
         lda #>MENU_BASE
         sta dst+1
-        lda #0
-        sta cnt
         lda #F_MENU_N
         sta cnt+1
         ldx PB_TILES
-        jsr bcopy
+        jsr bcopy                   ; (src, cnt lo kept: bcopy, readfile leave them)
         lda #FI_TITLE
-        jsr stage
-        lda #<STAGE
-        sta src
+        jsr stage                   ; (dst lo 0 = <TITLE_ADDR)
         lda #>STAGE
         sta src+1
-        lda #<TITLE_ADDR
-        sta dst
         lda #>TITLE_ADDR
         sta dst+1
-        lda #0
-        sta cnt
         lda #F_TITLE_N
         sta cnt+1
         ldx PB_MAP
         jmp bcopy
+        .assert (<STAGE | <MENU_BASE | <TITLE_ADDR) = 0, error, "title_load: page-aligned"
 
 ; ---------------------------------------------------------------- the packer's tables
 imgtab: .incbin "build/imgtab.bin"  ; per item: file, offset, length, mask file, offset, length

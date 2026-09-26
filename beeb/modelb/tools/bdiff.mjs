@@ -73,7 +73,12 @@ const t0 = Date.now();
 for (let f = 0; f < frames; f++) {
   if (hold-- <= 0) { keys = [0, 1, 2, 2|4, 1|4, 4, 16, 2|16, 1|16, 8][rnd() % 10]; hold = 4 + rnd() % 40; }
   mcpu.writemem(MA.keys, keys); bcpu.writemem(BA.keys, keys);
-  await M.runTo(MA.frame_top); await runToB(BA.frame_top, 7);
+  try { await M.runTo(MA.frame_top); }
+  catch (e) {                        // the Master reference never comes back to play once its
+    if (mcpu.readmem(MA.lives) === 0) { console.log(`game over at frame ${f}`); break; }   // last life is gone
+    throw e;
+  }
+  await runToB(BA.frame_top, 7);
   const sm = state(mcpu, MA, OBJN_M), sb = state(bcpu, BA, OBJN_B);
   const diffs = Object.keys(sm).filter((k) => sm[k] !== sb[k]);
   if (diffs.length) {
@@ -84,5 +89,5 @@ for (let f = 0; f < frames; f++) {
   if (f % 50 === 0) console.log(`frame ${f}: px=${sm.px} py=${sm.py} stars=${sm.stars} score=${sm.score} health=${sm.health} keys=${keys} (${((Date.now()-t0)/1000).toFixed(0)}s)`);
   if (sm.exiting) { console.log("level over at frame", f); break; }
 }
-console.log(bad ? `FAILED: ${bad} differing frames` : `OK: ${frames} frames in lock step`);
+console.log(bad ? `FAILED: ${bad} differing frames` : `OK: ${frames} frames in lock step (or to the level's end)`);
 process.exit(bad ? 1 : 0);

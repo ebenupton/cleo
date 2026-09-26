@@ -21,6 +21,17 @@ drawtext:
         beq @space
         cmp #'_'
         bne :+
+  .if MODELB
+        lda #0                      ; '_' = erase: draw an all-zero glyph (A is dead:
+        sta GLYPHBUF+0              ;  draw_glyph_rows starts with lda tx)
+        sta GLYPHBUF+1
+        sta GLYPHBUF+2
+        sta GLYPHBUF+3
+        sta GLYPHBUF+4
+        sta GLYPHBUF+5
+        sta GLYPHBUF+6
+        sta GLYPHBUF+7
+  .else
         stz GLYPHBUF+0              ; '_' = erase: draw an all-zero glyph
         stz GLYPHBUF+1
         stz GLYPHBUF+2
@@ -29,17 +40,18 @@ drawtext:
         stz GLYPHBUF+5
         stz GLYPHBUF+6
         stz GLYPHBUF+7
+  .endif
         jsr draw_glyph_rows
-        bra @space
+        beq @space                  ; Z = 1: draw_glyph_rows returns from its cpx #8
 :       jsr glyph_index
         jsr draw_glyph
 @space: lda tx
-        clc
-        adc #8
+        adc #7                      ; C = 1 on every way in: cmp #' ' equal, or the cpx #8
+                                    ; draw_glyph_rows returns from
         sta tx
         ldy tchar
         iny
-        bra @ch
+        bne @ch                     ; Y > 0: no string is 256 characters
 @done:  rts
 
 ; A = ascii -> A = glyph index (0..39)
@@ -59,31 +71,37 @@ glyph_index:
         bne :+
         lda #27
         rts
-:       cmp #'/'
-        bne :+
-        lda #28
+:       cmp #'0'                    ; past '>' and '<' only '/', '.' and digits come here
+        bcs :+
+        eor #$33                    ; '/' -> 28, '.' -> 29
         rts
-:       cmp #'.'
-        bne :+
-        lda #29
-        rts
-:       sec
-        sbc #('0'-30)               ; -'0'+30 folded into one subtraction
+:       sbc #('0'-30)               ; C = 1 from the bcs: -'0'+30 in one subtraction
         rts
 
 ; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows
 draw_glyph:
+  .if MODELB                        ; (font_art moves with bank 5's code: no fold)
         stza w16b+1
         asl
         asl
         asl
-        rol w16b+1
-        clc
+        rol w16b+1                  ; C = 0: the byte it shifts out was 0
         adc #<SPR_FONT
         sta w16b
         lda w16b+1
         adc #>SPR_FONT
         sta w16b+1                  ; glyph rows
+  .else
+        .assert (SPR_FONT & $0101) = 0 && (<SPR_FONT) / 2 + 39*4 < 256, error, "draw_glyph folds the font base into its shifts"
+        asl
+        asl                         ; glyph (0..39) * 4, C = 0
+        adc #(<SPR_FONT) / 2        ; no carry out: the assert
+        asl                         ; glyph*8 + <SPR_FONT, C = its bit 8
+        sta w16b
+        lda #(>SPR_FONT) / 2
+        rol                         ; >SPR_FONT (even) + C
+        sta w16b+1                  ; glyph rows
+  .endif
         jsr getglyph                ; main RAM: the font is in bank 4, this code in 7
 draw_glyph_rows:
         lda tx
@@ -98,8 +116,8 @@ draw_glyph_rows:
 @row:   cpx #4
         bne :++                     ; past the fold's own anonymous label
         lda sp                      ; second char row: one row on
-        clc
-        adc #<ROWBYTES
+        adc #(<ROWBYTES) - 1        ; C = 1: cpx #4 found X = 4
+        .assert (<ROWBYTES) <> 0, error, "the carry-in add needs a nonzero low byte"
         sta sp
         lda sp+1
         adc #>ROWBYTES
@@ -150,8 +168,7 @@ pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game
         .assert (<BARADDR) = 0 && (<RINGEND_B) = 0, error, "the clear is whole pages"
 clear_ring:
         lda #>BARADDR               ; the bar, both mirrors and both rings: main RAM
-        ldx #(>RINGEND_B - >BARADDR) ; from $0300 to the top, whole pages
-        sta w16+1
+        sta w16+1                   ; from $0300 to the top ($8000), whole pages
         lda #0
         sta w16
         tay
@@ -159,23 +176,21 @@ clear_ring:
         iny
         bne @l
         inc w16+1
-        dex
-        bne @l
+        bpl @l                      ; RINGEND_B = $8000 (engine.s asserts it)
         rts
   .else
 clear_ring:
         stz w16
         lda #>BARADDR               ; from the bar, not the ring base: the bar sits below
         sta w16+1                   ; $3000 now and the menu still wants it black
-        ldx #((RINGEND - BARADDR) >> 8)
         ldy #0
         tya
 @l:     sta (w16),y
         iny
         bne @l
         inc w16+1
-        dex
-        bne @l
+        bpl @l                      ; to $8000: RINGEND (asserted below)
+        .assert RINGEND = $8000, error, "clear_ring stops at $8000"
         rts
   .endif
 
@@ -201,6 +216,17 @@ load_title:
 menu_begin:
         jsr m_blank_palette
         jsr m_wait_flip               ; the game may still have a flip pending
+  .if MODELB
+        sta wx                      ; A = 0: m_wait_flip spun until flipreq was 0
+        sta wx+1
+        sta wy
+        sta wy+1
+        sta wcx
+        sta wcx+1
+        sta wcy
+        sta wfine
+        sta curbuf
+  .else
         stza wx
         stza wx+1
         stza wy
@@ -210,6 +236,7 @@ menu_begin:
         stza wcy
         stza wfine
         stza curbuf
+  .endif
         jsr m_select_backbuf
         jsr m_calc_ring
         jsr clear_ring
@@ -223,7 +250,7 @@ menu_begin:
 
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
-        stza curbuf
+        stz curbuf                  ; (A is dead: build_sections loads it)
   .if MODELB
         jsr m_build_sections        ; bank 7's
   .else
@@ -231,12 +258,10 @@ menu_show:
         stz NEXTBUF
   .endif
         stz NEXTSECT
-        lda #1
-        sta flipreq
+        inc flipreq                 ; 0 -> 1: every way in has waited for it to clear
 :       lda flipreq
         bne :-
-        lda #1
-        sta curbuf                  ; next game frame renders into the other buffer
+        inc curbuf                  ; 0 -> 1: next game frame renders into the other buffer
         jmp m_set_palette             ; page is on display: colours back
 
 ; wait one vsync and return new key edges in A (keys pressed now but not last time)
@@ -253,10 +278,9 @@ menu_keys:
 
 ; draw a title piece: A = piece index, spx/spy = position (top-left)
 draw_piece:
-        pha
-        ldpbank lda, BANK_MAP       ; the title pack sits where the map goes (the
-        sta spbank                  ; overlay comes off the disc: the loader cannot
-        pla                         ; patch it, so the physical bank is read)
+        ldpbank ldx, BANK_MAP       ; the title pack sits where the map goes (the
+        stx spbank                  ; overlay comes off the disc: the loader cannot
+                                    ; patch it, so the physical bank is read)
         jsr m_drawsprite
         ldpbank lda, BANK_SPR
         sta spbank
@@ -264,17 +288,15 @@ draw_piece:
 
 ; centred text: ptr -> string, X = y  (x = (160 - len*8)/2)
 text_centred:
-        ldy #0
-:       lda (ptr),y
-        beq :+
-        iny
-        bra :-
+        ldy #$FF
+:       iny
+        lda (ptr),y
+        bne :-
 :       tya
         asl
         asl                         ; len*4
         eor #$FF                    ; WINPX/2 - A, without parking A in memory
-        sec
-        adc #(WINPX/2)
+        adc #(WINPX/2)+1            ; C = 0 from the second asl: len < 64
         jmp drawtext
 
 ; ---------------------------------------------------------------- generic list menu
@@ -298,16 +320,13 @@ menu_list:
         iny
         lda (menuptr),y
         sta ptr+1
-        lda tmp3
-        jsr item_y
-        tax
+        jsr item_y                  ; X = the index still: A = X = its y
         jsr text_centred
         ldx tmp3
         inx
         cpx mcount
         bne @it
-        lda msel
-        jsr @cursor
+        jsr @cursor                 ; A = 0 = msel: drawtext returns A = 0
         jsr menu_show
 @loop:  jsr menu_keys
         sta tmp
@@ -316,16 +335,16 @@ menu_list:
         lda msel
         beq :+
         dec msel
-        bra @move
+        bpl @move                   ; always: msel < mcount <= 8
 :       lda tmp
         and #K_DOWN
         beq :+
-        lda msel
-        inca
-        cmp mcount
+        ldx msel
+        inx
+        cpx mcount
         bcs :+
-        sta msel
-        bra @move
+        stx msel
+        bcc @move                   ; always: bcs not taken
 :       lda tmp
         and #(K_FIRE|K_RIGHT)
         beq @loop
@@ -339,7 +358,7 @@ menu_list:
         jsr @curstr
         lda msel
         jsr @cursor
-        bra @loop
+        beq @loop                   ; always: drawtext returns Z = 1
 @cursor:
         sta mlast
         ldx #<cursor_str
@@ -347,19 +366,19 @@ menu_list:
 @curstr:
         stx ptr
         sty ptr+1
-        jsr item_y
         tax
+        jsr item_y
         lda #8
         jmp drawtext
-item_y: tax
-        lda mtop
+item_y: lda mtop                    ; X = item index -> A = X = its y
         cpx #0
         beq :++
 :       clc
         adc mstep
         dex
         bne :-
-:       rts
+:       tax
+        rts
 cursor_str: .byte ">                 <", 0
 blank_str:  .byte "_                 _", 0
 
@@ -376,8 +395,8 @@ clear_items:
         sta w16
         lda RINGHI,x
         sta w16+1
-        ldy #0
         lda #0
+        tay
 :       sta (w16),y
         iny
         bne :-
@@ -407,9 +426,14 @@ title_menu:
         bne :+
         jsr m_music_start             ; only if not already playing (back from help)
 :       jsr menu_begin
-        mov16i spx, 40
-        mov16i spy, 4
-        lda #TP_LOGO
+        lda #40
+        sta spx
+        lda #4
+        sta spy
+        lda #TP_LOGO                ; = 0: both high bytes
+        .assert TP_LOGO = 0, error, "title_menu: TP_LOGO doubles as the zero high bytes"
+        sta spx+1
+        sta spy+1
         jsr draw_piece
         lda #<menu1
         sta menuptr
@@ -419,7 +443,7 @@ title_menu:
         sta mstep
         lda #1
         sta mclear
-        lda #2
+        asl                         ; A = 2 items
         ldx #48
         jmp menu_list
 
@@ -435,15 +459,13 @@ help_screen:
         lda helptab+1,y
         sta ptr+1
   .if MODELB                        ; 84 px of window: i*10+16, the last line at 66
-        lda tmp3
-        asl
+        tya                         ; Y = 2i (C=0 from the asl above)
         asl
         adc tmp3                    ; i*5
         adc #8
         asl                         ; (i*5+8)*2 = i*10+16
   .else
-        lda tmp3
-        asl
+        tya                         ; Y = 2i = i*2 (C=0 from the asl above)
         adc tmp3                    ; i*3
         adc #5                      ; i*3+5
         asl
@@ -475,21 +497,18 @@ level_select:
         sta mstep
         lda #1
         sta mclear
-        pla
-        inca
-        sta tmp
+        pla                         ; max = n-1
+        tax
+        inx
+        stx tmp                     ; n
         ; top y = (108 - (n-1)*12 - 8)/2 rounded to multiple of 4
-        deca
         asl
         asl
         sta tmp2
         asl
-        clc
-        adc tmp2                    ; (n-1)*12
-        sta tmp2
-        lda #(VISLINES/2 - 8)       ; (108 on the Master, 84 here)
-        sec
-        sbc tmp2
+        adc tmp2                    ; (n-1)*12 (C=0: (n-1)*8 <= 56)
+        eor #$FF
+        adc #(VISLINES/2 - 8 + 1)   ; K - (n-1)*12 (C=0 from the adc)
         lsr
         and #$FC
         tax
@@ -497,28 +516,28 @@ level_select:
         jmp menu_list
 
 ; pause menu: returns 0 resume, 1 exit
+  .if .not MODELB                  ; (the Model B's t_pause_menu is its own stub, game.s)
 pause_menu:
         jsr menu_begin
         lda #<menu2
-        sta menuptr
+        sta z:menuptr
         lda #>menu2
-        sta menuptr+1
+        sta z:menuptr+1
         lda #14
         sta mstep
         stz mclear
         lda #2
         ldx #40
         jsr menu_list
-        pha
-        ; invalidate game buffers
-        stz BUF_VALID
-        stz BUF_VALID+1
-        stz RECCNT
-        stz RECCNT+1
-        lda #1
-        sta BARDIRTY
-        pla
+        ldx #0                      ; invalidate game buffers (A = the result survives)
+        stx BUF_VALID
+        stx BUF_VALID+1
+        stx RECCNT
+        stx RECCNT+1
+        inx
+        stx BARDIRTY
         rts
+  .endif
 
 ; win/lose: A = 1 win, 0 lose ; score/hiscore shown
 winlose:
@@ -527,38 +546,29 @@ winlose:
                                     ; was cycling the WIN frames)
         jsr m_music_stop              ; the win/lose screen is silent
         jsr menu_begin
-        lda mtop
-        beq @lose
-        mov16i spx, 36
+        .assert TP_WIN = TP_LOSE - 1, error, "winlose picks the piece as TP_LOSE - mtop"
+  .if MODELB
+        lda #0
+        sta spx+1
+        sta spy+1
+  .else
+        stz spx+1
+        stz spy+1
+  .endif
         lda #4
         sta spy
-        stz spy+1
+        lda mtop                    ; 1 win, 0 lose
+        asl                         ; (C = 0)
+        adc #34                     ; YOU at 36 / 34
+        sta spx
         lda #TP_YOU
-        jsr draw_piece
-        lda #82
+        jsr draw_piece              ; (leaves spx, spx+1, spy, spy+1 alone)
+        lda spx
+        clc
+        adc #80-34                  ; WIN at 82 / LOSE at 80; C = 0
         sta spx
-        stz spx+1
-        lda #4
-        sta spy
-        stz spy+1
-        lda #TP_WIN
-        jsr draw_piece
-        bra @scores
-@lose:  lda #34
-        sta spx
-        stz spx+1
-        lda #4
-        sta spy
-        stz spy+1
-        lda #TP_YOU
-        jsr draw_piece
-        lda #80
-        sta spx
-        stz spx+1
-        lda #4
-        sta spy
-        stz spy+1
-        lda #TP_LOSE
+        lda #TP_LOSE+1
+        sbc mtop                    ; C = 0: TP_LOSE - mtop = TP_WIN / TP_LOSE
         jsr draw_piece
 @scores:
         lda #<str_score
@@ -594,6 +604,10 @@ HISCORE_Y = 96
         sta lastkeys
         sta mcount                  ; last drawn frame   (menu_list's variables: this
         stz msel                    ; animation counter   screen never runs a list, and
+        lda #66                     ; big Cleo's place, once: nothing in the loop moves
+        sta spx                     ; spx/spy (spx+1, spy+1 are 0 from the pieces above)
+        lda #28
+        sta spy
 @loop:  ; big cleo frame            ; tmp2/tmp3 are clobbered by menu_show's callees
         lda msel                    ; every pass, which froze big Cleo on one frame)
                                     ; the shift count is the same on both arms
@@ -610,7 +624,7 @@ HISCORE_Y = 96
         lda w16
         and #3
         ora #4
-        bra @drawc
+        bne @drawc                  ; (always)
 @lframe:
         lda #$79
         sta w16
@@ -626,24 +640,16 @@ HISCORE_Y = 96
         cmp mcount
         beq @same
         sta mcount
-        lda #66
-        sta spx
-        stz spx+1
-        lda #28
-        sta spy
-        stz spy+1
-        lda mcount
         jsr draw_piece
 @same:  jsr menu_show
         inc msel
         jsr menu_keys
         and #(K_FIRE|K_RIGHT)
-        bne :+
-        jmp @loop
+        beq @loop
 :       rts
 
 ; w16 >>= X
-shr16x: cpx #0
+shr16x: txa                         ; Z from X (A dead at both callers)
         beq :++
 :       lsr w16+1
         ror w16
@@ -651,7 +657,7 @@ shr16x: cpx #0
         bne :-
 :       rts
 ; w16b:w16 (24 bit) >>= X
-shr24x: cpx #0
+shr24x: txa                         ; Z from X (A dead at the caller)
         beq :++
 :       lsr w16b
         ror w16+1
@@ -665,28 +671,25 @@ draw_number:
         sta tx
         stx ty
         ; convert t16 to decimal (5 digits, leading zeros suppressed) into numbuf
-        ldx #4
-@d:     phx
+        ldy #4
+@d:
   .if MODELB
         jsr m_div10_16
   .else
         jsr div10_16
   .endif
-        plx
-        lda q1
-        ora #'0'
-        sta numbuf,x
-        dex
+        ora #'0'                    ; A = the remainder (= q1); Y survives the call
+        sta numbuf,y
+        dey
         bpl @d
         ; suppress leading zeros (keep at least one)
-        ldx #0
-:       lda numbuf,x
+:       iny                         ; (Y = $FF from the loop above)
+        lda numbuf,y
         cmp #'0'
         bne :+
         lda #' '
-        sta numbuf,x
-        inx
-        cpx #4
+        sta numbuf,y
+        cpy #3
         bne :-
 :       lda #'0'
         sta numbuf+5
@@ -696,9 +699,7 @@ draw_number:
         sta ptr
         lda #>numbuf
         sta ptr+1
-        lda tx
-        ldx ty
-        jmp drawtext
+        jmp drawtext+6              ; past its sta tx/stx ty: tx, ty hold A, X already
 
 ; ---------------------------------------------------------------- strings
 menu1:      .word s_start, s_help

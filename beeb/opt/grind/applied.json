@@ -1,0 +1,6855 @@
+[
+ {
+  "key": "r000:0",
+  "file": "src/engine.s",
+  "lo": 526,
+  "hi": 529,
+  "result": "anon: 1 outside branch(es) retargeted"
+ },
+ {
+  "key": "r058:0",
+  "file": "modelb/src/display.s",
+  "lo": 188,
+  "hi": 446,
+  "saved_master": 0,
+  "saved_modelb": 65,
+  "result": "applied",
+  "delta_lines": -23,
+  "line_now": 188
+ },
+ {
+  "key": "r054:4",
+  "file": "src/menu.s",
+  "lo": 593,
+  "hi": 661,
+  "result": "anon: 1 outside branch(es) retargeted"
+ },
+ {
+  "key": "r011:0",
+  "file": "src/engine.s",
+  "lo": 2204,
+  "hi": 2262,
+  "saved_master": 10,
+  "saved_modelb": 90,
+  "result": "applied",
+  "delta_lines": 18,
+  "line_now": 2204
+ },
+ {
+  "key": "r041:0",
+  "file": "src/logic.s",
+  "lo": 2207,
+  "hi": 2301,
+  "saved_master": 57,
+  "saved_modelb": 57,
+  "result": "applied",
+  "delta_lines": -17,
+  "line_now": 2207
+ },
+ {
+  "key": "r053:10",
+  "file": "src/menu.s",
+  "lo": 500,
+  "hi": 521,
+  "saved_master": 1,
+  "saved_modelb": 55,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 500
+ },
+ {
+  "key": "r054:0",
+  "file": "src/menu.s",
+  "lo": 499,
+  "hi": 521,
+  "result": "stale"
+ },
+ {
+  "key": "r074:0",
+  "file": "modelb/src/loader.s",
+  "lo": 318,
+  "hi": 513,
+  "saved_master": 0,
+  "saved_modelb": 55,
+  "result": "applied",
+  "delta_lines": -17,
+  "line_now": 318
+ },
+ {
+  "key": "r054:3",
+  "file": "src/menu.s",
+  "lo": 530,
+  "hi": 561,
+  "saved_master": 41,
+  "saved_modelb": 54,
+  "result": "applied",
+  "delta_lines": -9,
+  "line_now": 530
+ },
+ {
+  "key": "r043:12",
+  "file": "src/logic.s",
+  "lo": 2502,
+  "hi": 2645,
+  "result": "anon: 3 outside branch(es) retargeted"
+ },
+ {
+  "key": "r009:11",
+  "file": "src/engine.s",
+  "lo": 1769,
+  "hi": 1925,
+  "result": "anon: 2 outside branch(es) retargeted"
+ },
+ {
+  "key": "r036a:0",
+  "file": "src/logic.s",
+  "lo": 1440,
+  "hi": 1485,
+  "saved_master": 37,
+  "saved_modelb": 37,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 1440
+ },
+ {
+  "key": "r036d:0",
+  "file": "src/logic.s",
+  "lo": 1559,
+  "hi": 1627,
+  "saved_master": 31,
+  "saved_modelb": 37,
+  "result": "applied",
+  "delta_lines": -8,
+  "line_now": 1560
+ },
+ {
+  "key": "r032:0",
+  "file": "src/logic.s",
+  "lo": 832,
+  "hi": 848,
+  "saved_master": 1,
+  "saved_modelb": 37,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 832
+ },
+ {
+  "key": "r051:9",
+  "file": "src/menu.s",
+  "lo": 204,
+  "hi": 212,
+  "saved_master": 0,
+  "saved_modelb": 36,
+  "result": "applied",
+  "delta_lines": 12,
+  "line_now": 204
+ },
+ {
+  "key": "r052:1",
+  "file": "src/menu.s",
+  "lo": 204,
+  "hi": 212,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r031:9",
+  "file": "src/logic.s",
+  "lo": 832,
+  "hi": 848,
+  "result": "stale"
+ },
+ {
+  "key": "r012:5",
+  "file": "src/engine.s",
+  "lo": 2523,
+  "hi": 2574,
+  "saved_master": 21,
+  "saved_modelb": 30,
+  "result": "applied",
+  "delta_lines": -20,
+  "line_now": 2541
+ },
+ {
+  "key": "r034:7",
+  "file": "src/logic.s",
+  "lo": 1287,
+  "hi": 1309,
+  "saved_master": 27,
+  "saved_modelb": 29,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 1287
+ },
+ {
+  "key": "r001:0",
+  "file": "src/engine.s",
+  "lo": 527,
+  "hi": 527,
+  "saved_master": 0,
+  "saved_modelb": 28,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 527
+ },
+ {
+  "key": "r004:2",
+  "file": "src/engine.s",
+  "lo": 525,
+  "hi": 527,
+  "result": "stale"
+ },
+ {
+  "key": "r011:9",
+  "file": "src/engine.s",
+  "lo": 527,
+  "hi": 527,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r013:1",
+  "file": "src/engine.s",
+  "lo": 527,
+  "hi": 527,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r069:1",
+  "file": "modelb/src/ldprog.s",
+  "lo": 496,
+  "hi": 559,
+  "saved_master": 0,
+  "saved_modelb": 28,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 496
+ },
+ {
+  "key": "r044:0",
+  "file": "src/logic.s",
+  "lo": 2710,
+  "hi": 2805,
+  "saved_master": 22,
+  "saved_modelb": 27,
+  "result": "applied",
+  "delta_lines": -11,
+  "line_now": 2681
+ },
+ {
+  "key": "r073:4",
+  "file": "modelb/src/loader.s",
+  "lo": 244,
+  "hi": 318,
+  "result": "stale"
+ },
+ {
+  "key": "r060:3",
+  "file": "modelb/src/display.s",
+  "lo": 539,
+  "hi": 565,
+  "saved_master": 0,
+  "saved_modelb": 26,
+  "result": "applied",
+  "delta_lines": -16,
+  "line_now": 516
+ },
+ {
+  "key": "r038d:0",
+  "file": "src/logic.s",
+  "lo": 1837,
+  "hi": 1879,
+  "saved_master": 24,
+  "saved_modelb": 24,
+  "result": "applied",
+  "delta_lines": 8,
+  "line_now": 1825
+ },
+ {
+  "key": "r068:0",
+  "file": "modelb/src/ldprog.s",
+  "lo": 314,
+  "hi": 385,
+  "saved_master": 0,
+  "saved_modelb": 24,
+  "result": "applied",
+  "delta_lines": -8,
+  "line_now": 314
+ },
+ {
+  "key": "r037:0",
+  "file": "src/logic.s",
+  "lo": 1567,
+  "hi": 1603,
+  "result": "stale"
+ },
+ {
+  "key": "r066:2",
+  "file": "modelb/src/ldprog.s",
+  "lo": 109,
+  "hi": 146,
+  "saved_master": 0,
+  "saved_modelb": 23,
+  "result": "gate: B pix L0 / B pix L6"
+ },
+ {
+  "key": "r043:10",
+  "file": "src/logic.s",
+  "lo": 2659,
+  "hi": 2666,
+  "saved_master": 22,
+  "saved_modelb": 22,
+  "result": "applied",
+  "delta_lines": 32,
+  "line_now": 2638
+ },
+ {
+  "key": "r009:10",
+  "file": "src/engine.s",
+  "lo": 1829,
+  "hi": 1921,
+  "saved_master": 25,
+  "saved_modelb": 21,
+  "result": "applied",
+  "delta_lines": -8,
+  "line_now": 1833
+ },
+ {
+  "key": "r035b:0",
+  "file": "src/logic.s",
+  "lo": 1366,
+  "hi": 1394,
+  "saved_master": 16,
+  "saved_modelb": 21,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 1361
+ },
+ {
+  "key": "r065:4",
+  "file": "modelb/src/init.s",
+  "lo": 51,
+  "hi": 61,
+  "result": "noasm modelb: src/init.s(51): Error: Symbol 'to7' is undefined"
+ },
+ {
+  "key": "r036b:0",
+  "file": "src/logic.s",
+  "lo": 1473,
+  "hi": 1486,
+  "result": "stale"
+ },
+ {
+  "key": "r047:11",
+  "file": "src/logic.s",
+  "lo": 3168,
+  "hi": 3263,
+  "saved_master": 17,
+  "saved_modelb": 20,
+  "result": "applied",
+  "delta_lines": -9,
+  "line_now": 3174
+ },
+ {
+  "key": "r073:5",
+  "file": "modelb/src/loader.s",
+  "lo": 250,
+  "hi": 287,
+  "saved_master": 0,
+  "saved_modelb": 20,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 250
+ },
+ {
+  "key": "r067:11",
+  "file": "modelb/src/ldprog.s",
+  "lo": 308,
+  "hi": 345,
+  "result": "stale"
+ },
+ {
+  "key": "r030:6",
+  "file": "src/logic.s",
+  "lo": 689,
+  "hi": 737,
+  "saved_master": 18,
+  "saved_modelb": 18,
+  "result": "applied",
+  "delta_lines": -8,
+  "line_now": 689
+ },
+ {
+  "key": "r046:10",
+  "file": "src/logic.s",
+  "lo": 3073,
+  "hi": 3099,
+  "saved_master": 13,
+  "saved_modelb": 18,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 3071
+ },
+ {
+  "key": "r037:13",
+  "file": "src/logic.s",
+  "lo": 1655,
+  "hi": 1671,
+  "result": "anon: 5 outside branch(es) retargeted"
+ },
+ {
+  "key": "r040:0",
+  "file": "src/logic.s",
+  "lo": 2066,
+  "hi": 2086,
+  "saved_master": 0,
+  "saved_modelb": 18,
+  "result": "applied",
+  "delta_lines": 16,
+  "line_now": 2060
+ },
+ {
+  "key": "r060:1",
+  "file": "modelb/src/display.s",
+  "lo": 497,
+  "hi": 521,
+  "saved_master": 0,
+  "saved_modelb": 18,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 474
+ },
+ {
+  "key": "r071:1",
+  "file": "modelb/src/ldprog.s",
+  "lo": 738,
+  "hi": 770,
+  "saved_master": 0,
+  "saved_modelb": 18,
+  "result": "applied",
+  "delta_lines": -8,
+  "line_now": 724
+ },
+ {
+  "key": "r004:1",
+  "file": "src/engine.s",
+  "lo": 1154,
+  "hi": 1239,
+  "saved_master": 5,
+  "saved_modelb": 17,
+  "result": "applied",
+  "delta_lines": 14,
+  "line_now": 1158
+ },
+ {
+  "key": "r028:0",
+  "file": "src/logic.s",
+  "lo": 314,
+  "hi": 434,
+  "saved_master": 16,
+  "saved_modelb": 16,
+  "result": "applied",
+  "delta_lines": -12,
+  "line_now": 314
+ },
+ {
+  "key": "r033:9",
+  "file": "src/logic.s",
+  "lo": 1159,
+  "hi": 1171,
+  "saved_master": 16,
+  "saved_modelb": 16,
+  "result": "applied",
+  "delta_lines": -11,
+  "line_now": 1139
+ },
+ {
+  "key": "r034:1",
+  "file": "src/logic.s",
+  "lo": 1159,
+  "hi": 1171,
+  "result": "stale"
+ },
+ {
+  "key": "r038b:0",
+  "file": "src/logic.s",
+  "lo": 1798,
+  "hi": 1801,
+  "saved_master": 16,
+  "saved_modelb": 16,
+  "result": "applied",
+  "delta_lines": 12,
+  "line_now": 1761
+ },
+ {
+  "key": "r036d:1",
+  "file": "src/logic.s",
+  "lo": 1586,
+  "hi": 1603,
+  "result": "stale"
+ },
+ {
+  "key": "r022:2",
+  "file": "src/engine.s",
+  "lo": 4110,
+  "hi": 4181,
+  "saved_master": 13,
+  "saved_modelb": 16,
+  "result": "applied",
+  "delta_lines": -12,
+  "line_now": 4118
+ },
+ {
+  "key": "r007:4",
+  "file": "src/engine.s",
+  "lo": 1534,
+  "hi": 1562,
+  "saved_master": 3,
+  "saved_modelb": 16,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 1552
+ },
+ {
+  "key": "r057:4",
+  "file": "modelb/src/display.s",
+  "lo": 215,
+  "hi": 446,
+  "result": "stale"
+ },
+ {
+  "key": "r058:13",
+  "file": "modelb/src/display.s",
+  "lo": 215,
+  "hi": 446,
+  "result": "stale"
+ },
+ {
+  "key": "r037:1",
+  "file": "src/logic.s",
+  "lo": 1586,
+  "hi": 1603,
+  "result": "stale"
+ },
+ {
+  "key": "r029:3",
+  "file": "src/logic.s",
+  "lo": 500,
+  "hi": 519,
+  "saved_master": 13,
+  "saved_modelb": 15,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 488
+ },
+ {
+  "key": "r030:4",
+  "file": "src/logic.s",
+  "lo": 634,
+  "hi": 642,
+  "saved_master": 10,
+  "saved_modelb": 15,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 617
+ },
+ {
+  "key": "r054:5",
+  "file": "src/menu.s",
+  "lo": 593,
+  "hi": 643,
+  "saved_master": 10,
+  "saved_modelb": 15,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 596
+ },
+ {
+  "key": "r010:2",
+  "file": "src/engine.s",
+  "lo": 2210,
+  "hi": 2215,
+  "result": "stale"
+ },
+ {
+  "key": "r008:9",
+  "file": "src/engine.s",
+  "lo": 1802,
+  "hi": 1828,
+  "result": "anon: 3 outside branch(es) retargeted"
+ },
+ {
+  "key": "r009:1",
+  "file": "src/engine.s",
+  "lo": 1802,
+  "hi": 1820,
+  "result": "anon: 4 outside branch(es) retargeted"
+ },
+ {
+  "key": "r070:3",
+  "file": "modelb/src/ldprog.s",
+  "lo": 630,
+  "hi": 655,
+  "saved_master": 0,
+  "saved_modelb": 15,
+  "result": "applied",
+  "delta_lines": -9,
+  "line_now": 616
+ },
+ {
+  "key": "r074:6",
+  "file": "modelb/src/loader.s",
+  "lo": 478,
+  "hi": 513,
+  "result": "stale"
+ },
+ {
+  "key": "r003:9",
+  "file": "src/engine.s",
+  "lo": 853,
+  "hi": 955,
+  "saved_master": 13,
+  "saved_modelb": 14,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 857
+ },
+ {
+  "key": "r036d:2",
+  "file": "src/logic.s",
+  "lo": 1590,
+  "hi": 1603,
+  "result": "stale"
+ },
+ {
+  "key": "r044:1",
+  "file": "src/logic.s",
+  "lo": 2737,
+  "hi": 2749,
+  "result": "stale"
+ },
+ {
+  "key": "r045:1",
+  "file": "src/logic.s",
+  "lo": 2807,
+  "hi": 2814,
+  "result": "anon: 2 outside branch(es) retargeted"
+ },
+ {
+  "key": "r052:0",
+  "file": "src/menu.s",
+  "lo": 301,
+  "hi": 362,
+  "saved_master": 6,
+  "saved_modelb": 14,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 313
+ },
+ {
+  "key": "r003:12",
+  "file": "src/engine.s",
+  "lo": 493,
+  "hi": 511,
+  "saved_master": 0,
+  "saved_modelb": 14,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 493
+ },
+ {
+  "key": "r049:8",
+  "file": "src/game.s",
+  "lo": 206,
+  "hi": 209,
+  "saved_master": 0,
+  "saved_modelb": 14,
+  "result": "applied",
+  "delta_lines": 8,
+  "line_now": 206
+ },
+ {
+  "key": "r050:2",
+  "file": "src/game.s",
+  "lo": 206,
+  "hi": 209,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r051:0",
+  "file": "src/menu.s",
+  "lo": 24,
+  "hi": 31,
+  "saved_master": 0,
+  "saved_modelb": 14,
+  "result": "applied",
+  "delta_lines": 12,
+  "line_now": 24
+ },
+ {
+  "key": "r068:1",
+  "file": "modelb/src/ldprog.s",
+  "lo": 389,
+  "hi": 420,
+  "saved_master": 0,
+  "saved_modelb": 14,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 381
+ },
+ {
+  "key": "r068:5",
+  "file": "modelb/src/ldprog.s",
+  "lo": 314,
+  "hi": 346,
+  "result": "stale"
+ },
+ {
+  "key": "r036d:3",
+  "file": "src/logic.s",
+  "lo": 1590,
+  "hi": 1600,
+  "result": "stale"
+ },
+ {
+  "key": "r037:2",
+  "file": "src/logic.s",
+  "lo": 1590,
+  "hi": 1601,
+  "result": "stale"
+ },
+ {
+  "key": "r043:0",
+  "file": "src/logic.s",
+  "lo": 2502,
+  "hi": 2521,
+  "saved_master": 9,
+  "saved_modelb": 13,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 2474
+ },
+ {
+  "key": "r003:11",
+  "file": "src/engine.s",
+  "lo": 990,
+  "hi": 1146,
+  "saved_master": 0,
+  "saved_modelb": 13,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 987
+ },
+ {
+  "key": "r035d:5",
+  "file": "src/logic.s",
+  "lo": 1454,
+  "hi": 1474,
+  "result": "stale"
+ },
+ {
+  "key": "r043:3",
+  "file": "src/logic.s",
+  "lo": 2579,
+  "hi": 2585,
+  "result": "anon: 2 outside branch(es) retargeted"
+ },
+ {
+  "key": "r047:0",
+  "file": "src/logic.s",
+  "lo": 3078,
+  "hi": 3092,
+  "result": "stale"
+ },
+ {
+  "key": "r022:3",
+  "file": "src/engine.s",
+  "lo": 4137,
+  "hi": 4181,
+  "result": "stale"
+ },
+ {
+  "key": "r015:7",
+  "file": "src/engine.s",
+  "lo": 3030,
+  "hi": 3071,
+  "saved_master": 7,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 3028
+ },
+ {
+  "key": "r041:2",
+  "file": "src/logic.s",
+  "lo": 2305,
+  "hi": 2321,
+  "saved_master": 7,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 2277
+ },
+ {
+  "key": "r044:2",
+  "file": "src/logic.s",
+  "lo": 2807,
+  "hi": 2814,
+  "saved_master": 7,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": 3,
+  "line_now": 2798
+ },
+ {
+  "key": "r049:1",
+  "file": "src/game.s",
+  "lo": 29,
+  "hi": 49,
+  "saved_master": 6,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 29
+ },
+ {
+  "key": "r048:1",
+  "file": "src/logic.s",
+  "lo": 3265,
+  "hi": 3300,
+  "saved_master": 5,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 3244
+ },
+ {
+  "key": "r011:1",
+  "file": "src/engine.s",
+  "lo": 2197,
+  "hi": 2197,
+  "saved_master": 0,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2197
+ },
+ {
+  "key": "r024:2",
+  "file": "src/engine.s",
+  "lo": 4513,
+  "hi": 4531,
+  "saved_master": 0,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 4494
+ },
+ {
+  "key": "r026:0",
+  "file": "src/engine.s",
+  "lo": 4849,
+  "hi": 4850,
+  "saved_master": 0,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 4824
+ },
+ {
+  "key": "r061:0",
+  "file": "modelb/src/disc.s",
+  "lo": 95,
+  "hi": 124,
+  "saved_master": 0,
+  "saved_modelb": 12,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 95
+ },
+ {
+  "key": "r070:9",
+  "file": "modelb/src/ldprog.s",
+  "lo": 757,
+  "hi": 768,
+  "result": "stale"
+ },
+ {
+  "key": "r073:15",
+  "file": "modelb/src/loader.s",
+  "lo": 369,
+  "hi": 380,
+  "result": "stale"
+ },
+ {
+  "key": "r074:7",
+  "file": "modelb/src/loader.s",
+  "lo": 369,
+  "hi": 380,
+  "result": "stale"
+ },
+ {
+  "key": "r035c:5",
+  "file": "src/logic.s",
+  "lo": 1395,
+  "hi": 1402,
+  "saved_master": 11,
+  "saved_modelb": 11,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 1355
+ },
+ {
+  "key": "r046:0",
+  "file": "src/logic.s",
+  "lo": 2926,
+  "hi": 2951,
+  "saved_master": 6,
+  "saved_modelb": 11,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 2922
+ },
+ {
+  "key": "r034:2",
+  "file": "src/logic.s",
+  "lo": 1200,
+  "hi": 1216,
+  "saved_master": 4,
+  "saved_modelb": 11,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 1159
+ },
+ {
+  "key": "r029:1",
+  "file": "src/logic.s",
+  "lo": 470,
+  "hi": 491,
+  "saved_master": 1,
+  "saved_modelb": 11,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 458
+ },
+ {
+  "key": "r006:5",
+  "file": "src/engine.s",
+  "lo": 1517,
+  "hi": 1521,
+  "saved_master": 0,
+  "saved_modelb": 11,
+  "result": "applied",
+  "delta_lines": 12,
+  "line_now": 1528
+ },
+ {
+  "key": "r007:2",
+  "file": "src/engine.s",
+  "lo": 1517,
+  "hi": 1521,
+  "result": "stale"
+ },
+ {
+  "key": "r059:1",
+  "file": "modelb/src/display.s",
+  "lo": 349,
+  "hi": 395,
+  "result": "stale"
+ },
+ {
+  "key": "r059:9",
+  "file": "modelb/src/display.s",
+  "lo": 497,
+  "hi": 522,
+  "result": "stale"
+ },
+ {
+  "key": "r065:1",
+  "file": "modelb/src/init.s",
+  "lo": 31,
+  "hi": 50,
+  "saved_master": 0,
+  "saved_modelb": 11,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 31
+ },
+ {
+  "key": "r022:0",
+  "file": "src/engine.s",
+  "lo": 4272,
+  "hi": 4289,
+  "saved_master": 10,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 4265
+ },
+ {
+  "key": "r023:0",
+  "file": "src/engine.s",
+  "lo": 4272,
+  "hi": 4289,
+  "result": "stale"
+ },
+ {
+  "key": "r035a:0",
+  "file": "src/logic.s",
+  "lo": 1291,
+  "hi": 1309,
+  "result": "stale"
+ },
+ {
+  "key": "r042:6",
+  "file": "src/logic.s",
+  "lo": 2437,
+  "hi": 2444,
+  "saved_master": 10,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 2413
+ },
+ {
+  "key": "r045:3",
+  "file": "src/logic.s",
+  "lo": 2820,
+  "hi": 2821,
+  "saved_master": 10,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 2823
+ },
+ {
+  "key": "r005:0",
+  "file": "src/engine.s",
+  "lo": 1207,
+  "hi": 1239,
+  "result": "stale"
+ },
+ {
+  "key": "r019:1",
+  "file": "src/engine.s",
+  "lo": 3621,
+  "hi": 3649,
+  "saved_master": 6,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3626
+ },
+ {
+  "key": "r040:1",
+  "file": "src/logic.s",
+  "lo": 2155,
+  "hi": 2172,
+  "saved_master": 6,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 2151
+ },
+ {
+  "key": "r035a:2",
+  "file": "src/logic.s",
+  "lo": 1346,
+  "hi": 1363,
+  "saved_master": 2,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1305
+ },
+ {
+  "key": "r022:5",
+  "file": "src/engine.s",
+  "lo": 4191,
+  "hi": 4193,
+  "saved_master": 0,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": 8,
+  "line_now": 4183
+ },
+ {
+  "key": "r053:7",
+  "file": "src/menu.s",
+  "lo": 478,
+  "hi": 482,
+  "saved_master": 0,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 499
+ },
+ {
+  "key": "r064:3",
+  "file": "modelb/src/banks.s",
+  "lo": 176,
+  "hi": 181,
+  "saved_master": 0,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 176
+ },
+ {
+  "key": "r066:6",
+  "file": "modelb/src/ldprog.s",
+  "lo": 181,
+  "hi": 198,
+  "saved_master": 0,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 181
+ },
+ {
+  "key": "r072:14",
+  "file": "modelb/src/loader.s",
+  "lo": 199,
+  "hi": 318,
+  "result": "stale"
+ },
+ {
+  "key": "r072:9",
+  "file": "modelb/src/loader.s",
+  "lo": 158,
+  "hi": 163,
+  "saved_master": 0,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 158
+ },
+ {
+  "key": "r073:10",
+  "file": "modelb/src/loader.s",
+  "lo": 199,
+  "hi": 204,
+  "saved_master": 0,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 194
+ },
+ {
+  "key": "r073:8",
+  "file": "modelb/src/loader.s",
+  "lo": 158,
+  "hi": 163,
+  "result": "stale"
+ },
+ {
+  "key": "r074:1",
+  "file": "modelb/src/loader.s",
+  "lo": 158,
+  "hi": 163,
+  "result": "stale"
+ },
+ {
+  "key": "r074:2",
+  "file": "modelb/src/loader.s",
+  "lo": 198,
+  "hi": 204,
+  "result": "stale"
+ },
+ {
+  "key": "r074:3",
+  "file": "modelb/src/loader.s",
+  "lo": 243,
+  "hi": 249,
+  "saved_master": 0,
+  "saved_modelb": 10,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 233
+ },
+ {
+  "key": "r017:0",
+  "file": "src/engine.s",
+  "lo": 3392,
+  "hi": 3432,
+  "saved_master": 9,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 3397
+ },
+ {
+  "key": "r028:2",
+  "file": "src/logic.s",
+  "lo": 371,
+  "hi": 426,
+  "result": "stale"
+ },
+ {
+  "key": "r030:7",
+  "file": "src/logic.s",
+  "lo": 689,
+  "hi": 720,
+  "result": "stale"
+ },
+ {
+  "key": "r031:0",
+  "file": "src/logic.s",
+  "lo": 689,
+  "hi": 720,
+  "result": "stale"
+ },
+ {
+  "key": "r039:6",
+  "file": "src/logic.s",
+  "lo": 1932,
+  "hi": 2037,
+  "saved_master": 9,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 1911
+ },
+ {
+  "key": "r042:10",
+  "file": "src/logic.s",
+  "lo": 2507,
+  "hi": 2521,
+  "result": "stale"
+ },
+ {
+  "key": "r036c:2",
+  "file": "src/logic.s",
+  "lo": 1540,
+  "hi": 1551,
+  "saved_master": 4,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 1507
+ },
+ {
+  "key": "r045:8",
+  "file": "src/logic.s",
+  "lo": 2863,
+  "hi": 2880,
+  "saved_master": 3,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2866
+ },
+ {
+  "key": "r002:8",
+  "file": "src/engine.s",
+  "lo": 818,
+  "hi": 831,
+  "saved_master": 2,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 821
+ },
+ {
+  "key": "r010:3",
+  "file": "src/engine.s",
+  "lo": 2210,
+  "hi": 2215,
+  "result": "stale"
+ },
+ {
+  "key": "r007:13",
+  "file": "src/engine.s",
+  "lo": 1643,
+  "hi": 1649,
+  "saved_master": 1,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1659
+ },
+ {
+  "key": "r053:11",
+  "file": "src/menu.s",
+  "lo": 512,
+  "hi": 520,
+  "result": "stale"
+ },
+ {
+  "key": "r054:2",
+  "file": "src/menu.s",
+  "lo": 512,
+  "hi": 520,
+  "result": "stale"
+ },
+ {
+  "key": "r065:2",
+  "file": "modelb/src/init.s",
+  "lo": 73,
+  "hi": 75,
+  "saved_master": 0,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 67
+ },
+ {
+  "key": "r070:6",
+  "file": "modelb/src/ldprog.s",
+  "lo": 700,
+  "hi": 724,
+  "saved_master": 0,
+  "saved_modelb": 9,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 667
+ },
+ {
+  "key": "r003:1",
+  "file": "src/engine.s",
+  "lo": 939,
+  "hi": 954,
+  "result": "stale"
+ },
+ {
+  "key": "r012:6",
+  "file": "src/engine.s",
+  "lo": 2579,
+  "hi": 2586,
+  "saved_master": 8,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2584
+ },
+ {
+  "key": "r027:0",
+  "file": "src/logic.s",
+  "lo": 32,
+  "hi": 34,
+  "saved_master": 8,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 32
+ },
+ {
+  "key": "r035c:3",
+  "file": "src/logic.s",
+  "lo": 1379,
+  "hi": 1380,
+  "result": "stale"
+ },
+ {
+  "key": "r035c:7",
+  "file": "src/logic.s",
+  "lo": 1411,
+  "hi": 1412,
+  "saved_master": 8,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1383
+ },
+ {
+  "key": "r035d:2",
+  "file": "src/logic.s",
+  "lo": 1411,
+  "hi": 1411,
+  "result": "stale"
+ },
+ {
+  "key": "r035d:3",
+  "file": "src/logic.s",
+  "lo": 1425,
+  "hi": 1437,
+  "saved_master": 8,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 1396
+ },
+ {
+  "key": "r035d:4",
+  "file": "src/logic.s",
+  "lo": 1440,
+  "hi": 1453,
+  "result": "stale"
+ },
+ {
+  "key": "r036d:4",
+  "file": "src/logic.s",
+  "lo": 1567,
+  "hi": 1567,
+  "result": "stale"
+ },
+ {
+  "key": "r044:4",
+  "file": "src/logic.s",
+  "lo": 2659,
+  "hi": 2662,
+  "result": "stale"
+ },
+ {
+  "key": "r044:5",
+  "file": "src/logic.s",
+  "lo": 2663,
+  "hi": 2666,
+  "result": "stale"
+ },
+ {
+  "key": "r051:4",
+  "file": "src/menu.s",
+  "lo": 62,
+  "hi": 72,
+  "saved_master": 8,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 74
+ },
+ {
+  "key": "r020:2",
+  "file": "src/engine.s",
+  "lo": 3920,
+  "hi": 3936,
+  "saved_master": 7,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 3915
+ },
+ {
+  "key": "r021:0",
+  "file": "src/engine.s",
+  "lo": 3920,
+  "hi": 3936,
+  "result": "stale"
+ },
+ {
+  "key": "r047:9",
+  "file": "src/logic.s",
+  "lo": 3228,
+  "hi": 3263,
+  "result": "stale"
+ },
+ {
+  "key": "r050:8",
+  "file": "src/game.s",
+  "lo": 268,
+  "hi": 276,
+  "saved_master": 7,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 278
+ },
+ {
+  "key": "r009:8",
+  "file": "src/engine.s",
+  "lo": 1829,
+  "hi": 1910,
+  "result": "stale"
+ },
+ {
+  "key": "r050:9",
+  "file": "src/game.s",
+  "lo": 277,
+  "hi": 282,
+  "saved_master": 6,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 284
+ },
+ {
+  "key": "r055:3",
+  "file": "src/menu.s",
+  "lo": 668,
+  "hi": 690,
+  "saved_master": 6,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 671
+ },
+ {
+  "key": "r043:9",
+  "file": "src/logic.s",
+  "lo": 2653,
+  "hi": 2657,
+  "saved_master": 4,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2628
+ },
+ {
+  "key": "r044:3",
+  "file": "src/logic.s",
+  "lo": 2653,
+  "hi": 2657,
+  "result": "stale"
+ },
+ {
+  "key": "r037:4",
+  "file": "src/logic.s",
+  "lo": 1609,
+  "hi": 1627,
+  "result": "stale"
+ },
+ {
+  "key": "r037:8",
+  "file": "src/logic.s",
+  "lo": 1641,
+  "hi": 1650,
+  "saved_master": 2,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": 7,
+  "line_now": 1600
+ },
+ {
+  "key": "r007:5",
+  "file": "src/engine.s",
+  "lo": 1534,
+  "hi": 1545,
+  "result": "stale"
+ },
+ {
+  "key": "r008:8",
+  "file": "src/engine.s",
+  "lo": 1774,
+  "hi": 1782,
+  "saved_master": 0,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": 12,
+  "line_now": 1789
+ },
+ {
+  "key": "r034:4",
+  "file": "src/logic.s",
+  "lo": 1243,
+  "hi": 1247,
+  "saved_master": 0,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": 9,
+  "line_now": 1213
+ },
+ {
+  "key": "r035c:6",
+  "file": "src/logic.s",
+  "lo": 1404,
+  "hi": 1408,
+  "saved_master": 0,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": 8,
+  "line_now": 1385
+ },
+ {
+  "key": "r035d:1",
+  "file": "src/logic.s",
+  "lo": 1404,
+  "hi": 1408,
+  "result": "stale"
+ },
+ {
+  "key": "r058:11",
+  "file": "modelb/src/display.s",
+  "lo": 319,
+  "hi": 342,
+  "result": "stale"
+ },
+ {
+  "key": "r058:9",
+  "file": "modelb/src/display.s",
+  "lo": 292,
+  "hi": 318,
+  "result": "stale"
+ },
+ {
+  "key": "r059:13",
+  "file": "modelb/src/display.s",
+  "lo": 497,
+  "hi": 510,
+  "result": "stale"
+ },
+ {
+  "key": "r067:0",
+  "file": "modelb/src/ldprog.s",
+  "lo": 181,
+  "hi": 198,
+  "result": "stale"
+ },
+ {
+  "key": "r067:3",
+  "file": "modelb/src/ldprog.s",
+  "lo": 210,
+  "hi": 213,
+  "saved_master": 0,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 206
+ },
+ {
+  "key": "r074:4",
+  "file": "modelb/src/loader.s",
+  "lo": 297,
+  "hi": 301,
+  "saved_master": 0,
+  "saved_modelb": 8,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 276
+ },
+ {
+  "key": "r074:8",
+  "file": "modelb/src/loader.s",
+  "lo": 494,
+  "hi": 498,
+  "result": "stale"
+ },
+ {
+  "key": "r009:9",
+  "file": "src/engine.s",
+  "lo": 1848,
+  "hi": 1921,
+  "result": "stale"
+ },
+ {
+  "key": "r032:6",
+  "file": "src/logic.s",
+  "lo": 939,
+  "hi": 954,
+  "saved_master": 7,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 915
+ },
+ {
+  "key": "r035d:0",
+  "file": "src/logic.s",
+  "lo": 1398,
+  "hi": 1402,
+  "result": "stale"
+ },
+ {
+  "key": "r031:7",
+  "file": "src/logic.s",
+  "lo": 790,
+  "hi": 823,
+  "saved_master": 6,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 766
+ },
+ {
+  "key": "r042:4",
+  "file": "src/logic.s",
+  "lo": 2380,
+  "hi": 2408,
+  "saved_master": 6,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2368
+ },
+ {
+  "key": "r010:0",
+  "file": "src/engine.s",
+  "lo": 2068,
+  "hi": 2075,
+  "saved_master": 5,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": 14,
+  "line_now": 2087
+ },
+ {
+  "key": "r046:9",
+  "file": "src/logic.s",
+  "lo": 3062,
+  "hi": 3072,
+  "saved_master": 5,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 3073
+ },
+ {
+  "key": "r047:7",
+  "file": "src/logic.s",
+  "lo": 3179,
+  "hi": 3191,
+  "result": "stale"
+ },
+ {
+  "key": "r012:2",
+  "file": "src/engine.s",
+  "lo": 2467,
+  "hi": 2486,
+  "saved_master": 2,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 2518
+ },
+ {
+  "key": "r000:1",
+  "file": "src/engine.s",
+  "lo": 499,
+  "hi": 501,
+  "result": "stale"
+ },
+ {
+  "key": "r004:0",
+  "file": "src/engine.s",
+  "lo": 1012,
+  "hi": 1132,
+  "result": "stale"
+ },
+ {
+  "key": "r008:0",
+  "file": "src/engine.s",
+  "lo": 1643,
+  "hi": 1647,
+  "result": "stale"
+ },
+ {
+  "key": "r016:0",
+  "file": "src/engine.s",
+  "lo": 3029,
+  "hi": 3048,
+  "result": "stale"
+ },
+ {
+  "key": "r025:0",
+  "file": "src/engine.s",
+  "lo": 4822,
+  "hi": 4840,
+  "saved_master": 0,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 4829
+ },
+ {
+  "key": "r035b:1",
+  "file": "src/logic.s",
+  "lo": 1359,
+  "hi": 1363,
+  "result": "stale"
+ },
+ {
+  "key": "r065:0",
+  "file": "modelb/src/init.s",
+  "lo": 10,
+  "hi": 30,
+  "saved_master": 0,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 10
+ },
+ {
+  "key": "r066:10",
+  "file": "modelb/src/ldprog.s",
+  "lo": 596,
+  "hi": 602,
+  "result": "noasm modelb: src/ldprog.s(572): Error: Symbol 'readpage' is undefined"
+ },
+ {
+  "key": "r068:6",
+  "file": "modelb/src/ldprog.s",
+  "lo": 350,
+  "hi": 370,
+  "result": "stale"
+ },
+ {
+  "key": "r018:2",
+  "file": "src/engine.s",
+  "lo": 3448,
+  "hi": 3464,
+  "result": "anon: 3 outside branch(es) retargeted"
+ },
+ {
+  "key": "r011:4",
+  "file": "src/engine.s",
+  "lo": 2323,
+  "hi": 2334,
+  "saved_master": 6,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 2374
+ },
+ {
+  "key": "r019:2",
+  "file": "src/engine.s",
+  "lo": 3628,
+  "hi": 3649,
+  "result": "stale"
+ },
+ {
+  "key": "r027:1",
+  "file": "src/logic.s",
+  "lo": 50,
+  "hi": 52,
+  "saved_master": 6,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 56
+ },
+ {
+  "key": "r038c:6",
+  "file": "src/logic.s",
+  "lo": 1838,
+  "hi": 1839,
+  "result": "stale"
+ },
+ {
+  "key": "r044:6",
+  "file": "src/logic.s",
+  "lo": 2659,
+  "hi": 2662,
+  "result": "stale"
+ },
+ {
+  "key": "r044:7",
+  "file": "src/logic.s",
+  "lo": 2663,
+  "hi": 2666,
+  "result": "stale"
+ },
+ {
+  "key": "r047:3",
+  "file": "src/logic.s",
+  "lo": 3126,
+  "hi": 3138,
+  "saved_master": 6,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 3134
+ },
+ {
+  "key": "r055:6",
+  "file": "src/menu.s",
+  "lo": 699,
+  "hi": 701,
+  "saved_master": 6,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 699
+ },
+ {
+  "key": "r043:6",
+  "file": "src/logic.s",
+  "lo": 2602,
+  "hi": 2615,
+  "saved_master": 5,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2597
+ },
+ {
+  "key": "r045:13",
+  "file": "src/logic.s",
+  "lo": 2944,
+  "hi": 2951,
+  "result": "stale"
+ },
+ {
+  "key": "r048:0",
+  "file": "src/logic.s",
+  "lo": 3244,
+  "hi": 3263,
+  "result": "stale"
+ },
+ {
+  "key": "r036d:5",
+  "file": "src/logic.s",
+  "lo": 1539,
+  "hi": 1547,
+  "result": "stale"
+ },
+ {
+  "key": "r055:4",
+  "file": "src/menu.s",
+  "lo": 668,
+  "hi": 680,
+  "result": "stale"
+ },
+ {
+  "key": "r011:6",
+  "file": "src/engine.s",
+  "lo": 2352,
+  "hi": 2356,
+  "saved_master": 3,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2399
+ },
+ {
+  "key": "r050:10",
+  "file": "src/game.s",
+  "lo": 298,
+  "hi": 299,
+  "saved_master": 3,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 302
+ },
+ {
+  "key": "r050:5",
+  "file": "src/game.s",
+  "lo": 253,
+  "hi": 253,
+  "saved_master": 3,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 263
+ },
+ {
+  "key": "r035c:0",
+  "file": "src/logic.s",
+  "lo": 1372,
+  "hi": 1372,
+  "result": "stale"
+ },
+ {
+  "key": "r046:2",
+  "file": "src/logic.s",
+  "lo": 2976,
+  "hi": 2978,
+  "saved_master": 1,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2991
+ },
+ {
+  "key": "r002:1",
+  "file": "src/engine.s",
+  "lo": 715,
+  "hi": 722,
+  "saved_master": 0,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 718
+ },
+ {
+  "key": "r006:4",
+  "file": "src/engine.s",
+  "lo": 1477,
+  "hi": 1483,
+  "saved_master": 0,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": 9,
+  "line_now": 1481
+ },
+ {
+  "key": "r011:7",
+  "file": "src/engine.s",
+  "lo": 2373,
+  "hi": 2379,
+  "saved_master": 0,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 2424
+ },
+ {
+  "key": "r025:1",
+  "file": "src/engine.s",
+  "lo": 4822,
+  "hi": 4840,
+  "result": "stale"
+ },
+ {
+  "key": "r026:1",
+  "file": "src/engine.s",
+  "lo": 4828,
+  "hi": 4840,
+  "result": "stale"
+ },
+ {
+  "key": "r029:4",
+  "file": "src/logic.s",
+  "lo": 520,
+  "hi": 520,
+  "saved_master": 0,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 515
+ },
+ {
+  "key": "r049:7",
+  "file": "src/game.s",
+  "lo": 200,
+  "hi": 201,
+  "saved_master": 0,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 202
+ },
+ {
+  "key": "r050:1",
+  "file": "src/game.s",
+  "lo": 200,
+  "hi": 202,
+  "result": "stale"
+ },
+ {
+  "key": "r058:8",
+  "file": "modelb/src/display.s",
+  "lo": 305,
+  "hi": 307,
+  "result": "stale"
+ },
+ {
+  "key": "r059:0",
+  "file": "modelb/src/display.s",
+  "lo": 319,
+  "hi": 341,
+  "result": "stale"
+ },
+ {
+  "key": "r059:4",
+  "file": "modelb/src/display.s",
+  "lo": 424,
+  "hi": 435,
+  "result": "stale"
+ },
+ {
+  "key": "r062:8",
+  "file": "modelb/src/disc.s",
+  "lo": 91,
+  "hi": 318,
+  "result": "stale"
+ },
+ {
+  "key": "r065:7",
+  "file": "modelb/src/init.s",
+  "lo": 94,
+  "hi": 95,
+  "saved_master": 0,
+  "saved_modelb": -34,
+  "result": "bytes: Master +0, Model B -34"
+ },
+ {
+  "key": "r066:11",
+  "file": "modelb/src/ldprog.s",
+  "lo": 624,
+  "hi": 628,
+  "result": "noasm modelb: src/ldprog.s(599): Error: Symbol 'readpage' is undefined"
+ },
+ {
+  "key": "r066:4",
+  "file": "modelb/src/ldprog.s",
+  "lo": 161,
+  "hi": 165,
+  "result": "noasm modelb: src/ldprog.s(163): Error: Symbol 'readpage' is undefined"
+ },
+ {
+  "key": "r070:8",
+  "file": "modelb/src/ldprog.s",
+  "lo": 741,
+  "hi": 752,
+  "result": "stale"
+ },
+ {
+  "key": "r072:8",
+  "file": "modelb/src/loader.s",
+  "lo": 141,
+  "hi": 156,
+  "saved_master": 0,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 141
+ },
+ {
+  "key": "r073:11",
+  "file": "modelb/src/loader.s",
+  "lo": 212,
+  "hi": 221,
+  "saved_master": 0,
+  "saved_modelb": 6,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 200
+ },
+ {
+  "key": "r073:7",
+  "file": "modelb/src/loader.s",
+  "lo": 295,
+  "hi": 312,
+  "result": "stale"
+ },
+ {
+  "key": "r075:1",
+  "file": "modelb/src/loader.s",
+  "lo": 480,
+  "hi": 513,
+  "result": "stale"
+ },
+ {
+  "key": "r023:1",
+  "file": "src/engine.s",
+  "lo": 4297,
+  "hi": 4307,
+  "saved_master": 5,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 4305
+ },
+ {
+  "key": "r033:7",
+  "file": "src/logic.s",
+  "lo": 1142,
+  "hi": 1157,
+  "saved_master": 5,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1121
+ },
+ {
+  "key": "r035c:8",
+  "file": "src/logic.s",
+  "lo": 1425,
+  "hi": 1434,
+  "result": "stale"
+ },
+ {
+  "key": "r040:2",
+  "file": "src/logic.s",
+  "lo": 2190,
+  "hi": 2195,
+  "saved_master": 5,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 2208
+ },
+ {
+  "key": "r053:0",
+  "file": "src/menu.s",
+  "lo": 301,
+  "hi": 362,
+  "result": "stale"
+ },
+ {
+  "key": "r010:1",
+  "file": "src/engine.s",
+  "lo": 2068,
+  "hi": 2075,
+  "result": "stale"
+ },
+ {
+  "key": "r036c:1",
+  "file": "src/logic.s",
+  "lo": 1533,
+  "hi": 1538,
+  "saved_master": 2,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 1521
+ },
+ {
+  "key": "r001:5",
+  "file": "src/engine.s",
+  "lo": 612,
+  "hi": 626,
+  "saved_master": 1,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 3,
+  "line_now": 615
+ },
+ {
+  "key": "r045:12",
+  "file": "src/logic.s",
+  "lo": 2933,
+  "hi": 2941,
+  "result": "stale"
+ },
+ {
+  "key": "r051:7",
+  "file": "src/menu.s",
+  "lo": 132,
+  "hi": 132,
+  "result": "anon: 1 outside branch(es) retargeted"
+ },
+ {
+  "key": "r002:9",
+  "file": "src/engine.s",
+  "lo": 818,
+  "hi": 825,
+  "result": "stale"
+ },
+ {
+  "key": "r007:12",
+  "file": "src/engine.s",
+  "lo": 1636,
+  "hi": 1639,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1661
+ },
+ {
+  "key": "r034:5",
+  "file": "src/logic.s",
+  "lo": 1256,
+  "hi": 1262,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 8,
+  "line_now": 1237
+ },
+ {
+  "key": "r036d:6",
+  "file": "src/logic.s",
+  "lo": 1548,
+  "hi": 1551,
+  "result": "stale"
+ },
+ {
+  "key": "r041:5",
+  "file": "src/logic.s",
+  "lo": 2355,
+  "hi": 2356,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2364
+ },
+ {
+  "key": "r042:0",
+  "file": "src/logic.s",
+  "lo": 2355,
+  "hi": 2356,
+  "result": "stale"
+ },
+ {
+  "key": "r044:8",
+  "file": "src/logic.s",
+  "lo": 2809,
+  "hi": 2811,
+  "result": "stale"
+ },
+ {
+  "key": "r049:5",
+  "file": "src/game.s",
+  "lo": 172,
+  "hi": 187,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 7,
+  "line_now": 174
+ },
+ {
+  "key": "r059:7",
+  "file": "modelb/src/display.s",
+  "lo": 472,
+  "hi": 489,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 449
+ },
+ {
+  "key": "r062:1",
+  "file": "modelb/src/disc.s",
+  "lo": 222,
+  "hi": 226,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 219
+ },
+ {
+  "key": "r062:5",
+  "file": "modelb/src/disc.s",
+  "lo": 273,
+  "hi": 274,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 268
+ },
+ {
+  "key": "r063:3",
+  "file": "modelb/src/low.s",
+  "lo": 90,
+  "hi": 98,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 90
+ },
+ {
+  "key": "r066:0",
+  "file": "modelb/src/ldprog.s",
+  "lo": 84,
+  "hi": 99,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 84
+ },
+ {
+  "key": "r067:2",
+  "file": "modelb/src/ldprog.s",
+  "lo": 208,
+  "hi": 209,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 204
+ },
+ {
+  "key": "r067:5",
+  "file": "modelb/src/ldprog.s",
+  "lo": 227,
+  "hi": 241,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 220
+ },
+ {
+  "key": "r072:0",
+  "file": "modelb/src/loader.s",
+  "lo": 51,
+  "hi": 52,
+  "saved_master": 0,
+  "saved_modelb": 5,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 51
+ },
+ {
+  "key": "r051:8",
+  "file": "src/menu.s",
+  "lo": 139,
+  "hi": 180,
+  "result": "anon: 2 outside branch(es) retargeted"
+ },
+ {
+  "key": "r006:1",
+  "file": "src/engine.s",
+  "lo": 1411,
+  "hi": 1425,
+  "saved_master": 4,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 1418
+ },
+ {
+  "key": "r019:3",
+  "file": "src/engine.s",
+  "lo": 3632,
+  "hi": 3641,
+  "result": "stale"
+ },
+ {
+  "key": "r032:5",
+  "file": "src/logic.s",
+  "lo": 928,
+  "hi": 938,
+  "saved_master": 4,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 912
+ },
+ {
+  "key": "r032:7",
+  "file": "src/logic.s",
+  "lo": 955,
+  "hi": 965,
+  "saved_master": 4,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 931
+ },
+ {
+  "key": "r036a:1",
+  "file": "src/logic.s",
+  "lo": 1488,
+  "hi": 1497,
+  "saved_master": 4,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 1478
+ },
+ {
+  "key": "r036b:1",
+  "file": "src/logic.s",
+  "lo": 1488,
+  "hi": 1501,
+  "result": "stale"
+ },
+ {
+  "key": "r039:0",
+  "file": "src/logic.s",
+  "lo": 1872,
+  "hi": 1879,
+  "result": "stale"
+ },
+ {
+  "key": "r043:2",
+  "file": "src/logic.s",
+  "lo": 2555,
+  "hi": 2562,
+  "saved_master": 4,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 2557
+ },
+ {
+  "key": "r046:1",
+  "file": "src/logic.s",
+  "lo": 2969,
+  "hi": 2974,
+  "saved_master": 4,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2997
+ },
+ {
+  "key": "r053:4",
+  "file": "src/menu.s",
+  "lo": 410,
+  "hi": 412,
+  "saved_master": 4,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 426
+ },
+ {
+  "key": "r010:4",
+  "file": "src/engine.s",
+  "lo": 2092,
+  "hi": 2142,
+  "saved_master": 3,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 2131
+ },
+ {
+  "key": "r041:6",
+  "file": "src/logic.s",
+  "lo": 2369,
+  "hi": 2370,
+  "saved_master": 1,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 2370
+ },
+ {
+  "key": "r050:6",
+  "file": "src/game.s",
+  "lo": 257,
+  "hi": 257,
+  "saved_master": 3,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 280
+ },
+ {
+  "key": "r035b:2",
+  "file": "src/logic.s",
+  "lo": 1337,
+  "hi": 1339,
+  "saved_master": 2,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1315
+ },
+ {
+  "key": "r036d:7",
+  "file": "src/logic.s",
+  "lo": 1560,
+  "hi": 1560,
+  "result": "stale"
+ },
+ {
+  "key": "r045:11",
+  "file": "src/logic.s",
+  "lo": 2909,
+  "hi": 2912,
+  "saved_master": 2,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 2944
+ },
+ {
+  "key": "r050:7",
+  "file": "src/game.s",
+  "lo": 260,
+  "hi": 260,
+  "saved_master": 2,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 283
+ },
+ {
+  "key": "r054:6",
+  "file": "src/menu.s",
+  "lo": 668,
+  "hi": 680,
+  "result": "stale"
+ },
+ {
+  "key": "r001:3",
+  "file": "src/engine.s",
+  "lo": 596,
+  "hi": 598,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 599
+ },
+ {
+  "key": "r003:8",
+  "file": "src/engine.s",
+  "lo": 1024,
+  "hi": 1029,
+  "result": "stale"
+ },
+ {
+  "key": "r005:1",
+  "file": "src/engine.s",
+  "lo": 1210,
+  "hi": 1213,
+  "result": "stale"
+ },
+ {
+  "key": "r007:14",
+  "file": "src/engine.s",
+  "lo": 1655,
+  "hi": 1655,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 1680
+ },
+ {
+  "key": "r008:3",
+  "file": "src/engine.s",
+  "lo": 1699,
+  "hi": 1700,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 1728
+ },
+ {
+  "key": "r011:3",
+  "file": "src/engine.s",
+  "lo": 2295,
+  "hi": 2301,
+  "result": "anon: 2 outside branch(es) retargeted"
+ },
+ {
+  "key": "r013:2",
+  "file": "src/engine.s",
+  "lo": 2616,
+  "hi": 2616,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 2653
+ },
+ {
+  "key": "r016:2",
+  "file": "src/engine.s",
+  "lo": 3084,
+  "hi": 3091,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 8,
+  "line_now": 3120
+ },
+ {
+  "key": "r022:6",
+  "file": "src/engine.s",
+  "lo": 4231,
+  "hi": 4238,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 4266
+ },
+ {
+  "key": "r026:2",
+  "file": "src/engine.s",
+  "lo": 4829,
+  "hi": 4840,
+  "result": "stale"
+ },
+ {
+  "key": "r031:2",
+  "file": "src/logic.s",
+  "lo": 746,
+  "hi": 746,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 733
+ },
+ {
+  "key": "r042:9",
+  "file": "src/logic.s",
+  "lo": 2505,
+  "hi": 2505,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r043:8",
+  "file": "src/logic.s",
+  "lo": 2631,
+  "hi": 2632,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2644
+ },
+ {
+  "key": "r046:8",
+  "file": "src/logic.s",
+  "lo": 3060,
+  "hi": 3061,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 3097
+ },
+ {
+  "key": "r047:1",
+  "file": "src/logic.s",
+  "lo": 3096,
+  "hi": 3098,
+  "result": "stale"
+ },
+ {
+  "key": "r047:2",
+  "file": "src/logic.s",
+  "lo": 3100,
+  "hi": 3103,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3134
+ },
+ {
+  "key": "r047:4",
+  "file": "src/logic.s",
+  "lo": 3142,
+  "hi": 3144,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 3174
+ },
+ {
+  "key": "r049:4",
+  "file": "src/game.s",
+  "lo": 64,
+  "hi": 75,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 66
+ },
+ {
+  "key": "r049:6",
+  "file": "src/game.s",
+  "lo": 172,
+  "hi": 187,
+  "result": "stale"
+ },
+ {
+  "key": "r050:11",
+  "file": "src/game.s",
+  "lo": 302,
+  "hi": 302,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 319
+ },
+ {
+  "key": "r050:3",
+  "file": "src/game.s",
+  "lo": 220,
+  "hi": 225,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 244
+ },
+ {
+  "key": "r057:3",
+  "file": "modelb/src/display.s",
+  "lo": 213,
+  "hi": 214,
+  "result": "stale"
+ },
+ {
+  "key": "r058:12",
+  "file": "modelb/src/display.s",
+  "lo": 274,
+  "hi": 435,
+  "result": "stale"
+ },
+ {
+  "key": "r058:3",
+  "file": "modelb/src/display.s",
+  "lo": 213,
+  "hi": 214,
+  "result": "stale"
+ },
+ {
+  "key": "r059:11",
+  "file": "modelb/src/display.s",
+  "lo": 358,
+  "hi": 359,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 342
+ },
+ {
+  "key": "r066:5",
+  "file": "modelb/src/ldprog.s",
+  "lo": 171,
+  "hi": 174,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 171
+ },
+ {
+  "key": "r066:7",
+  "file": "modelb/src/ldprog.s",
+  "lo": 203,
+  "hi": 204,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 198
+ },
+ {
+  "key": "r066:8",
+  "file": "modelb/src/ldprog.s",
+  "lo": 210,
+  "hi": 211,
+  "result": "stale"
+ },
+ {
+  "key": "r066:9",
+  "file": "modelb/src/ldprog.s",
+  "lo": 245,
+  "hi": 246,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 232
+ },
+ {
+  "key": "r067:4",
+  "file": "modelb/src/ldprog.s",
+  "lo": 216,
+  "hi": 226,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 207
+ },
+ {
+  "key": "r067:8",
+  "file": "modelb/src/ldprog.s",
+  "lo": 263,
+  "hi": 287,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 248
+ },
+ {
+  "key": "r072:12",
+  "file": "modelb/src/loader.s",
+  "lo": 186,
+  "hi": 188,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 178
+ },
+ {
+  "key": "r073:0",
+  "file": "modelb/src/loader.s",
+  "lo": 165,
+  "hi": 180,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 157
+ },
+ {
+  "key": "r073:9",
+  "file": "modelb/src/loader.s",
+  "lo": 195,
+  "hi": 198,
+  "saved_master": 0,
+  "saved_modelb": 4,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 184
+ },
+ {
+  "key": "r074:9",
+  "file": "modelb/src/loader.s",
+  "lo": 505,
+  "hi": 513,
+  "result": "stale"
+ },
+ {
+  "key": "r013:0",
+  "file": "src/engine.s",
+  "lo": 2551,
+  "hi": 2574,
+  "result": "stale"
+ },
+ {
+  "key": "r003:0",
+  "file": "src/engine.s",
+  "lo": 916,
+  "hi": 916,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "gate: B lockstep L0 / B lockstep L12 / B lockstep L5 / B pix L0 / B pix L6 / M dmg L0 / M pix L3 / M pix L6 / M state L0 / M state L1 / M state L5"
+ },
+ {
+  "key": "r004:3",
+  "file": "src/engine.s",
+  "lo": 916,
+  "hi": 916,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "gate: B lockstep L0 / B lockstep L12 / B lockstep L5 / B pix L0 / B pix L6 / M dmg L0 / M pix L3 / M pix L6 / M state L0 / M state L1 / M state L5"
+ },
+ {
+  "key": "r006:3",
+  "file": "src/engine.s",
+  "lo": 1462,
+  "hi": 1465,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1471
+ },
+ {
+  "key": "r021:2",
+  "file": "src/engine.s",
+  "lo": 3949,
+  "hi": 3960,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3987
+ },
+ {
+  "key": "r025:2",
+  "file": "src/engine.s",
+  "lo": 4674,
+  "hi": 4696,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -4,
+  "line_now": 4691
+ },
+ {
+  "key": "r031:1",
+  "file": "src/logic.s",
+  "lo": 731,
+  "hi": 737,
+  "result": "stale"
+ },
+ {
+  "key": "r031:4",
+  "file": "src/logic.s",
+  "lo": 766,
+  "hi": 776,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -3,
+  "line_now": 757
+ },
+ {
+  "key": "r033:8",
+  "file": "src/logic.s",
+  "lo": 1153,
+  "hi": 1157,
+  "result": "stale"
+ },
+ {
+  "key": "r034:0",
+  "file": "src/logic.s",
+  "lo": 1154,
+  "hi": 1157,
+  "result": "stale"
+ },
+ {
+  "key": "r034:3",
+  "file": "src/logic.s",
+  "lo": 1233,
+  "hi": 1238,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1200
+ },
+ {
+  "key": "r036a:2",
+  "file": "src/logic.s",
+  "lo": 1436,
+  "hi": 1437,
+  "result": "stale"
+ },
+ {
+  "key": "r036a:3",
+  "file": "src/logic.s",
+  "lo": 1430,
+  "hi": 1432,
+  "result": "stale"
+ },
+ {
+  "key": "r038b:1",
+  "file": "src/logic.s",
+  "lo": 1810,
+  "hi": 1823,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 1808
+ },
+ {
+  "key": "r038b:2",
+  "file": "src/logic.s",
+  "lo": 1833,
+  "hi": 1837,
+  "result": "stale"
+ },
+ {
+  "key": "r038c:0",
+  "file": "src/logic.s",
+  "lo": 1814,
+  "hi": 1823,
+  "result": "stale"
+ },
+ {
+  "key": "r038c:1",
+  "file": "src/logic.s",
+  "lo": 1844,
+  "hi": 1853,
+  "result": "stale"
+ },
+ {
+  "key": "r039:3",
+  "file": "src/logic.s",
+  "lo": 1906,
+  "hi": 1912,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1913
+ },
+ {
+  "key": "r039:4",
+  "file": "src/logic.s",
+  "lo": 1916,
+  "hi": 1922,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1922
+ },
+ {
+  "key": "r039:7",
+  "file": "src/logic.s",
+  "lo": 2038,
+  "hi": 2153,
+  "result": "stale"
+ },
+ {
+  "key": "r040:3",
+  "file": "src/logic.s",
+  "lo": 2133,
+  "hi": 2141,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 2149
+ },
+ {
+  "key": "r041:7",
+  "file": "src/logic.s",
+  "lo": 2372,
+  "hi": 2372,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 2373
+ },
+ {
+  "key": "r044:12",
+  "file": "src/logic.s",
+  "lo": 2812,
+  "hi": 2814,
+  "result": "stale"
+ },
+ {
+  "key": "r045:2",
+  "file": "src/logic.s",
+  "lo": 2815,
+  "hi": 2818,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 2847
+ },
+ {
+  "key": "r048:3",
+  "file": "src/logic.s",
+  "lo": 3228,
+  "hi": 3232,
+  "result": "stale"
+ },
+ {
+  "key": "r053:9",
+  "file": "src/menu.s",
+  "lo": 489,
+  "hi": 492,
+  "saved_master": 3,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 510
+ },
+ {
+  "key": "r055:0",
+  "file": "src/menu.s",
+  "lo": 641,
+  "hi": 643,
+  "result": "stale"
+ },
+ {
+  "key": "r035c:1",
+  "file": "src/logic.s",
+  "lo": 1376,
+  "hi": 1377,
+  "result": "stale"
+ },
+ {
+  "key": "r037:15",
+  "file": "src/logic.s",
+  "lo": 1707,
+  "hi": 1709,
+  "saved_master": 2,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1693
+ },
+ {
+  "key": "r038a:2",
+  "file": "src/logic.s",
+  "lo": 1739,
+  "hi": 1746,
+  "saved_master": 2,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1724
+ },
+ {
+  "key": "r041:4",
+  "file": "src/logic.s",
+  "lo": 2343,
+  "hi": 2345,
+  "saved_master": 2,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2338
+ },
+ {
+  "key": "r043:11",
+  "file": "src/logic.s",
+  "lo": 2669,
+  "hi": 2671,
+  "saved_master": 2,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2706
+ },
+ {
+  "key": "r044:10",
+  "file": "src/logic.s",
+  "lo": 2683,
+  "hi": 2685,
+  "saved_master": 2,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2719
+ },
+ {
+  "key": "r044:11",
+  "file": "src/logic.s",
+  "lo": 2750,
+  "hi": 2752,
+  "result": "stale"
+ },
+ {
+  "key": "r044:9",
+  "file": "src/logic.s",
+  "lo": 2669,
+  "hi": 2671,
+  "result": "stale"
+ },
+ {
+  "key": "r045:9",
+  "file": "src/logic.s",
+  "lo": 2882,
+  "hi": 2886,
+  "saved_master": 2,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2918
+ },
+ {
+  "key": "r052:6",
+  "file": "src/menu.s",
+  "lo": 267,
+  "hi": 271,
+  "saved_master": 2,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 286
+ },
+ {
+  "key": "r002:12",
+  "file": "src/engine.s",
+  "lo": 866,
+  "hi": 869,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 7,
+  "line_now": 884
+ },
+ {
+  "key": "r003:10",
+  "file": "src/engine.s",
+  "lo": 1015,
+  "hi": 1132,
+  "result": "stale"
+ },
+ {
+  "key": "r007:15",
+  "file": "src/engine.s",
+  "lo": 1661,
+  "hi": 1662,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 1696
+ },
+ {
+  "key": "r007:6",
+  "file": "src/engine.s",
+  "lo": 1547,
+  "hi": 1553,
+  "result": "stale"
+ },
+ {
+  "key": "r007:9",
+  "file": "src/engine.s",
+  "lo": 1590,
+  "hi": 1596,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 1623
+ },
+ {
+  "key": "r008:1",
+  "file": "src/engine.s",
+  "lo": 1655,
+  "hi": 1655,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r008:10",
+  "file": "src/engine.s",
+  "lo": 1590,
+  "hi": 1596,
+  "result": "stale"
+ },
+ {
+  "key": "r008:2",
+  "file": "src/engine.s",
+  "lo": 1661,
+  "hi": 1662,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r012:0",
+  "file": "src/engine.s",
+  "lo": 2373,
+  "hi": 2379,
+  "result": "stale"
+ },
+ {
+  "key": "r021:6",
+  "file": "src/engine.s",
+  "lo": 3990,
+  "hi": 4002,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 4034
+ },
+ {
+  "key": "r024:5",
+  "file": "src/logic.s",
+  "lo": 442,
+  "hi": 443,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 442
+ },
+ {
+  "key": "r029:5",
+  "file": "src/logic.s",
+  "lo": 563,
+  "hi": 563,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 565
+ },
+ {
+  "key": "r029:6",
+  "file": "src/logic.s",
+  "lo": 579,
+  "hi": 579,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 586
+ },
+ {
+  "key": "r030:1",
+  "file": "src/logic.s",
+  "lo": 563,
+  "hi": 563,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r030:2",
+  "file": "src/logic.s",
+  "lo": 579,
+  "hi": 579,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r030:3",
+  "file": "src/logic.s",
+  "lo": 628,
+  "hi": 628,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 640
+ },
+ {
+  "key": "r030:5",
+  "file": "src/logic.s",
+  "lo": 649,
+  "hi": 649,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 661
+ },
+ {
+  "key": "r036b:2",
+  "file": "src/logic.s",
+  "lo": 1533,
+  "hi": 1536,
+  "result": "stale"
+ },
+ {
+  "key": "r036d:8",
+  "file": "src/logic.s",
+  "lo": 1611,
+  "hi": 1612,
+  "result": "stale"
+ },
+ {
+  "key": "r037:11",
+  "file": "src/logic.s",
+  "lo": 1658,
+  "hi": 1659,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1666
+ },
+ {
+  "key": "r037:12",
+  "file": "src/logic.s",
+  "lo": 1666,
+  "hi": 1667,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1674
+ },
+ {
+  "key": "r041:1",
+  "file": "src/logic.s",
+  "lo": 2267,
+  "hi": 2268,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 2264
+ },
+ {
+  "key": "r043:1",
+  "file": "src/logic.s",
+  "lo": 2522,
+  "hi": 2526,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2552
+ },
+ {
+  "key": "r050:0",
+  "file": "src/game.s",
+  "lo": 176,
+  "hi": 178,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r052:9",
+  "file": "src/menu.s",
+  "lo": 152,
+  "hi": 163,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 159
+ },
+ {
+  "key": "r058:4",
+  "file": "modelb/src/display.s",
+  "lo": 225,
+  "hi": 234,
+  "result": "stale"
+ },
+ {
+  "key": "r062:7",
+  "file": "modelb/src/disc.s",
+  "lo": 259,
+  "hi": 318,
+  "result": "stale"
+ },
+ {
+  "key": "r063:5",
+  "file": "src/engine.s",
+  "lo": 4560,
+  "hi": 4560,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 4585
+ },
+ {
+  "key": "r065:3",
+  "file": "modelb/src/init.s",
+  "lo": 80,
+  "hi": 80,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 71
+ },
+ {
+  "key": "r069:3",
+  "file": "modelb/src/ldprog.s",
+  "lo": 606,
+  "hi": 615,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 570
+ },
+ {
+  "key": "r070:0",
+  "file": "modelb/src/ldprog.s",
+  "lo": 596,
+  "hi": 602,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 560
+ },
+ {
+  "key": "r070:1",
+  "file": "modelb/src/ldprog.s",
+  "lo": 609,
+  "hi": 613,
+  "result": "stale"
+ },
+ {
+  "key": "r070:2",
+  "file": "modelb/src/ldprog.s",
+  "lo": 617,
+  "hi": 620,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 579
+ },
+ {
+  "key": "r072:1",
+  "file": "modelb/src/loader.s",
+  "lo": 57,
+  "hi": 61,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 56
+ },
+ {
+  "key": "r072:13",
+  "file": "modelb/src/loader.s",
+  "lo": 189,
+  "hi": 191,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 177
+ },
+ {
+  "key": "r072:4",
+  "file": "modelb/src/loader.s",
+  "lo": 79,
+  "hi": 80,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 77
+ },
+ {
+  "key": "r072:6",
+  "file": "modelb/src/loader.s",
+  "lo": 125,
+  "hi": 140,
+  "saved_master": 0,
+  "saved_modelb": 3,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 122
+ },
+ {
+  "key": "r073:2",
+  "file": "modelb/src/loader.s",
+  "lo": 189,
+  "hi": 191,
+  "result": "stale"
+ },
+ {
+  "key": "r002:4",
+  "file": "src/engine.s",
+  "lo": 752,
+  "hi": 784,
+  "saved_master": 3,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 759
+ },
+ {
+  "key": "r002:10",
+  "file": "src/engine.s",
+  "lo": 826,
+  "hi": 830,
+  "result": "stale"
+ },
+ {
+  "key": "r008:6",
+  "file": "src/engine.s",
+  "lo": 1727,
+  "hi": 1732,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1769
+ },
+ {
+  "key": "r009:3",
+  "file": "src/engine.s",
+  "lo": 1868,
+  "hi": 1874,
+  "result": "stale"
+ },
+ {
+  "key": "r009:4",
+  "file": "src/engine.s",
+  "lo": 1880,
+  "hi": 1883,
+  "result": "stale"
+ },
+ {
+  "key": "r016:5",
+  "file": "src/engine.s",
+  "lo": 3144,
+  "hi": 3151,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3195
+ },
+ {
+  "key": "r018:1",
+  "file": "src/engine.s",
+  "lo": 3421,
+  "hi": 3422,
+  "result": "stale"
+ },
+ {
+  "key": "r022:7",
+  "file": "src/engine.s",
+  "lo": 4235,
+  "hi": 4237,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4278
+ },
+ {
+  "key": "r025:3",
+  "file": "src/engine.s",
+  "lo": 4674,
+  "hi": 4696,
+  "result": "stale"
+ },
+ {
+  "key": "r027:2",
+  "file": "src/logic.s",
+  "lo": 66,
+  "hi": 66,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r027:3",
+  "file": "src/logic.s",
+  "lo": 93,
+  "hi": 99,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 105
+ },
+ {
+  "key": "r028:3",
+  "file": "src/logic.s",
+  "lo": 317,
+  "hi": 327,
+  "result": "stale"
+ },
+ {
+  "key": "r028:4",
+  "file": "src/logic.s",
+  "lo": 332,
+  "hi": 342,
+  "result": "stale"
+ },
+ {
+  "key": "r028:5",
+  "file": "src/logic.s",
+  "lo": 362,
+  "hi": 365,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 365
+ },
+ {
+  "key": "r029:2",
+  "file": "src/logic.s",
+  "lo": 485,
+  "hi": 489,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 488
+ },
+ {
+  "key": "r033:1",
+  "file": "src/logic.s",
+  "lo": 1020,
+  "hi": 1021,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1015
+ },
+ {
+  "key": "r034:6",
+  "file": "src/logic.s",
+  "lo": 1282,
+  "hi": 1283,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 1285
+ },
+ {
+  "key": "r035c:2",
+  "file": "src/logic.s",
+  "lo": 1378,
+  "hi": 1378,
+  "result": "stale"
+ },
+ {
+  "key": "r037:9",
+  "file": "src/logic.s",
+  "lo": 1651,
+  "hi": 1652,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1663
+ },
+ {
+  "key": "r038c:2",
+  "file": "src/logic.s",
+  "lo": 1830,
+  "hi": 1831,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 1852
+ },
+ {
+  "key": "r038c:3",
+  "file": "src/logic.s",
+  "lo": 1860,
+  "hi": 1861,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 1898
+ },
+ {
+  "key": "r038c:4",
+  "file": "src/logic.s",
+  "lo": 1834,
+  "hi": 1837,
+  "result": "stale"
+ },
+ {
+  "key": "r038c:5",
+  "file": "src/logic.s",
+  "lo": 1864,
+  "hi": 1867,
+  "result": "stale"
+ },
+ {
+  "key": "r039:5",
+  "file": "src/logic.s",
+  "lo": 1923,
+  "hi": 1924,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1963
+ },
+ {
+  "key": "r040:5",
+  "file": "src/logic.s",
+  "lo": 2193,
+  "hi": 2195,
+  "result": "stale"
+ },
+ {
+  "key": "r042:7",
+  "file": "src/logic.s",
+  "lo": 2445,
+  "hi": 2453,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2488
+ },
+ {
+  "key": "r042:8",
+  "file": "src/logic.s",
+  "lo": 2497,
+  "hi": 2497,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2539
+ },
+ {
+  "key": "r043:4",
+  "file": "src/logic.s",
+  "lo": 2593,
+  "hi": 2593,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2642
+ },
+ {
+  "key": "r044:13",
+  "file": "src/logic.s",
+  "lo": 2816,
+  "hi": 2818,
+  "result": "stale"
+ },
+ {
+  "key": "r045:10",
+  "file": "src/logic.s",
+  "lo": 2901,
+  "hi": 2902,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 2976
+ },
+ {
+  "key": "r045:4",
+  "file": "src/logic.s",
+  "lo": 2825,
+  "hi": 2832,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2903
+ },
+ {
+  "key": "r045:5",
+  "file": "src/logic.s",
+  "lo": 2837,
+  "hi": 2844,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2915
+ },
+ {
+  "key": "r046:5",
+  "file": "src/logic.s",
+  "lo": 3025,
+  "hi": 3026,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3100
+ },
+ {
+  "key": "r046:7",
+  "file": "src/logic.s",
+  "lo": 3055,
+  "hi": 3056,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3129
+ },
+ {
+  "key": "r047:5",
+  "file": "src/logic.s",
+  "lo": 3149,
+  "hi": 3150,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3223
+ },
+ {
+  "key": "r047:8",
+  "file": "src/logic.s",
+  "lo": 3196,
+  "hi": 3197,
+  "result": "stale"
+ },
+ {
+  "key": "r052:3",
+  "file": "src/menu.s",
+  "lo": 234,
+  "hi": 235,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 251
+ },
+ {
+  "key": "r052:4",
+  "file": "src/menu.s",
+  "lo": 238,
+  "hi": 239,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 254
+ },
+ {
+  "key": "r052:5",
+  "file": "src/menu.s",
+  "lo": 256,
+  "hi": 259,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 271
+ },
+ {
+  "key": "r053:6",
+  "file": "src/menu.s",
+  "lo": 438,
+  "hi": 446,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 453
+ },
+ {
+  "key": "r011:8",
+  "file": "src/engine.s",
+  "lo": 2384,
+  "hi": 2387,
+  "saved_master": 1,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2446
+ },
+ {
+  "key": "r012:1",
+  "file": "src/engine.s",
+  "lo": 2385,
+  "hi": 2387,
+  "result": "stale"
+ },
+ {
+  "key": "r042:11",
+  "file": "src/logic.s",
+  "lo": 2522,
+  "hi": 2524,
+  "result": "stale"
+ },
+ {
+  "key": "r001:7",
+  "file": "src/engine.s",
+  "lo": 708,
+  "hi": 714,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 718
+ },
+ {
+  "key": "r002:0",
+  "file": "src/engine.s",
+  "lo": 708,
+  "hi": 714,
+  "result": "stale"
+ },
+ {
+  "key": "r002:11",
+  "file": "src/engine.s",
+  "lo": 855,
+  "hi": 855,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 9,
+  "line_now": 857
+ },
+ {
+  "key": "r002:2",
+  "file": "src/engine.s",
+  "lo": 744,
+  "hi": 745,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 750
+ },
+ {
+  "key": "r002:6",
+  "file": "src/engine.s",
+  "lo": 794,
+  "hi": 801,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 801
+ },
+ {
+  "key": "r003:5",
+  "file": "src/engine.s",
+  "lo": 974,
+  "hi": 989,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 987
+ },
+ {
+  "key": "r005:3",
+  "file": "src/engine.s",
+  "lo": 1268,
+  "hi": 1268,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1293
+ },
+ {
+  "key": "r005:4",
+  "file": "src/engine.s",
+  "lo": 1276,
+  "hi": 1276,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1301
+ },
+ {
+  "key": "r005:5",
+  "file": "src/engine.s",
+  "lo": 1289,
+  "hi": 1289,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 1314
+ },
+ {
+  "key": "r006:0",
+  "file": "src/engine.s",
+  "lo": 1406,
+  "hi": 1406,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1435
+ },
+ {
+  "key": "r007:8",
+  "file": "src/engine.s",
+  "lo": 1582,
+  "hi": 1589,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 9,
+  "line_now": 1626
+ },
+ {
+  "key": "r008:5",
+  "file": "src/engine.s",
+  "lo": 1718,
+  "hi": 1718,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1779
+ },
+ {
+  "key": "r009:2",
+  "file": "src/engine.s",
+  "lo": 1843,
+  "hi": 1843,
+  "result": "stale"
+ },
+ {
+  "key": "r009:7",
+  "file": "src/engine.s",
+  "lo": 1948,
+  "hi": 1952,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 2013
+ },
+ {
+  "key": "r010:5",
+  "file": "src/engine.s",
+  "lo": 1948,
+  "hi": 1952,
+  "result": "stale"
+ },
+ {
+  "key": "r012:3",
+  "file": "src/engine.s",
+  "lo": 2499,
+  "hi": 2499,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2587
+ },
+ {
+  "key": "r016:4",
+  "file": "src/engine.s",
+  "lo": 3130,
+  "hi": 3130,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3203
+ },
+ {
+  "key": "r018:3",
+  "file": "src/engine.s",
+  "lo": 3475,
+  "hi": 3480,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 3545
+ },
+ {
+  "key": "r019:5",
+  "file": "src/engine.s",
+  "lo": 3665,
+  "hi": 3667,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3732
+ },
+ {
+  "key": "r019:7",
+  "file": "src/engine.s",
+  "lo": 3687,
+  "hi": 3687,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3754
+ },
+ {
+  "key": "r022:1",
+  "file": "src/engine.s",
+  "lo": 4199,
+  "hi": 4199,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 4260
+ },
+ {
+  "key": "r023:2",
+  "file": "src/engine.s",
+  "lo": 4212,
+  "hi": 4238,
+  "result": "stale"
+ },
+ {
+  "key": "r032:3",
+  "file": "src/logic.s",
+  "lo": 892,
+  "hi": 892,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 898
+ },
+ {
+  "key": "r032:9",
+  "file": "src/logic.s",
+  "lo": 1013,
+  "hi": 1014,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 6,
+  "line_now": 1008
+ },
+ {
+  "key": "r033:0",
+  "file": "src/logic.s",
+  "lo": 1013,
+  "hi": 1014,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r035a:1",
+  "file": "src/logic.s",
+  "lo": 1337,
+  "hi": 1337,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r036c:0",
+  "file": "src/logic.s",
+  "lo": 1525,
+  "hi": 1525,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1544
+ },
+ {
+  "key": "r036c:3",
+  "file": "src/logic.s",
+  "lo": 1560,
+  "hi": 1560,
+  "result": "stale"
+ },
+ {
+  "key": "r037:7",
+  "file": "src/logic.s",
+  "lo": 1628,
+  "hi": 1629,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 7,
+  "line_now": 1639
+ },
+ {
+  "key": "r038c:7",
+  "file": "src/logic.s",
+  "lo": 1802,
+  "hi": 1802,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 1836
+ },
+ {
+  "key": "r038d:1",
+  "file": "src/logic.s",
+  "lo": 1888,
+  "hi": 1888,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1947
+ },
+ {
+  "key": "r038d:2",
+  "file": "src/logic.s",
+  "lo": 1891,
+  "hi": 1891,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1950
+ },
+ {
+  "key": "r039:1",
+  "file": "src/logic.s",
+  "lo": 1888,
+  "hi": 1888,
+  "result": "stale"
+ },
+ {
+  "key": "r039:2",
+  "file": "src/logic.s",
+  "lo": 1891,
+  "hi": 1891,
+  "result": "stale"
+ },
+ {
+  "key": "r040:4",
+  "file": "src/logic.s",
+  "lo": 2034,
+  "hi": 2034,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 9,
+  "line_now": 2018
+ },
+ {
+  "key": "r042:12",
+  "file": "src/logic.s",
+  "lo": 2526,
+  "hi": 2526,
+  "result": "stale"
+ },
+ {
+  "key": "r045:7",
+  "file": "src/logic.s",
+  "lo": 2860,
+  "hi": 2860,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2964
+ },
+ {
+  "key": "r046:11",
+  "file": "src/logic.s",
+  "lo": 3103,
+  "hi": 3103,
+  "result": "stale"
+ },
+ {
+  "key": "r047:10",
+  "file": "src/logic.s",
+  "lo": 3270,
+  "hi": 3272,
+  "result": "stale"
+ },
+ {
+  "key": "r050:14",
+  "file": "src/game.s",
+  "lo": 376,
+  "hi": 380,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 398
+ },
+ {
+  "key": "r050:4",
+  "file": "src/game.s",
+  "lo": 236,
+  "hi": 236,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 265
+ },
+ {
+  "key": "r052:2",
+  "file": "src/menu.s",
+  "lo": 226,
+  "hi": 226,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 243
+ },
+ {
+  "key": "r055:5",
+  "file": "src/menu.s",
+  "lo": 682,
+  "hi": 694,
+  "result": "stale"
+ },
+ {
+  "key": "r057:0",
+  "file": "modelb/src/display.s",
+  "lo": 91,
+  "hi": 107,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 91
+ },
+ {
+  "key": "r059:10",
+  "file": "modelb/src/display.s",
+  "lo": 335,
+  "hi": 335,
+  "result": "stale"
+ },
+ {
+  "key": "r059:2",
+  "file": "modelb/src/display.s",
+  "lo": 406,
+  "hi": 406,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 390
+ },
+ {
+  "key": "r059:6",
+  "file": "modelb/src/display.s",
+  "lo": 460,
+  "hi": 465,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 437
+ },
+ {
+  "key": "r061:1",
+  "file": "modelb/src/disc.s",
+  "lo": 153,
+  "hi": 154,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 150
+ },
+ {
+  "key": "r061:2",
+  "file": "modelb/src/disc.s",
+  "lo": 203,
+  "hi": 204,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 199
+ },
+ {
+  "key": "r061:3",
+  "file": "modelb/src/disc.s",
+  "lo": 224,
+  "hi": 225,
+  "result": "stale"
+ },
+ {
+  "key": "r061:4",
+  "file": "modelb/src/disc.s",
+  "lo": 47,
+  "hi": 48,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 47
+ },
+ {
+  "key": "r061:5",
+  "file": "modelb/src/disc.s",
+  "lo": 67,
+  "hi": 68,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 66
+ },
+ {
+  "key": "r061:6",
+  "file": "modelb/src/disc.s",
+  "lo": 74,
+  "hi": 75,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 72
+ },
+ {
+  "key": "r062:4",
+  "file": "modelb/src/disc.s",
+  "lo": 255,
+  "hi": 256,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 245
+ },
+ {
+  "key": "r062:6",
+  "file": "modelb/src/disc.s",
+  "lo": 275,
+  "hi": 284,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 263
+ },
+ {
+  "key": "r063:0",
+  "file": "modelb/src/low.s",
+  "lo": 17,
+  "hi": 49,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 17
+ },
+ {
+  "key": "r063:1",
+  "file": "modelb/src/low.s",
+  "lo": 68,
+  "hi": 69,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 66
+ },
+ {
+  "key": "r063:4",
+  "file": "modelb/src/low.s",
+  "lo": 100,
+  "hi": 120,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 94
+ },
+ {
+  "key": "r064:0",
+  "file": "modelb/src/banks.s",
+  "lo": 121,
+  "hi": 122,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 121
+ },
+ {
+  "key": "r064:1",
+  "file": "modelb/src/banks.s",
+  "lo": 139,
+  "hi": 140,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 138
+ },
+ {
+  "key": "r065:6",
+  "file": "modelb/src/init.s",
+  "lo": 92,
+  "hi": 92,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 83
+ },
+ {
+  "key": "r067:1",
+  "file": "modelb/src/ldprog.s",
+  "lo": 203,
+  "hi": 204,
+  "result": "stale"
+ },
+ {
+  "key": "r067:10",
+  "file": "modelb/src/ldprog.s",
+  "lo": 304,
+  "hi": 307,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 288
+ },
+ {
+  "key": "r067:6",
+  "file": "modelb/src/ldprog.s",
+  "lo": 245,
+  "hi": 246,
+  "result": "stale"
+ },
+ {
+  "key": "r067:7",
+  "file": "modelb/src/ldprog.s",
+  "lo": 257,
+  "hi": 260,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 242
+ },
+ {
+  "key": "r068:2",
+  "file": "modelb/src/ldprog.s",
+  "lo": 424,
+  "hi": 425,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 392
+ },
+ {
+  "key": "r070:4",
+  "file": "modelb/src/ldprog.s",
+  "lo": 658,
+  "hi": 665,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 607
+ },
+ {
+  "key": "r070:5",
+  "file": "modelb/src/ldprog.s",
+  "lo": 689,
+  "hi": 692,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 638
+ },
+ {
+  "key": "r072:10",
+  "file": "modelb/src/loader.s",
+  "lo": 164,
+  "hi": 164,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 153
+ },
+ {
+  "key": "r072:3",
+  "file": "modelb/src/loader.s",
+  "lo": 69,
+  "hi": 71,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 67
+ },
+ {
+  "key": "r072:5",
+  "file": "modelb/src/loader.s",
+  "lo": 89,
+  "hi": 90,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 85
+ },
+ {
+  "key": "r073:13",
+  "file": "modelb/src/loader.s",
+  "lo": 349,
+  "hi": 354,
+  "result": "stale"
+ },
+ {
+  "key": "r073:14",
+  "file": "modelb/src/loader.s",
+  "lo": 362,
+  "hi": 363,
+  "result": "stale"
+ },
+ {
+  "key": "r073:3",
+  "file": "modelb/src/loader.s",
+  "lo": 240,
+  "hi": 241,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 211
+ },
+ {
+  "key": "r074:10",
+  "file": "modelb/src/loader.s",
+  "lo": 349,
+  "hi": 354,
+  "result": "stale"
+ },
+ {
+  "key": "r074:11",
+  "file": "modelb/src/loader.s",
+  "lo": 355,
+  "hi": 356,
+  "result": "stale"
+ },
+ {
+  "key": "r074:12",
+  "file": "modelb/src/loader.s",
+  "lo": 361,
+  "hi": 363,
+  "result": "stale"
+ },
+ {
+  "key": "r074:13",
+  "file": "modelb/src/loader.s",
+  "lo": 366,
+  "hi": 367,
+  "result": "stale"
+ },
+ {
+  "key": "r074:15",
+  "file": "modelb/src/loader.s",
+  "lo": 442,
+  "hi": 445,
+  "result": "stale"
+ },
+ {
+  "key": "r074:16",
+  "file": "modelb/src/loader.s",
+  "lo": 459,
+  "hi": 461,
+  "result": "stale"
+ },
+ {
+  "key": "r075:2",
+  "file": "modelb/src/loader.s",
+  "lo": 517,
+  "hi": 518,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 456
+ },
+ {
+  "key": "r075:3",
+  "file": "modelb/src/loader.s",
+  "lo": 551,
+  "hi": 552,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 490
+ },
+ {
+  "key": "r050:13",
+  "file": "src/game.s",
+  "lo": 315,
+  "hi": 347,
+  "saved_master": 13,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 337
+ },
+ {
+  "key": "r051:5",
+  "file": "src/menu.s",
+  "lo": 76,
+  "hi": 86,
+  "saved_master": 6,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 11,
+  "line_now": 83
+ },
+ {
+  "key": "r037:16",
+  "file": "src/logic.s",
+  "lo": 1711,
+  "hi": 1717,
+  "saved_master": 2,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1734
+ },
+ {
+  "key": "r000:3",
+  "file": "src/engine.s",
+  "lo": 548,
+  "hi": 550,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 551
+ },
+ {
+  "key": "r001:1",
+  "file": "src/engine.s",
+  "lo": 548,
+  "hi": 550,
+  "result": "stale"
+ },
+ {
+  "key": "r001:2",
+  "file": "src/engine.s",
+  "lo": 590,
+  "hi": 592,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 592
+ },
+ {
+  "key": "r001:4",
+  "file": "src/engine.s",
+  "lo": 603,
+  "hi": 610,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 608
+ },
+ {
+  "key": "r002:7",
+  "file": "src/engine.s",
+  "lo": 806,
+  "hi": 809,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 811
+ },
+ {
+  "key": "r003:3",
+  "file": "src/engine.s",
+  "lo": 957,
+  "hi": 959,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 968
+ },
+ {
+  "key": "r006:2",
+  "file": "src/engine.s",
+  "lo": 1460,
+  "hi": 1460,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1484
+ },
+ {
+  "key": "r007:11",
+  "file": "src/engine.s",
+  "lo": 1631,
+  "hi": 1631,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1675
+ },
+ {
+  "key": "r008:7",
+  "file": "src/engine.s",
+  "lo": 1769,
+  "hi": 1770,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1827
+ },
+ {
+  "key": "r009:5",
+  "file": "src/engine.s",
+  "lo": 1898,
+  "hi": 1899,
+  "result": "stale"
+ },
+ {
+  "key": "r009:6",
+  "file": "src/engine.s",
+  "lo": 1911,
+  "hi": 1912,
+  "result": "stale"
+ },
+ {
+  "key": "r013:4",
+  "file": "src/engine.s",
+  "lo": 2648,
+  "hi": 2649,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2714
+ },
+ {
+  "key": "r016:3",
+  "file": "src/engine.s",
+  "lo": 3094,
+  "hi": 3099,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3162
+ },
+ {
+  "key": "r019:4",
+  "file": "src/engine.s",
+  "lo": 3659,
+  "hi": 3663,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3721
+ },
+ {
+  "key": "r019:6",
+  "file": "src/engine.s",
+  "lo": 3681,
+  "hi": 3681,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3742
+ },
+ {
+  "key": "r021:3",
+  "file": "src/engine.s",
+  "lo": 3974,
+  "hi": 3974,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 4032
+ },
+ {
+  "key": "r022:4",
+  "file": "src/engine.s",
+  "lo": 4132,
+  "hi": 4132,
+  "result": "stale"
+ },
+ {
+  "key": "r029:0",
+  "file": "src/logic.s",
+  "lo": 422,
+  "hi": 423,
+  "result": "stale"
+ },
+ {
+  "key": "r037:6",
+  "file": "src/logic.s",
+  "lo": 1626,
+  "hi": 1627,
+  "result": "stale"
+ },
+ {
+  "key": "r041:3",
+  "file": "src/logic.s",
+  "lo": 2330,
+  "hi": 2330,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2392
+ },
+ {
+  "key": "r042:1",
+  "file": "src/logic.s",
+  "lo": 2358,
+  "hi": 2358,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2419
+ },
+ {
+  "key": "r042:2",
+  "file": "src/logic.s",
+  "lo": 2369,
+  "hi": 2369,
+  "result": "stale"
+ },
+ {
+  "key": "r042:3",
+  "file": "src/logic.s",
+  "lo": 2372,
+  "hi": 2372,
+  "result": "stale"
+ },
+ {
+  "key": "r043:5",
+  "file": "src/logic.s",
+  "lo": 2599,
+  "hi": 2599,
+  "saved_master": -1,
+  "saved_modelb": -1,
+  "result": "bytes: Master -1, Model B -1"
+ },
+ {
+  "key": "r043:7",
+  "file": "src/logic.s",
+  "lo": 2626,
+  "hi": 2626,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2699
+ },
+ {
+  "key": "r044:14",
+  "file": "src/logic.s",
+  "lo": 2777,
+  "hi": 2785,
+  "result": "stale"
+ },
+ {
+  "key": "r045:0",
+  "file": "src/logic.s",
+  "lo": 2798,
+  "hi": 2805,
+  "result": "stale"
+ },
+ {
+  "key": "r046:3",
+  "file": "src/logic.s",
+  "lo": 2991,
+  "hi": 2993,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3092
+ },
+ {
+  "key": "r046:4",
+  "file": "src/logic.s",
+  "lo": 3009,
+  "hi": 3011,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "gate: M pix L6"
+ },
+ {
+  "key": "r049:2",
+  "file": "src/game.s",
+  "lo": 50,
+  "hi": 52,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 52
+ },
+ {
+  "key": "r049:3",
+  "file": "src/game.s",
+  "lo": 57,
+  "hi": 59,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 58
+ },
+ {
+  "key": "r051:2",
+  "file": "src/menu.s",
+  "lo": 37,
+  "hi": 38,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 49
+ },
+ {
+  "key": "r051:6",
+  "file": "src/menu.s",
+  "lo": 100,
+  "hi": 102,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 118
+ },
+ {
+  "key": "r052:7",
+  "file": "src/menu.s",
+  "lo": 276,
+  "hi": 277,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 300
+ },
+ {
+  "key": "r053:2",
+  "file": "src/menu.s",
+  "lo": 354,
+  "hi": 362,
+  "result": "stale"
+ },
+ {
+  "key": "r053:3",
+  "file": "src/menu.s",
+  "lo": 379,
+  "hi": 380,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 399
+ },
+ {
+  "key": "r053:5",
+  "file": "src/menu.s",
+  "lo": 420,
+  "hi": 422,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 445
+ },
+ {
+  "key": "r053:8",
+  "file": "src/menu.s",
+  "lo": 486,
+  "hi": 488,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 509
+ },
+ {
+  "key": "r055:1",
+  "file": "src/menu.s",
+  "lo": 646,
+  "hi": 646,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 653
+ },
+ {
+  "key": "r055:2",
+  "file": "src/menu.s",
+  "lo": 654,
+  "hi": 654,
+  "saved_master": 1,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 661
+ },
+ {
+  "key": "r001:6",
+  "file": "src/engine.s",
+  "lo": 653,
+  "hi": 657,
+  "result": "noasm master: src/engine.s(661): Error: ':' expected | src/engine.s(661): Error: Unexpected trailing garbage characters | src/engine.s(662): Error: Unexpected trailing garbage characters | src/engine.s(662): Error: '.S' is not a recognized control command | src/engine.s(667): Error: Unexpected trailing garbage ch"
+ },
+ {
+  "key": "r003:2",
+  "file": "src/engine.s",
+  "lo": 955,
+  "hi": 955,
+  "result": "stale"
+ },
+ {
+  "key": "r003:4",
+  "file": "src/engine.s",
+  "lo": 973,
+  "hi": 973,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 983
+ },
+ {
+  "key": "r005:2",
+  "file": "src/engine.s",
+  "lo": 1242,
+  "hi": 1244,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 1264
+ },
+ {
+  "key": "r005:6",
+  "file": "src/engine.s",
+  "lo": 1293,
+  "hi": 1293,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1324
+ },
+ {
+  "key": "r005:7",
+  "file": "src/engine.s",
+  "lo": 1296,
+  "hi": 1296,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 1327
+ },
+ {
+  "key": "r005:8",
+  "file": "src/engine.s",
+  "lo": 1321,
+  "hi": 1322,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1356
+ },
+ {
+  "key": "r007:1",
+  "file": "src/engine.s",
+  "lo": 1513,
+  "hi": 1514,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 1554
+ },
+ {
+  "key": "r007:10",
+  "file": "src/engine.s",
+  "lo": 1598,
+  "hi": 1599,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 1655
+ },
+ {
+  "key": "r007:3",
+  "file": "src/engine.s",
+  "lo": 1531,
+  "hi": 1531,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1588
+ },
+ {
+  "key": "r007:7",
+  "file": "src/engine.s",
+  "lo": 1564,
+  "hi": 1565,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 1618
+ },
+ {
+  "key": "r008:4",
+  "file": "src/engine.s",
+  "lo": 1714,
+  "hi": 1714,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1788
+ },
+ {
+  "key": "r009:0",
+  "file": "src/engine.s",
+  "lo": 1788,
+  "hi": 1790,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "gate: B pix L0 / B pix L6"
+ },
+ {
+  "key": "r011:5",
+  "file": "src/engine.s",
+  "lo": 2345,
+  "hi": 2346,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2449
+ },
+ {
+  "key": "r012:4",
+  "file": "src/engine.s",
+  "lo": 2503,
+  "hi": 2505,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2603
+ },
+ {
+  "key": "r013:3",
+  "file": "src/engine.s",
+  "lo": 2619,
+  "hi": 2619,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2700
+ },
+ {
+  "key": "r015:8",
+  "file": "src/engine.s",
+  "lo": 3040,
+  "hi": 3042,
+  "result": "stale"
+ },
+ {
+  "key": "r021:4",
+  "file": "src/engine.s",
+  "lo": 3979,
+  "hi": 3979,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 4052
+ },
+ {
+  "key": "r021:8",
+  "file": "src/engine.s",
+  "lo": 4060,
+  "hi": 4063,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 4134
+ },
+ {
+  "key": "r021:9",
+  "file": "src/engine.s",
+  "lo": 4087,
+  "hi": 4087,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 4161
+ },
+ {
+  "key": "r022:8",
+  "file": "src/engine.s",
+  "lo": 4087,
+  "hi": 4087,
+  "result": "stale"
+ },
+ {
+  "key": "r024:6",
+  "file": "src/engine.s",
+  "lo": 4563,
+  "hi": 4567,
+  "result": "noasm modelb: ../src/engine.s(4135): Error: Symbol 'init_maprows' is undefined"
+ },
+ {
+  "key": "r026:3",
+  "file": "src/engine.s",
+  "lo": 4835,
+  "hi": 4837,
+  "result": "stale"
+ },
+ {
+  "key": "r031:3",
+  "file": "src/logic.s",
+  "lo": 765,
+  "hi": 765,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 777
+ },
+ {
+  "key": "r031:5",
+  "file": "src/logic.s",
+  "lo": 777,
+  "hi": 777,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 786
+ },
+ {
+  "key": "r031:6",
+  "file": "src/logic.s",
+  "lo": 780,
+  "hi": 780,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 789
+ },
+ {
+  "key": "r031:8",
+  "file": "src/logic.s",
+  "lo": 816,
+  "hi": 816,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 824
+ },
+ {
+  "key": "r032:1",
+  "file": "src/logic.s",
+  "lo": 869,
+  "hi": 869,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 875
+ },
+ {
+  "key": "r032:2",
+  "file": "src/logic.s",
+  "lo": 882,
+  "hi": 882,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 888
+ },
+ {
+  "key": "r032:4",
+  "file": "src/logic.s",
+  "lo": 908,
+  "hi": 908,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 914
+ },
+ {
+  "key": "r033:2",
+  "file": "src/logic.s",
+  "lo": 1048,
+  "hi": 1049,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1048
+ },
+ {
+  "key": "r033:3",
+  "file": "src/logic.s",
+  "lo": 1055,
+  "hi": 1056,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1055
+ },
+ {
+  "key": "r033:4",
+  "file": "src/logic.s",
+  "lo": 1068,
+  "hi": 1069,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1068
+ },
+ {
+  "key": "r033:5",
+  "file": "src/logic.s",
+  "lo": 1090,
+  "hi": 1091,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1090
+ },
+ {
+  "key": "r033:6",
+  "file": "src/logic.s",
+  "lo": 1101,
+  "hi": 1102,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1101
+ },
+ {
+  "key": "r035b:3",
+  "file": "src/logic.s",
+  "lo": 1358,
+  "hi": 1358,
+  "result": "stale"
+ },
+ {
+  "key": "r035c:4",
+  "file": "src/logic.s",
+  "lo": 1393,
+  "hi": 1393,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1394
+ },
+ {
+  "key": "r036c:4",
+  "file": "src/logic.s",
+  "lo": 1566,
+  "hi": 1566,
+  "result": "stale"
+ },
+ {
+  "key": "r037:10",
+  "file": "src/logic.s",
+  "lo": 1654,
+  "hi": 1655,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1678
+ },
+ {
+  "key": "r037:14",
+  "file": "src/logic.s",
+  "lo": 1690,
+  "hi": 1691,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1714
+ },
+ {
+  "key": "r037:17",
+  "file": "src/logic.s",
+  "lo": 1727,
+  "hi": 1728,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1750
+ },
+ {
+  "key": "r037:18",
+  "file": "src/logic.s",
+  "lo": 1729,
+  "hi": 1730,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1752
+ },
+ {
+  "key": "r037:19",
+  "file": "src/logic.s",
+  "lo": 1731,
+  "hi": 1732,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1754
+ },
+ {
+  "key": "r037:20",
+  "file": "src/logic.s",
+  "lo": 1743,
+  "hi": 1744,
+  "result": "stale"
+ },
+ {
+  "key": "r037:21",
+  "file": "src/logic.s",
+  "lo": 1753,
+  "hi": 1754,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1775
+ },
+ {
+  "key": "r037:22",
+  "file": "src/logic.s",
+  "lo": 1755,
+  "hi": 1756,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1777
+ },
+ {
+  "key": "r037:23",
+  "file": "src/logic.s",
+  "lo": 1757,
+  "hi": 1758,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1779
+ },
+ {
+  "key": "r037:24",
+  "file": "src/logic.s",
+  "lo": 1761,
+  "hi": 1762,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1783
+ },
+ {
+  "key": "r037:3",
+  "file": "src/logic.s",
+  "lo": 1579,
+  "hi": 1580,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1586
+ },
+ {
+  "key": "r037:5",
+  "file": "src/logic.s",
+  "lo": 1623,
+  "hi": 1624,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1626
+ },
+ {
+  "key": "r038a:0",
+  "file": "src/logic.s",
+  "lo": 1730,
+  "hi": 1730,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1786
+ },
+ {
+  "key": "r038a:1",
+  "file": "src/logic.s",
+  "lo": 1732,
+  "hi": 1732,
+  "result": "stale"
+ },
+ {
+  "key": "r038a:3",
+  "file": "src/logic.s",
+  "lo": 1754,
+  "hi": 1754,
+  "result": "stale"
+ },
+ {
+  "key": "r038a:4",
+  "file": "src/logic.s",
+  "lo": 1756,
+  "hi": 1756,
+  "result": "stale"
+ },
+ {
+  "key": "r038a:5",
+  "file": "src/logic.s",
+  "lo": 1758,
+  "hi": 1758,
+  "result": "stale"
+ },
+ {
+  "key": "r038a:6",
+  "file": "src/logic.s",
+  "lo": 1762,
+  "hi": 1762,
+  "result": "stale"
+ },
+ {
+  "key": "r038a:7",
+  "file": "src/logic.s",
+  "lo": 1764,
+  "hi": 1764,
+  "result": "stale"
+ },
+ {
+  "key": "r042:5",
+  "file": "src/logic.s",
+  "lo": 2399,
+  "hi": 2401,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 7,
+  "line_now": 2467
+ },
+ {
+  "key": "r044:15",
+  "file": "src/logic.s",
+  "lo": 2711,
+  "hi": 2713,
+  "result": "stale"
+ },
+ {
+  "key": "r044:16",
+  "file": "src/logic.s",
+  "lo": 2726,
+  "hi": 2728,
+  "result": "stale"
+ },
+ {
+  "key": "r045:6",
+  "file": "src/logic.s",
+  "lo": 2848,
+  "hi": 2848,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2959
+ },
+ {
+  "key": "r046:6",
+  "file": "src/logic.s",
+  "lo": 3032,
+  "hi": 3032,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3138
+ },
+ {
+  "key": "r050:12",
+  "file": "src/game.s",
+  "lo": 312,
+  "hi": 312,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 332
+ },
+ {
+  "key": "r051:1",
+  "file": "src/menu.s",
+  "lo": 33,
+  "hi": 33,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 45
+ },
+ {
+  "key": "r051:3",
+  "file": "src/menu.s",
+  "lo": 42,
+  "hi": 42,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 54
+ },
+ {
+  "key": "r053:1",
+  "file": "src/menu.s",
+  "lo": 342,
+  "hi": 342,
+  "result": "stale"
+ },
+ {
+  "key": "r057:1",
+  "file": "modelb/src/display.s",
+  "lo": 188,
+  "hi": 190,
+  "result": "stale"
+ },
+ {
+  "key": "r057:2",
+  "file": "modelb/src/display.s",
+  "lo": 199,
+  "hi": 201,
+  "result": "stale"
+ },
+ {
+  "key": "r058:1",
+  "file": "modelb/src/display.s",
+  "lo": 188,
+  "hi": 188,
+  "result": "stale"
+ },
+ {
+  "key": "r058:10",
+  "file": "modelb/src/display.s",
+  "lo": 309,
+  "hi": 317,
+  "result": "stale"
+ },
+ {
+  "key": "r058:2",
+  "file": "modelb/src/display.s",
+  "lo": 199,
+  "hi": 199,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "gate: B lockstep L0 / B lockstep L12 / B lockstep L5 / B pix L0 / B pix L6"
+ },
+ {
+  "key": "r058:5",
+  "file": "modelb/src/display.s",
+  "lo": 247,
+  "hi": 248,
+  "result": "stale"
+ },
+ {
+  "key": "r058:6",
+  "file": "modelb/src/display.s",
+  "lo": 255,
+  "hi": 263,
+  "result": "stale"
+ },
+ {
+  "key": "r058:7",
+  "file": "modelb/src/display.s",
+  "lo": 277,
+  "hi": 277,
+  "result": "stale"
+ },
+ {
+  "key": "r059:12",
+  "file": "modelb/src/display.s",
+  "lo": 384,
+  "hi": 385,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 368
+ },
+ {
+  "key": "r059:14",
+  "file": "modelb/src/display.s",
+  "lo": 515,
+  "hi": 517,
+  "result": "stale"
+ },
+ {
+  "key": "r059:3",
+  "file": "modelb/src/display.s",
+  "lo": 413,
+  "hi": 414,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 396
+ },
+ {
+  "key": "r059:5",
+  "file": "modelb/src/display.s",
+  "lo": 437,
+  "hi": 442,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 405
+ },
+ {
+  "key": "r059:8",
+  "file": "modelb/src/display.s",
+  "lo": 492,
+  "hi": 493,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 464
+ },
+ {
+  "key": "r060:0",
+  "file": "modelb/src/display.s",
+  "lo": 492,
+  "hi": 493,
+  "result": "stale"
+ },
+ {
+  "key": "r060:2",
+  "file": "modelb/src/display.s",
+  "lo": 529,
+  "hi": 529,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 498
+ },
+ {
+  "key": "r062:0",
+  "file": "modelb/src/disc.s",
+  "lo": 190,
+  "hi": 192,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 183
+ },
+ {
+  "key": "r062:2",
+  "file": "modelb/src/disc.s",
+  "lo": 230,
+  "hi": 232,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 220
+ },
+ {
+  "key": "r062:3",
+  "file": "modelb/src/disc.s",
+  "lo": 245,
+  "hi": 251,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 235
+ },
+ {
+  "key": "r064:2",
+  "file": "modelb/src/banks.s",
+  "lo": 162,
+  "hi": 167,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 161
+ },
+ {
+  "key": "r066:1",
+  "file": "modelb/src/ldprog.s",
+  "lo": 104,
+  "hi": 107,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 104
+ },
+ {
+  "key": "r066:3",
+  "file": "modelb/src/ldprog.s",
+  "lo": 149,
+  "hi": 150,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 148
+ },
+ {
+  "key": "r067:9",
+  "file": "modelb/src/ldprog.s",
+  "lo": 289,
+  "hi": 296,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 271
+ },
+ {
+  "key": "r068:3",
+  "file": "modelb/src/ldprog.s",
+  "lo": 438,
+  "hi": 438,
+  "saved_master": 0,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 404
+ },
+ {
+  "key": "r068:4",
+  "file": "modelb/src/ldprog.s",
+  "lo": 476,
+  "hi": 476,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 442
+ },
+ {
+  "key": "r068:7",
+  "file": "modelb/src/ldprog.s",
+  "lo": 375,
+  "hi": 383,
+  "result": "stale"
+ },
+ {
+  "key": "r069:0",
+  "file": "modelb/src/ldprog.s",
+  "lo": 476,
+  "hi": 476,
+  "result": "stale"
+ },
+ {
+  "key": "r069:2",
+  "file": "modelb/src/ldprog.s",
+  "lo": 601,
+  "hi": 602,
+  "result": "stale"
+ },
+ {
+  "key": "r069:4",
+  "file": "modelb/src/ldprog.s",
+  "lo": 617,
+  "hi": 620,
+  "result": "stale"
+ },
+ {
+  "key": "r070:7",
+  "file": "modelb/src/ldprog.s",
+  "lo": 734,
+  "hi": 735,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 676
+ },
+ {
+  "key": "r071:0",
+  "file": "modelb/src/ldprog.s",
+  "lo": 733,
+  "hi": 735,
+  "result": "stale"
+ },
+ {
+  "key": "r072:11",
+  "file": "modelb/src/loader.s",
+  "lo": 165,
+  "hi": 180,
+  "result": "stale"
+ },
+ {
+  "key": "r072:2",
+  "file": "modelb/src/loader.s",
+  "lo": 66,
+  "hi": 66,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 64
+ },
+ {
+  "key": "r072:7",
+  "file": "modelb/src/loader.s",
+  "lo": 135,
+  "hi": 136,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 125
+ },
+ {
+  "key": "r073:1",
+  "file": "modelb/src/loader.s",
+  "lo": 168,
+  "hi": 180,
+  "result": "stale"
+ },
+ {
+  "key": "r073:12",
+  "file": "modelb/src/loader.s",
+  "lo": 228,
+  "hi": 228,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 198
+ },
+ {
+  "key": "r073:6",
+  "file": "modelb/src/loader.s",
+  "lo": 294,
+  "hi": 294,
+  "saved_master": 0,
+  "saved_modelb": 1,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 252
+ },
+ {
+  "key": "r074:14",
+  "file": "modelb/src/loader.s",
+  "lo": 320,
+  "hi": 321,
+  "result": "stale"
+ },
+ {
+  "key": "r074:17",
+  "file": "modelb/src/loader.s",
+  "lo": 477,
+  "hi": 479,
+  "result": "stale"
+ },
+ {
+  "key": "r075:0",
+  "file": "modelb/src/loader.s",
+  "lo": 478,
+  "hi": 478,
+  "result": "stale"
+ },
+ {
+  "key": "r015:6",
+  "file": "src/engine.s",
+  "lo": 2984,
+  "hi": 3008,
+  "saved_master": 44,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -24,
+  "line_now": 3064
+ },
+ {
+  "key": "r024:3",
+  "file": "src/engine.s",
+  "lo": 4568,
+  "hi": 4604,
+  "saved_master": 32,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -8,
+  "line_now": 4605
+ },
+ {
+  "key": "r014:8",
+  "file": "src/engine.s",
+  "lo": 2785,
+  "hi": 2983,
+  "saved_master": 23,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -9,
+  "line_now": 2865
+ },
+ {
+  "key": "r015:5",
+  "file": "src/engine.s",
+  "lo": 2942,
+  "hi": 2983,
+  "result": "stale"
+ },
+ {
+  "key": "r056:0",
+  "file": "src/main.s",
+  "lo": 27,
+  "hi": 52,
+  "saved_master": 22,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -11,
+  "line_now": 27
+ },
+ {
+  "key": "r015:2",
+  "file": "src/engine.s",
+  "lo": 2842,
+  "hi": 2928,
+  "result": "stale"
+ },
+ {
+  "key": "r014:0",
+  "file": "src/engine.s",
+  "lo": 2705,
+  "hi": 2727,
+  "result": "anon: 1 outside branch(es) retargeted"
+ },
+ {
+  "key": "r013:6",
+  "file": "src/engine.s",
+  "lo": 2699,
+  "hi": 2733,
+  "saved_master": 11,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 2779
+ },
+ {
+  "key": "r015:0",
+  "file": "src/engine.s",
+  "lo": 2821,
+  "hi": 2826,
+  "saved_master": 11,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 2893
+ },
+ {
+  "key": "r015:3",
+  "file": "src/engine.s",
+  "lo": 2875,
+  "hi": 2896,
+  "saved_master": 9,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -6,
+  "line_now": 2936
+ },
+ {
+  "key": "r020:0",
+  "file": "src/engine.s",
+  "lo": 3779,
+  "hi": 3899,
+  "saved_master": 9,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3806
+ },
+ {
+  "key": "r014:4",
+  "file": "src/engine.s",
+  "lo": 2819,
+  "hi": 2843,
+  "result": "stale"
+ },
+ {
+  "key": "r014:5",
+  "file": "src/engine.s",
+  "lo": 2847,
+  "hi": 2873,
+  "result": "stale"
+ },
+ {
+  "key": "r023:8",
+  "file": "src/engine.s",
+  "lo": 4442,
+  "hi": 4455,
+  "saved_master": 7,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4455
+ },
+ {
+  "key": "r000:2",
+  "file": "src/engine.s",
+  "lo": 507,
+  "hi": 509,
+  "saved_master": 11,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 506
+ },
+ {
+  "key": "r014:6",
+  "file": "src/engine.s",
+  "lo": 2874,
+  "hi": 2896,
+  "result": "stale"
+ },
+ {
+  "key": "r011:2",
+  "file": "src/engine.s",
+  "lo": 2181,
+  "hi": 2182,
+  "saved_master": 4,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 4,
+  "line_now": 2271
+ },
+ {
+  "key": "r015:1",
+  "file": "src/engine.s",
+  "lo": 2835,
+  "hi": 2836,
+  "saved_master": 4,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2906
+ },
+ {
+  "key": "r019:0",
+  "file": "src/engine.s",
+  "lo": 3577,
+  "hi": 3584,
+  "saved_master": 4,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3609
+ },
+ {
+  "key": "r023:4",
+  "file": "src/engine.s",
+  "lo": 4353,
+  "hi": 4360,
+  "saved_master": 4,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 4368
+ },
+ {
+  "key": "r048:2",
+  "file": "src/menu.s",
+  "lo": 669,
+  "hi": 676,
+  "result": "stale"
+ },
+ {
+  "key": "r015:4",
+  "file": "src/engine.s",
+  "lo": 2933,
+  "hi": 2941,
+  "saved_master": 3,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2988
+ },
+ {
+  "key": "r018:9",
+  "file": "src/engine.s",
+  "lo": 3577,
+  "hi": 3578,
+  "result": "stale"
+ },
+ {
+  "key": "r020:1",
+  "file": "src/engine.s",
+  "lo": 3896,
+  "hi": 3898,
+  "saved_master": 3,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 3923
+ },
+ {
+  "key": "r021:1",
+  "file": "src/engine.s",
+  "lo": 3896,
+  "hi": 3898,
+  "result": "stale"
+ },
+ {
+  "key": "r052:8",
+  "file": "src/menu.s",
+  "lo": 170,
+  "hi": 178,
+  "saved_master": 3,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 186
+ },
+ {
+  "key": "r018:5",
+  "file": "src/engine.s",
+  "lo": 3531,
+  "hi": 3531,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3562
+ },
+ {
+  "key": "r018:7",
+  "file": "src/engine.s",
+  "lo": 3562,
+  "hi": 3562,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "gate: M pix L3 / M pix L6"
+ },
+ {
+  "key": "r018:8",
+  "file": "src/engine.s",
+  "lo": 3563,
+  "hi": 3576,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3594
+ },
+ {
+  "key": "r022:9",
+  "file": "src/engine.s",
+  "lo": 4248,
+  "hi": 4254,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4272
+ },
+ {
+  "key": "r023:3",
+  "file": "src/engine.s",
+  "lo": 4248,
+  "hi": 4254,
+  "result": "stale"
+ },
+ {
+  "key": "r023:7",
+  "file": "src/engine.s",
+  "lo": 4417,
+  "hi": 4420,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 4427
+ },
+ {
+  "key": "r023:9",
+  "file": "src/engine.s",
+  "lo": 4475,
+  "hi": 4476,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4482
+ },
+ {
+  "key": "r024:0",
+  "file": "src/engine.s",
+  "lo": 4475,
+  "hi": 4476,
+  "result": "stale"
+ },
+ {
+  "key": "r024:1",
+  "file": "src/engine.s",
+  "lo": 4477,
+  "hi": 4494,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4483
+ },
+ {
+  "key": "r024:4",
+  "file": "src/engine.s",
+  "lo": 4618,
+  "hi": 4635,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4613
+ },
+ {
+  "key": "r047:6",
+  "file": "src/logic.s",
+  "lo": 3172,
+  "hi": 3178,
+  "result": "stale"
+ },
+ {
+  "key": "r054:1",
+  "file": "src/menu.s",
+  "lo": 503,
+  "hi": 505,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 523
+ },
+ {
+  "key": "r056:1",
+  "file": "src/main.s",
+  "lo": 59,
+  "hi": 59,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 48
+ },
+ {
+  "key": "r056:2",
+  "file": "src/main.s",
+  "lo": 69,
+  "hi": 79,
+  "saved_master": 2,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 58
+ },
+ {
+  "key": "r002:5",
+  "file": "src/engine.s",
+  "lo": 777,
+  "hi": 780,
+  "result": "stale"
+ },
+ {
+  "key": "r003:6",
+  "file": "src/engine.s",
+  "lo": 996,
+  "hi": 996,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 1007
+ },
+ {
+  "key": "r003:7",
+  "file": "src/engine.s",
+  "lo": 1000,
+  "hi": 1000,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 2,
+  "line_now": 1011
+ },
+ {
+  "key": "r007:0",
+  "file": "src/engine.s",
+  "lo": 1498,
+  "hi": 1507,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 1,
+  "line_now": 1541
+ },
+ {
+  "key": "r013:5",
+  "file": "src/engine.s",
+  "lo": 2687,
+  "hi": 2687,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2774
+ },
+ {
+  "key": "r014:1",
+  "file": "src/engine.s",
+  "lo": 2769,
+  "hi": 2769,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 2851
+ },
+ {
+  "key": "r014:2",
+  "file": "src/engine.s",
+  "lo": 2799,
+  "hi": 2801,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2878
+ },
+ {
+  "key": "r014:3",
+  "file": "src/engine.s",
+  "lo": 2811,
+  "hi": 2813,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2889
+ },
+ {
+  "key": "r014:7",
+  "file": "src/engine.s",
+  "lo": 2902,
+  "hi": 2904,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 2961
+ },
+ {
+  "key": "r015:9",
+  "file": "src/engine.s",
+  "lo": 3058,
+  "hi": 3060,
+  "result": "stale"
+ },
+ {
+  "key": "r016:1",
+  "file": "src/engine.s",
+  "lo": 3049,
+  "hi": 3060,
+  "result": "stale"
+ },
+ {
+  "key": "r018:4",
+  "file": "src/engine.s",
+  "lo": 3498,
+  "hi": 3505,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -2,
+  "line_now": 3529
+ },
+ {
+  "key": "r018:6",
+  "file": "src/engine.s",
+  "lo": 3535,
+  "hi": 3535,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 3564
+ },
+ {
+  "key": "r021:7",
+  "file": "src/engine.s",
+  "lo": 4015,
+  "hi": 4016,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 5,
+  "line_now": 4037
+ },
+ {
+  "key": "r023:5",
+  "file": "src/engine.s",
+  "lo": 4401,
+  "hi": 4403,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4414
+ },
+ {
+  "key": "r023:6",
+  "file": "src/engine.s",
+  "lo": 4399,
+  "hi": 4400,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": 0,
+  "line_now": 4412
+ },
+ {
+  "key": "r025:4",
+  "file": "src/engine.s",
+  "lo": 4619,
+  "hi": 4624,
+  "result": "stale"
+ },
+ {
+  "key": "r049:0",
+  "file": "src/game.s",
+  "lo": 17,
+  "hi": 19,
+  "saved_master": 1,
+  "saved_modelb": 0,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 17
+ },
+ {
+  "key": "r021:5",
+  "file": "src/engine.s",
+  "lo": 3980,
+  "hi": 3984,
+  "saved_master": 2,
+  "saved_modelb": 2,
+  "result": "applied",
+  "delta_lines": -1,
+  "line_now": 4001
+ },
+ {
+  "key": "r028:1",
+  "file": "src/logic.s",
+  "lo": 1121,
+  "hi": 1121,
+  "saved_master": 0,
+  "saved_modelb": 0,
+  "result": "bytes: Master +0, Model B +0"
+ },
+ {
+  "key": "r032:8",
+  "file": "src/logic.s",
+  "lo": 966,
+  "hi": 981,
+  "saved_master": 7,
+  "saved_modelb": 7,
+  "result": "applied",
+  "delta_lines": -5,
+  "line_now": 961
+ },
+ {
+  "key": "r030:0",
+  "file": "src/logic.s",
+  "lo": 584,
+  "hi": 786,
+  "result": "stale"
+ }
+]

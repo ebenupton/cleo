@@ -24,29 +24,18 @@ start:
         sta $0D02
         ; the LOW overlay (render helpers) comes first in the file after the main code:
         ; copy it into the NMI page after our JMP at $0D00
-        lda #<__MAIN_LAST__
-        sta ptr
-        lda #>__MAIN_LAST__
-        sta ptr+1
-        ldy #0
-:       lda (ptr),y
-        sta __LOW_START__,y
-        iny
-        cpy #<(__LOW_LAST__ - __LOW_START__)
+        ldy #<(__LOW_LAST__ - __LOW_START__)
+:       lda __MAIN_LAST__-1,y       ; top down, so Y leaves at 0
+        sta __LOW_START__-1,y
+        dey
         bne :-
         ; LOW2 follows LOW in the file; its home ($0300) is VDU workspace until MODE 1 has
-        ; been selected and the screen clear wipes the file image, so stage it in SPRREC
-        lda #<(__MAIN_LAST__ + __LOW_LAST__ - __LOW_START__)
-        sta ptr
-        lda #>(__MAIN_LAST__ + __LOW_LAST__ - __LOW_START__)
-        sta ptr+1
-        ldy #0                      ; two whole pages (SPRREC is 640 bytes; the overrun
-:       lda (ptr),y                 ; past LOW2's end lands in MASKTAB, rebuilt below)
+        ; been selected and the screen clear wipes the file image, so stage it in SPRREC:
+        ; two whole pages (SPRREC is 640 bytes; the overrun past LOW2's end lands in
+        ; MASKTAB, rebuilt below)
+:       lda __MAIN_LAST__ + __LOW_LAST__ - __LOW_START__,y
         sta SPRREC,y
-        iny
-        bne :-
-        inc ptr+1
-:       lda (ptr),y
+        lda __MAIN_LAST__ + __LOW_LAST__ - __LOW_START__ + 256,y
         sta SPRREC+256,y
         iny
         bne :-
@@ -56,7 +45,7 @@ start:
         lda #1
         jsr OSWRCH
         sei
-        ldy #0
+
 :       lda SPRREC,y
         sta __LOW2_START__,y
         lda SPRREC+256,y
@@ -69,13 +58,13 @@ start:
         stz ptr                     ; <$0400 is 0
         lda #>$0400
         sta ptr+1
-        lda #0
+        ldx #$0D - >$0400           ; pages $04..$0C
+        tya                         ; Y = 0 from the copy above
 :       sta (ptr),y
         iny
         bne :-
         inc ptr+1
-        ldx ptr+1
-        cpx #$0D
+        dex
         bne :-
         jsr blank_palette
         jsr disc_init

@@ -48,27 +48,24 @@ start:
         ; ---- the controller: the DFS ROM's version string.  Acorn's 8271 DFSs are
         ; 0.90 and 1.20 (whose title is "DFS,NET" with no version at all); the 1770
         ; DFSs are 2.xx.  Hold W or I at boot to say so instead.
-        lda #0
-        sta fdc
+
         lda #$81
         ldx #$DE                    ; W (negative INKEY code)
         ldy #$FF
         jsr OSBYTE
-        cpx #$FF
+        inx                         ; X = $FF: W held
         bne :+
-        lda #1
-        sta fdc
+        inc fdc                     ; 0 (above) -> 1, Z clear
         bne @fdcdone
 :       lda #$81
         ldx #$DA                    ; I
         ldy #$FF
         jsr OSBYTE
-        cpx #$FF
+        inx                         ; X = $FF: I held
         beq @fdcdone                ; 8271, as set
         ldx #15
 @rom:   lda ROMTYPE,x               ; the MOS's ROM type table: service ROMs only
-        and #$80
-        beq @nextrom
+        bpl @nextrom
         stx ROMSELC
         stx ROMSEL
         ldy #0
@@ -76,8 +73,7 @@ start:
         beq :+
         iny
         bne :-
-:       lda $8009,y                 ; the version follows its terminator
-        lda $800A,y
+:       lda $800A,y                 ; the version follows its terminator
         cmp #'2'
         bne @nextrom
         lda $8009                   ; only a DFS: the title starts "DFS" (Acorn's)
@@ -86,8 +82,7 @@ start:
         lda $800A
         cmp #'F'
         bne @nextrom
-        lda #1
-        sta fdc
+        inc fdc                     ; 0 -> 1
         ldx #0
 @nextrom:
         dex
@@ -124,84 +119,63 @@ start:
         sei
         lda BUF
         sta npieces
-        lda #<(BUF+1)               ; the table
-        sta ztab
-        lda #>(BUF+1)
-        sta ztab+1
-        lda npieces                 ; the first piece follows the table: BUF + 1 + 5n
-        asl
+        asl                         ; the first piece follows the table: BUF + 1 + 5n
         asl
         adc npieces
-        sec                         ; (+1)
-        adc #<BUF
+        adc #<(BUF+1)               ; (+1: C clear, 5n < 256)
         sta zsrc
         lda #>BUF
         adc #0
         sta zsrc+1
-@piece: ldy #0
-        lda (ztab),y
-        sta pbank
-        iny
-        lda (ztab),y
-        sta zdst
-        iny
-        lda (ztab),y
-        sta zdst+1
-        iny
-        lda (ztab),y
-        sta plen
-        iny
+        lda #<(BUF+1)               ; the table
+        sta ztab
+        lda #>(BUF+1)
+        sta ztab+1
+@piece: ldy #4                      ; backwards: A ends as the bank, Y as 0
         lda (ztab),y
         sta plen+1
-        lda pbank                   ; the piece's bank is the code's number (4..7):
+        dey
+        lda (ztab),y
+        sta plen
+        dey
+        lda (ztab),y
+        sta zdst+1
+        dey
+        lda (ztab),y
+        sta zdst
+        dey
+        lda (ztab),y                ; the piece's bank is the code's number (4..7):
         beq :+                      ; the socket it goes to is map's (main RAM: no paging)
-        tax
-        lda map-4,x
-        sta ROMSELC
-        sta ROMSEL
-        tax
-        jsr wrx                     ; and the write bank, on a board that has one
-:       ldy #0
-@cp:    lda plen
-        ora plen+1
+        jsr selbank                 ; and the write bank, on a board that has one
+:                                   ; (Y = 0: the table read ends there)
+@cp:    lda plen                    ; the length, counted down first
+        bne :+
+        lda plen+1
         beq @cpdone
+        dec plen+1
+:       dec plen
         lda (zsrc),y
         sta (zdst),y
         inc zsrc
         bne :+
         inc zsrc+1
 :       inc zdst
-        bne :+
+        bne @cp
         inc zdst+1
-:       lda plen
-        bne :+
-        dec plen+1
-:       dec plen
-        jmp @cp
+        bne @cp                     ; (zdst never wraps)
 @cpdone:
         lda ztab
         clc
         adc #5
         sta ztab
-        bcc :+
-        inc ztab+1
-:       dec npieces
-        beq :+
-        jmp @piece
-:
+        dec npieces
+        bne @piece
         ; ---- the bank patches: (bank, address) x n, $FF -- zsrc is on them, the pieces
         ; being done.  The byte is a bank number in its low nibble (bit 7 on one of them
         ; is the Master's ANDY flag, which the Model B never takes: kept as it is).
-@fix:   ldy #0
-        lda (zsrc),y
-        cmp #$FF
-        beq @fixdone
-        tax
-        lda map-4,x
-        sta ROMSELC
-        sta ROMSEL
-        tax
-        jsr wrx
+@fix:   lda (zsrc),y                ; (Y = 0 here: the copy loop and this loop leave it so)
+        bmi @fixdone                ; the $FF (a bank is 4..7)
+        jsr selbank
         iny
         lda (zsrc),y
         sta zdst
@@ -210,14 +184,10 @@ start:
         sta zdst+1
         ldy #0
         lda (zdst),y
-        pha
         and #$0F
         tax
-        lda map-4,x
-        sta ztmp
-        pla
-        and #$F0
-        ora ztmp
+        eor (zdst),y                ; the high nibble, kept
+        ora map-4,x
         sta (zdst),y
         lda zsrc
         clc
@@ -225,7 +195,7 @@ start:
         sta zsrc
         bcc @fix
         inc zsrc+1
-        jmp @fix
+        bne @fix                    ; (zsrc never wraps)
 @fixdone:
         ; ---- the write-bank stores: (bank, address, kind) x n, $FF, after the $FF above.
         ; Each is a `sta $FE30` in the code, a harmless second write of the bank on a
@@ -237,16 +207,10 @@ start:
         inc zsrc+1
 @wfix:  ldy #0
         lda (zsrc),y
-        cmp #$FF
-        beq @wfixdone
+        bmi @wfixdone               ; the $FF (a bank is 4..7)
         ldx board
         beq @wnext                  ; plain: as assembled
-        tax
-        lda map-4,x
-        sta ROMSELC
-        sta ROMSEL
-        tax
-        jsr wrx
+        jsr selbank
         iny
         lda (zsrc),y
         sta zdst
@@ -291,14 +255,11 @@ start:
         sta zsrc
         bcc @wfix
         inc zsrc+1
-        jmp @wfix
+        bne @wfix                   ; (zsrc never wraps)
 @wfixdone:
         ; ---- the driver's configuration, the banks themselves and the board, into bank 7
-        lda map+3
-        sta ROMSELC
-        sta ROMSEL
         ldx map+3
-        jsr wrx
+        jsr selwr
         lda fdc
         sta dsk_type
         lda drive
@@ -315,10 +276,20 @@ start:
 ; ---------------------------------------------------------------- the write bank
 ; X = a socket: make it the one a store reaches, on a board that chooses that apart
 ; from ROMSEL.  A is destroyed.
+; A = a bank's code number (4..7): page its socket for reading and writing.
+; X = the socket, A destroyed.
+selbank:
+        tax
+        lda map-4,x
+        tax                         ; and into selwr
+; X = a socket: page it for reading, and writing (into wrx)
+selwr:  stx ROMSELC
+        stx ROMSEL
 wrx:    lda board
         beq @r
-        cmp #BOARD_SOLIDISK
-        beq @s
+        .assert BOARD_WATFORD = 1 && BOARD_SOLIDISK = 2, error, "wrx tells the boards by bit 0"
+        lsr
+        bcc @s
         sta WRSEL_WATFORD,x         ; Watford: the address says which, the value nothing
 @r:     rts
 @s:     stx WRSEL_SOLIDISK          ; Solidisk: port B bits 0-3 (DDRB was set by findram)
@@ -348,45 +319,34 @@ findram:
         sei
         lda #BOARD_STD
         sta board
+        sta bestb                   ; (plain wins a tie)
         jsr @count
-        sta best                    ; (plain wins a tie)
-        lda #BOARD_STD
-        sta bestb
-        lda #BOARD_WATFORD
-        sta board
+        sta best
+        .assert BOARD_WATFORD = BOARD_STD + 1 && BOARD_SOLIDISK = BOARD_WATFORD + 1, error, "findram steps board up"
+        inc board                   ; BOARD_WATFORD
         jsr @count
         cmp best
         bcc :+
         beq :+
         sta best
-        lda #BOARD_WATFORD
-        sta bestb
+        inc bestb                   ; BOARD_WATFORD
 :       lda #$0F                    ; Solidisk: port B bits 0-3 as outputs
         sta $FE62
-        lda #BOARD_SOLIDISK
-        sta board
+        inc board                   ; BOARD_SOLIDISK
         jsr @count
         cmp best
-        bcc :+
         beq :+
-        sta best
-        lda #BOARD_SOLIDISK
-        sta bestb
+        bcs @classify               ; Solidisk found the most: board and port B stay
 :       lda bestb
         sta board
-        cmp #BOARD_SOLIDISK         ; not a Solidisk: give the user port back
-        beq @classify
-        lda #0
+        lda #0                      ; not a Solidisk: give the user port back
         sta $FE62
 @classify:
         ldx #15
-@b:     stx ROMSELC
-        stx ROMSEL
-        jsr wrx
-        lda #$FF                    ; not RAM until proven
+@b:     lda #$FF                    ; not RAM until proven
         sta score,x
-        jsr @flip
-        bcc @bnext
+        jsr @selflip
+        bne @bnext
         lda ROMTYPE,x               ; a ROM the MOS is using
         beq :+
         lda #2
@@ -416,9 +376,7 @@ findram:
         ldx #15
 @sig:   lda score,x
         bmi @snext
-        stx ROMSELC
-        stx ROMSEL
-        jsr wrx
+        jsr selwr
         lda $8007
         sta saved,x
         txa
@@ -439,13 +397,11 @@ findram:
         sta score,x                 ; keeps it (still to be restored: not $FF)
 @cnext: dex
         bpl @chk
-        ldx #0                      ; restored in the reverse order of the saving, so
-@res:   lda score,x                 ; a chain of aliases unwinds to its first byte
-        cmp #$FF
+        inx                         ; X = 0 (from $FF): restored in the reverse order of
+@res:   ldy score,x                 ; the saving, so a chain of aliases unwinds to its
+        iny                         ; first byte ($FF: not RAM)
         beq @rnext
-        stx ROMSELC
-        stx ROMSEL
-        jsr wrx
+        jsr selwr
         lda saved,x
         sta $8007
 @rnext: inx
@@ -457,8 +413,7 @@ findram:
         cli
         ; the choice: the lowest sockets of class 0, then of class 1, then of class 2
         ldy #0
-        lda #0
-        sta want
+        sty want
 @cls:   ldx #0
 @pick:  lda score,x
         cmp want
@@ -475,47 +430,36 @@ findram:
         lda want
         cmp #3
         bne @cls
-        sec                         ; fewer than four
-        rts
-@found: clc
-        rts
-        ; --- A = how many of the 16 banks take a write, the board being as set
+        rts                         ; fewer than four (C = 1: A = 3)
+        ; --- A = how many of the 16 banks take a write, the board being as set (the
+        ; bank is left paged: interrupts are off until findram restores oldbank)
 @count: lda #0
         sta want                    ; (want is free until the choice below)
         ldx #15
-:       stx ROMSELC
-        stx ROMSEL
-        jsr wrx
-        jsr @flip
-        bcc :+
+:       jsr @selflip
+        bne :+
         inc want
 :       dex
         bpl :--
-        lda oldbank
-        sta ROMSELC
-        sta ROMSEL
         lda want
         rts
-        ; --- C = 1 if the bank paged (and selected for writing) takes a write: flip bit 0
+        ; --- Z = 1 if bank X, paged and selected for writing, takes a write: flip bit 0
         ; of the ROM type byte, look, put it back
+@selflip:
+        jsr selwr
 @flip:  lda $8006
         tay
         eor #1
         sta $8006
         cmp $8006
-        php
-        sty $8006
-        plp
-        bne @no
-        sec
-        rts
-@no:    clc
+        sty $8006                   ; (a store leaves the flags)
+@found: clc                         ; (the choice's exit: C = 0; Z is @flip's)
         rts
 
 ; not enough: say what was found and return to the MOS (MODE 7 still: this runs
 ; before the mode change)
-noram:  ldx #0
-:       lda msg1,x
+noram:                              ; X = 16 (findram's fewer-than-four exit)
+:       lda msg1-16,x
         beq :+
         jsr OSWRCH
         inx
@@ -548,8 +492,7 @@ noram:  ldx #0
 @dnext: inx
         cpx #16
         bne @d
-        ldx #0
-:       lda msg2,x
+:       lda msg2-16,x               ; X = 16 from the loop above
         beq :+
         jsr OSWRCH
         inx

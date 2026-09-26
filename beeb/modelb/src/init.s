@@ -8,42 +8,35 @@
         .segment "LGCENT"           ; bank 7, $8100: the entry vector
         .assert * = BANKCODE, error, "the loader jumps to BANKCODE"
 ; A bank cannot page itself out and carry on: the instruction after the switch is
-; read from the new bank.  So the switch runs from main RAM -- the bottom of the
-; stack page, which nothing has used yet.
-entry:  ldx #@stubend-@stub-1
-:       lda @stub,x
-        sta $0100,x
-        dex
-        bpl :-
-        jmp $0100
-@stub:  bankimm lda, BANK_MAP, BANK_LVL
+; read from the new bank.  So each switch lands on its continuation: entry's, at
+; $8040 in bank 7, on start6 at $8047 in bank 6; bank 6's to7, the same seven bytes
+; at $8040 there, on the jmp start7 at $8047 in bank 7.
+entry:  bankimm lda, BANK_MAP, BANK_LVL
         sta ROMSEL_CPY
-        sta ROMSEL
-        jmp start6
-@stubend:
+        sta ROMSEL                  ; the next fetch is bank 6's start6
+        .assert * = BANKCODE + 7, error, "entry's switch must end where start6 begins"
+        jmp start7                  ; bank 6's to7 lands here, in bank 7
 
         .segment "MAPLO"            ; bank 6
         .import __LOWCODE_SIZE__: absolute   ; (LOAD and RUN: cpu.inc, for the bank patches)
+to7:    bankimm lda, BANK_LVL, BANK_MAP ; start6's way out: the next fetch is bank 7's
+        sta ROMSEL_CPY              ; jmp start7, at the same address
+        sta ROMSEL
 start6:
+        .assert * = BANKCODE + 7, error, "start6 must follow entry's switch"
         sei
         ldx #$3F                    ; the stack is 64 bytes: $0100-$013F
         txs
         lda #0                      ; zero page ($F0-$FF is the MOS's: $F4 is the
-        ldx #0                      ; bank the loader selected, and the OS IRQ still
-:       sta $00,x                   ; restores from it until take_over) and the low RAM
-        inx
-        cpx #$F0
-        bne :-
-        ldx #0
-:       sta $0140,x
-        inx
-        cpx #$C4
+        ldx #$F0                    ; bank the loader selected, and the OS IRQ still
+:       sta $FF,x                   ; restores from it until take_over): $00-$EF, zp,x
+        sta $0113,x                 ; wrapping; and $0114-$0203, the low RAM and the
+        dex                         ; stack above $0113 (nothing is on it yet)
         bne :-
         ; the low-RAM image is copied down to $0206 -- absolute indexed, the image being
         ; under a page (14 bytes shorter than two pointers: this bank's corner is full)
         .assert __LOWCODE_SIZE__ < 256, error, "the low-RAM image is copied a byte at a time"
-        ldx #0                      ; exactly its length: the bar starts at $0300
-@lc:    lda __LOWCODE_LOAD__,x
+@lc:    lda __LOWCODE_LOAD__,x      ; (X = 0) exactly its length: the bar starts at $0300
         sta __LOWCODE_RUN__,x
         inx
         cpx #<__LOWCODE_SIZE__
@@ -70,14 +63,12 @@ start7:
         dex
         bpl @pb
         jsr lvreset                 ; the records, the buffers' state
-        ; what the Master's init_tables sets that is this bank's or the zero page's
-        stz MUSON
-        stz SFXREQ
+        ; MUSON and SFXREQ: the zeros start6 left (low BSS, zero page)
         lda #<VS2T_DEFAULT
         sta VS2T
         lda #>VS2T_DEFAULT
         sta VS2T+1
-        jsr music_init
+        ; (music_init: an rts on the Model B, whose period table is static)
         lda #$34
         sta seed
         lda #$12
@@ -89,7 +80,7 @@ start7:
         jsr build_sections
         inc curbuf
         jsr build_sections
-        stz curbuf
+        dec curbuf                  ; (1 -> 0: build_sections only reads it)
         farjsr F_INIT5              ; bank 5's state, spbank, then the interrupt takeover
         jsr disc_init               ; a 1770 board: reset, and the head found
         jmp game_main               ; the title menu loads its overlay and starts the tune

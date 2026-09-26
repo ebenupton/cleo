@@ -44,8 +44,7 @@ nmi_i_sta:
 nmi_i_end:
         lda FDC8271_PAR             ; the result (reading it clears the interrupt)
         sta ld_res
-        lda #1
-        sta ld_done
+        inc ld_done
         pla
         rti
 nmi_w:                              ; ---- the 1770: DRQ with busy = a byte, else
@@ -64,15 +63,13 @@ nmi_w_sta:
         bne :+
         lda #$D0                    ; force interrupt: stop the multi-sector read
         sta FDC1770_CMD
-        lda #1
-        sta ld_done
+        inc ld_done
 :       pla
         rti
 nmi_w_nd:
         and #1
         bne :+
-        lda #1
-        sta ld_done
+        inc ld_done
 :       pla
         rti
 ld_res:   .res 1
@@ -92,20 +89,18 @@ LD_SECS   = NMIPAGE + (ld_secs - nmi_page)
 ; ld_sec (16 bit), ld_n sectors -> ld_dst in main RAM.  The disc is 80 tracks of 10
 ; 256-byte sectors: the division is by repeated subtraction, as the Master's.
 read_sectors:
-        lda #0
-        sta ld_trk
-@d10:   lda ld_sec
+        ldx #$FF                    ; X = track, Y = high byte + 1: ld_sec / 10
+        lda ld_sec
+        ldy ld_sec+1
+        iny
+@d10:   inx
         sec
         sbc #10
-        tay
-        lda ld_sec+1
-        sbc #0
-        bcc @drem
-        sty ld_sec
-        sta ld_sec+1
-        inc ld_trk
+        bcs @d10
+        dey
         bne @d10
-@drem:  lda ld_sec
+        adc #10                     ; (C clear) the remainder; Y = 0 from here on
+        stx ld_trk
         sta ld_sc
 @track: lda #10                     ; sectors to read on this track: min(n, 10 - s)
         sec
@@ -120,8 +115,7 @@ read_sectors:
         lda ld_dst+1
         sta NMI_I_STA+2
         sta NMI_W_STA+2
-        lda #0
-        sta LD_DONE
+        sty LD_DONE                 ; (Y = 0 throughout read_sectors)
         lda dsk_type
         bne @wd
         ; ---- 8271: read data, multi-record, 256-byte sectors -- after two commands
@@ -150,8 +144,7 @@ read_sectors:
         sta FDC8271_CMD             ; interrupt -- its result (the status) is read to
         jsr i_idle                  ; clear it
         lda FDC8271_PAR
-        lda #0                      ; (and the stub's flag, should a controller
-        sta LD_DONE                 ; interrupt after all)
+        sty LD_DONE                 ; (and the stub's flag, should a controller interrupt after all; Y = 0)
         txa
         ora #$13                    ; read data
         sta FDC8271_CMD
@@ -188,8 +181,8 @@ read_sectors:
 :       lda LD_DONE
         bne :+
         lda FDC1770_CMD             ; fallback: the command ended without a completion NMI
-        and #1
-        bne :-
+        lsr                         ; busy (bit 0) into C
+        bcs :-
 :       jsr w_wait                  ; the abort takes a moment to clear busy
 @next:  lda ld_dst+1
         clc
@@ -200,8 +193,7 @@ read_sectors:
         sbc ld_cnt
         sta ld_n
         beq @done
-        lda #0
-        sta ld_sc
+        sty ld_sc                   ; (Y = 0)
         inc ld_trk
         jmp @track
 @done:  rts
@@ -221,15 +213,13 @@ i_param:                            ; and a parameter when the register is free
 wait_done:                          ; the stub's completion flag, taken
         lda LD_DONE
         beq wait_done
-        lda #0
-        sta LD_DONE
         rts
 w_wait: ldx #20
 :       dex
         bne :-
 :       lda FDC1770_CMD
-        and #1
-        bne :-
+        lsr                         ; busy (bit 0) into C
+        bcs :-
         rts
         .segment "LGCBSS"
 w_trk:    .res 1                    ; the 1770's head, as far as this driver knows
@@ -242,18 +232,17 @@ disc_init:
         beq @done
         lda #$08                    ; reset held (bit 5 low), FM
         sta FDC1770_CTL
-        lda #$28                    ; reset released, FM, the drive
+        lda #$29                    ; reset released, FM, drive 0
         ldx dsk_drv
         beq :+
-        ora #$02
+        lda #$2A                    ; drive 1 (the old ora/bne path's 7 cycles)
         bne :++
-:       ora #$01
+:       nop                         ; drive 0 (the old ora #$01's 2 cycles)
 :       sta FDC1770_CTL
         lda #$00                    ; restore: track 0
         sta FDC1770_CMD
         jsr w_wait
-        lda #0
-        sta w_trk
+        stx w_trk                   ; X = 0: w_wait's delay loop ends there
 @done:  rts
 
 ; ---------------------------------------------------------------- the loader
@@ -270,18 +259,17 @@ disc_boot:
         beq :+
         lda #<NMI_W                 ; a 1770: the page's jump goes to its stub
         sta NMIPAGE+1
-        lda #>NMI_W
-        sta NMIPAGE+2
+        .assert >NMI_W = >nmi_i, error, "NMI_W: the page's jmp keeps its high byte"
 :       lda #<F_LDPROG_SEC
         sta ld_sec
-        lda #>F_LDPROG_SEC
-        sta ld_sec+1
         lda #F_LDPROG_N
         sta ld_n
-        lda #<LDPROG
-        sta ld_dst
         lda #>LDPROG
         sta ld_dst+1
+        lda #0                      ; >F_LDPROG_SEC and <LDPROG: both zero
+        sta ld_sec+1
+        sta ld_dst
+        .assert >F_LDPROG_SEC = 0 && <LDPROG = 0, error, "disc_boot: a zero assumed"
         jmp read_sectors
 
 ; X = level index 0..15: everything the level needs into the banks (the palette is

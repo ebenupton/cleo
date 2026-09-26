@@ -88,6 +88,7 @@ vsync_tick:
         and #$7F
         sta CRTC_DAT
         inc vsyncs
+        ldx #0                      ; X = 0: the bar's pair below, and flipreq's clear
         lda flipreq
         beq @noflip
         lda vsyncs
@@ -99,11 +100,10 @@ vsync_tick:
         sta flipvs
         lda NEXTSECT
         sta DISPSECT
-        stz flipreq
+        stx flipreq
 @noflip:
-        ldx #0                      ; section 0 is the bar: its address and length come
-        ldy DISPSECT                ; from the buffer about to be displayed
-        beq :+
+        ldy DISPSECT                ; section 0 is the bar: its address and length come
+        beq :+                      ; from the buffer about to be displayed
         ldx #2
 :       lda BUF_SEC0T1,x
         sta VIA_T1LL
@@ -185,7 +185,7 @@ build_sections:
         sta crtcbm
         lda @cmh,x
         sta crtcbm+1
-        lda curbuf
+        txa                         ; X = curbuf still (ldx curbuf above)
         asl
         tax
         lda #>BARCRTC               ; section 0 is the bar: fixed address and length
@@ -196,7 +196,7 @@ build_sections:
         sta BUF_SEC0T1,x
         lda #>(BARROWS*8*LINE-2)
         sta BUF_SEC0T1+1,x
-        ldx curbuf
+        txa                         ; Z from X = curbuf*2
         beq :+
         ldx #48
 :       lda #BARROWS-1
@@ -210,57 +210,47 @@ build_sections:
         lda wfine
         beq @coarse
         ; ---- f > 0: T -> A (the composed row) -> P.. -> P2 -> Q
-        eor #7
-        inca                        ; 8-f lines of it
-        jsr @dur
-        sta SECTAB+6,x
-        lda tmp3
-        sta SECTAB+7,x
         lda ringS                   ; the composed row is the 80 chars above the window
         sec
         sbc #<ROWCHARS
         sta w16
         lda ringS+1
         sbc #0
-        sta w16+1
-        bpl :+
-        lda w16
-        clc
+        bpl :+                      ; negative: C = 0 (the borrow), A = $FF
+        lda w16                     ; + RINGCHARS
         adc #<RINGCHARS
         sta w16
-        lda w16+1
-        adc #>RINGCHARS
-        sta w16+1
-:       jsr @addr
-        txa
-        clc
-        adc #8
-        tax                         ; A's entry
-        stz SECTAB+2,x
+        lda #>(RINGCHARS-$100)      ; $FF + >RINGCHARS + C
+        adc #0
+:       sta w16+1
+        jsr @addr
         lda wfine
-        eor #7                      ; 7 - f
-        sta SECTAB+3,x
+        eor #7                      ; 7 - f: A's R9
+        sta SECTAB+8+3,x
+        clc
+        adc #1                      ; 8-f lines of it
+        jsr @dur                    ; X = A's entry
+        stz SECTAB+2,x
         lda #2
         sta SECTAB+4,x
         lda #30
         sta SECTAB+5,x
-        lda ringS                   ; the run starts one row into the window
-        clc
+        lda ringS                   ; the run starts one row into the window (C = 0: @dur's adc #8)
         adc #<ROWCHARS
         sta w16
         lda ringS+1
         adc #0
         sta w16+1
         jsr @wrap
-        lda #VISROWS-1
-        sta tmp4                    ; rows in the run
         ldy barq
         iny
         cpy #RINGROWS
         bcc :+
         ldy #0
 :       sty tmp3
-        bra @run
+        lda #VISROWS-1
+        sta tmp4                    ; rows in the run
+        bne @run                    ; always: A = VISROWS-1
 @coarse:                            ; ---- f = 0: T -> P.. -> Q
         lda ringS
         sta w16
@@ -271,10 +261,22 @@ build_sections:
         lda barq
         sta tmp3
 @run:   ; w16 = the run's ring offset, tmp4 = its rows, X = the entry before it
-        jsr @nfull                  ; rows that end before the ring end
+        ; rows of the run that end before the ring end (was @nfull): the run starts on
+        ; ring row tmp3; r = ringS mod 80 non-zero -> the last ring row straddles
+        ldy barq
+        lda ringS
+        sec
+        sbc mulrowlo,y              ; r
+        cmp #1                      ; C = 1 iff r > 0
+        lda #RINGROWS-1
+        bcs :+
+        adc #0                      ; r == 0: C is clear here, so this adds 1
+        adc #1
+:       sec
+        sbc tmp3
         cmp tmp4
         bcs @one                    ; the whole run fits
-        cmp #0
+        tay                         ; Z from A (Y is dead: @emit's @addr reloads it)
         beq @one                    ; it starts inside the straddling row: all of it folds
         sta tmp2
         jsr @emit                   ; up to the ring end
@@ -289,22 +291,14 @@ build_sections:
         jsr @emit
         lda tmp4
         jsr @advance                ; now the row below the playfield
+        jsr @addr                   ; the row below the playfield: P2's start, or Q's
         lda wfine
-        beq @setq
-        ; --- P2: the top f lines of that row
-        jsr @addr
+        beq @sq2
+        ; --- P2: the top f lines of that row (A = wfine)
+        jsr @dur                    ; X = P2's entry
+        stz SECTAB+2,x              ; A dead: reloaded next
         lda wfine
-        jsr @dur
-        sta SECTAB+6,x
-        lda tmp3
-        sta SECTAB+7,x
-        txa
-        clc
-        adc #8
-        tax
-        stza SECTAB+2, x
-        lda wfine
-        deca
+        sbc #0                      ; C = 0 from @dur's adc #8: f - 1
         sta SECTAB+3,x
         lda #VISROWS
         sta SECTAB+4,x
@@ -314,31 +308,28 @@ build_sections:
         sta SECTAB,x                ; in the previous entry is this one's too
         lda SECTAB-8+1,x
         sta SECTAB+1,x
-        bra @sq2
-@setq:  jsr @addr                   ; Q starts on the row below the playfield
-@sq2:   lda #<(40*LINE-2)
-        sta SECTAB+6,x
-        lda #>(40*LINE-2)
-        sta SECTAB+7,x
-        txa
+@sq2:   txa
         clc
         adc #8
         tax
-        lda #>BARCRTC               ; and hands the chain back to the bar
-        sta SECTAB,x
+        lda #<(40*LINE-2)           ; the previous section's T1 and Q's
+        sta SECTAB-8+6,x
+        sta SECTAB+6,x
+        lda #>(40*LINE-2)
+        sta SECTAB-8+7,x
+        sta SECTAB+7,x
+        .assert >BARCRTC = 0, error, "Q's R12 and R6 share the zero"
+        lda #0                      ; >BARCRTC, and Q's R6
+        sta SECTAB,x                ; hands the chain back to the bar
+        sta SECTAB+4,x
         lda #<BARCRTC
         sta SECTAB+1,x
         lda #QROWS-1
         sta SECTAB+2,x
         lda #7
         sta SECTAB+3,x
-        stza SECTAB+4, x
         lda #QVSYNC
-        sta SECTAB+5, x
-        lda #<(40*LINE-2)
-        sta SECTAB+6, x
-        lda #>(40*LINE-2)
-        sta SECTAB+7, x
+        sta SECTAB+5,x
         rts
 @cbl:   .byte <CRTCB_A, <CRTCB_B
 @cbh:   .byte >CRTCB_A, >CRTCB_B
@@ -347,16 +338,9 @@ build_sections:
 ; --- emit a run of tmp2 rows starting at ring offset w16, following entry X
 @emit:  jsr @addr
         lda tmp2
-        jsr @lines
-        sta SECTAB+6,x
-        lda tmp3
-        sta SECTAB+7,x
-        txa
-        clc
-        adc #8
-        tax
+        jsr @lines                  ; X = the run's entry
         lda tmp2
-        deca
+        sbc #0                      ; C = 0 out of the adc: tmp2 - 1
         sta SECTAB+2,x
         lda #7
         sta SECTAB+3,x
@@ -381,8 +365,7 @@ build_sections:
         adc crtcbm+1
         sta SECTAB,x
         rts
-:       clc
-        adc crtcb
+:       adc crtcb                   ; C = 0: both ways here are a bcc
         sta SECTAB+1,x
         tya
         adc crtcb+1
@@ -403,47 +386,39 @@ build_sections:
         lda w16+1
         adc mulrowhi,y
         sta w16+1
-@wrap:  lda w16+1
+@wrap:                              ; A = w16+1: both ways in have just stored it
         cmp #>RINGCHARS
         bcc :++
         bne :+
         lda w16
         cmp #<RINGCHARS
         bcc :++
-:       lda w16
-        sec
+:       lda w16                     ; C = 1: both ways here
         sbc #<RINGCHARS
         sta w16
         lda w16+1
         sbc #>RINGCHARS
         sta w16+1
 :       rts
-        ; --- rows of the run that finish before the ring end.  The run starts on ring
-        ; row tmp3; when r = ringS mod 80 is non-zero the last ring row straddles and
-        ; @addr sends it to the mirror, so RINGROWS-1-tmp3 rows come first.
-@nfull: ldy barq
-        lda ringS
-        sec
-        sbc mulrowlo,y              ; r
-        cmp #1                      ; C = 1 iff r > 0
-        lda #RINGROWS-1
-        bcs :+
-        adc #0                      ; r == 0: C is clear here, so this adds 1
-        adc #1
-:       sec
-        sbc tmp3
-        rts
-        ; --- A = lines -> A/tmp3 = the T1 count that lasts that long
-@dur:   sta tmp3                    ; n*64 == (n*256)>>2
+        ; --- A = lines, X = an entry -> its T1lo/T1hi (SECTAB+6/7,x) = the T1 count
+        ; that lasts that long (tmp3 = the high byte); then X = the next entry (C = 0)
+@dur:   lsr                         ; n*64 == (n*256)>>2
+        sta tmp3
         lda #0
-        lsr tmp3
         ror
         lsr tmp3
         ror
         sbc #1                      ; C = 0 out of the ror pair: A - 2
         bcs :+
         dec tmp3
-:       rts
+:       sta SECTAB+6,x
+        lda tmp3
+        sta SECTAB+7,x
+        txa
+        clc
+        adc #8
+        tax
+        rts
 
 ; ---------------------------------------------------------------- the mirror
         .segment "LGCCODE"          ; bank 7: render_core's last step
@@ -457,12 +432,11 @@ mirror_copy:
         lda wcxm
         cmp mirwcx,x                ; a move left uncovers chars the last copy never
         bcs :+                      ; reached, so the whole row has to be made again
-        lda #1
-        sta mirdty,x
         lda #0
         sta mirlo,x
         lda #ROWCHARS-1
         sta mirhi,x
+        sta mirdty,x                ; non-zero: dirty
 :       lda mirdty,x                ; nothing has touched the ring's last row in this
         bne :+                      ; buffer since the mirror was last made
         rts
@@ -471,54 +445,49 @@ mirror_copy:
         rts                         ; not read -- and the flag stays up for when it is
 :       lda #0
         sta mirdty,x
+        ldy mirhi,x                 ; the last written char
+        sta mirhi,x                 ; the written range is empty again (mirlo below)
         lda mirlo,x                 ; the copy starts at the first written char, or at
         cmp wcxm                    ; wcxm if the writing started left of it
         bcs :+
         lda wcxm
 :       sta tmp4                    ; and runs to the last written one
-        lda mirhi,x
-        sta tmp3
-        lda #$FF                    ; the written range is empty again
+        lda #$FF
         sta mirlo,x
-        lda #0
-        sta mirhi,x
         lda wcxm                    ; the chars left of wcxm are not copied
         sta mirwcx,x
-        lda tmp3                    ; the chars from the first written to the last
+        tya                         ; the chars from the first written to the last
         sec
         sbc tmp4
         bcs :+                      ; nothing of it is in the window
         rts
-:       clc
-        adc #1
+:       adc #0                      ; C = 1 from the bcs: +1
         sta tmp
         ; source: the last slot, base + (RINGROWS-1)*640 + tmp4*8; the mirror is one
         ; whole ring below it
-        lda tmp4
-        sta w16
-        lda #0
+        .assert (RINGEND_A >> 8) - 3 = (RING_A >> 8) + (((RINGROWS-1)*ROWBYTES) >> 8) && (RINGEND_B >> 8) - 3 = (RING_B >> 8) + (((RINGROWS-1)*ROWBYTES) >> 8), error, "ringe3 is the last slot's page less the base's"
+        .assert <(RING_A + (RINGROWS-1)*ROWBYTES) = $80 && <RING_A = <RING_B, error, "the last slot is at xx80"
+        .assert (RING_A & $FF) + (RINGROWS-1)*ROWBYTES - RINGBYTES = -$200, error, "the mirror is 2 pages below the base page"
+        lda tmp4                    ; T = tmp4*8: A = its high byte, C = bit 7 of its low
+        lsr                         ; byte -- the carry out of the +$80 below
+        lsr
+        lsr
+        lsr
+        lsr
+        tax
+        adc ringe3                  ; ringbhi + >((RINGROWS-1)*ROWBYTES); C = 0 after
         sta w16+1
-        asl w16
-        rol w16+1
-        asl w16
-        rol w16+1
-        asl w16
-        rol w16+1
-        lda w16
-        clc
-        adc #<(RING_A + (RINGROWS-1)*ROWBYTES)
-        sta w16
-        lda w16+1
-        adc ringbhi
-        adc #>((RINGROWS-1)*ROWBYTES)
-        sta w16+1
-        lda w16
-        sec
-        sbc #<RINGBYTES
-        sta w16b
-        lda w16+1
-        sbc #>RINGBYTES
+        txa
+        adc ringbhi                 ; C = 0 in and out
+        sbc #1                      ; C = 0: -2, the mirror's page
         sta w16b+1
+        lda tmp4
+        asl
+        asl
+        asl
+        sta w16b
+        eor #<(RING_A + (RINGROWS-1)*ROWBYTES)   ; +$80, its carry taken above
+        sta w16
         ldy #0
 @c:     ldx #8
 @b:     lda (w16),y
@@ -526,7 +495,7 @@ mirror_copy:
         iny
         dex
         bne @b
-        cpy #0
+        tya                         ; Z: Y = 0 (A is dead: reloaded at @b, and after the rts)
         bne :+
         inc w16+1
         inc w16b+1
@@ -537,32 +506,16 @@ mirror_copy:
 ; ---------------------------------------------------------------- the CRTC
         .segment "LGCLO"
 crtc_init:                          ; start the chain at the bar and let vsync re-phase
-        ldx #8                      ; no interlace: the MOS's MODE 1 leaves interlace sync
-        lda #0                      ; on, which puts every other field's vsync half a
-        jsr @w                      ; scanline later and the whole chain with it (the
-        ldx #10                     ; Master's crtc_init writes 0 too)
-        lda #$20                    ; the MOS's cursor off
-        jsr @w
-        ldx #9
-        lda #7
-        jsr @w
-        ldx #4
-        lda #BARROWS-1
-        jsr @w
-        ldx #6
-        lda #BARROWS
-        jsr @w
-        ldx #7
-        lda #30
-        jsr @w
-        ldx #12
-        lda #>BARCRTC
-        jsr @w
-        ldx #13
-        lda #<BARCRTC
-@w:     stx CRTC_IDX
-        sta CRTC_DAT
+        ldx #7                      ; written from the end of the tables: R8 = 0 first (no
+@w:     lda @reg,x                  ; interlace: the MOS's MODE 1 leaves interlace sync on,
+        sta CRTC_IDX                ; which puts every other field's vsync half a scanline
+        lda @val,x                  ; later; the Master's crtc_init writes 0 too), R10 = $20
+        sta CRTC_DAT                ; (the MOS's cursor off), ... R12/R13 last
+        dex
+        bpl @w
         rts
+@reg:   .byte 13, 12, 7, 6, 4, 9, 10, 8
+@val:   .byte <BARCRTC, >BARCRTC, 30, BARROWS, BARROWS-1, 7, $20, 0
 
         .segment "LGCBSS"
 crtcb:    .res 2                    ; the buffer being built: its CRTC base, and the

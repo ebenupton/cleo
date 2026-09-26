@@ -14,8 +14,7 @@ load_level:
         ; main level, which is the 'B' one: file = FI_L0A + (i eor 1) * 2
         txa
         eor #1
-        asl                         ; two pieces: map, bank-7 tables
-        clc
+        asl                         ; two pieces: map, bank-7 tables (C = 0: X < 128)
         adc #FI_L0A
         sta tmp2
         jsr loadfile
@@ -26,36 +25,36 @@ load_level:
         ; geometry
         setbank BANK_LVL
   .endif
-        lda LV_HDR
-        sta maplw
-        lda LV_HDR+1
-        sta maplh
-        ; mapw = 8 << lw ; maph = 8 << lh
-        lda #8
+        lda #8                      ; mapw = 8 << lw ; maph = 8 << lh
         sta mapw
-        stza mapw+1
-        ldx maplw
+        sta maph
+  .if MODELB
+        lda #0
+        sta mapw+1
+        sta maph+1
+  .else
+        stz mapw+1
+        stz maph+1
+  .endif
+        ldx LV_HDR
+        stx maplw
 :       asl mapw
         rol mapw+1
         dex
         bne :-
-        lda #8
-        sta maph
-        stza maph+1
-        ldx maplh
+        ldx LV_HDR+1
+        stx maplh
 :       asl maph
         rol maph+1
         dex
         bne :-
-        lda mapw
-        sec
-        sbc #WINPX
+        lda mapw                    ; C = 0: the last rol shifted out maph's bit 15
+        sbc #WINPX-1
         sta maxwx
         lda mapw+1
         sbc #0
         sta maxwx+1
-        lda maph
-        sec
+        lda maph                    ; C = 1: mapw >= WINPX
         sbc #VISLINES/2
         sta maxwy
         lda maph+1
@@ -63,6 +62,7 @@ load_level:
         sta maxwy+1
   .if MODELB
         jsr lvreset                 ; the records (bank 7) and the buffers' state (main RAM)
+        sta NSPR                    ; A = 0: lvreset ends with a stz
   .else
         stza BUF_VALID
         stza BUF_VALID+1
@@ -70,8 +70,8 @@ load_level:
         stza RECCNT+1
         stza DIRTYCNT
         stza DIRTYCNT+1
-  .endif
         stza NSPR
+  .endif
         rts
 
   .if .not MODELB                   ; the disc: the Model B loads its four bank images
@@ -169,6 +169,18 @@ clamp_window:
         lda wx+1
         sbc maxwx+1
         bmi @wxok
+  .if MODELB
+        lda maxwx+1
+        sta wx+1
+        lda maxwx
+        bcs @wxev                   ; C = 1: wx >= maxwx >= 0, no borrow
+@wx0:   lda #0
+        sta wx+1
+        beq @wxev                   ; A = 0
+@wxok:  lda wx
+@wxev:  and #$FE
+        sta wx
+  .else
         lda maxwx
         sta wx
         lda maxwx+1
@@ -177,11 +189,6 @@ clamp_window:
 @wx0:   stz wx
         stz wx+1
 @wxok:
-  .if MODELB
-        lda wx
-        and #$FE
-        sta wx
-  .else
         lda #1
         trb wx                      ; wx &= ~1 : the 65C02 does this in one RMW
   .endif
@@ -197,16 +204,30 @@ clamp_window:
         lda maxwy+1
         sta wy+1
         rts
+  .if MODELB
+@wy0:   lda #0                      ; A dead: the caller's setbank reloads it
+        sta wy
+        sta wy+1
+  .else
 @wy0:   stza wy
         stza wy+1
+  .endif
 @wyok:  rts
 
 ; ---------------------------------------------------------------- game
 game_main:
+  .if MODELB
+        lda #0                      ; A dead: ensure_menu loads title_res first
+        sta hiscore
+        sta hiscore+1
+        sta maxlevel
+        sta title_res
+  .else
         stza hiscore
         stza hiscore+1
         stza maxlevel
         stza title_res
+  .endif
 title_loop:
   .if MODELB
         jsr ensure_menu             ; the menus are bank 5's overlay: in place first
@@ -218,11 +239,16 @@ title_loop:
         bra title_loop
 new_game:
         stz level
+  .if MODELB
+        sta score                   ; A = 0 (the stz)
+        sta score+1
+  .else
+        stz score
+        stz score+1
+  .endif
         lda #3
         sta lives
         sta health
-        stz score
-        stz score+1
         lda maxlevel
         beq level_loop
         jsr t_level_select
@@ -233,7 +259,7 @@ level_loop:
   .if .not MODELB
         jsr load_begin              ; and stop the chain at a frame boundary (engine.s;
   .endif                            ; the Model B's loader does it itself)
-        stza title_res               ; the level's map replaces the title pack
+        stz title_res               ; the level's map replaces the title pack
   .if .not MODELB
         lda #FI_BOX                  ; and the title pack replaced the box stars
         jsr loadfile
@@ -250,14 +276,14 @@ level_loop:
         ; initial camera; render both buffers before the palette comes back
         jsr t_game_frame
         jsr render_frame
-        stza NSPR
+
         jsr t_game_frame
         jsr render_frame
         jsr set_palette
-        stz NSPR
+
         lda vsyncs
         sta logicvs
-        stz pausing
+
 frame_loop:
         ; pause?
         lda keys
@@ -265,21 +291,15 @@ frame_loop:
         beq fl_nopause
         lda pausing
         bne fl_nopause
-        jsr t_pause_menu
-        cmp #0
-        beq :+
-        jmp title_loop
-:       lda #1
-        sta pausing
+        jsr t_pause_menu            ; Z from A: 0 resume, else exit
+        bne title_loop
         lda vsyncs
         sta logicvs
-        bra frame_loop
-fl_nopause:
-        lda keys
-        and #K_MENU
-        bne :+
-        stz pausing
-:       ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes two
+        inc pausing                 ; 0 -> 1 (it was 0 to get here): Z = 0
+        bne frame_loop
+fl_nopause:                         ; A = 0 (menu key up: clear) or pausing (held: kept)
+        sta pausing
+        ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes two
         ; steps for each one, so the player, every animation and every enemy move
         ; twice as far per frame as they used to.  Two steps is a fixed pairing,
         ; not catching up: time lost to a long frame is still dropped, so the
@@ -295,11 +315,10 @@ frame_top:                          ; exactly once per rendered frame, before th
                                     ; logic steps read 'keys': the test harness breaks
                                     ; here so every wait and every input it applies is
                                     ; quantised to a frame boundary (tools/harness.mjs)
-        stza NSPR                   ; the list is rebuilt by each step; only the
-        jsr t_game_frame            ; second one's survives to be drawn
+        jsr t_game_frame            ; (NSPR is 0 here: render_frame and load_level clear it)
         lda exiting
         bne fl_over
-        stza NSPR
+        sta NSPR                    ; A = 0: exiting, just tested
         jsr t_game_frame
         lda exiting
         bne fl_over
@@ -309,17 +328,16 @@ fl_wait:  ; nothing to do yet: wait for the next vsync
         lda vsyncs
 :       cmp vsyncs
         beq :-
-        bra frame_loop
+        bne frame_loop              ; Z = 0: the vsync ticked
 fl_over:
         ; level over
-        lda lives
+        ldx lives                   ; (X = lives: the Master's winlose flag below)
         beq game_over
         lda stars
         beq @next1
         lda level
-        lsr                         ; C = bit 0
-        bcs @next1
-        inc level
+        ora #1                      ; a star: on to the next odd level (+2 from even)
+        sta level
 @next1: inc level
         lda level
         cmp #16
@@ -329,22 +347,27 @@ fl_over:
         bcc :+
         sta maxlevel
 :       jmp level_loop
+  .if MODELB
 game_over:
         jsr update_hiscore
-  .if MODELB
         jsr ensure_menu
-  .endif
         lda #0
         jsr t_winlose
         jmp title_loop
 game_won:
         jsr update_hiscore
-  .if MODELB
         jsr ensure_menu
-  .endif
         lda #1
         jsr t_winlose
         jmp title_loop
+  .else
+game_over:                          ; X = lives: 0 lost, else won (winlose tests its flag
+game_won:                           ; only for zero; update_hiscore keeps X)
+        jsr update_hiscore
+        txa
+        jsr t_winlose
+        jmp title_loop
+  .endif
   .if MODELB
 ; the menu overlay and the title pack, unless they are still in (menu.s's load_title
 ; does the same from inside the overlay, for the screens reached from the title)
@@ -373,8 +396,7 @@ t_pause_menu:
         lda keys
         and #K_FIRE
         beq @w
-        lda #1
-        rts
+        rts                         ; A = K_FIRE: exit (non-zero is all the caller tests)
 @resume:
         lda #0
         rts

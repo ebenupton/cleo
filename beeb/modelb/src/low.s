@@ -15,12 +15,12 @@
 ; handler reads the bank from $F4 and puts it back, which is the MOS's own rule.
 ;
 ;   caller's return
-;   A on entry
 ;   caller's bank          <- fcret pulls this
 ;   fcret-1                <- the target's rts lands here
 ;   target-1               <- this rts goes there
+; (A crosses in fcA: nothing runs between its store and its load but this code)
 farcall:
-        pha
+        sta fcA                     ; A as it came in
         lda ROMSEL_CPY
         pha
         lda #>(fcret-1)
@@ -36,8 +36,7 @@ farcall:
         sta ROMSEL
         tax                         ; (X is reloaded below)
         wrselx 0
-        tsx
-        lda $0106,x                 ; A as it came in
+        lda fcA
         rts
 fcret:  sta fcA                     ; the target's A (Y must survive, X carries the bank)
         pla                         ; the caller's bank
@@ -45,7 +44,6 @@ fcret:  sta fcA                     ; the target's A (Y must survive, X carries 
         stx ROMSEL_CPY
         stx ROMSEL
         wrselx 0
-        pla                         ; (the A that went in)
         lda fcA
         rts
 
@@ -65,8 +63,7 @@ irq_handler:
         jsr isr_body
         lda MUSTICK                 ; the vsync's sound_tick, while the tune plays; the
         beq @nomus                  ; T1 steps come through here too and must not count
-        lda #0
-        sta MUSTICK
+        dec MUSTICK                 ; (1 -> 0: MUSON's value, which is 0 or 1)
         bankimm lda, BANK_TILES, 0
         sta ROMSEL_CPY
         sta ROMSEL
@@ -87,21 +84,19 @@ irq_handler:
 ; mapshr = 8 - lw, which the loader sets from the header) and the strip copy is the
 ; one bank switch a tile row costs.
 maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 << lw) + rc_tx0
-        jsr maprow                  ; (X kept; the logic's mapptr is its scratch)
+        jsr maprow                  ; (X kept; the logic's mapptr is its scratch) A = mapptr+1, C = 0
+        sta ptr+1                   ; tx0 < the map's width: no carry out of the low byte
         lda mapptr
-        clc
         adc rc_tx0
         sta ptr
-        lda mapptr+1
-        adc #0
-        sta ptr+1
         rts
 
 mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; bank 5 back (the row
-        bankimm lda, BANK_MAP, 0    ; loop's: dirfetch, the other caller, restores its own)
+        ldy rc_nt                   ; loop's: dirfetch, the other caller, restores its own)
+mapstripy:                          ; (Y = the count: dirfetch)
+        bankimm lda, BANK_MAP, 0
         sta ROMSEL_CPY
         sta ROMSEL
-        ldy rc_nt
 :       lda (ptr),y
         sta MAPBUF,y
         dey
@@ -113,11 +108,10 @@ mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; bank 5 back (th
 
 ; the sprite directory (and the title pack's) is in bank 6 and the prologue in bank
 ; 7: an entry's eight bytes come across here, and ptr is left pointing at the copy.
-; (mapstrip's loop, with its count: rc_nt is drawrect's, which is not running.)
+; (mapstrip's loop, with its count in Y: rc_nt is drawrect's and is left alone.)
 dirfetch:                           ; ptr -> the entry in bank 6
-        lda #7
-        sta rc_nt
-        jsr mapstrip
+        ldy #7
+        jsr mapstripy
         lda #<MAPBUF
         sta ptr
         lda #>MAPBUF
