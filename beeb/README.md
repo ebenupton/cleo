@@ -40,7 +40,7 @@ The original JAR contents are expected in `../v500/` (unzipped `CleoV500.jar`).
 * **Memory**: engine code and tables live below 12K (&0400-&2FFF). Game logic and
   menus live in HAZEL (8K at &C000, copied there at start). All data is in the four
   sideways RAM banks: 4 = sprites/font/bar, 5 = the level's own tiles (gathered at
-  load from its set's files, unfolded: `tools/convert.py` pack_tiles), 6 + 7 = the
+  load from the one tile set's files, unfolded: `tools/convert.py` pack_tiles), 6 + 7 = the
   current level (map, page tables, objects, altitude data) and the title pack.
 * **Loading**: after `*RUN CLEO` the MOS is abandoned; a small WD1770 driver reads the
   data files by sector (multi-sector reads under NMI) using a table generated at build

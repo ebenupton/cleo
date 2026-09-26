@@ -98,10 +98,12 @@ game pixels swapped, `((b & $33) << 2) | ((b & $CC) >> 2)`.  That is exact: the
 dither is per game pixel with no position term, so a pixel's 2x2 dots move as one.
 It is a char-at-a-time path, so the packer mirrors only what the bank cannot hold,
 the least used first: L2B 11 tiles, L4B 16, no other level.  L4B: 191 full tiles,
-40 halves, 16 mirrors, 4 flats -- 13.5K of the 13.6K.  The set files are 16K each
-(TILESO0/1, TILESI0/1: 256 tiles a file, the tiles most levels use first), staged
-at STAGE in turn, and the tile list says how many of the level's tiles each file
-gives.  Every level shows the Master's pixels.  drawrect's head -- the mirror and partial-row
+40 halves, 16 mirrors, 4 flats -- 13.5K of the 13.6K.  There is one tile set for
+both kinds of level, 390 tiles, in three files cut by who uses a tile: TILES0 the
+outdoor levels' alone (223), TILES1 both kinds' (61), TILES2 the indoor levels'
+(106), at most 256 a file (16K, STAGE's size), the tiles most levels use first.  A
+level stages its side's file and the shared one in turn, and its tile list names the
+files and how many of its tiles each gives.  Every level shows the Master's pixels.  drawrect's head -- the mirror and partial-row
 notes, the per-rect invariants, the ring address, the map row pointer -- is main
 RAM's, and the rows are one far call; the sprite prologue and its records went to
 bank 7 with the logic that queues the sprites; match_sprites and erase_old are main
@@ -199,7 +201,7 @@ The disc (`build.sh`, 28 files):
                            every load
     MENU, BAR              the menu overlay; the bar template
     SPR, SPRAND, BOX       the Master's sprite files (convert.py, MODE 1)
-    TILESO, TILESI         the Master's tile sets
+    TILES0, TILES1, TILES2 the tile set: outdoor, shared, indoor (convert.py)
     TITLE                  the title pack
     L0..L15                per level (tools/assets.py): a table of section offsets,
                            the header, the objects, attr and altcls by tile id, the

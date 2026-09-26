@@ -564,7 +564,6 @@ for (lv, sub), L in levels.items():
         cm[hy, hx] = twin_of[ho]     # keep the wall texture at ramp feet
     maps[(lv, sub)] = cm
 
-SETNAME = ['O', 'I']                 # outdoors, indoors
 def tileset_of(lv, sub):
     return lv & 1
 
@@ -637,7 +636,7 @@ for (lv, sub), cm in maps.items():
 # ----------------------------------------------------------------------------
 # The tiles of a level, for both targets (modelb/tools/assets.py calls pack_tiles
 # too).  A map byte is a LEVEL tile id; the level's tiles are gathered at load time
-# from its set's files into the tile bank, 64 bytes a slot, so a tile's address is
+# from the tile set's files into the tile bank, 64 bytes a slot, so a tile's address is
 # arithmetic (drawrect's gather).  Ids:
 #   0 .. NTILES-1        full tiles, slot = id
 #   half0 .. mir0-1      half tiles: one char row stored (32 bytes, from HALFPAGE),
@@ -661,31 +660,34 @@ def mirror_byte(b):
 def mirror_tile(t):
     t = bytes(t)
     return bytes(mirror_byte(t[cr * 32 + (3 - c) * 8 + l]) for cr in range(2) for c in range(4) for l in range(8))
-# the set files: every distinct tile the set's levels use, those the most levels
-# use first, so a level rarely needs a set's second file
-_setpat = []                        # per set: pattern bytes -> (chunk, index)
-_nlev = {}
+# ONE tile set: every distinct tile any level uses, once, in files of at most 256
+# (16K, what either target stages at a time) cut by who uses a tile -- outdoor levels
+# only, both, indoor levels only -- so a level stages only its side's file and the
+# shared one: TILES0 outdoor, TILES1 shared, TILES2 indoor.  Within a file the tiles
+# the most levels use come first.
+_nlev, _side = {}, {}
 for (lv, sub), cm in maps.items():
-    g = tileset_of(lv, sub)
     for c in set(int(x) for x in np.unique(cm)):
         if c not in tile_solid:
             b = bytes(tiles_bytes[c])
-            _nlev[(g, b)] = _nlev.get((g, b), 0) + 1
-SETFILES = []
+            _nlev[b] = _nlev.get(b, 0) + 1
 for g in (0, 1):
-    pats = {}
-    for c in sorted(_want[g]):
+    for c in _want[g]:
         if c not in tile_solid:
-            pats.setdefault(bytes(tiles_bytes[c]), c)
-    order = sorted(pats, key=lambda b: (-_nlev.get((g, b), 0), pats[b]))
-    _setpat.append({b: (i // TILE_CHUNK, i % TILE_CHUNK) for i, b in enumerate(order)})
-    nch = (len(order) + TILE_CHUNK - 1) // TILE_CHUNK
-    assert nch <= 2
-    for k in range(2):
-        data = b''.join(order[k * TILE_CHUNK:(k + 1) * TILE_CHUNK])
-        open(os.path.join(OUT, 'TILES%s%d' % (SETNAME[g], k)), 'wb').write(data or bytes(64))
-    SETFILES.append(nch)
-    print('tile set %s: %d distinct tiles, %d file(s)' % (SETNAME[g], len(order), nch))
+            b = bytes(tiles_bytes[c])
+            _side[b] = _side.get(b, 0) | (1 << g)       # 1 outdoor, 2 indoor, 3 both
+TSET = {}                           # tile bytes -> (file, index in it)
+NTFILES = 0
+for side in (1, 3, 2):
+    order = sorted((b for b in _side if _side[b] == side), key=lambda b: (-_nlev.get(b, 0), b))
+    for k in range(0, len(order), TILE_CHUNK):
+        part = order[k:k + TILE_CHUNK]
+        for i, b in enumerate(part):
+            TSET[b] = (NTFILES, i)
+        open(os.path.join(OUT, 'TILES%d' % NTFILES), 'wb').write(b''.join(part))
+        print('tile file %d: %d tiles (%s)' % (NTFILES, len(part), {1: 'outdoor', 2: 'indoor', 3: 'shared'}[side]))
+        NTFILES += 1
+assert NTFILES == 3                 # the loaders' file tables name three
 
 def attr_of(c):
     a = 3
@@ -714,10 +716,13 @@ def _layout(stored, hlist, halfpair, base, end, loc):
     HALFPAGE = base + ((NT * 64) & ~255)
     HALFOFF = ((NT * 64) & 255) // 32
     assert HALFPAGE + (HALFOFF + NHALF) * 32 + len(halfpair) <= end, ('tiles do not fit', NT, NHALF)
+    return dict(slot=slot, NT=NT, HALFPAGE=HALFPAGE, HALFOFF=HALFOFF)
+def _tilelist(files, stored, loc):
+    """The level's files (the set's numbers) with the full tiles each gives, then each
+    full tile's index in its file: [n, file, count, ..., index, ...]."""
     chunks = [loc(k)[0] for k in stored]
-    nfiles = max(chunks + [loc(h[0])[0] for h in hlist] + [0]) + 1     # the files to stage
-    return dict(slot=slot, NT=NT, HALFPAGE=HALFPAGE, HALFOFF=HALFOFF,
-                tiles=bytes([nfiles] + [chunks.count(j) for j in range(nfiles)]) + bytes(loc(k)[1] for k in stored))
+    return (bytes([len(files)]) + b''.join(bytes([f, chunks.count(f)]) for f in files)
+            + bytes(loc(k)[1] for k in stored))
 
 def pack_tiles(lv, sub):
     """The level's tile ids, and for each target the lists that gather its tiles."""
@@ -753,8 +758,7 @@ def pack_tiles(lv, sub):
             halves['pair'].append((k, 0, b'\0\0'))
         else:
             fulls.append(k)
-    pat = _setpat[g]
-    loc = lambda k: pat[k[0]]
+    loc = lambda k: TSET[k[0]]
     for v in halves.values():
         v.sort(key=lambda h: loc(h[0]))
     hlist = halves['top'] + halves['bot'] + halves['pair']
@@ -797,29 +801,30 @@ def pack_tiles(lv, sub):
         for c in cs:
             local[c] = idof[k]
     flattab = b''.join(fp for k, fp in flats).ljust(2 * NFLAT, b'\0') + bytes([0x0F, 0x0F, 0x00, 0x00])
-    halflist = b''.join(bytes([loc(h[0])[1], h[1] | loc(h[0])[0] << 1]) for h in hlist)
+    # the files to stage, and each tile's by its place in that list
+    files = sorted(set(loc(k)[0] for k in list(fulls) + [h[0] for h in hlist]))
+    pos = lambda k: files.index(loc(k)[0])
+    halflist = b''.join(bytes([loc(h[0])[1], h[1] | pos(h[0]) << 1]) for h in hlist)
     lw = 8 - levels[(lv, sub)]['lw']
     # the Model B: the stored tiles at slot = id, a mirror by its source's slot
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc)
     assert all(B['slot'][k] == idof[k] for k in stored)
-    B['hdr'] = bytes([g, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR, 0])
+    B['tiles'] = _tilelist(files, stored, loc)
+    B['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR, 0])
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
     # the Master: the same slots, then a copy of each mirrored tile as a full tile of
     # its own (by a list of its own: file index, file); load_tiles builds LV_PAGE0
     NS = NT + NMIR
     M = dict(NT=NS, HALFPAGE=M_TILES + ((NS * 64) & ~255), HALFOFF=((NS * 64) & 255) // 32)
     assert M['HALFPAGE'] + (M['HALFOFF'] + NHALF) * 32 + len(halfpair) <= M_TILES_END
-    chunks = [loc(k)[0] for k in stored]
-    nfiles = max(chunks + [loc(k)[0] for k in mirs] + [loc(h[0])[0] for h in hlist] + [0]) + 1
-    M['tiles'] = bytes([nfiles] + [chunks.count(j) for j in range(nfiles)]) + bytes(loc(k)[1] for k in stored)
-    M['mirs'] = b''.join(bytes([loc(k)[1], loc(k)[0]]) for k in mirs)
-    M['hdr'] = bytes([g, NT, lw, NHALF, half0, half1, half2, M['HALFPAGE'] >> 8, M['HALFOFF'], mir0, NMIR, 0])
+    M['tiles'] = _tilelist(files, stored, loc)
+    M['mirs'] = b''.join(bytes([loc(k)[1], pos(k)]) for k in mirs)
+    M['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, M['HALFPAGE'] >> 8, M['HALFOFF'], mir0, NMIR, 0])
     return dict(local=local, B=B, M=M, flat=flattab, halves=halflist, hpair=halfpair,
                 ntiles=NT, nhalf=NHALF, nmir=NMIR, nflat=len(flats), usage=usage)
 
 for (lv, sub), L in levels.items():
     cm = maps[(lv, sub)]
-    gset = tileset_of(lv, sub)
     T = pack_tiles(lv, sub)
     local = T['local']               # compact id -> level tile id, solids included
     lut = np.zeros(len(compact), dtype=np.uint8)

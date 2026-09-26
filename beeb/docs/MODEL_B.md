@@ -107,7 +107,7 @@ same day, below.)
 **No tile is folded on either machine now (26 Sep 2026).**  The Master's outdoor set
 was folded 309 -> 254 tiles so a map byte could be a global tile id; the B then
 folded again per level.  Both went: the Master took the B's scheme -- per-level ids,
-the level's tiles gathered at load from its set's 16K files, staged in screen RAM
+the level's tiles gathered at load from the tile set's files, staged in screen RAM
 (`load_tiles`), flat and half tiles -- from one packer (`tools/convert.py`
 pack_tiles).  The B's bank still came up a kilobyte short on L2B and L4B, so a
 mirror kind closed it: a tile that is another reversed left to right is drawn from
@@ -119,7 +119,10 @@ unfolded, every drawn char cell of all sixteen levels on both machines against t
 unfolded tile by id (thousands of them mirrored), the logic state identical to the
 old builds throughout.  Altitude and attributes were not worth mirroring: nine
 altitude classes (72 bytes), and both tables are per id, so a mirrored id carries
-its own entries whatever the tile's bytes do.
+its own entries whatever the tile's bytes do.  The two sets then became one (390
+tiles, 61 of them used by both kinds of level and once stored twice), in three files
+cut by who uses a tile -- outdoor, shared, indoor -- so a level stages its side's and
+the shared one: 3.9K less on each disc, loads within 2% of before.
 
 **The row came back once the tiles shrank.**  Half and flat tiles freed 2.5K of bank
 5 on L4B; the 1.1K of code and state that had sat in main RAM went above the tiles

@@ -4553,11 +4553,12 @@ build_ring:
         .segment "CODE"
 
 ; ---------------------------------------------------------------- level tiles
-; A level's tiles are gathered from its set's files as the Model B's are (ldprog.s):
+; A level's tiles are gathered from the tile set's files as the Model B's are (ldprog.s):
 ; each file (at most 256 tiles, 16K) staged in screen RAM, which is black and about
 ; to be redrawn whole, and every stored tile copied to its slot in bank 5 by the
 ; lists convert.py's pack_tiles put in the map piece at bank 6 $8700: the tile list
-; (the file count, each file's count, then each tile's index in its file), and at
+; (the files: each one's number and its full tiles; then each tile's index in its
+; file), and at
 ; $8800 the half list (index, row | file << 1), the halves' fill pairs and the mirror
 ; copies' list (index, file): the Master stores a mirrored id's tile as it is, in the
 ; slots after the full tiles.  Then LV_PAGE0, the gather's table: per id, the pair
@@ -4582,8 +4583,6 @@ load_tiles:
         bpl :-
         lda LV_HDR+23
         sta rc_nt                   ; the halves
-        lda LV_HDR+20
-        sta rc_tx0                  ; the set
         lda LV_HDR+21
         sta rc_subc                 ; the full tiles
         lda LV_HDR+24               ; half0, half1, half2 (the builder's)
@@ -4609,21 +4608,20 @@ load_tiles:
         lda #>TILES
         sta sp+1
         stz sp
-        ldx LLIST                   ; the file count
-        inx
-        stx rc_gi                   ; the first tile's list entry
-        stz rc_n                    ; the file
+        lda LLIST                   ; the file count: 2 a file (its number, its tiles)
+        asl
+        inca
+        sta rc_gi                   ; the first tile's list entry
+        stz rc_n                    ; the file's place in the list
 @file:  lda rc_n
-        beq :+
-        lda #FI_TILESO1-FI_TILESO
-:       clc
-        adc rc_tx0
-        adc #FI_TILESO
+        asl
+        tax
+        ldy LLIST+1,x               ; the set's file
+        lda LLIST+2,x
+        sta rc_h                    ; its full tiles
+        lda lt_fi,y
         jsr loadfile
         setbank BANK_TILES
-        ldx rc_n
-        lda LLIST+1,x
-        sta rc_h
 @tile:  lda rc_h                    ; this file's full tiles, to the next slots
         beq @halves
         ldx rc_gi
@@ -4853,6 +4851,7 @@ load_tiles:
 @bnext: inx
         bne @id
         rts
+lt_fi:  .byte FI_TILES0, FI_TILES1, FI_TILES2   ; the set's files (convert.py TSET)
 lt_src: php                         ; A = a tile's index in the staged file, C = its
         pha                         ; row -> tp (the row's 32 bytes, or the tile's 64)
         lsr

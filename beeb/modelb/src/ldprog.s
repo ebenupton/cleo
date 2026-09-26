@@ -53,8 +53,8 @@ nt    = $B8
 ftab:   FILE "SPR"                  ; 0..2: the sprite sources, in imgtab's numbering
         FILE "SPRAND"
         FILE "BOX"
-        FILE "TILESO0"              ; 3, 4: the tile sets' first files
-        FILE "TILESI0"
+        FILE "TILES0"               ; 3, 4: the tile set's outdoor and shared files
+        FILE "TILES1"
         FILE "MENU"                 ; 5
         FILE "TITLE"                ; 6
         FILE "BAR"                  ; 7
@@ -74,10 +74,8 @@ ftab:   FILE "SPR"                  ; 0..2: the sprite sources, in imgtab's numb
         FILE "L13"
         FILE "L14"
         FILE "L15"
-        FILE "TILESO1"              ; 24, 25: and their second files
-        FILE "TILESI1"
-FI_TILESO = 3
-FI_TILESO1 = 24
+        FILE "TILES2"               ; 24: and its indoor file
+tfi:    .byte 3, 4, 24              ; the tile set's files (convert.py TSET) by number
 FI_MENU = 5
 FI_TITLE = 6
 FI_BAR = 7
@@ -234,16 +232,18 @@ lv_load:
         lda #>MAP6
         sta dst+1
         jsr unrle
-        ; ---- the tiles (convert.py pack_tiles): each of the set's files staged in turn
-        ; and its tiles copied to their slots in bank 5 -- the full tiles by the tile
-        ; list (the file count, each file's count, then each tile's index in its
-        ; file), the half tiles by the half list (index, row | file << 1)
+        ; ---- the tiles (convert.py pack_tiles): each of the level's files of the tile
+        ; set staged in turn and its tiles copied to their slots in bank 5 -- the full
+        ; tiles by the tile list (the files: each one's number and its full tiles; then
+        ; each tile's index in its file), the half tiles by the half list (index,
+        ; row | the file's place in the list << 1)
         lda #4
         jsr section
         ldy #0
         lda (src),y
         sta nfiles
-        sec                         ; the first index: past the counts
+        asl                         ; the first index: past the files (C = 0: n < 128)
+        sec
         adc src
         sta lp
         lda src+1
@@ -254,16 +254,22 @@ lv_load:
         lda #>TILES
         sta tbase+1
         sty fnum
-@file:  lda fnum
-        beq :+
-        lda #FI_TILESO1-FI_TILESO
-:       clc
-        adc LV_HDR+20               ; the set
-        adc #FI_TILESO
+@file:  lda #4
+        jsr section
+        lda fnum
+        asl
+        tay
+        iny
+        lda (src),y                 ; the set's file
+        tay
+        lda tfi,y
         jsr stage
         lda #4
         jsr section
-        ldy fnum
+        lda fnum
+        asl
+        tay
+        iny
         iny
         lda (src),y                 ; this file's full tiles
         sta nt

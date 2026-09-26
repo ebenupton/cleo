@@ -10,9 +10,9 @@ mkdir -p build
 # the disc's file list, in disc order: what every load reads first (LDPROG) by the
 # boot files, the shared files together, the levels after them
 DISC="!BOOT:build/BOOT LOADER:build/LOADER BANKS:build/BANKS LDPROG:build/LDPROG MENU:build/MENU BAR:build/BAR"
-DISC="$DISC SPR:../build/SPR SPRAND:../build/SPRAND BOX:../build/BOX TILESO0:../build/TILESO0 TILESI0:../build/TILESI0 TITLE:../build/TITLE"
+DISC="$DISC SPR:../build/SPR SPRAND:../build/SPRAND BOX:../build/BOX TILES0:../build/TILES0 TILES1:../build/TILES1 TITLE:../build/TITLE"
 for l in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do DISC="$DISC L$l:build/L$l"; done
-DISC="$DISC TILESO1:../build/TILESO1 TILESI1:../build/TILESI1"
+DISC="$DISC TILES2:../build/TILES2"
 for f in BOOT LOADER BANKS MENU LDPROG; do [ -f build/$f ] || : > build/$f; done
 printf '*RUN LOADER\r' > build/BOOT
 

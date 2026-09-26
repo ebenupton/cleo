@@ -21,7 +21,7 @@ load_level:
         lda tmp2
         inca
         jsr loadfile
-        jsr load_tiles              ; the level's tiles, from its set's files, to bank 5
+        jsr load_tiles              ; the level's tiles, from the tile set's files, to bank 5
         ; geometry
         setbank BANK_LVL
   .endif
@@ -95,8 +95,8 @@ FTMODE .set 0
 .endmacro
 .macro FILE_LIST
         FILE F_SPR_SEC,   F_SPR_N,   BANK_SPR,  $8000
-        FILE F_TILESO0_SEC, F_TILESO0_N, 0, SCREEN   ; the sets' first files: staged in
-        FILE F_TILESI0_SEC, F_TILESI0_N, 0, SCREEN   ; screen RAM (load_tiles)
+        FILE F_TILES0_SEC, F_TILES0_N, 0, SCREEN     ; the tile set: outdoor, shared (staged
+        FILE F_TILES1_SEC, F_TILES1_N, 0, SCREEN     ; in screen RAM: load_tiles) ...
         FILE F_LOGIC_SEC, <((__LOGIC_LAST__ - __LOGIC_START__ + 255) / 256), BANK_LVL, LOGIC_ADDR
         FILE F_BOX_SEC,   F_BOX_N,   BANK_TIL1, BOX_BASE
         FILE F_MUSIC_SEC, F_MUSIC_N, BANK_LVL,  MUSIC_ADDR
@@ -136,8 +136,7 @@ FTMODE .set 0
         FILE F_L7B_SEC + LM_L7B, F_L7B_N - LM_L7B, BANK_LVL, LV_HDR
         FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
         FILE F_TABLES_SEC, F_TABLES_N, 0, $0400             ; main RAM: bank 0 selects none
-        FILE F_TILESO1_SEC, F_TILESO1_N, 0, SCREEN   ; and their second files
-        FILE F_TILESI1_SEC, F_TILESI1_N, 0, SCREEN
+        FILE F_TILES2_SEC, F_TILES2_N, 0, SCREEN     ; ... and indoor
 .endmacro
 FTMODE .set 0
 ft_seclo: FILE_LIST
@@ -151,8 +150,8 @@ FTMODE .set 4
 ft_dest:  FILE_LIST
 
 FI_SPR = 0
-FI_TILESO = 1                     ; the two tile sets, outdoors and indoors
-FI_TILESI = 2
+FI_TILES0 = 1                     ; the tile set's files (convert.py TSET)
+FI_TILES1 = 2
 FI_LOGIC = 3
 FI_BOX = 4
 FI_MUSIC = 5
@@ -161,8 +160,7 @@ FI_TITLE = 7
 FI_L0A = 8                        ; two pieces per level: map, bank-7 tables
 FI_SPRAND = 40
 FI_TABLES = 41
-FI_TILESO1 = 42
-FI_TILESI1 = 43
+FI_TILES2 = 42
 
   .endif
 
