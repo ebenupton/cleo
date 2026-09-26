@@ -164,15 +164,13 @@ init5:
         bne :-
         bankimm lda, BANK_SPR, BANK_TILES
         sta spbank
-        lda #$FF
-        sta BUF_BARQ
-        sta BUF_BARQ+1
         jmp take_over
         .segment "LGCCODE"
 lvreset:
-        lda #0
-        sta BUF_VALID
-        sta BUF_VALID+1
+        lda #$80                    ; both buffers invalid: an unreachable window x
+        sta BUF_CX+1                ; (scroll_validate redraws them whole)
+        sta BUF_CX+3
+        lda #0                      ; (the caller stores this A: it must be 0)
         sta RECCNT
         sta RECCNT+1
         sta DIRTYCNT

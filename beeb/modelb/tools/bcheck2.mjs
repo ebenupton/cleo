@@ -34,7 +34,7 @@ const r16 = (a) => cpu.readmem(a) | (cpu.readmem(a + 1) << 8);
 const b5 = inbank(5, () => ({ bufcx: [r16(lab.BUF_CX), r16(lab.BUF_CX + 2)], bufcy: [cpu.readmem(lab.BUF_CY), cpu.readmem(lab.BUF_CY + 1)] }));   // the buffers' windows: bank 5's
 const st = inbank(7, () => ({ wcx: r16(lab.wcx), wcy: cpu.readmem(lab.wcy), wfine: cpu.readmem(lab.wfine), curbuf: cpu.readmem(lab.curbuf),
   ...b5,
-  valid: [cpu.readmem(lab.BUF_VALID), cpu.readmem(lab.BUF_VALID + 1)],
+  valid: [cpu.readmem(lab.BUF_CX + 1) !== 0x80 ? 1 : 0, cpu.readmem(lab.BUF_CX + 3) !== 0x80 ? 1 : 0],   // $80xx = invalid
   px: r16(lab.px), py: r16(lab.py), frame: cpu.readmem(lab.frame), wcxm: cpu.readmem(0xe5), mrow: cpu.readmem(0xe4),
   // the records of the buffer being drawn, with KEEP: a kept sprite's pixels stay in the ring
   kept: (() => { const cb = cpu.readmem(lab.curbuf), n = cpu.readmem(lab.RECCNT + cb), out = [];

@@ -323,13 +323,13 @@ spclip:    .res 1                 ; drawsprite: the last sprite came off a windo
 NSPR:      .res 1
 BUF_CX:    .res 4                 ; per buffer held window (cx lo,hi) x2
 BUF_CY:    .res 2                 ; (a buffer is invalid when its BUF_CX high byte is $80:
-                                  ;  scroll_validate sees |dx| >= 80 and redraws it whole)
+                                  ;  scroll_validate sees |dx| >= 80 and redraws it whole;
+                                  ;  window x in chars never reaches $400)
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 PART_CY:   .res 2                 ; per buffer: row/fine the partial (A) row was last copied for
 PART_F:    .res 2
 PART_LO:   .res 2                 ; per buffer: window columns of row wcy drawn since that copy
 PART_HI:   .res 2                 ;   (LO > HI = none)
-BUF_BARQ:  .res 2
 BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
 BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
 BARDIRTY:  .res 1                 ; one bar, so one flag
@@ -385,7 +385,6 @@ rowbit:    .res 1                   ; the char row being drawn, as a flag bit (1
         ; bank 5 still, with the ring work that keeps it (init5 zeroes the segment)
 RINGLO:    .res RINGROWS            ; the buffer being drawn (select_backbuf rebuilds them)
 RINGHI:    .res RINGROWS
-BUF_CX:    .res 4
 BUF_CY:    .res 2
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 PART_CY:   .res 2
@@ -394,10 +393,9 @@ FLATTAB:   .res 32                  ; the level's flat tiles: (even line, odd li
                                     ; id - FLAT0, the loader's; the solids are the last two
 DIRTYLIST: .res 2*2*16
         .segment "LOWBSS"           ; main RAM: the buffers' state bank 7 reads too
-BUF_VALID: .res 2                   ; (the game loop, the menus)
+BUF_CX:    .res 4                   ; (bank 7 invalidates a buffer: high byte $80)
 PART_LO:   .res 2                   ; (the sprite prologue widens the range)
 PART_HI:   .res 2
-BUF_BARQ:  .res 2
 spbank:    .res 1
 DIRTYCNT:  .res 2                   ; (the game loop)
 farx:      .res 1                   ; X across a far call (farcall needs X: m_mark_dirty)
@@ -1158,12 +1156,8 @@ HPAIR1  := HPAIR0 + 5
 ; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
         PLACE "CODE", "TILCODE"     ; Model B: bank 5, with the row loop (F_RENDER5)
 scroll_validate:
-        ldx curbuf
-  .if MODELB                        ; (Master: an invalid buffer holds BUF_CX = $80xx, which
-        lda BUF_VALID,x             ;  the |dx| >= 80 test below sends to @full.  The Model B
-        beq @full                   ;  keeps the flag: BUF_CX is bank 5's, and what
-  .endif                            ;  invalidates runs in bank 7, which cannot write it)
-:       txa                         ; (anonymous label kept: it holds the label count)
+        ldx curbuf                  ; (an invalid buffer holds BUF_CX = $80xx, which the
+:       txa                         ;  |dx| >= 80 test below sends to @full)                         ; (anonymous label kept: it holds the label count)
         asl
         tay
         ; dy = wcy - BUF_CY
@@ -1264,14 +1258,7 @@ scroll_validate:
         jsr drawrect                ; (falls into @done)
 @done:
         ldx curbuf
-  .if MODELB
-        lda #1
-        sta BUF_VALID,x
-        lsr                         ; A = 0: a byte shorter than stz's lda #0
-        sta BUF_BOTOK,x             ; the window moved: the slot below is stale again
-  .else
         stz BUF_BOTOK,x             ; the window moved: the slot below is stale again
-  .endif
         lda wcy
         sta BUF_CY,x
         txa
@@ -3629,8 +3616,6 @@ init_tables:
         lda #BANK_SPR
         sta spbank
         lda #$FF
-        sta BUF_BARQ
-        sta BUF_BARQ+1
         sta tset                    ; no tile set resident yet
         stz BARDIRTY
         stz BARBG
