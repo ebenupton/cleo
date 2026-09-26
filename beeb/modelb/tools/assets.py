@@ -50,7 +50,7 @@ VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 
 B4_DATA = (0x83C0, 0xBB00)                  # bank 4: images and masks, between the row loop
                                             #   ($8000) and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (no hole now: one run)
-B6_HOLE = (0x8260, 0x8800)                  # bank 6: between the row loop and the map
+B6_HOLE = (0x8310, 0x8800)                  # bank 6: between the row loop + gather and the map
 B6_SWAP = (0x8800, 0x8800)                  #   (none now)
 B6_TOP = 0xBC00                             #   MASKTAB0-3 above this
 MAP6 = 0x8800                               #   the map, then images (the directory: bank 7)

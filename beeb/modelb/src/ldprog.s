@@ -381,7 +381,7 @@ lv_load:
         lda hdst+1
         sbc #0
         tay
-        ; ---- the tile shape, into bank 5's variables (read here, with bank 7 in)
+        ; ---- the tile shape, into banks 5 and 6 (read here, with bank 7 in)
         lda LV_HDR+24
         sta sv_half0
         clc
@@ -404,6 +404,10 @@ lv_load:
         bne :+
         iny
 :       sty HPAIR1+1
+        lda sv_halfhi
+        sta halfhi                  ; (bank 5's: the row loop's @hfill)
+        lda PB_MAP                  ; the gather's shape: bank 6, beside it (gather6)
+        jsr pgbank
         lda sv_half0
         sta half0
         lda sv_half1
@@ -411,7 +415,7 @@ lv_load:
         lda sv_half2
         sta half2
         lda sv_halfhi
-        sta halfhi
+        sta halfhi6
         lda sv_halfsub
         sta halfsub
         lda sv_mir0
@@ -429,7 +433,7 @@ lv_load:
         sta cnt
         lda #0
         sta cnt+1
-        ldx PB_TILES
+        ldx PB_MAP
         jsr bcopy
         ; ---- the sprites.  The common block (SPRC: Cleo, the boomerang, the stars) goes
         ; to its fixed place in bank 4 once, and stays; the rest (SPRX) is staged and

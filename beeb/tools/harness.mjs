@@ -52,7 +52,7 @@ const WRAP = 2_000_000;        // cpu.currentCycles wraps at 2e6 (cycleSeconds t
 // sideways RAM, where one address names a different byte in each bank: the linker's
 // debug file says which bank each label is in (by its segment), so a PC break waits
 // for that bank to be paged ($F4, ROMSEL's copy) and a state read pages it first.
-const SEGBANK = [[/^SPR4/, 4], [/^(TIL|MNU)/, 5], [/^SPR6/, 6],
+const SEGBANK = [[/^SPR4/, 4], [/^(TIL|MNU)/, 5], [/^(SPR6|MAP6)/, 6],
                  [/^(COMMON7|LGC)/, 7]];
 export function loadBanks(dbgFile) {
   if (!existsSync(dbgFile)) return null;

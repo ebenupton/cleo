@@ -387,18 +387,10 @@ NEXTBUF:   .res 1
 ; reads it, and only what more than one bank touches is in the 512 bytes of low RAM.
 ; The mask tables are static data at a fixed address in both sprite banks (MASKTAB0,
 ; SWAPTAB in modelb/src/defs.inc); sprmul5 and the row tables are static too.
-        .segment "TILBSS"           ; bank 5: the tile blitter's gather, above the tiles
-GATHERL:   .res 24
-GATHERH:   .res 24
-half0:     .res 1                   ; the level's half tiles: first id, the two range
-half1:     .res 1                   ;   boundaries (bottom fills from half1, rowpairs
-half2:     .res 1                   ;   from half2), the halves' page (the loader's)
-halfhi:    .res 1
-halfsub:   .res 1                   ; half0 less the slot the first half takes in that
-                                    ;   page: id - halfsub = the half's slot from the page
-mir0:      .res 1                   ; the first mirrored tile's id (the loader's)
+        .segment "TILBSS"           ; bank 5: the tile blitter's (the gather's arrays are
+                                    ; low RAM's, its shape bank 6's: gather6)
+halfhi:    .res 1                   ; the halves' page (the loader's), for @hfill
 rowbit:    .res 1                   ; the char row being drawn, as a flag bit (1, 2)
-MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
         ; bank 5 still, with the ring work that keeps it (init5 zeroes the segment)
 BUF_CY:    .res 2
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
@@ -691,107 +683,12 @@ drawrect:
   .endif
 @rowy:
   .if MODELB
-        jsr mapstrip                ; the row's rc_nt+1 map bytes into MAPBUF, likewise
-        wrsel BANK_TILES, BANK_TILES ; (mapstrip comes back with A = this bank: the
-  .endif                            ;  write bank too, done here rather than in low RAM)
+        jsr mapstrip                ; the row's gather, run in bank 6 beside the map
+        wrsel BANK_TILES, BANK_TILES ; (gather6, below): GATHERL/H in low RAM; mapstrip
+                                    ; comes back with A = this bank: the write bank too
+  .else
         ldy rc_nt
 @gl:
-  .if MODELB && (.not BHW)
-        ; the converged Master: the Model B's strip of the map row (MAPBUF), then the
-        ; Master's table -- LV_PAGE0 in main RAM, the level's (the loader's), the pair
-        ; the Model B's gather below computes
-        lda MAPBUF,y
-        tax
-        lda LV_PAGE0,x
-        sta GATHERL,y
-        lda LV_PAGE0+$100,x
-        sta GATHERH,y
-        dey
-        bpl @gl
-  .elseif MODELB
-        ; the tiles are contiguous from TILES (page aligned, 64 bytes each), so the
-        ; address is arithmetic: no table beside them.  Ids from FLAT0 are fills -- a
-        ; flat tile is two bytes alternating down every char (FLATTAB, the loader's;
-        ; the two solids are the last two entries) -- flagged by bit 6 of the high
-        ; byte, the low byte indexing the pair.
-        ; Between the full tiles and the flats are the HALF tiles (ids from half0,
-        ; the loader's): one 32-byte char row stored at halfhi:00 + k*32, the other
-        ; either a fill (its pair in HALFPAIR) or the same row again.  Their low byte
-        ; carries the flags: bit 2 = a half, bit 0 = the top row is the fill, bit 1 the
-        ; bottom (neither: both rows are the stored one).
-        lda MAPBUF,y
-        cmp #FLAT0
-        bcs @gflat
-        cmp half0
-        bcs @ghalf
-        tax
-        lsr
-        lsr
-        clc
-        adc #>TILES
-        sta GATHERH,y
-        txa
-        and #3
-        lsr
-        ror
-        ror                         ; (id & 3) << 6
-        sta GATHERL,y
-        dey
-        bpl @gl
-        bmi @gdone
-@gflat: sbc #FLAT0                  ; (C is set)
-        asl
-        sta GATHERL,y
-        lda #$C0
-        sta GATHERH,y
-        dey
-        bpl @gl
-        bmi @gdone
-@ghalf: cmp mir0
-        bcs @gmir
-        tax                         ; X = the id, for the range tests
-        sbc halfsub                 ; k, the slot from the halves' page (C is clear:
-                                    ; halfsub is the loader's half0 - HALFOFF - 1)
-        sta tmp
-        lsr
-        lsr
-        lsr
-        clc
-        adc halfhi
-        sta GATHERH,y
-        lda tmp
-        asl
-        asl
-        asl
-        asl
-        asl                         ; (k & 7) << 5: the shifts drop the rest
-        cpx half1                   ; a half: bit 2, the fill row's flag by range:
-        adc #5                      ; below half1 4|1 (top fills), else 4|2 (C from cpx)
-        cpx half2
-        bcc @gh2                    ; below half2: done
-:       eor #2                      ; from half2 (so from half1): 6 -> 4, both stored
-@gh2:   sta GATHERL,y
-        dey
-        bpl @gl
-        bmi @gdone
-@gmir:  sbc mir0                    ; a mirrored tile: its source's slot (C is set),
-        tax                         ; addressed as a full tile's, kind 3
-        lda MIRTAB,x
-        tax
-        lsr
-        lsr
-        clc
-        adc #>TILES
-        sta GATHERH,y
-        txa
-        and #3
-        lsr
-        ror
-        ror                         ; (slot & 3) << 6
-        ora #3
-        bne @gh2                    ; (always)
-@gdone:
-  .else
         lda (ptr),y
         tax
         lda LV_PAGE0,x
@@ -3422,6 +3319,135 @@ render5:
   .endif
 
 
+; ---------------------------------------------------------------- the gather, in bank 6
+; A tile row's ids, straight from the map (ptr, the row's first tile; rc_nt+1 of them),
+; into GATHERL/GATHERH in low RAM, which the row loop in bank 5 reads: low RAM's
+; mapstrip pages this bank in around it.  The half and mirror shape it reads is the
+; loader's, here in bank 6 beside it.
+  .if MODELB
+        .segment "MAP6CODE"
+gather6:
+        ldy rc_nt
+@gl:
+  .if MODELB && (.not BHW)
+        ; the converged Master: the map row read in place (this is bank 6), then the
+        ; Master's table -- LV_PAGE0 in main RAM, the level's (the loader's), the pair
+        ; the Model B's gather below computes
+        lda (ptr),y
+        tax
+        lda LV_PAGE0,x
+        sta GATHERL,y
+        lda LV_PAGE0+$100,x
+        sta GATHERH,y
+        dey
+        bpl @gl
+  .elseif MODELB
+        ; the tiles are contiguous from TILES (page aligned, 64 bytes each), so the
+        ; address is arithmetic: no table beside them.  Ids from FLAT0 are fills -- a
+        ; flat tile is two bytes alternating down every char (FLATTAB, the loader's;
+        ; the two solids are the last two entries) -- flagged by bit 6 of the high
+        ; byte, the low byte indexing the pair.
+        ; Between the full tiles and the flats are the HALF tiles (ids from half0,
+        ; the loader's): one 32-byte char row stored at halfhi:00 + k*32, the other
+        ; either a fill (its pair in HALFPAIR) or the same row again.  Their low byte
+        ; carries the flags: bit 2 = a half, bit 0 = the top row is the fill, bit 1 the
+        ; bottom (neither: both rows are the stored one).
+        lda (ptr),y
+        cmp #FLAT0
+        bcs @gflat
+        cmp half0
+        bcs @ghalf
+        tax
+        lsr
+        lsr
+        clc
+        adc #>TILES
+        sta GATHERH,y
+        txa
+        and #3
+        lsr
+        ror
+        ror                         ; (id & 3) << 6
+        sta GATHERL,y
+        dey
+        bpl @gl
+        bmi @gdone
+@gflat: sbc #FLAT0                  ; (C is set)
+        asl
+        sta GATHERL,y
+        lda #$C0
+        sta GATHERH,y
+        dey
+        bpl @gl
+        bmi @gdone
+@ghalf: cmp mir0
+        bcs @gmir
+        tax                         ; X = the id, for the range tests
+        sbc halfsub                 ; k, the slot from the halves' page (C is clear:
+                                    ; halfsub is the loader's half0 - HALFOFF - 1)
+        sta tmp
+        lsr
+        lsr
+        lsr
+        clc
+        adc halfhi6
+        sta GATHERH,y
+        lda tmp
+        asl
+        asl
+        asl
+        asl
+        asl                         ; (k & 7) << 5: the shifts drop the rest
+        cpx half1                   ; a half: bit 2, the fill row's flag by range:
+        adc #5                      ; below half1 4|1 (top fills), else 4|2 (C from cpx)
+        cpx half2
+        bcc @gh2                    ; below half2: done
+:       eor #2                      ; from half2 (so from half1): 6 -> 4, both stored
+@gh2:   sta GATHERL,y
+        dey
+        bpl @gl
+        bmi @gdone
+@gmir:  sbc mir0                    ; a mirrored tile: its source's slot (C is set),
+        tax                         ; addressed as a full tile's, kind 3
+        lda MIRTAB,x
+        tax
+        lsr
+        lsr
+        clc
+        adc #>TILES
+        sta GATHERH,y
+        txa
+        and #3
+        lsr
+        ror
+        ror                         ; (slot & 3) << 6
+        ora #3
+        bne @gh2                    ; (always)
+    .endif
+@gdone: rts
+; the title pack's directory entries and mask addresses (and nothing else now): the
+; eight bytes at (ptr) into MAPBUF, ptr left pointing at the copy (low.s dirfetch)
+fetch8:
+        ldy #7
+:       lda (ptr),y
+        sta MAPBUF,y
+        dey
+        bpl :-
+        lda #<MAPBUF
+        sta ptr
+        lda #>MAPBUF
+        sta ptr+1
+        rts
+        .segment "MAP6BSS"          ; the level's half and mirror shape (the loader's)
+half0:     .res 1                   ; the level's half tiles: first id, the two range
+half1:     .res 1                   ;   boundaries (bottom fills from half1, rowpairs
+half2:     .res 1                   ;   from half2), the halves' page (the loader's;
+halfhi6:   .res 1                   ;   bank 5 keeps its own halfhi for the row loop)
+halfsub:   .res 1                   ; half0 less the slot the first half takes in that
+                                    ;   page: id - halfsub = the half's slot from the page
+mir0:      .res 1                   ; the first mirrored tile's id (the loader's)
+MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
+  .endif
         PLACE "LOW", "TIL5ENT"     ; render-time helpers in the NMI page ($0D03..),
                                    ; copied there at init; banked: the start of bank 5
 ; ============================================================================

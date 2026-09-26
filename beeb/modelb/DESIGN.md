@@ -50,7 +50,7 @@ because they are copied while it is still being read).
 |---|---|---|---|
 | 4 | the sprite row loop at $8000, entered there (`BANKENTRY`; `SPRITE_LOOPS 1, 0`), SWAPTAB at $BB00, MASKTAB0..3 $BC00-$BFFF | images and masks $83C0-$BAFF: the resident block (SPRC) first, the level's after | (untouched) |
 | 5 | bank5_entry and drawrect_clip at $8000 (`BANKENTRY`); from $B620 the tile blitter (drawrect, the row loop, the gather), ringaddr and the ring modulus, select_backbuf (which points ringaddr at its buffer's assembled row table), scroll_validate, the dirty lists and mark/draw_dirty, copy_partial, blank_below, mirdirty, and the buffers' state (BUF_CX/CY, PART_CY/F, FLATTAB) | the full tiles from $8100 (up to 193: L4B), the half tiles' stored rows from the 32-byte slot after them (up to 34), their pair table after those | the menu overlay from $8100: menu.s, the tune and its player, the font |
-| 6 | the row loop without the mirrored blitter at $8000 (`BANKENTRY`; `SPRITE_LOOPS 0, 1`), MASKTAB0..3 $BC00-$BFFF | sprites $8260-$87FF, the map at $8800 (up to 8K), the level's sprites above it, the resident block's bank-6 part below $BC00 | the title pack at $8900, over the map |
+| 6 | the row loop without the mirrored blitter at $8000 (`BANKENTRY`; `SPRITE_LOOPS 0, 1`), then the gather (`gather6`, `fetch8`) and its shape, MASKTAB0..3 $BC00-$BFFF | sprites $8310-$87FF, the map at $8800 (up to 8K), the level's sprites above it, the resident block's bank-6 part below $BC00 | the title pack at $8900, over the map |
 | 7 | the far table (the only copy: farcall pages bank 7 to read it), the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue, SPRMASK and the level's sprite directory (`SPR_TABLE`, loaded), draw_sprites, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
 Every bank starts with the same far table at $8000 (banks.s `COMMON_TABLES`), so the
@@ -67,7 +67,7 @@ and blank_below; copy_partial -- and the logic one per tile it changes
 (m_mark_dirty, which parks X in `farx` because the thunk takes X).  The two
 crossings that happen once a sprite and once an erased rect skip the far table
 (~90 cycles) for low RAM's `callbank` (~30): page the bank, `jsr BANKENTRY` --
-$BFFD, a `jmp` to the sprite row loop in banks 4 and 6 and to drawrect_clip in
+$8000, the sprite row loop in banks 4 and 6 and bank5_entry + drawrect_clip in
 bank 5 -- and bank 7 back through `pagelogic`.  `mapstrip`, the row loop's, pages
 bank 5 back directly (dirfetch, the prologue's, restores 7 itself).  The mask
 tables are assembled too.
@@ -113,10 +113,14 @@ RAM's and run with bank 7 paged (the records).  A frame is one far call into ban
 A far call (`farjsr`, low.s) pushes the caller's bank, a return into `fcret` and the
 target, and rts's into it: ~90 cycles, nesting and interrupt safe; A goes in and
 comes back, Y survives, X does not.  Two things the Master does inline go through
-main RAM here because a bank cannot page another over itself: the tile blitter's map
-row is fetched into MAPBUF a tile row at a time (`mapstrip`, which returns to the
-caller's bank).  The title pack's directory entries and mask addresses, in bank 6,
-come into MAPBUF too (`dirfetch`, mapstrip with a count of 8); the game's own
+main RAM here because a bank cannot page another over itself: a tile row's gather
+runs in bank 6, beside the map it reads in place (`gather6`, engine.s, with the
+level's half and mirror shape in bank 6's MAP6BSS), and leaves GATHERL/GATHERH in
+low RAM for the row loop in bank 5; `mapstrip` pages bank 6 in around it and bank 5
+back.  (Until 26 Sep 2026 the map row was copied to low RAM and gathered in bank 5:
+the fold saves ~14 cycles a tile, up to ~1.2% of a frame.)  The title pack's
+directory entries and mask addresses, in bank 6, come into MAPBUF (= GATHERH) through
+`dirfetch` and bank 6's `fetch8`; the game's own
 directory is in bank 7 beside the prologue, which reads it in place as the Master's
 does (it lived above the map in bank 6 until 26 Sep 2026: ~1,250 cycles a frame).
 
@@ -280,7 +284,8 @@ There is no pause on either target (removed 26 Sep 2026).
 - `ringup p` folds `p` 16 bits wide against the buffer's end; `select_backbuf` sets
   `ringbhi/ringehi/ringe3/ringneg` and rebuilds RINGLO/HI from the buffer's base.
 - `drawrect` is whole in bank 5 (erase_old reaches its clip through `F_DRAWRECT`);
-  the map fetch is `maprow5` + `mapstrip`; the gather is arithmetic.
+  the map row is `maprow5`; `mapstrip` runs the gather (arithmetic on the Model B,
+  LV_PAGE0 on the converged Master) in bank 6 (`gather6`).
 - `drawsprite`: no bank switching in the prologue; the directory read in place
   (bank 7, as the Master's); the dispatch index goes in `sp_disp` and the loop copy patches its
   own jump; the hand-over to the row loop is a far call chosen by `sp_dbank`.

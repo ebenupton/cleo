@@ -97,32 +97,24 @@ maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 <<
         sta ptr
         rts
 
-mapstrip:                           ; (ptr), 0..rc_nt -> MAPBUF; bank 5 back (the row
-        ldy rc_nt                   ; loop's: dirfetch, the other caller, restores its own)
-mapstripy:                          ; (Y = the count: dirfetch)
-        bankimm lda, BANK_MAP, 0
+mapstrip:                           ; (ptr) = the row's first tile: its gather, run in
+        bankimm lda, BANK_MAP, 0    ; bank 6 beside the map (engine.s gather6), into
+        sta ROMSEL_CPY              ; GATHERL/GATHERH here; bank 5 back (the write bank:
+        sta ROMSEL                  ; drawrect sets it after the call)
+        jsr gather6
+        bankimm lda, BANK_TILES, 0
         sta ROMSEL_CPY
-        sta ROMSEL
-:       lda (ptr),y
-        sta MAPBUF,y
-        dey
-        bpl :-
-        bankimm lda, BANK_TILES, 0  ; (the write bank: drawrect sets it after the call;
-        sta ROMSEL_CPY              ;  dirfetch goes on to pagelogic)
         sta ROMSEL
         rts
 
-; the sprite directory (and the title pack's) is in bank 6 and the prologue in bank
-; 7: an entry's eight bytes come across here, and ptr is left pointing at the copy.
-; (mapstrip's loop, with its count in Y: rc_nt is drawrect's and is left alone.)
+; the title pack's directory is in bank 6 and the prologue in bank 7: an entry's
+; eight bytes come across here (bank 6's fetch8), and ptr is left pointing at the copy
 dirfetch:                           ; ptr -> the entry in bank 6
-        ldy #7
-        jsr mapstripy
-        lda #<MAPBUF
-        sta ptr
-        lda #>MAPBUF
-        sta ptr+1
-        jmp pagelogic               ; bank 7 back (mapstrip left bank 5)
+        bankimm lda, BANK_MAP, 0
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jsr fetch8
+        jmp pagelogic               ; bank 7 back
 
 ; ---------------------------------------------------------------- the direct switch
 ; The two crossings that happen once a sprite and once an erased rect skip the far
@@ -136,7 +128,12 @@ callbank:                           ; A = the bank (the write bank is set by the
         jmp pagelogic
 
         .segment "LOWBSS"
-MAPBUF:   .res 21                   ; a tile row of the rectangle: 21 tiles at most
+GATHERH:  .res 21                   ; a tile row's gather (gather6): 21 tiles at most --
+MAPBUF = GATHERH                    ; and dirfetch's eight bytes, drawsprite's, when no
+                                    ; rect is being drawn
+        .segment "LOWBSS2"          ; the rest of low RAM, above the code
+GATHERL:  .res 21
+        .segment "LOWBSS"
 ; the mirror's bookkeeping (display.s): the blitters in bank 5 note what they wrote
 ; to the ring's last slot row, the copy in bank 7 reads it
   .if BHW

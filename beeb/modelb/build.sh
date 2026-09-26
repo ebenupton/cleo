@@ -43,7 +43,7 @@ for pass in 1 2 3; do
 import re
 want = ['boot','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','SPR_TABLE','mapshr','MAPSTRIDE','FLATTAB',
-        'half0','half1','half2','halfhi','halfsub','mir0','MIRTAB','sprc_ok','sprx_ok','HPAIR0','HPAIR1',
+        'half0','half1','half2','halfhi','halfhi6','halfsub','mir0','MIRTAB','sprc_ok','sprx_ok','HPAIR0','HPAIR1',
         'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
 addr = {}
 import os

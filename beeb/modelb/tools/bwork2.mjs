@@ -1,9 +1,9 @@
 // Frame cost: cycles from one frame_top (bank 7) to the next, less the wait for the
 // vsync peg, over N frames of a key script; prints the distribution and the far-call
-// count per frame.
+// count per frame.  BDISC/BLABELS: another build's disc and labels.
 import { openB } from "./bopen.mjs";
 const frames = parseInt(process.argv[2] ?? "300"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "0");
-const { s, cpu, A, bank, cyc, runTo, PB } = await openB({ level: LEVEL }); const B7 = PB(7);
+const { s, cpu, A, bank, cyc, runTo, PB } = await openB({ level: LEVEL, ...(process.env.BDISC ? { disc: process.env.BDISC, labels: process.env.BLABELS } : {}) }); const B7 = PB(7);
 // work = frame_top .. the flip request (render_frame's end): everything but the peg wait
 let t0 = -1, work = [], far = 0, fars = [], isr = 0, isrs = [], isrAt = -1;
 const meter = cpu.debugInstruction.add((pc, op) => {
