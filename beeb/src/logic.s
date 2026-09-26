@@ -3246,7 +3246,7 @@ ob_switch:
         jmp m_addsprite
 
 ; ============================================================================
-; Status bar digits (drawn into the bar master image in bank 4)  [main RAM]
+; Status bar digits (drawn straight into the bar, from HUD_BANK's digit art)
 ; ============================================================================
         PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with the digits and the bar art
 ; draw digit A at bar pixel column X (even), digit slot Y (0..8): copies a 64-byte digit

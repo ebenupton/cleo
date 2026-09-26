@@ -124,7 +124,7 @@ export class Harness {
       ["MIRR_R", A.MIRR_R, 2], ["MIRR_LO", A.MIRR_LO, 2],
       ["NSPR", A.NSPR, 1], ["SPRLIST", A.SPRLIST, 5 * MAXSPR, "sprites"],
       ["RECCNT", A.RECCNT, 2], ["SPRREC", A.SPRREC, 2 * MAXREC * 10], ["KEEP", A.KEEP, MAXREC],
-      ["DIRTYCNT", A.DIRTYCNT, 2], ["DIRTYLIST", A.DIRTYLIST, 2 * 2 * 16],
+      ["DIRTYCNT", A.DIRTYCNT, 2], ["DIRTYLIST", A.DIRTYLIST, 2 * 2 * 64, "dirty"],
       ["px", A.px, 2], ["py", A.py, 2], ["vx", A.vx, 2], ["vy", A.vy, 2],
       ["frame", A.frame, 2], ["health", A.health, 1], ["hurt", A.hurt, 1],
       ["level", A.level, 1], ["score", A.score, 3],
@@ -134,7 +134,12 @@ export class Harness {
     const h = createHash("sha256"), parts = {};
     for (const [name, addr, len, kind] of this.sceneRanges()) {
       const b = Buffer.alloc(len);
-      if (kind === "sprites" && this.A.SPR_XL !== undefined) {   // five arrays: as id,xl,xh,yl,yh records
+      if (kind === "dirty") {         // each buffer's list up to its count: the capacity
+        const cap = (this.A.DIRTYCNT - this.A.DIRTYLIST) / 4;   // (DIRTYMAX) is a build choice
+        const n = cap >= 1 && cap <= 64 && Number.isInteger(cap) ? cap : 16;
+        for (let bf = 0; bf < 2; bf++) { const c = Math.min(this.rd(this.A.DIRTYCNT + bf), n);
+          for (let i = 0; i < 2 * c; i++) b[bf * 128 + i] = this.rd(this.A.DIRTYLIST + bf * 2 * n + i); }
+      } else if (kind === "sprites" && this.A.SPR_XL !== undefined) {   // five arrays: as id,xl,xh,yl,yh records
         const n = len / 5, F = [this.A.SPR_ID, this.A.SPR_XL, this.A.SPR_XH, this.A.SPR_YL, this.A.SPR_YH];
         for (let i = 0; i < n; i++) for (let k = 0; k < 5; k++) b[i * 5 + k] = F[k] < 0x10000 ? this.rd(F[k] + i) : 0;
       } else for (let i = 0; i < len; i++) b[i] = this.rd(addr + i);

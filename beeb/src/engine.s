@@ -38,7 +38,7 @@ IRQ1V     = $0204
 ROMSEL_CPY= $F4
 
 SCREEN    = $3000
-BARBUF    = SPR_BAR               ; master bar image lives in bank 4 (2 char rows x 640 bytes)
+BARBUF    = SPR_BAR               ; the bar template's span list: HUD_BANK (6), in the box-star file
 
 BANK_SPR  = 4
 BANK_TIL0 = 5
@@ -47,13 +47,12 @@ BANK_TILES= 5                     ; every level's tile data now fits one bank
 BANK_LVL  = 7
 BANK_MAP  = 6                     ; the map and the tables read alongside it
 
-; bank 6: this level's overflow tiles, then the map and everything the renderer or
-; the logic reads in the same breath as the map.  It is here rather than in bank 7
+; bank 6: the tile-address table, then the map and everything the renderer or the
+; logic reads in the same breath as the map; the box stars and the HUD art above.  It is here rather than in bank 7
 ; because the game logic took that bank: the Model B it was written for had no
 ; HAZEL, and the map was the only thing big enough to make the room.  A Master
 ; does have HAZEL, so that placement is now a free choice rather than a forced
 ; one -- moving the logic there would hand bank 7 back.
-;         $8000  tiles 256.. of this level (16 tiles: no level needs more)
   .if .not MODELB                 ; (Model B: LV_PAGE0 is a label in bank 5, with the tiles)
 LV_PAGE0  = $8500                 ; tile id -> tile data address: 256 lo ((id&3)<<6),
                                   ; 256 hi ($80 | id>>2).  A map byte is a tile id, so
@@ -139,13 +138,8 @@ BARADDR   = $0300
   .else
 BUF0      = $3000
 .assert (RINGCHARS & $FF) = 0, error, "the ring folds on a high-byte compare"
-; Three rows come out of the ring so the status bar can stop chasing it:
-;   $3000  the row copy_partial fills with the window's top slice
-;   $3280  a copy of the ring's last 80 chars, immediately before the ring, so a row
-;          that straddles the ring end can still be read as one run
-;   $3500  the ring, 28 rows -- both ends page aligned, so ringup stays a byte compare
-;   $7B00  the bar
-; The ring is the entire screen and the CRTC folds it for free: an address that runs
+; The layout: the bar at $2B00 (below the screen, main RAM, single buffered), then each
+; buffer's ring at $3000-$7FFF, main and shadow.  The ring is the entire screen and the CRTC folds it for free: an address that runs
 ; off $8000 comes back to $3000, which is the ring base, so a displayed row may straddle
 ; the end and no mirror copy is needed.  That is the whole reason RINGROWS is 32 -- it
 ; is not a choice, it is the size of the region the hardware wraps.
@@ -187,6 +181,9 @@ MAXSPR    = 32
   .endif
 
 ; key bits
+DIRTYMAX = 20                     ; dirty tiles a buffer can queue: a switch marks 2 x its
+                                  ; height at once, 18 for the tallest (level 7's main map);
+                                  ; past this the buffer is redrawn whole (mark_dirty)
 K_LEFT  = 1
 K_RIGHT = 2
 K_UP    = 4
@@ -358,7 +355,7 @@ MAPSTRIDE: .res 2                  ; bytes per map row (1 << maplw): drawrect wa
                                    ; row pointer by this instead of re-deriving it
 BARCACHE:  .res 16                 ; the nine digit values last blitted into the one bar
                                    ; its bar was last drawn with, $FF = unknown
-DIRTYLIST: .res 2*2*16            ; per buffer dirty tiles (tx, ty)
+DIRTYLIST: .res 2*2*DIRTYMAX      ; per buffer dirty tiles (tx, ty)
 DIRTYCNT:  .res 2
 DISPSECT:  .res 1
 dispD:     .res 1                 ; ACCCON D for the PLAYFIELD sections: which buffer is
@@ -402,7 +399,7 @@ BUF_CY:    .res 2
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 FLATTAB:   .res 32                  ; the level's flat tiles: (even line, odd line) by
                                     ; id - FLAT0, the loader's; the solids are the last two
-DIRTYLIST: .res 2*2*16
+DIRTYLIST: .res 2*2*DIRTYMAX
         .segment "LOWBSS"           ; main RAM: the buffers' state bank 7 reads too
 BUF_CX:    .res 4                   ; (bank 7 invalidates a buffer: high byte $80)
 spbank:    .res 1
@@ -442,7 +439,7 @@ SPR_XL:    .res MAXSPR            ;  the sprite's number, so no stride to multip
 SPR_XH:    .res MAXSPR            ;  id, x lo/hi, y lo/hi in map px
 SPR_YL:    .res MAXSPR
 SPR_YH:    .res MAXSPR
-BARCACHE:  .res 16                  ; bar_bg (bank 4) resets it, bar_digit (bank 7) keeps it
+BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit (bank 7) keeps it
 DISPSECT:  .res 1
 NEXTSECT:  .res 1
   .endif
@@ -868,14 +865,13 @@ drawrect:
         bne @sc
         jmp @runend                 ; (out of bra's reach from here)
         ; unrolled copy, one block per char in descending char order so that entry at
-        ; char n-1 copies chars n-1..0.  A cell whose first byte has bit 7 set repeats
-        ; lines 0..3 as 4..7 (flagged by convert.py): 4 loads, 8 stores.
+        ; char n-1 copies chars n-1..0.
 .macro CPYN                         ; next line: A = (tp),y -> (sp),y ; y++
         lda (tp),y
         sta (sp),y
         iny
 .endmacro
-.macro CHARCPY c, per
+.macro CHARCPY c
 .if c = 0
   .if ::MODELB
         ldy #0                      ; line 0 (staz would reload the same 0 into Y)
@@ -902,37 +898,10 @@ drawrect:
         lda (tp),y                  ; line 7
         sta (sp),y
 .endmacro
-.macro CHARPER c, next              ; A = line 0 (Y = 8c unless c = 0)
-.if c = 0
-        staz sp
-.else
-        sta (sp),y
-.endif
-        ldy #8*c+4
-        sta (sp),y
-        ldy #8*c+1
-        lda (tp),y
-        sta (sp),y
-        ldy #8*c+5
-        sta (sp),y
-        ldy #8*c+2
-        lda (tp),y
-        sta (sp),y
-        ldy #8*c+6
-        sta (sp),y
-        ldy #8*c+3
-        lda (tp),y
-        sta (sp),y
-        ldy #8*c+7
-        sta (sp),y
-.if .paramcount = 2                 ; @p0 omits it: @advsp is the next instruction
-        jmp next
-.endif
-.endmacro
-@b31:   CHARCPY 3, @t3
-@b23:   CHARCPY 2, @t2
-@b15:   CHARCPY 1, @t1
-@b7:    CHARCPY 0, @t0
+@b31:   CHARCPY 3
+@b23:   CHARCPY 2
+@b15:   CHARCPY 1
+@b7:    CHARCPY 0
 @advsp: lda sp
         adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
@@ -1268,7 +1237,13 @@ scroll_validate:
         PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with the records
 match_sprites:
         ldx curbuf
-        lda RECCNT,x
+        txa                         ; an invalid buffer (BUF_CX high byte $80: a level
+        asl                         ; start, or a dirty list that overflowed) is about to
+        tay                         ; be redrawn whole, so nothing in it is kept and
+        lda BUF_CX+1,y              ; there is nothing to erase: its records go
+        bpl @valid
+        stz RECCNT,x
+@valid: lda RECCNT,x
         cmp NSPR
         bcc :+
         lda NSPR
@@ -3516,12 +3491,12 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
   .endif
         ldx #1
 @b:     lda DIRTYCNT,x
-        cmp #16
-        bcs @next
-        asl                         ; cnt*2, C = 0 (cnt < 16)
+        cmp #DIRTYMAX
+        bcs @over
+        asl                         ; cnt*2, C = 0 (cnt < DIRTYMAX)
         cpx #1
         bcc @b0                     ; buffer 0: its list is at 0
-        adc #31                     ; buffer 1: C = 1, so this adds 32
+        adc #2*DIRTYMAX-1           ; buffer 1: C = 1, so this adds 2*DIRTYMAX
 @b0:    tay
         lda tmp
         sta DIRTYLIST,y
@@ -3535,6 +3510,12 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
 @next:  dex
         bpl @b
         rts
+@over:  txa                         ; the list is full: that buffer is redrawn whole
+        asl                         ; instead (an unreachable window x; match_sprites
+        tay                         ; drops its records, scroll_validate redraws it)
+        lda #$80
+        sta BUF_CX+1,y
+        bne @next                   ; (always)
 
         PLACE "LOW2", "TILCODE"     ; Model B: bank 5, with drawrect
 draw_dirty:
@@ -3542,12 +3523,11 @@ draw_dirty:
         lda DIRTYCNT,x
         beq @done
         sta lcnt
-        txa
-        lsr                         ; C = curbuf (0 or 1), A = 0
-        ror                         ; curbuf * $80, C = 0
-        lsr
-        lsr                         ; curbuf * 32
-        sta lidx
+        lda #0                      ; the buffer's list: 0, or 2*DIRTYMAX for buffer 1
+        cpx #1
+        bcc @d0
+        lda #2*DIRTYMAX
+@d0:    sta lidx
 @l:     stz rc_x+1                  ; A is dead here: loaded just below
         ldy lidx
         lda DIRTYLIST,y
