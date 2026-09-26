@@ -4176,7 +4176,7 @@ music_stop:
         jmp sndwrite
 
 ; ---------------------------------------------------------------- interrupt takeover
-        PLACE "CODE", "TILLOW"      ; Model B: bank 5's low corner, with init5 (once only)
+        PLACE "CODE", "BOOT"        ; banked builds: start-up's, in main RAM (once only)
 take_over:
         sei
   .if .not BHW
@@ -4213,7 +4213,7 @@ take_over:
 ; ============================================================================
   .if .not BHW                   ; (Model B: modelb/src/display.s)
     .if MODELB
-        .segment "LGCCODE"          ; (the converged Master: start7's, in bank 7)
+        .segment "BOOT"             ; (the converged Master: start-up's, in main RAM)
     .endif
 crtc_init:
         ; standard 20K-mode timings, no interlace, cursor off

@@ -8,8 +8,9 @@
         .segment "LOWCODE"
 
 ; ---------------------------------------------------------------- far calls
-; X = the index of a (bank, address-1) entry in FARTAB, which every bank carries at
-; the same address.  A goes in and comes back, Y is untouched, X is destroyed.
+; X = the index of a (bank, address-1) entry in FARTAB, bank 7's: paged in to read
+; it (ROMSEL_CPY first, so an interrupt in between puts bank 7 back, not the caller's).
+; A goes in and comes back, Y is untouched, X is destroyed.
 ; Everything is on the stack -- the caller's bank, the return into fcret, the target
 ; -- so it nests and a step of the interrupt handler can land anywhere in it: the
 ; handler reads the bank from $F4 and puts it back, which is the MOS's own rule.
@@ -27,6 +28,9 @@ farcall:
         pha
         lda #<(fcret-1)
         pha
+        bankimm lda, BANK_LVL, 0    ; the table's bank (for reading: the write bank is
+        sta ROMSEL_CPY              ; set below, for the target)
+        sta ROMSEL
         lda FARTAB+2,x
         pha
         lda FARTAB+1,x

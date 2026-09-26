@@ -4,18 +4,18 @@
 ; the banks by ldprog.s; the menu overlay (bank 5 from MENU_BASE) is the menus with
 ; the tune and the font, and is loaded the same way.
 ;
-; $8000 of EVERY bank is the same: the far table (the thunk in low RAM reads it
-; from whichever bank is paged in); banks 5 and 7 go on with the small tables more
-; than one bank's code indexes (sprmul5, the row multiples, the ring modulus).  The
-; Master builds these at start-up; here they are assembled.
+; $8000 of bank 7 is the far table: the thunk in low RAM pages bank 7 to read it,
+; whichever bank called (only bank 7 and the bank-5 menu overlay ever do).  Then the
+; small tables more than one bank's code indexes (sprmul5, the row multiples, the ring
+; modulus).  The Master builds these at start-up; here they are assembled.
 ; ============================================================================
 .macro FAR bank, target, in        ; (in: the bank this copy of the table is in --
         .byte bank                  ;  the bank byte is patched by the loader, cpu.inc)
         BANKREF .sprintf("far_%s_%d", .string(target), in), in
         .byte <(target-1), >(target-1)
 .endmacro
-.macro COMMON_TABLES in             ; the far table: the same $40 bytes in every bank
-        .assert * = FARTAB, error, "the far table must be at FARTAB in every bank"
+.macro COMMON_TABLES in             ; the far table, bank 7's alone
+        .assert * = FARTAB, error, "the far table must be at FARTAB"
         FAR BANK_TILES, render5, in                 ; F_RENDER5
         FAR BANK_TILES, select_backbuf, in          ; F_SELBB
         FAR BANK_TILES, title_menu, in              ; F_TITLE     (the menu overlay)
@@ -32,16 +32,8 @@
         FAR BANK_LVL, calc_ring, in                 ; F_CALCRING
         FAR BANK_TILES, copy_partial, in            ; F_COPYPART
         FAR BANK_TILES, mark_dirty_x, in            ; F_MARKDIRTY (the logic)
-        FAR BANK_TILES, init5, in                   ; F_INIT5     (start-up: with take_over)
         .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"
-        .res $40 - 3*NFAR
 .endmacro
-        .segment "COMMON4"
-        COMMON_TABLES BANK_SPR
-        .segment "COMMON5"
-        COMMON_TABLES BANK_TILES
-        .segment "COMMON6"
-        COMMON_TABLES BANK_MAP
         .segment "COMMON7"
         COMMON_TABLES BANK_LVL
 
@@ -144,28 +136,14 @@ mirdirty:
         MIRDIRTY_BODY
   .endif
 
-; the once-only part of the Master's init_tables that is bank 5's or low RAM's,
-; then the interrupt takeover -- in bank 5's low corner, where once-only code costs
-; the level nothing.  Bank 7's per-level clear (lvreset) is load_level's.
-        .import __TILBSS_RUN__: absolute, __TILBSS_SIZE__: absolute
-        .segment "TILLOW"
+        .segment "TILCODE"
 ; callbank's way into this bank (BANKENTRY jumps here): the write bank first -- A is
 ; the bank, as callbank left it -- then drawrect_clip, which bank 5's own draw_dirty
 ; also calls directly (with A something else, so the companion cannot sit there).
 bank5_entry:
         wrsel BANK_TILES, BANK_TILES
         jmp drawrect_clip
-init5:
-        .assert __TILBSS_SIZE__ < 256, error, "init5 zeroes TILBSS with an 8-bit index"
-        ldx #<__TILBSS_SIZE__
-        lda #0
-:       dex
-        sta __TILBSS_RUN__,x        ; the ring work's state: zero, as the Master's tables
-        bne :-
-        bankimm lda, BANK_SPR, BANK_TILES
-        sta spbank
-        jmp take_over
-        .segment "LGCCODE"
+        .segment "LGCCODE"          ; (bank 7's per-level clear: load_level's, and boot's)
 lvreset:
         lda #$80                    ; both buffers invalid: an unreachable window x
         sta BUF_CX+1                ; (scroll_validate redraws them whole)

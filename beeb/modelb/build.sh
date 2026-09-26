@@ -41,7 +41,7 @@ for pass in 1 2 3; do
     # what the loaders need from the game: its addresses
     python3 - <<'EOF'
 import re
-want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
+want = ['boot','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','SPR_TABLE','mapshr','MAPSTRIDE','FLATTAB',
         'half0','half1','half2','halfhi','halfsub','mir0','MIRTAB','sprc_ok','sprx_ok','HPAIR0','HPAIR1',
         'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
@@ -79,9 +79,10 @@ EOF
     python3 - <<'EOF'
 import os
 BD = os.environ['BD']
-pieces = [(4, 0x8000, 'b4c.bin'), (4, 0x8300, 'b4t.bin'), (4, 0xBC40, 'b4x.bin'),
-          (5, 0x8000, 'b5c.bin'), (5, 0xB620, 'b5x.bin'),         # (B5X in cleo_b.cfg)
-          (6, 0x8000, 'b6c.bin'), (6, 0x8040, 'b6l.bin'), (6, 0x8400, 'b6t.bin'), (6, 0xBDA0, 'b6x.bin'),
+pieces = [(4, 0x8300, 'b4t.bin'), (4, 0xBC40, 'b4x.bin'),
+          (5, 0xB620, 'b5x.bin'),                                 # (B5X in cleo_b.cfg)
+          (6, 0x8400, 'b6t.bin'), (6, 0xBDA0, 'b6x.bin'),
+          (7, 0x7000, 'boot.bin'),        # main RAM (BOOTRAM): start-up and the low-RAM image
           (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin')]
 if os.environ.get('TARGET') == 'master':
     pieces.append((7, 0x0600, 'mcode.bin'))         # main RAM: the Master's handler and chain
@@ -107,7 +108,9 @@ for i in range(0, len(wr), 4):
     bank, addr, kind = wr[i], wr[i + 1] | (wr[i + 2] << 8), wr[i + 3]
     assert piece_bytes(bank, addr, 3) == b'\x8d\x30\xfe', 'write-bank store %d:$%04X is not sta $FE30' % (bank, addr)
     assert kind in (4, 5, 6, 7, 0xFE), 'write-bank store %d:$%04X: kind $%02X' % (bank, addr, kind)
-open(BD + '/BANKS', 'wb').write(tab + body + fix + b'\xff' + wr + b'\xff')
+banks = tab + body + fix + b'\xff' + wr + b'\xff'
+assert 0x2000 + len(banks) <= 0x7000, 'BANKS (read to $2000) would run into the start-up piece at $7000'
+open(BD + '/BANKS', 'wb').write(banks)
 print('BANKS: %d pieces, %d bytes, %d bank patches, %d write-bank stores' % (len(pieces), len(tab) + len(body), len(fix) // 3, len(wr) // 4))
 EOF
 done

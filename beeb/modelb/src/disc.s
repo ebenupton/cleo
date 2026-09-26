@@ -11,8 +11,6 @@
         .segment "LGCBSS"
 dsk_type: .res 1                    ; 0 = 8271, 1 = 1770 (loader.s decides at boot)
 dsk_drv:  .res 1                    ; 0 or 1: the drive DFS had current
-dsk_banks: .res 4                   ; the physical bank of each of banks 4..7 (loader.s;
-dsk_board: .res 1                   ; start7 copies them to PBANK) and the board (PBOARD)
 ld_sec:   .res 2                    ; read_sectors: first sector, count, destination
 ld_n:     .res 1
 ld_dst:   .res 2
@@ -225,8 +223,9 @@ w_wait: ldx #20
 w_trk:    .res 1                    ; the 1770's head, as far as this driver knows
         .segment "LGCCODE"
 
-; the 1770 board is reset and its head found once, at start-up (start7): the 8271
-; keeps DFS's state and needs nothing
+; the 1770 board is reset and its head found once, at start-up (init.s, main RAM):
+; the 8271 keeps DFS's state and needs nothing
+        .segment "BOOT"
 disc_init:
         lda dsk_type
         beq @done
@@ -256,6 +255,7 @@ disc_init:
   .if .not BHW
 @drvsel: .byte $25, $26, $35, $36   ; drive 0, 1, 0 side 1, 1 side 1 (engine.s disc_drive)
   .endif
+        .segment "LGCCODE"
 
 ; ---------------------------------------------------------------- the loader
 ; The NMI stubs go to their page and the load-time program to LDPROG, then it runs:

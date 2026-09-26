@@ -26,14 +26,13 @@
 VSPEG     = 3                       ; vsyncs a rendered frame, as the Master
   .endif
 
-FARTAB    = $8000                   ; every bank carries the same far table here
-                                    ; (banks.s)
+FARTAB    = $8000                   ; bank 7: the far table (banks.s; farcall pages
+                                    ; bank 7 to read it)
 SWAPTAB   = $8300                   ; static in bank 4: dot reversal (bank 6 draws
 MASKTAB0  = $8400                   ; nothing mirrored, so that page holds data there);
 MASKTAB1  = MASKTAB0 + $100         ; the four mask-phase pages in both sprite banks
 MASKTAB2  = MASKTAB0 + $200
 MASKTAB3  = MASKTAB0 + $300
-BANKCODE  = $8040                   ; bank 7's entry vector, where the loader jumps
 BANKENTRY = $BFFD                   ; banks 4, 5 and 6: a jump to the routine bank 7 calls
                                     ; once a sprite or rect (low.s callbank): the sprite
                                     ; row loop, drawrect_clip
@@ -157,6 +156,5 @@ F_DRAWSPR   = 12*3                  ; drawsprite      bank 7 (the menus' title p
 F_CALCRING  = 13*3                  ; calc_ring       bank 7 (the menus)
 F_COPYPART  = 14*3                  ; copy_partial    bank 5
 F_MARKDIRTY = 15*3                  ; mark_dirty      bank 5 (the logic; X in farx)
-F_INIT5     = 16*3                  ; init5 + take_over, bank 5's low corner (start-up)
-NFAR        = 17
+NFAR        = 16
 .assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"

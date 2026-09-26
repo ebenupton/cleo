@@ -19,7 +19,6 @@
         OUTC STAGE_LVL
         OUTC TITLE_ADDR
         OUTC MAP6
-        OUTC BANKCODE
         OUTC LV_OBJS
         OUTC LV_PAGE0
         OUTC TAILBUF

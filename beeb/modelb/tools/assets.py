@@ -48,8 +48,8 @@ VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 
 # level image of bank 5 is its code and BSS from $8100 and the tiles above them, page
 # aligned.  These are the bounds the linker config (cleo_b.cfg) and defs.inc share.
 B4_DATA = (0x8800, 0xBC40)                  # bank 4: images and masks
-B4_HOLE = (0x8040, 0x8300)                  #   masks on their own below the tables
-B6_HOLE = (0x8180, 0x8300)                  # bank 6: below the tables, above the low image
+B4_HOLE = (0x8000, 0x8300)                  #   masks on their own below the tables
+B6_HOLE = (0x8000, 0x8300)                  # bank 6: below the tables
 B6_SWAP = (0x8300, 0x8400)                  #   the page SWAPTAB would take: data here
 B6_TOP = 0xBDA0                             #   the row loop and copy blitter above this
 MAP6 = 0x8800                               #   the map, then images (the directory: bank 7)

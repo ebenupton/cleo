@@ -86,8 +86,8 @@ BHW = MODELB
         .ident(.concat("@bf_", name)):
         .pushseg
         .segment "BANKFIX"
-    .if b = 0
-        .byte BANK_MAP
+    .if b = 0                       ; low RAM: its image, in the BOOT piece (main RAM,
+        .byte BANK_LVL              ; filed under bank 7 in BANKS)
         .word .ident(.concat("@bf_", name)) - 1 - __LOWCODE_RUN__ + __LOWCODE_LOAD__
     .else
         .byte b
@@ -135,7 +135,7 @@ BHW = MODELB
         .pushseg
         .segment "WRFIX"
     .if b = 0
-        .byte BANK_MAP
+        .byte BANK_LVL
         .word .ident(.concat("@wr_", name)) - 3 - __LOWCODE_RUN__ + __LOWCODE_LOAD__
     .else
         .byte b

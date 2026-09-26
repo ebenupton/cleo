@@ -9,10 +9,10 @@
 ; controller the game's own driver is to use, and the game.  Everything else -- the
 ; menu overlay, the title pack, every level -- the game loads itself (disc.s,
 ; ldprog.s), reading the physical banks from PBANK, which start7 fills from the
-; four bytes this leaves in bank 7 (dsk_banks).
+; four bytes this leaves in the start-up piece (dsk_banks).
 ; ============================================================================
         .setcpu "6502"
-        .include "defs_ld.inc"      ; BANKCODE, dsk_type, dsk_drv, dsk_banks, dsk_board,
+        .include "defs_ld.inc"      ; boot, dsk_type, dsk_drv, dsk_banks, dsk_board,
                                     ; BOARD_*, WRSEL_* (build.sh)
 OSFILE  = $FFDD
 OSGBPB  = $FFD1
@@ -271,7 +271,7 @@ start:
         bpl :-
         lda board
         sta dsk_board
-        jmp BANKCODE                ; bank 7's entry vector (bank 7 is paged)
+        jmp boot                    ; the game's start-up, in main RAM (init.s)
 
 ; ---------------------------------------------------------------- the write bank
 ; X = a socket: make it the one a store reaches, on a board that chooses that apart

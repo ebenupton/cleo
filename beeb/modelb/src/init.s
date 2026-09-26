@@ -1,30 +1,14 @@
 ; ============================================================================
-; Start-up.  The loader leaves bank 7 paged in and jumps to $8100.  The low-RAM
-; image lives in bank 6 (the only bank with a corner free below the mask tables),
-; so the copy runs there; the rest is the Master's start (src/main.s) less the
-; disc: the tables it builds are static here (banks.s) and the bank-5 part is
-; init5.
+; Start-up, in main RAM: the BOOT piece (BANKS puts it at BOOTRAM, display RAM
+; nothing has drawn in yet) with the low-RAM image behind it.  The loader jumps to
+; `boot` with bank 7 paged.  Code in main RAM pages any bank it likes and carries
+; on, so none of this needs a place in a bank: once play starts the display
+; overwrites it.  The tables it builds on the Master are static here (banks.s).
 ; ============================================================================
-        .segment "LGCENT"           ; bank 7, $8100: the entry vector
-        .assert * = BANKCODE, error, "the loader jumps to BANKCODE"
-; A bank cannot page itself out and carry on: the instruction after the switch is
-; read from the new bank.  So each switch lands on its continuation: entry's, at
-; $8040 in bank 7, on start6 at $8047 in bank 6; bank 6's to7, the same seven bytes
-; at $8040 there, on the jmp start7 at $8047 in bank 7.
-entry:  bankimm lda, BANK_MAP, BANK_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL                  ; the next fetch is bank 6's start6
-        .assert * = BANKCODE + 7, error, "entry's switch must end where start6 begins"
-        jmp start7                  ; bank 6's to7 lands here, in bank 7
-
-        .segment "MAPLO"            ; bank 6
-        .import __LOWCODE_SIZE__: absolute   ; (LOAD and RUN: cpu.inc, for the bank patches)
-to7:    bankimm lda, BANK_LVL, BANK_MAP ; start6's way out: the next fetch is bank 7's
-        sta ROMSEL_CPY              ; jmp start7, at the same address
-        sta ROMSEL
-start6:
-        .assert * = BANKCODE + 7, error, "start6 must follow entry's switch"
-        sei
+        .segment "BOOT"
+        .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute, __LOWCODE_SIZE__: absolute
+        .import __TILBSS_RUN__: absolute, __TILBSS_SIZE__: absolute
+boot:   sei
         ldx #$3F                    ; the stack is 64 bytes: $0100-$013F
         txs
         lda #0                      ; zero page ($F0-$FF is the MOS's: $F4 is the
@@ -33,37 +17,24 @@ start6:
         sta $0113,x                 ; wrapping; and $0114-$0203, the low RAM and the
         dex                         ; stack above $0113 (nothing is on it yet)
         bne :-
-        ; the low-RAM image is copied down to $0206 -- absolute indexed, the image being
-        ; under a page (14 bytes shorter than two pointers: this bank's corner is full)
         .assert __LOWCODE_SIZE__ < 256, error, "the low-RAM image is copied a byte at a time"
 @lc:    lda __LOWCODE_LOAD__,x      ; (X = 0) exactly its length: the bar starts at $0300
         sta __LOWCODE_RUN__,x
         inx
         cpx #<__LOWCODE_SIZE__
         bne @lc
-        ldx #@to7end-@to7-1         ; the switch to bank 7 runs from the stack page,
-:       lda @to7,x                  ; as the entry's did: a bank cannot page itself out
-        sta $0100,x
-        dex
-        bpl :-
-        jmp $0100
-@to7:   bankimm lda, BANK_LVL, BANK_MAP
+        bankimm lda, BANK_LVL, BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
-        jmp start7
-@to7end:
-
-        .segment "LGCCODE"
-start7:
-        wrsel BANK_LVL, BANK_LVL    ; (A = the bank from the stub: the write bank too)
+        wrsel BANK_LVL, BANK_LVL
         .assert dsk_board = dsk_banks + 4 && PBOARD = PBANK + 4, error, "the board byte follows the banks"
         ldx #4                      ; the physical banks and the board, from where the
-@pb:    lda dsk_banks,x             ; loader put them (start6 has just zeroed the low BSS)
-        sta PBANK,x
+@pb:    lda dsk_banks,x             ; loader put them (the loop above has just zeroed
+        sta PBANK,x                 ; the low BSS)
         dex
         bpl @pb
         jsr lvreset                 ; the records, the buffers' state
-        ; MUSON and SFXREQ: the zeros start6 left (low BSS, zero page)
+        ; MUSON and SFXREQ: the zeros above (low BSS, zero page)
         ; (music_init: an rts on the Model B, whose period table is static)
         lda #$34
         sta seed
@@ -72,7 +43,7 @@ start7:
         jsr blank_palette           ; nothing on the screen is a picture until the title
   .if .not BHW                      ; the converged Master: its handler's state in main RAM
         .import __TABLES_RUN__: absolute, __TABLES_SIZE__: absolute
-        .assert __TABLES_SIZE__ < 256, error, "start7 zeroes TABLES with an 8-bit index"
+        .assert __TABLES_SIZE__ < 256, error, "boot zeroes TABLES with an 8-bit index"
         ldx #<__TABLES_SIZE__       ; (LOADREQ above all: a load is not under way)
         lda #0
 :       dex
@@ -89,6 +60,24 @@ start7:
         inc curbuf
         jsr build_sections
         dec curbuf                  ; (1 -> 0: build_sections only reads it)
-        farjsr F_INIT5              ; bank 5's state, spbank, then the interrupt takeover
+        ; bank 5's state: the ring work's, zero as the Master's tables; spbank
+        bankimm lda, BANK_TILES, BANK_LVL
+        sta ROMSEL_CPY
+        sta ROMSEL
+        wrsel BANK_TILES, BANK_LVL
+        .assert __TILBSS_SIZE__ < 256, error, "boot zeroes TILBSS with an 8-bit index"
+        ldx #<__TILBSS_SIZE__
+        lda #0
+:       dex
+        sta __TILBSS_RUN__,x
+        bne :-
+        bankimm lda, BANK_SPR, BANK_LVL
+        sta spbank
+        jsr take_over               ; the interrupt: bank 5 still paged, as it was
+        jsr pagelogic               ; bank 7 (low RAM's, the image copied above)
         jsr disc_init               ; a 1770 board: reset, and the head found
         jmp game_main               ; the title menu loads its overlay and starts the tune
+; the loader's: the physical bank of each of banks 4..7 and the board -- read once,
+; above, into PBANK and PBOARD
+dsk_banks: .res 4
+dsk_board: .res 1

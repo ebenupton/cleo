@@ -501,7 +501,7 @@ mirror_copy:
         rts
 
 ; ---------------------------------------------------------------- the CRTC
-        .segment "LGCLO"
+        .segment "BOOT"             ; start-up's, in main RAM (init.s)
 crtc_init:                          ; start the chain at the bar and let vsync re-phase
         ldx #7                      ; written from the end of the tables: R8 = 0 first (no
 @w:     lda @reg,x                  ; interlace: the MOS's MODE 1 leaves interlace sync on,
