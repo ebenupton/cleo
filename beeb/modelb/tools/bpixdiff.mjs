@@ -12,6 +12,9 @@ let keys = 0, hold = 0, bad = 0;
 for (let f = 0; f < frames; f++) {
   if (hold-- <= 0) { keys = [0, 1, 2, 2|4, 1|4, 4, 16, 2|16, 1|16, 8][rnd() % 10]; hold = 4 + rnd() % 40; }
   for (const M of [X, Y]) { M.bank(7, () => { M.cpu.writemem(M.A.keys, keys); M.cpu.writemem(M.A.hurt, 1); M.cpu.writemem(M.A.health, 3); }); await M.runTo(M.A.frame_top, 7); }
+  if (f < 2) continue;              // the first two frames are drawn with the palette black and
+                                    // can still hold the load's staging bytes in ring rows the
+                                    // window has not reached: those are overwritten before use
   let n = 0, first = -1;
   for (let a = 0x0300; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) { n++; if (first < 0) first = a; }
   if (n) { console.log(`frame ${f}: ${n} display bytes differ, first at $${first.toString(16)}`); if (++bad >= 3) break; }

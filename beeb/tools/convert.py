@@ -864,7 +864,6 @@ print('refy snapped:', snapped)
 
 # Bank 4 layout (sprite table moved to main RAM; ANDY 4K holds the overflow):
 #   FONT $8000 (320)  DIGITS $8140 (640)  BAR $83C0 (1280)  sprite data from $88C0..$C000
-SPR_FONT   = 0x8000
 SPR_DIGITS = 0x8140
 SPR_BAR    = 0x83C0
 SPR_DATA   = 0x8000               # the mask planes need the room: the font, digits and
@@ -1249,9 +1248,11 @@ barspans += bytes([0xFF, 0xFF])
 print('bar: %d span bytes vs %d raw (%d free in bank 4)'
       % (len(barspans), len(barbytes), len(barbytes) - len(barspans)))
 
-# bank 6, in the box-star file, behind the boxes
+# bank 6, in the box-star file, behind the boxes: the HUD's digits and the bar.  The
+# menus' font is a file of its own, FONT, assembled into bank 7 beside the menu code
+# (menu.s font_art), so the text drawer reads it in place.
 boxfile = b''.join(allbox_bytes)
-SPR_FONT = BOX_BASE + len(boxfile); boxfile += font
+open(os.path.join(OUT, 'FONT'), 'wb').write(font)
 SPR_DIGITS = BOX_BASE + len(boxfile); boxfile += digits
 SPR_BAR = BOX_BASE + len(boxfile); boxfile += barspans
 HUD_BANK = 6
@@ -1355,8 +1356,8 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('TITLE_ADDR = $%04X\n' % TITLE_ADDR)
     for _n, _m in sorted(level_split.items()):
         f.write('LM_%s = %d\n' % (_n, _m))
-    f.write('SPR_FONT = $%04X\nSPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_ANDY = $%04X\n' %
-            (SPR_FONT, SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_ANDY))
+    f.write('SPR_BAR = $%04X\nSPR_DIGITS = $%04X\nSPR_DATA = $%04X\nSPR_ANDY = $%04X\n' %
+            (SPR_BAR, SPR_DIGITS, SPR_DATA, SPR_ANDY))
     for i, (name, ptr, W, hpx, lines, flags, mptr) in enumerate(tdir):
         f.write('TP_%s = %d\n' % (name.upper(), i))
     f.write('HUD_BANK = %d\n' % HUD_BANK)

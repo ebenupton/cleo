@@ -21,26 +21,10 @@ drawtext:
         beq @space
         cmp #'_'
         bne :+
-  .if MODELB
-        lda #0                      ; '_' = erase: draw an all-zero glyph (A is dead:
-        sta GLYPHBUF+0              ;  draw_glyph_rows starts with lda tx)
-        sta GLYPHBUF+1
-        sta GLYPHBUF+2
-        sta GLYPHBUF+3
-        sta GLYPHBUF+4
-        sta GLYPHBUF+5
-        sta GLYPHBUF+6
-        sta GLYPHBUF+7
-  .else
-        stz GLYPHBUF+0              ; '_' = erase: draw an all-zero glyph
-        stz GLYPHBUF+1
-        stz GLYPHBUF+2
-        stz GLYPHBUF+3
-        stz GLYPHBUF+4
-        stz GLYPHBUF+5
-        stz GLYPHBUF+6
-        stz GLYPHBUF+7
-  .endif
+        lda #<font_blank            ; '_' = erase: draw the all-zero glyph (A is dead:
+        sta w16b                    ;  draw_glyph_rows starts with lda tx)
+        lda #>font_blank
+        sta w16b+1
         jsr draw_glyph_rows
         beq @space                  ; Z = 1: draw_glyph_rows returns from its cpx #8
 :       jsr glyph_index
@@ -78,31 +62,20 @@ glyph_index:
 :       sbc #('0'-30)               ; C = 1 from the bcs: -'0'+30 in one subtraction
         rts
 
-; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows
+; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows.  The font is in the
+; menu code's own bank (Master: bank 7, font_art below; Model B: the overlay in bank 5,
+; banks.s), so the rows are read in place through w16b.
 draw_glyph:
-  .if MODELB                        ; (font_art moves with bank 5's code: no fold)
         stza w16b+1
         asl
         asl
         asl
         rol w16b+1                  ; C = 0: the byte it shifts out was 0
-        adc #<SPR_FONT
+        adc #<font_art
         sta w16b
         lda w16b+1
-        adc #>SPR_FONT
+        adc #>font_art
         sta w16b+1                  ; glyph rows
-  .else
-        .assert (SPR_FONT & $0101) = 0 && (<SPR_FONT) / 2 + 39*4 < 256, error, "draw_glyph folds the font base into its shifts"
-        asl
-        asl                         ; glyph (0..39) * 4, C = 0
-        adc #(<SPR_FONT) / 2        ; no carry out: the assert
-        asl                         ; glyph*8 + <SPR_FONT, C = its bit 8
-        sta w16b
-        lda #(>SPR_FONT) / 2
-        rol                         ; >SPR_FONT (even) + C
-        sta w16b+1                  ; glyph rows
-  .endif
-        jsr getglyph                ; main RAM: the font is in bank 4, this code in 7
 draw_glyph_rows:
         lda tx
         lsr
@@ -124,7 +97,9 @@ draw_glyph_rows:
         ringup sp
         sta sp+1
 :
-        lda GLYPHBUF,x
+        txa
+        tay
+        lda (w16b),y
         sta tmp                     ; row bits
         txa
         asl
@@ -159,6 +134,10 @@ draw_glyph_rows:
         beq :+
         jmp @row                    ; (the 6502 spellings put @row out of a branch's reach)
 :       rts
+  .if .not MODELB
+font_art:   .incbin "build/FONT"         ; the menus' 40 glyphs, 8 bytes each (tools/convert.py)
+  .endif
+font_blank: .res 8, 0               ; the erase glyph ('_' in a string)
 pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game px
 
 ; ---------------------------------------------------------------- menu screen helpers

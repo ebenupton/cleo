@@ -316,7 +316,6 @@ GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank 
 GATHERH:   .res 24                ;                       tile address hi
 SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
 SPRREC:    .res 2*MAXREC*10       ; per buffer drawn-sprite records: id,xl,xh,yl,yh, cxl,cxh,cy,w,h
-GLYPHBUF:  .res 8                 ; one font glyph, copied out of bank 4 for the menus
 RECCNT:    .res 2
 KEEP:      .res MAXREC
 dpass:     .res 1                 ; draw_sprites pass: 1 = box stars, 0 = the rest
@@ -427,7 +426,6 @@ KEYSCAN:   .res 1
 VS2T:      .res 2
         .segment "MNUBSS"           ; bank 5's menu overlay: the tune's player lives there
 MUSTMP:    .res 1                   ; (MUSON is in low RAM: the interrupt stub reads it)
-GLYPHBUF:  .res 8                   ; one font glyph (the font and the menus are both here)
 MUSDUR:    .res 1
 MUSNOTE:   .res 3
 ISRT1:     .res 1
@@ -4642,29 +4640,6 @@ build_tileaddr:
         jmp pagelogic
   .endif
 
-  .if .not MODELB
-; one font glyph out of bank 4, for the menus
-getglyph:
-        lda #HUD_BANK
-        sta ROMSEL_CPY
-        sta ROMSEL
-        ldy #7
-:       lda (w16b),y
-        sta GLYPHBUF,y
-        dey
-        bpl :-
-        jmp pagelogic
-        .segment "CODE"
-  .else
-        .segment "MNUCODE"          ; the font is in the overlay with the menus
-getglyph:
-        ldy #7
-:       lda (w16b),y
-        sta GLYPHBUF,y
-        dey
-        bpl :-
-        rts
-  .endif
 
         PLACE "LOW2", "TILCODE"     ; Model B: bank 5, with select_backbuf
 ; the screen address of each ring row, from the base of the buffer being drawn
