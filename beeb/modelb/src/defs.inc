@@ -80,8 +80,8 @@ CRTCB_B   = RING_B / 8
 ; through pagelogic (the write bank too) both the vsync's T1 restart and every step are
 ; ~23 cycles later -- 46 in all, 23 ticks -- and the -23 takes that back: tools/bcrtc.mjs
 ; shows R9 landing at char 41-53 of the section's first scanline, as before.
-VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 23 - 12   ; -12: the step's LOADREQ test and
-                                    ; the IER-masked entry, measured (tools/crtclog): R9 lands 43-91 cycles in, R4 by 109 of 128
+VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 23 - 12 + 2   ; -12: the step's LOADREQ test and the
+                                    ; IER-masked entry; +2 (ticks): loaded as an immediate, 4 cycles sooner
 
 ; ---------------------------------------------------------------- sideways RAM boards
 ; Which register chooses the bank a store goes to (the loader finds out: findram).  The

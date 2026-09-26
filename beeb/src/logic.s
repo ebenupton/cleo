@@ -251,7 +251,6 @@ starty:   .res 2
 exitx:    .res 2
 exity:    .res 2
 nobj:     .res 1
-pausing:  .res 1
 exiting:  .res 1
 level:    .res 1
 lives:    .res 1
@@ -845,7 +844,6 @@ level_init:
         sty running
         sty firing
         sty bactive
-        sty pausing
         sty exiting
         sty frame
         sty frame+1

@@ -8,7 +8,7 @@ game data and decompiled logic in the two original JARs.
 Boot `build/cleo.ssd` on a BBC Master 128 (SHIFT+BREAK). Tested in jsbeeb's Master model.
 
 Keys: `Z`/`X` or cursor left/right run, `RETURN` (or `SPACE`, cursor up, `:`) jumps,
-`/` (or cursor down) throws the boomerang, `ESCAPE` pauses. Menus use cursor keys and
+`/` (or cursor down) throws the boomerang. There is no pause. Menus use cursor keys and
 `RETURN`.
 
 ## Building

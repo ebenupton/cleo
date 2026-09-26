@@ -290,20 +290,6 @@ level_loop:
         sta logicvs
 
 frame_loop:
-        ; pause?
-        lda keys
-        and #K_MENU
-        beq fl_nopause
-        lda pausing
-        bne fl_nopause
-        jsr t_pause_menu            ; Z from A: 0 resume, else exit
-        bne title_loop
-        lda vsyncs
-        sta logicvs
-        inc pausing                 ; 0 -> 1 (it was 0 to get here): Z = 0
-        bne frame_loop
-fl_nopause:                         ; A = 0 (menu key up: clear) or pausing (held: kept)
-        sta pausing
         ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes two
         ; steps for each one, so the player, every animation and every enemy move
         ; twice as far per frame as they used to.  Two steps is a fixed pairing,
@@ -384,27 +370,6 @@ ensure_menu:
         inc title_res
 :       rts
   .endif
-; The pause key freezes the game: ESCAPE again resumes, RETURN leaves for the title.
-; Both targets (the Master had a RESUME / EXIT menu; it cleared the screen, bar
-; included, and nothing drew the bar's template back).  Returns A = 0 and Z = 1 to
-; resume, non-zero to exit: the caller branches on Z straight after the jsr.
-t_pause_menu:
-:       lda keys                    ; the pause key released first
-        and #K_MENU
-        bne :-
-@w:     lda vsyncs                  ; then a vsync at a time
-:       cmp vsyncs
-        beq :-
-        lda keys
-        and #K_MENU
-        bne @resume
-        lda keys
-        and #K_FIRE
-        beq @w
-        rts                         ; A = K_FIRE: exit (non-zero is all the caller tests)
-@resume:
-        lda #0
-        rts
 update_hiscore:
         lda hiscore
         cmp score

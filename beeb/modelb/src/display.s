@@ -85,9 +85,9 @@ isr_body:
 
 ; ---- vsync: restart T1 first (constant latency), counter = vsync -> the bar
 vsync_tick:
-        lda VS2T
+        lda #<VS2T                  ; (immediate: 4 cycles sooner than the old RAM copy)
         sta VIA_T1LL
-        lda VS2T+1
+        lda #>VS2T
         sta VIA_T1CH                ; (clears T1's flag)
         lda #$02
         sta VIA_IFR

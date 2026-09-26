@@ -192,7 +192,6 @@ K_RIGHT = 2
 K_UP    = 4
 K_DOWN  = 8
 K_FIRE  = 16
-K_MENU  = 32
 
 ; ---------------------------------------------------------------- zero page
         .zeropage
@@ -340,10 +339,6 @@ BUF_CY:    .res 2                 ; (a buffer is invalid when its BUF_CX high by
                                   ;  scroll_validate sees |dx| >= 80 and redraws it whole;
                                   ;  window x in chars never reaches $400)
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
-PART_CY:   .res 2                 ; per buffer: row/fine the partial (A) row was last copied for
-PART_F:    .res 2
-PART_LO:   .res 2                 ; per buffer: window columns of row wcy drawn since that copy
-PART_HI:   .res 2                 ;   (LO > HI = none)
 BUF_SEC0:  .res 4              ; per buffer: CRTC start of the frame's first section
 BUF_SEC0T1: .res 4             ;   and how long it lasts (the vsync handler needs both)
 BARDIRTY:  .res 1                 ; one bar, so one flag
@@ -377,9 +372,7 @@ MUSDUR:    .res 1
 MUSNOTE:   .res 3
 ISRT1:     .res 1
 ISRT2:     .res 1
-OSBLOCK:   .res 18
 KEYSCAN:   .res 1
-VS2T:      .res 2
 NEXTBUF:   .res 1
   .else
 ; Model B: main RAM is the screen, so each table lives in the bank of the code that
@@ -401,15 +394,11 @@ RINGLO:    .res RINGROWS            ; the buffer being drawn (select_backbuf reb
 RINGHI:    .res RINGROWS
 BUF_CY:    .res 2
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
-PART_CY:   .res 2
-PART_F:    .res 2
 FLATTAB:   .res 32                  ; the level's flat tiles: (even line, odd line) by
                                     ; id - FLAT0, the loader's; the solids are the last two
 DIRTYLIST: .res 2*2*16
         .segment "LOWBSS"           ; main RAM: the buffers' state bank 7 reads too
 BUF_CX:    .res 4                   ; (bank 7 invalidates a buffer: high byte $80)
-PART_LO:   .res 2                   ; (the sprite prologue widens the range)
-PART_HI:   .res 2
 spbank:    .res 1
 DIRTYCNT:  .res 2                   ; (the game loop)
 farx:      .res 1                   ; X across a far call (farcall needs X: m_mark_dirty)
@@ -435,7 +424,6 @@ SECTAB:    .res 2*48
 SFXDUR:    .res 1
 LOADREQ:   .res 1                 ; 0 running, 1 stop asked, 2 stopped, 3 resume asked (load_begin)
 KEYSCAN:   .res 1
-VS2T:      .res 2
         .segment "MNUBSS"           ; bank 5's menu overlay: the tune's player lives there
 MUSTMP:    .res 1                   ; (MUSON is in low RAM: the interrupt stub reads it)
 MUSDUR:    .res 1
@@ -596,26 +584,7 @@ drawrect:
         jsr mirdirty5
 @nomir:
   .endif
-        lda rc_y
-        cmp wcy
-        bne :+
-        ldx curbuf                  ; touches the window's top row: widen the partial-row
-        lda rc_x                    ; dirty column range (rects are window-clipped, so
-        sbc wcx                     ; the low byte of rc_x - wcx is the column; C = 1 from cmp wcy)
-        cmp PART_LO,x
-        bcs @plo
-        sta PART_LO,x
-@plo:   clc
-        adc rc_w
-  .if MODELB
-        sbc #0                      ; C = 0 (col + rc_w <= 80): the -1
-  .else
-        deca
-  .endif
-        cmp PART_HI,x
-        bcc :+
-        sta PART_HI,x
-:       ; ---- per-rect invariants: tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
+:       ; ---- per-rect invariants  (the ':' is kept: it holds the anonymous label count): tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
         lda rc_x+1
         sta w16+1                   ; the ring address's copy, from this load too
         lsr                         ; C = bit 0, A = bit 1 (rc_x+1 <= 3)
@@ -1821,16 +1790,7 @@ drawsprite:
         lsr
         lsr
         sta sp_r0                   ; sta sets no flags: Z still from the third lsr
-        bne @nopart
-        ldx curbuf                  ; touches the window's top row (see drawrect)
-        lda sp_c0
-        cmp PART_LO,x
-        bcs :+
-        sta PART_LO,x
-:       lda sp_c1
-        cmp PART_HI,x
-        bcc @nopart
-        sta PART_HI,x
+:                                   ; (kept: it holds the anonymous label count)
 @nopart:
         ; ---- record rect in current sprite record
         ldy #5
@@ -2562,52 +2522,22 @@ music_tab:                        ; SN76489 periods for MIDI 24..95: the first 1
 ; ring row above the window (the "A" section source), for the columns drawn since.
 ; ============================================================================
         PLACE "CODE", "TILCODE"     ; Model B: bank 5, with the ring work
-copy_partial:
-        lda wfine
-        bne :+
+copy_partial:                       ; the whole row, every frame the fine scroll is not 0
+        lda wfine                   ; (it used to track the columns drawn since the last
+        bne :+                      ;  copy: measured, that saved under 0.3% of a frame)
         rts
-:       ldx curbuf
-        cmp PART_F,x
-        bne @all
-        lda wcy
-        cmp PART_CY,x
-        bne @allcy                  ; A = wcy, and PART_F is already wfine
-        ; same source row and lines as last time: only the columns drawn since.  A
-        ; horizontal scroll does not matter: the composed row is a ring row at a fixed
-        ; offset from its source, so it moves with the ring and stays valid
-        lda PART_HI,x
-        cmp #ROWCHARS
-        bcc :+
-        lda #(ROWCHARS-1)
-:       sec
-        sbc PART_LO,x
-        bcs :+
-        rts                         ; nothing drawn in the top row
 :
-  .if MODELB
-        adc #0                      ; C = 1 from the bcs: +1
-  .else
-        inca
-  .endif
-        sta cnt
-        lda PART_LO,x
-        bpl @go                     ; LO <= 79 (it is <= min(HI, 79)): N = 0
-@all:   sta PART_F,x                ; A = wfine (the first bne)
-        lda wcy
-@allcy: sta PART_CY,x
-        lda #ROWCHARS
+:
+:       lda #ROWCHARS               ; (the three ':' keep the anonymous label count)
         sta cnt
         lda #0
-@go:    sta tmp4                    ; first column to copy
+        sta tmp4                    ; first column to copy
         clc
         adc wcx
         sta w16
         lda wcx+1
         adc #0
         sta w16+1
-        lda #$FF                    ; range is clean once copied
-        sta PART_LO,x
-        stz PART_HI, x              ; A dead: reloaded below
   .if MODELB
         lda barq                    ; the composed row is the ring row above the window,
         bne @nomir                  ; the last slot when the window starts at slot 0
@@ -3550,10 +3480,6 @@ init_tables:                        ; (the tables themselves are the file TABLES
         sta tset                    ; no tile set resident yet
         stz BARDIRTY
         stz BARBG
-        lda #<VS2T_DEFAULT
-        sta VS2T
-        lda #>VS2T_DEFAULT
-        sta VS2T+1
         rts
 
 
@@ -3653,7 +3579,7 @@ irq_handler:
         ; R9 = 1) both must be in place before the start of scanline 1 -- 128 cycles
         ; after the restart.  R6 is compared from scanline 1 on, so Q's R6 = 0 has
         ; the same deadline.  Everything else has a row or more to spare.  The chain is
-        ; phased (VS2T_DEFAULT) so the step fires ~50 cycles BEFORE the restart, the
+        ; phased (VS2T) so the step fires ~50 cycles BEFORE the restart, the
         ; hold below carries the first write past it, and the three deadline registers
         ; then land about 40, 60 and 80 cycles in, with the rest behind them.  Writing
         ; R4 third put it at ~140 for a 2-line P2: that section never ended, Q's R6
@@ -3769,9 +3695,9 @@ irq_handler:
         ; latch (how long section 0 lasts) is programmed further down, after the
         ; flip, because with no status bar section 0's length depends on the fine
         ; scroll and so belongs to the buffer that is about to be displayed.
-        lda VS2T
-        sta VIA_T1LL
-        lda VS2T+1
+        lda #<VS2T                  ; (immediate: 4 cycles earlier than the old RAM copy,
+        sta VIA_T1LL                ;  which VS2T allows for)
+        lda #>VS2T
         sta VIA_T1CH
         lda #$02
         sta VIA_IFR
@@ -3851,7 +3777,8 @@ irq_handler:
 ; CA1 fires at the end of the 2-line vsync pulse.  -35 put every step ~5 us INTO its
 ; section; the further -36 puts it ~30 us before the restart, so that the shape
 ; registers land early in the first scanline -- see the chain step in irq_handler.
-VS2T_DEFAULT = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 8   ; -8: the step's load-flag test
+VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 8 + 2   ; -8: the step's load-flag test; +2 (ticks): the
+                                    ; vsync handler loads it as an immediate, 4 cycles sooner
   .endif
 
 ; ---------------------------------------------------------------- keyboard
@@ -3862,7 +3789,7 @@ scan_keys:
         lda #3
         sta VIA_ORB                 ; disable keyboard autoscan
         stz keys                    ; built in place: the interrupt is atomic to its readers
-        ldx #10
+        ldx #9
 @k:     lda keytab,x
         sta VIA_ORANH
         lda VIA_ORANH
@@ -3877,8 +3804,8 @@ scan_keys:
 :       dex
         bpl @k
         rts
-keytab:  .byte $61,$19, $42,$79, $48,$39,$49, $68,$29, $62, $70
-keybits: .byte K_LEFT,K_LEFT, K_RIGHT,K_RIGHT, K_UP,K_UP,K_FIRE, K_DOWN,K_DOWN, K_FIRE, K_MENU
+keytab:  .byte $61,$19, $42,$79, $48,$39,$49, $68,$29, $62
+keybits: .byte K_LEFT,K_LEFT, K_RIGHT,K_RIGHT, K_UP,K_UP,K_FIRE, K_DOWN,K_DOWN, K_FIRE
 
 ; ---------------------------------------------------------------- sound
 ; sfx format: steps of (b0,b1,b2,frames) written to the SN76489 ; end = $FF

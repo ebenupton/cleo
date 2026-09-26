@@ -49,7 +49,7 @@ fcret:  sta fcA                     ; the target's A (Y must survive, X carries 
 
 ; ---------------------------------------------------------------- interrupts
 ; The chain step and the vsync work are in bank 7 with their tables: this pages it
-; in around them.  The step's timing (VS2T_DEFAULT) allows for the ~30 cycles that
+; in around them.  The step's timing (VS2T) allows for the ~30 cycles that
 ; takes, in place of the hold loop the Master's handler has.  The title tune's
 ; player is in the menu overlay (bank 5): the vsync work leaves MUSON set only
 ; while the overlay is there, and it is stepped from here, between the banks, once
@@ -59,7 +59,7 @@ irq_handler:
         sty irq_y
         lda ROMSEL_CPY
         pha
-        jsr pagelogic               ; bank 7, write bank too (VS2T_DEFAULT allows for it)
+        jsr pagelogic               ; bank 7, write bank too (VS2T allows for it)
         jsr isr_body
         lda MUSTICK                 ; the vsync's sound_tick, while the tune plays; the
         beq @nomus                  ; T1 steps come through here too and must not count

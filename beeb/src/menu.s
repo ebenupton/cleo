@@ -460,7 +460,7 @@ help_screen:
         lda #$FF
         sta lastkeys
 :       jsr menu_keys
-        and #(K_FIRE|K_RIGHT|K_MENU)
+        and #(K_FIRE|K_RIGHT)
         beq :-
         rts
 

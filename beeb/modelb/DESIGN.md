@@ -257,8 +257,7 @@ player lives in the overlay with its data and is stepped from the interrupt stub
 low RAM while MUSON is set; MUSON is cleared by `music_stop` in bank 7, which the
 level load calls, so the stub never enters bank 5 during a level.
 
-The pause menu is the one cut: during a level bank 5 holds no font, so ESCAPE
-freezes the game; ESCAPE again resumes, RETURN leaves for the title.
+There is no pause on either target (removed 26 Sep 2026).
 
 ## What the define changes, and only that
 
@@ -308,4 +307,4 @@ Y (the one site with Y live is `ldazy`), `bitimm` keeps A.
 21 visible rows against 30 (84 game px: the world's in-range decisions follow
 VISLINES, which is why the reference for the lock-step test is a 21-row Master).  The
 picture starts 72 lines after vsync, 4 scanlines below where a standard frame's centre
-would put it.  The pause menu is a freeze.  The tiles are the Master's, unfolded.
+would put it.  The tiles are the Master's, unfolded.

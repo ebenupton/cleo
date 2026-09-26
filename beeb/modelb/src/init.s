@@ -64,10 +64,6 @@ start7:
         bpl @pb
         jsr lvreset                 ; the records, the buffers' state
         ; MUSON and SFXREQ: the zeros start6 left (low BSS, zero page)
-        lda #<VS2T_DEFAULT
-        sta VS2T
-        lda #>VS2T_DEFAULT
-        sta VS2T+1
         ; (music_init: an rts on the Model B, whose period table is static)
         lda #$34
         sta seed

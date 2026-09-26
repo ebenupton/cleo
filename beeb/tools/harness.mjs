@@ -120,7 +120,6 @@ export class Harness {
       ["wcx", A.wcx, 2], ["wcy", A.wcy, 1], ["wfine", A.wfine, 1], ["wy", A.wy, 2],
       ["curbuf", A.curbuf, 1],   // (not BUF_VALID: the Master encodes it in BUF_CX now)
       ["BUF_CX", A.BUF_CX, 4], ["BUF_CY", A.BUF_CY, 2],
-      ["PART_LO", A.PART_LO, 2], ["PART_HI", A.PART_HI, 2],
       ["BARDIRTY", A.BARDIRTY, 2], ["BARBG", A.BARBG, 2],
       ["MIRR_R", A.MIRR_R, 2], ["MIRR_LO", A.MIRR_LO, 2],
       ["NSPR", A.NSPR, 1], ["SPRLIST", A.SPRLIST, 5 * MAXSPR],
