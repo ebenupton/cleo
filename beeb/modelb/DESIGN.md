@@ -200,7 +200,7 @@ The disc (`build.sh`, 28 files):
     LDPROG                 the load-time program, by the boot files: read first at
                            every load
     MENU, BAR              the menu overlay; the bar template
-    SPR, SPRAND, BOX       the Master's sprite files (convert.py, MODE 1)
+    SPRC, SPRX             the sprites: the resident block, and the rest (assets.py)
     TILES0, TILES1, TILES2 the tile set: outdoor, shared, indoor (convert.py)
     TITLE                  the title pack
     L0..L15                per level (tools/assets.py): a table of section offsets,
@@ -222,9 +222,13 @@ A level load, palette black, interrupts off (`load_level_b`):
    RLE-decoded straight into bank 6
 3. the tile set's files the level needs are staged at $1C00 in turn and its tiles
    copied into bank 5 by the tile list
-4. SPR, SPRAND and BOX are staged in turn; every image and mask the placement list
-   names is copied to its bank and address (an image's mask may live in another
-   file: SPRAND images keep their masks in SPR)
+4. the first load after the title also stages SPRC -- Cleo, the boomerang, the stars and
+   the trampoline, 10.9K -- and copies it to its fixed places (the mirrored ones and
+   what bank 4 can spare from $8800, the rest at the top of bank 6, which the title
+   pack overwrites, hence once per visit to the title); then SPRX (12.1K, everything
+   else) is staged and every image and mask the placement list names is copied to its
+   bank and address.  The converged Master keeps SPRX after its first read, in HAZEL
+   and ANDY (exactly its 12K), and rebuilds the stage from them
 5. the directory goes to bank 6 and SPRMASK (bank 7, the ids below the boxes) as
    the packer finished them: the Master's entries with each image's placed address
    and bank-6 flag (no table is built at load: every one is assembled or packed)
@@ -351,5 +355,13 @@ Cost against the Master (tools/bench.mjs, render + logic medians over identical 
 levels 0-7): +1.6% to +3.6% a frame.  Per frame about 15 map strips (~95 cycles each),
 7 directory fetches (~180), 3 far calls (~90) and 9 bank calls (~25) -- ~3,200 cycles of
 render; the logic is 300-1,100 cycles CHEAPER (the map row is arithmetic, with no bank
-switch).  A level load takes longer: 726 frames from the menu's RETURN into play
-against 494, the loader reading the shared sprite files and itself every time.
+switch).
+
+Loads (tools/loadtime.mjs, a level loaded again after it ends, the mean over the
+sixteen): the converged Master 5.17 s, the Master 5.28 s, the Model B 8.88 s.  Before
+the sprites were split into the resident block and the rest they were 9.79 s and
+11.49 s: every load re-read the Master's three sprite files, 24K.  (The first load
+after the title also reads the resident block: ~9-10 s on the converged Master, ~10-12
+s on the Model B.)  Every load starts by putting the CPU on main RAM (ACCCON X and Y
+clear): the game leaves X on the buffer it drew last, and a reload read its level file
+into shadow RAM and its sections back from main.

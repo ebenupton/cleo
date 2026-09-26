@@ -30,7 +30,7 @@ export function boardEmu(cpu, kind) {
   };
 }
 
-export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2", disc = "build/cleob.ssd", labels = "build/labels.txt", keys = false } = {}) {
+export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2", disc = "build/cleob.ssd", labels = "build/labels.txt", keys = false, onSession = null } = {}) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);
   const s = new MachineSession(model);
@@ -50,6 +50,7 @@ export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2
   const PB = (b) => (b >= 4 && b <= 7 ? P[b - 4] : b);
   const bank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, PB(b)); cpu.writemem(0xfe30, PB(b)); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
   const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
+  if (onSession) onSession({ s, cpu, A, bank, cyc, PB });   // (a tool's hooks, before the boot)
   async function runTo(pc, b, budget = 3000) {
     const pb = PB(b);
     const h = cpu.debugInstruction.add((p) => p === pc && cpu.readmem(0xf4) === pb);

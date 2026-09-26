@@ -13,6 +13,9 @@ const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjsslllllllllllllllll
 const KK = c => ({ s: 0, r: 2, l: 1, j: 4 })[c] ?? 0;
 const M = await open({ disc: dA, labels: lA, level: lv });
 const C = await open({ disc: dB, labels: lB, level: lv });
+// RELOAD=1: end the level once and compare after it loads again (the loaders' second
+// path: the converged Master's resident sprites, its main-RAM entry state)
+if (process.env.RELOAD) for (const H of [M, C]) { H.wr(H.A.exiting, 1); await H.runTo(H.A.level_init, 400_000_000); await H.runTo(H.A.frame_top, 40_000_000); }
 let bad = 0, badf = 0, sceneBad = 0;
 for (let f = 0; f < N; f++) {
   for (const H of [M, C]) { H.wr(H.A.keys, KK(PAT[f % PAT.length])); H.wr(H.A.hurt, 1); H.wr(H.A.health, 3); await H.runTo(H.A.frame_top); }

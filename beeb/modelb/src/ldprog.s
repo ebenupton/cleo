@@ -55,9 +55,9 @@ nt    = $B8
 .macro FILE name
         .byte <.ident(.concat("F_", name, "_SEC")), >.ident(.concat("F_", name, "_SEC")), .ident(.concat("F_", name, "_N"))
 .endmacro
-ftab:   FILE "SPR"                  ; 0..2: the sprite sources, in imgtab's numbering
-        FILE "SPRAND"
-        FILE "BOX"
+ftab:   FILE "SPRX"                 ; 0: the sprites placed per level (imgtab's file 0)
+        FILE "SPRC"                 ; 1: the sprites every level draws: bank 4, once
+        FILE "SPRC"                 ; 2: (unused)
         FILE "TILES0"               ; 3, 4: the tile set's outdoor and shared files
         FILE "TILES1"
         FILE "MENU"                 ; 5
@@ -81,6 +81,8 @@ ftab:   FILE "SPR"                  ; 0..2: the sprite sources, in imgtab's numb
         FILE "L15"
         FILE "TILES2"               ; 24: and its indoor file
 tfi:    .byte 3, 4, 24              ; the tile set's files (convert.py TSET) by number
+FI_SPRX = 0
+FI_SPRC = 1
 FI_MENU = 5
 FI_TITLE = 6
 FI_BAR = 7
@@ -173,6 +175,9 @@ wrx:    lda PBOARD                  ; X = the socket a store should reach
 
 ; ---------------------------------------------------------------- a level
 lv_load:
+  .if .not BHW
+        jsr mainram                 ; (X here is whatever buffer the game drew last)
+  .endif
         txa
         clc
         adc #FI_L0
@@ -437,11 +442,59 @@ lv_load:
         sta cnt+1
         ldx PB_TILES
         jsr bcopy
-        ; ---- the sprites: each source file staged in turn, the placement list walked
-        lda #0
+        ; ---- the sprites.  The common block (SPRC: Cleo, the boomerang, the stars) goes
+        ; to its fixed place in bank 4 once, and stays; the rest (SPRX) is staged and
+        ; the level's subset copied out by its placement list
+        lda sprc_ok
+        bne @sprx
+        lda #FI_SPRC
+        jsr stage
+        lda #<STAGE
+        sta src
+        lda #>STAGE
+        sta src+1
+        lda #<SPRC_BASE
+        sta dst
+        lda #>SPRC_BASE
+        sta dst+1
+        lda #<SPRC_LEN
+        sta cnt
+        lda #>SPRC_LEN
+        sta cnt+1
+        ldx PB_SPR
+        jsr sccopy                  ; the mirrored ones: bank 4
+        lda #<(STAGE + SPRC_LEN)
+        sta src
+        lda #>(STAGE + SPRC_LEN)
+        sta src+1
+        lda #<SPRC6_BASE
+        sta dst
+        lda #>SPRC6_BASE
+        sta dst+1
+        lda #<SPRC6_LEN
+        sta cnt
+        lda #>SPRC6_LEN
+        sta cnt+1
+        ldx PB_MAP
+        jsr sccopy                  ; the plain ones: the top of bank 6
+        inc sprc_ok
+@sprx:  lda #FI_SPRX
         sta fnum
-@sfile: jsr stage                   ; (A = fnum both ways in)
-        lda #5
+  .if BHW
+        jsr stage
+  .else
+        ; the converged Master reads SPRX once and keeps it: HAZEL (8K), ANDY (4K) and
+        ; a tail in main RAM; after, the stage is refilled from them, no disc read
+        ldx sprx_ok
+        bne @unkeep
+        jsr stage
+        jsr keep
+        inc sprx_ok
+        bne @sfile                  ; (always)
+@unkeep:
+        jsr unkeep
+  .endif
+@sfile: lda #5
         jsr section
         lda src
         sta lp
@@ -492,10 +545,7 @@ lv_load:
         bcc @pl
         inc lp+1
         bne @pl                     ; (lp+1 is never 0)
-@plend: inc fnum
-        lda fnum
-        cmp #3
-        bne @sfile
+@plend:
         ; ---- the directory and SPRMASK, as the packer finished them (assets.py)
         lda #11
         jsr section
@@ -572,6 +622,84 @@ lv_load:
   .endif
 
 ; ---- helpers
+sccopy:                             ; a copy out of the stage, on either machine
+  .if BHW
+        jmp bcopy
+  .else
+        jmp scopy
+  .endif
+  .if .not BHW
+; the converged Master: every load starts with the CPU on main RAM -- the game leaves
+; ACCCON X on the buffer it drew last, and the level's file is main RAM's
+mainram:
+        pha
+        lda ACCCON
+        and #$F3                    ; X and Y clear
+        sta ACCCON
+        pla
+        rts
+; SPRX's residency on the converged Master: the stage (shadow RAM, $3000) to HAZEL
+; ($C000, ACCCON Y), ANDY ($8000, ROMSEL bit 7) and main RAM (TAILBUF) -- keep -- and
+; back -- unkeep.  Only under a load: interrupts are off, and the MOS's interrupt
+; entry is under HAZEL.
+SPRX_PAGES = (SPRX_LEN + 255) / 256
+        .assert SPRX_PAGES - $30 <= >($2B00 - TAILBUF), error, "SPRX outgrows HAZEL, ANDY and the tail"
+        .assert <TAILBUF = 0, error, "TAILBUF page aligned"
+keep:   sec
+        .byte $24                   ; (bit zp: skips the clc)
+unkeep: clc
+        php
+        lda ACCCON
+        ora #$0C                    ; X (the stage) and Y (HAZEL)
+        sta ACCCON
+        ldx #$20                    ; HAZEL: the stage's first 8K
+        lda #>STAGE
+        ldy #$C0
+        jsr kpart
+        lda #$80                    ; ANDY: the next 4K
+        sta ROMSEL
+        ldx #$10
+        lda #>STAGE + $20
+        ldy #$80
+        jsr kpart
+        lda PB_LVL                  ; (bank 7 back, ANDY out)
+        jsr pgbank
+        ldx #SPRX_PAGES - $30       ; the rest, main RAM
+        beq :+
+        lda #>STAGE + $30
+        ldy #>TAILBUF
+        jsr kpart
+:       plp
+        lda ACCCON
+        and #$F3
+        sta ACCCON
+        rts
+kpart:  stx cnt                     ; X pages between the stage's page A and page Y:
+        tsx                         ; from the stage (keep: the C its caller pushed is
+        pha                         ; set) or to it
+        lda $0103,x                 ; (the P keep/unkeep pushed, under this call's return)
+        lsr
+        pla
+        bcc :+
+        sta src+1
+        sty dst+1
+        bcs :++
+:       sty src+1
+        sta dst+1
+:       lda #0
+        sta src
+        sta dst
+        tay
+@pg:    lda (src),y
+        sta (dst),y
+        iny
+        bne @pg
+        inc src+1
+        inc dst+1
+        dec cnt
+        bne @pg
+        rts
+  .endif
 tcopy:                              ; tile A of the staged file, its row C (or all of it:
         stx cnt                     ; C = 0, X = 64), X bytes to dst in bank 5
         ldx #0
@@ -720,6 +848,9 @@ unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c
 
 ; ---------------------------------------------------------------- the menus
 title_load:
+  .if .not BHW
+        jsr mainram
+  .endif
         lda #FI_MENU
         jsr stage                   ; (dst = STAGE: its lo 0 = <MENU_BASE)
         lda #0                      ; <STAGE = 0, cnt lo = 0
@@ -751,6 +882,8 @@ title_load:
   .else
         jsr scopy
   .endif
+        lda #0                      ; the title pack reaches the resident sprites' part
+        sta sprc_ok                 ; in bank 6: the next level puts them back
         ; ---- the bar template, straight into place: once per return to the title, as the
         ; menus never touch it (engine.s menu_sections) and a level does not either
         stx dst                     ; (X = 0 from bcopy; <BARADDR = 0)

@@ -207,16 +207,17 @@ export class Harness {
 // are unreachable otherwise, and a field's range measured without them is not its range.
 // Health stays pinned either way: a death leaves the frame loop and the run just hangs.
 export const ALLOW_DAMAGE = !!process.env.HARNESS_ALLOW_DAMAGE;
-export async function open({ disc, labels, level, quiet = true }) {
+export async function open({ disc, labels, level, quiet = true, onSession = null }) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);
   const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));
-  if (banks && banks.byName.get("frame_top") !== undefined) return openBanked({ MachineSession, disc, A, banks, level, quiet });
+  if (banks && banks.byName.get("frame_top") !== undefined) return openBanked({ MachineSession, disc, A, banks, level, quiet, onSession });
   for (const need of ["frame_top", "select_backbuf", "render_done", "irq_handler", "level_init", "title_loop", "level_loop", "scan_keys", "keys"])
     if (A[need] === undefined) throw new Error(`labels are missing ${need} -- rebuild?`);
   const s = new MachineSession("Master");
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const H = new Harness(s, A);
+  if (onSession) onSession(H);                   // (a tool's hooks, before anything runs)
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   await H.runTo(A.title_loop, 120_000_000);
   H.wr(A.title_loop, 0xa9); H.wr(A.title_loop + 1, 0); H.wr(A.title_loop + 2, 0xea);
@@ -236,10 +237,11 @@ export async function open({ disc, labels, level, quiet = true }) {
 // A banked build (the converged Master: modelb/build.sh TARGET=master) boots through
 // the Model B's loader, and its game loop is bank 7's: the title and the level are
 // patched there, as modelb/tools/bopen.mjs does for the Model B.
-async function openBanked({ MachineSession, disc, A, banks, level, quiet }) {
+async function openBanked({ MachineSession, disc, A, banks, level, quiet, onSession }) {
   const s = new MachineSession("Master");
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const H = new Harness(s, A, banks);
+  if (onSession) onSession(H);
   const in7 = (f) => { const was = H.rd(0xf4); H.wr(0xfe30, 7); try { return f(); } finally { H.wr(0xfe30, was); } };
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   await H.runTo(A.title_loop, 200_000_000);

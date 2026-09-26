@@ -1417,9 +1417,6 @@ SPR_DIGITS = BOX_BASE + len(boxfile); boxfile += digits
 SPR_BAR = BOX_BASE + len(boxfile); boxfile += barspans
 HUD_BANK = 6
 assert BOX_BASE + len(boxfile) <= SPILL_BASE, len(boxfile)
-if b6 > SPILL_BASE:                           # spilled images at $BE00: pad up to them
-    boxfile = boxfile.ljust(SPILL_BASE - BOX_BASE, b'\0') + bytes(spill[:b6 - SPILL_BASE])
-open(os.path.join(OUT, 'BOX'), 'wb').write(boxfile)
 for j in range(len(images)):
     base, region = img_addr[j]
     if region == 1:
@@ -1432,6 +1429,11 @@ for j in range(len(images)):
     if region != 2:
         m = mask_addr[j]
         bank4[m - 0x8000:m - 0x8000 + len(img_mask[j])] = img_mask[j]
+# (after the spill is filled: written before it, the file carried zeros for every image
+# spilled to bank 6 -- ids 31, 86-89, 98 and 99 drew nothing)
+if b6 > SPILL_BASE:                           # spilled images at $BE00: pad up to them
+    boxfile = boxfile.ljust(SPILL_BASE - BOX_BASE, b'\0') + bytes(spill[:b6 - SPILL_BASE])
+open(os.path.join(OUT, 'BOX'), 'wb').write(boxfile)
 sprmask = bytearray()
 for i in range(103 + 15):                         # box ids draw by copy: no mask
     a = mask_addr[entry[i][0]] if i < 103 and entry[i] is not None else 0

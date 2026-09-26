@@ -3,10 +3,13 @@
 
    python3 tools/assets.py            (all sixteen levels; prints a fit report)
 
-The Master's convert.py is imported for its tables.  The shared files (SPR,
-SPRAND, BOX, TILESO, TILESI, TITLE, MUSIC) go on the disc as convert.py wrote them;
-the game's own loader (ldprog.s) stages one at a time in display RAM and copies the
-pieces a level needs into the banks, where the packer here decided they go.  What
+The Master's convert.py is imported for its tables.  The shared files (the tile set's,
+TITLE, MUSIC) go on the disc as convert.py wrote them, and the sprites as this packer
+writes them: SPRC, the sprites every level draws (Cleo, the boomerang, the stars, the
+trampoline), at fixed addresses loaded once, and SPRX, everything else, from which
+each level takes its subset.  The game's own loader (ldprog.s) stages one file at a
+time in display RAM and copies the pieces a level needs into the banks, where the
+packer here decided they go.  What
 this writes to build/:
 
    L0..L15        per level: header, objects, attr/altcls, the level's tile lists
@@ -53,29 +56,13 @@ MAP6 = 0x8800                               #   the map, then the directory, the
 TILES_BASE, B5X = m.B_TILES, m.B_TILES_END  # bank 5: the tiles from here (page aligned)
                                             #   up to the row loop's region (cleo_b.cfg)
 
-SPRFILE_SPR, SPRFILE_AND, SPRFILE_BOX = 0, 1, 2   # the loader's source file ids
-
 # ---------------------------------------------------------------- the shared files
-# convert.py's bank-4 image, ANDY overflow and box-star file carry every image, mask,
-# box and trampoline: this table says where in which file each one is.  The loader
-# stages a file and copies from these offsets to the addresses placed below.
-def img_src(j):
-    base, region = m.img_addr[j]
-    if region == 0:
-        return (SPRFILE_SPR, base - 0x8000)
-    if region == 1:
-        return (SPRFILE_AND, base - m.SPR_ANDY)
-    return (SPRFILE_BOX, base - m.BOX_BASE)
-def mask_src(j):
-    base, region = m.img_addr[j]
-    a = m.mask_addr[j]
-    if region == 2:
-        return (SPRFILE_BOX, a - m.BOX_BASE)
-    return (SPRFILE_SPR, a - 0x8000)
-box_off = []
-_o = 0
-for b in m.allbox_bytes:                    # 12 boxes then 3 trampolines, in the BOX file
-    box_off.append(_o); _o += len(b)
+# The sprites every level draws -- Cleo, the boomerang, the stars (ids 0..42) -- are
+# one block at a fixed place in bank 4 (SPRC, from B4_DATA's start), loaded once and
+# never again.  Everything else -- the enemies, the box stars, the trampolines -- is
+# one file (SPRX), which a load stages and copies from: the level's subset, to the
+# addresses placed below.  (The converged Master keeps SPRX resident after its first
+# read: ldprog.s.)  imgtab says where in SPRX each item is.
 NIMG = len(m.images)
 # item keys: ('img', j) | ('box', k) | ('tramp', f) -> a small integer the placement
 # lists and the directory template use
@@ -83,15 +70,70 @@ def item_index(kind, j):
     return {'img': 0, 'box': NIMG, 'tramp': NIMG + 12}[kind] + j
 def item_bytes(kind, j):
     return m.img_bytes[j] if kind == 'img' else (m.box_bytes[j] if kind == 'box' else m.tramp_bytes[j])
-imgtab = bytearray()
+COMMON = sorted(set(m.entry[i][0] for i in list(range(43)) + [43, 44, 45] if m.entry[i] is not None))
+                                            # (and the trampoline, which 15 levels of 16 have)
+# The mirrored ones must be in bank 4 (its sprite loop has the dot-reversal table);
+# bank 4 cannot also hold the plain ones beside the biggest levels' mirrored enemies,
+# so those go to the top of bank 6, above any map and its directory.  The title pack
+# reaches that far, so the menus cost a reload of the block (ldprog.s title_load).
+_mirrored_all = set(m.entry[i][0] for i in range(103) if m.entry[i] is not None and m.entry[i][1])
+common_addr, common_mask, common_bank = {}, {}, {}
+def _pack(js, base):
+    blk = bytearray()
+    for j in js:                            # each image, then its mask
+        common_addr[j] = base + len(blk); blk += m.img_bytes[j]
+        if len(m.img_mask[j]):
+            common_mask[j] = base + len(blk); blk += m.img_mask[j]
+    return blk
+c4 = [j for j in COMMON if j in _mirrored_all]
+# the plain ones: bank 4 takes what it can spare beside the biggest level's mirrored
+# enemies (largest first), the top of bank 6 the rest
+_sz = lambda j: len(m.img_bytes[j]) + len(m.img_mask[j])
+_maxmir = 0
+for (_lv, _sub), _L in m.levels.items():
+    _js = set()
+    for _t in set(o[0] for o in _L['objs']):
+        if _t in m.TYPE_IDS:
+            _lo, _hi = m.TYPE_IDS[_t]
+            _js |= set(m.entry[i][0] for i in range(_lo, _hi + 1) if m.entry[i] is not None)
+    _maxmir = max(_maxmir, sum(_sz(j) for j in _js - set(COMMON) if j in _mirrored_all))
+_room4 = (B4_DATA[1] - B4_DATA[0]) - sum(_sz(j) for j in c4) - _maxmir
+c6 = []
+for j in sorted((j for j in COMMON if j not in _mirrored_all), key=lambda j: -_sz(j)):
+    if _sz(j) <= _room4:
+        c4.append(j); _room4 -= _sz(j)
+    else:
+        c6.append(j)
+sprc4 = _pack(c4, B4_DATA[0])
+TRAMP_LEN = sum(len(b) for b in m.tramp_bytes)   # the trampoline's boxes: bank 6 (the copy blitter's)
+C6_LEN = sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c6) + TRAMP_LEN
+C6_BASE = B6_TOP - C6_LEN
+sprc6 = _pack(c6, C6_BASE)
+tramp_addr = {}
+for f in range(3):
+    tramp_addr[f] = C6_BASE + len(sprc6); sprc6 += m.tramp_bytes[f]
+for j in c4: common_bank[j] = 4
+for j in c6: common_bank[j] = 6
+COMMON_END = B4_DATA[0] + len(sprc4)
+assert COMMON_END <= B4_DATA[1] and C6_BASE >= MAP6 + 0x2000 + 118 * 8
+sprc = sprc4 + sprc6
+out('SPRC', sprc)
+sprx, imgtab = bytearray(), bytearray()
 for j in range(NIMG):
-    f, o = img_src(j); mf, mo = mask_src(j)
-    n, mn = len(m.img_bytes[j]), len(m.img_mask[j])
-    imgtab += bytes([f, o & 255, o >> 8, n & 255, n >> 8, mf, mo & 255, mo >> 8, mn & 255, mn >> 8])
-for k in range(15):
-    o, n = box_off[k], len(m.allbox_bytes[k])
-    imgtab += bytes([SPRFILE_BOX, o & 255, o >> 8, n & 255, n >> 8, 0, 0, 0, 0, 0])
+    if j in common_addr:
+        imgtab += bytes(10); continue       # (never placed: resident)
+    o, n = len(sprx), len(m.img_bytes[j]); sprx += m.img_bytes[j]
+    mo, mn = len(sprx), len(m.img_mask[j]); sprx += m.img_mask[j]
+    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, mo & 255, mo >> 8, mn & 255, mn >> 8])
+for k in range(12):                         # the 12 boxes (the trampoline's: resident)
+    o, n = len(sprx), len(m.allbox_bytes[k]); sprx += m.allbox_bytes[k]
+    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, 0, 0, 0, 0])
+imgtab += bytes(30)
+assert len(sprx) <= 0x4000                  # STAGE's 16K
+out('SPRX', sprx)
 out('imgtab.bin', imgtab)
+print('sprites: SPRC %d bytes (bank 4 $%04X-$%04X, bank 6 $%04X-$%04X), SPRX %d bytes'
+      % (len(sprc), B4_DATA[0], COMMON_END, C6_BASE, B6_TOP, len(sprx)))
 
 # the directory template: the Master's entry less its pointer, which becomes the item
 # index and its kind; the loader writes the pointer and the bank-6 flag
@@ -214,15 +256,15 @@ def pack_level(lv, sub):
         if t in m.TYPE_IDS:
             lo, hi = m.TYPE_IDS[t]
             ids |= set(range(lo, hi + 1))
-    imgs = sorted(set(m.entry[i][0] for i in ids if m.entry[i] is not None))
+    imgs = sorted(set(m.entry[i][0] for i in ids if m.entry[i] is not None) - set(COMMON))   # (placed per level)
     # the box stars' art by each star's class (convert.py star_class: 1 on sky, the
     # first six boxes; 2 on black, the second six -- logic.s boxbase), not by the set
     classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
     bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
-    tramps = [0, 1, 2] if 1 in types else []
+    tramps = []                             # (resident: SPRC)
     R6BASE = MAP6 + len(mapb) + 118 * 8
-    regions = {'r4': [B4_DATA[0], B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
-               'r6': [R6BASE, B6_TOP], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
+    regions = {'r4': [COMMON_END, B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
+               'r6': [R6BASE, C6_BASE], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
     items0 = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
     items0 += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]
@@ -295,6 +337,12 @@ def pack_level(lv, sub):
         ma = mask_addr.get((kind, j), 0)
         placement += bytes([item_index(kind, j), img_bank[(kind, j)], a & 255, a >> 8, ma & 255, ma >> 8])
     placement += b'\xff'
+    for f in range(3):                      # (the resident block, for the directory)
+        img_addr[('tramp', f)] = tramp_addr[f]; img_bank[('tramp', f)] = 6
+    for j in COMMON:
+        img_addr[('img', j)] = common_addr[j]; img_bank[('img', j)] = common_bank[j]
+        if j in common_mask:
+            mask_addr[('img', j)] = common_mask[j]
     # the directory and SPRMASK as the game reads them: the template's entries with each
     # placed item's address (and bank 6's flag), and each sprite id's mask address
     byitem = {item_index(*k): k for k in img_addr}
@@ -354,6 +402,8 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by modelb/tools/assets.py: the bounds every level fits\n')
     f.write('SOLID_CYAN = %d\nSOLID_BLACK = %d\nFLAT0 = %d\nNFLAT = %d\nMAXMIR = %d\n' % (SOLID_CYAN, SOLID_BLACK, m.FLAT0, m.NFLAT, m.MAXMIR))
     f.write('BOXID0 = 103\nBOXN = 15\n')
+    f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC6_BASE = $%04X\nSPRC6_LEN = %d\nSPRX_LEN = %d\n'
+            % (B4_DATA[0], len(sprc4), C6_BASE, len(sprc6), len(sprx)))
     f.write('TITLE_ADDR = $8900\n')         # bank 6, as the Master: over the map
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
     f.write('HUD_BANK = 7\n')

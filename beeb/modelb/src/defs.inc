@@ -48,6 +48,7 @@ LV_OBJS   = $7C00                   ; the level's objects, 6 bytes each (894 at 
                                     ; reads them once, before the first render)
   .else                             ; the converged Master: main RAM below the screen
 LV_OBJS   = $1C00                   ; (the loader's program ends by $1BFF)
+TAILBUF   = $2000                   ; SPRX's last pages past HAZEL and ANDY (ldprog.s)
 LV_PAGE0  = $0400                   ; tile id -> the gather's pair: 256 lo, 256 hi (the
                                     ; level's, the loader's), page aligned
   .endif

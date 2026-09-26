@@ -147,5 +147,7 @@ mapshr:   .res 1                    ; 8 - lw (maprow, maprow5)
 MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
 MUSON:    .res 1                    ; the tune plays: the interrupt stub steps it
 MUSTICK:  .res 1                    ; a frame's step is due: the vsync's sound_tick says so
+sprc_ok:  .res 1                    ; the resident sprites (SPRC) are in bank 4, and (the
+sprx_ok:  .res 1                    ;  converged Master) SPRX in HAZEL/ANDY: ldprog.s
 title_res: .res 1                   ; the menu overlay and the title pack are in banks 5
                                     ; and 6 (a level load replaces both; menu.s reads it)

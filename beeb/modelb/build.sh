@@ -21,7 +21,7 @@ sed "s#\"build/#\"$BD/#g" $CFG > $BD/game.cfg
 # the disc's file list, in disc order: what every load reads first (LDPROG) by the
 # boot files, the shared files together, the levels after them
 DISC="!BOOT:$BD/BOOT LOADER:$BD/LOADER BANKS:$BD/BANKS LDPROG:$BD/LDPROG MENU:$BD/MENU BAR:$BD/BAR"
-DISC="$DISC SPR:../build/SPR SPRAND:../build/SPRAND BOX:../build/BOX TILES0:../build/TILES0 TILES1:../build/TILES1 TITLE:../build/TITLE"
+DISC="$DISC SPRX:$BD/SPRX SPRC:$BD/SPRC TILES0:../build/TILES0 TILES1:../build/TILES1 TITLE:../build/TITLE"
 for l in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do DISC="$DISC L$l:$BD/L$l"; done
 DISC="$DISC TILES2:../build/TILES2"
 for f in BOOT LOADER BANKS MENU LDPROG; do [ -f $BD/$f ] || : > $BD/$f; done
@@ -43,7 +43,7 @@ for pass in 1 2 3; do
 import re
 want = ['BANKCODE','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','sprtab','mapshr','MAPSTRIDE','FLATTAB',
-        'half0','half1','half2','halfhi','halfsub','mir0','MIRTAB','HPAIR0','HPAIR1',
+        'half0','half1','half2','halfhi','halfsub','mir0','MIRTAB','sprc_ok','sprx_ok','HPAIR0','HPAIR1',
         'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
 addr = {}
 import os
