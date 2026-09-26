@@ -5,6 +5,7 @@
 // and RETURN are pressed at fixed arrivals to walk into a second page.
 //   node tools/menusync.mjs master <discA> <labelsA> <discB> <labelsB>
 //   node tools/menusync.mjs modelb <discA> <labelsA> <discB> <labelsB>
+// Compared: the ring memory (not the bar: the menus leave it alone) and the painted frame.
 import { findJsbeeb, loadLabels } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
@@ -38,10 +39,13 @@ for (let k = 0; k < N; k++) {
     for (const shadow of [0, 4]) {   // not the code, which lives in main RAM below them
       const was = [X, Y].map((M) => M.cpu.readmem(0xfe34));
       [X, Y].forEach((M, i) => M.cpu.writemem(0xfe34, (was[i] & ~4) | shadow));
-      for (let a = shadow ? 0x3000 : 0x2b00; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;
+      for (let a = 0x3000; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;
       [X, Y].forEach((M, i) => M.cpu.writemem(0xfe34, was[i]));
     }
-  } else for (let a = 0x0300; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;   // the B: all display
+  } else for (let a = 0x0800; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;   // the B: mirrors and rings
+  // the bar's memory is not the menus' (they leave it in place and show two black ring
+  // rows there instead): compare the painted picture as well, which is what is seen
+  { const fa = X.s._completeFb8, fb = Y.s._completeFb8; for (let i = 0; i < fa.length; i += 4) if (fa[i] !== fb[i] || fa[i+1] !== fb[i+1] || fa[i+2] !== fb[i+2]) { n++; } }
   if (n) { bad++; if (bad <= 3) console.log(`  menu frame ${k}: ${n} display bytes differ`); }
 }
 console.log(bad ? `${kind} menus: DIFFER on ${bad}/${N} frames` : `${kind} menus: identical on ${N} frames`);

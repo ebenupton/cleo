@@ -49,7 +49,6 @@ LV_OBJS   = $7800                   ; the level's objects, 6 bytes each: main RA
 ; $A8-$DE.  These fill the gaps.  $F4 is the MOS's ROMSEL copy: nothing past $EF.
 NSPR     = $A3                      ; (main RAM tables on the Master: low RAM is short)
 BARDIRTY = $A4
-BARBG    = $A5
 SFXREQ   = $A6
 mtmp     = $DF                      ; cpu.inc's scratch (inca/deca/bitimm/ldazy)
 ringbhi  = $E0                      ; the buffer being drawn: ring base high byte,

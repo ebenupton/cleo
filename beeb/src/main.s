@@ -67,6 +67,7 @@ start:
         jsr loadfile
         lda #FI_BOX
         jsr loadfile
+        jsr bar_bg                  ; the bar's template, once: nothing erases it
         lda #FI_MUSIC
         jsr loadfile
         lda #FI_ALT

@@ -60,7 +60,7 @@ export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   await runToB(A.title_loop, 7);
   bank(7, () => {
-    for (let i = 0; i < 6; i++) cpu.writemem(A.title_loop + i, 0xea);   // jsr ensure_menu / jsr t_title_menu
+    cpu.writemem(A.title_loop + 5, 0xea);   // keep jsr ensure_menu (the overlay, the title pack and the BAR); jsr t_title_menu ->
     cpu.writemem(A.title_loop + 3, 0xa9); cpu.writemem(A.title_loop + 4, 0);   // "start game"
     let ok = false;
     for (let a = A.level_loop; a < A.level_loop + 24; a++)

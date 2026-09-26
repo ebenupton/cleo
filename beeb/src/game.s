@@ -275,9 +275,8 @@ level_loop:
         jsr load_end                ; the next vsync starts the chain again (the Model
   .endif                            ; B's loader does this itself, before its cli)
         jsr t_level_init
-        lda #1                      ; lay the bar template + digits into both buffers on
-        sta BARBG                   ; the first two renders (drawing now would hit the
-        sta BARDIRTY
+        lda #1                      ; the digits on the first render (the bar's template is
+        sta BARDIRTY                ; in place already: bar_bg)
         ; initial camera; render both buffers before the palette comes back
         jsr t_game_frame
         jsr render_frame

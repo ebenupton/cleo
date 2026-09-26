@@ -289,7 +289,8 @@ load_title_b:
         jsr load_begin
         sei
         jsr disc_boot
-        jsr LDPROG+3                ; title_load
+        jsr LDPROG+3                ; title_load (and the bar's template: ldprog.s)
+        jsr bar_bg                  ; so the digit cache is stale
 ld_resume:                          ; (interrupts still off: a flag raised during the load
         jsr load_end                ;  is stale, and load_end clears it before the cli)
         cli

@@ -42,7 +42,7 @@ async function runToB(pc, b, budget = 6000) {
 await runToB(BA.title_loop, 7);
 bank(bcpu, 7, () => {
   // title_loop: jsr ensure_menu / jsr t_title_menu -> both skipped, "start game"
-  for (let i = 0; i < 6; i++) bcpu.writemem(BA.title_loop + i, 0xea);
+  bcpu.writemem(BA.title_loop + 5, 0xea);   // keep jsr ensure_menu (it loads the BAR); t_title_menu ->
   bcpu.writemem(BA.title_loop + 3, 0xa9); bcpu.writemem(BA.title_loop + 4, 0);
   let ok = false;
   for (let a = BA.level_loop; a < BA.level_loop + 24; a++)

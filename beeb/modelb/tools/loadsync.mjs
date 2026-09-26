@@ -25,7 +25,7 @@ async function runTo(pc, b, budget = 3000) { const pb = PB(b); const h = cpu.deb
   try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (cpu.pc === pc && cpu.readmem(0xf4) === pb) return; } } finally { h.remove(); } throw new Error(`B: runTo ${pc.toString(16)} timed out`); }
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 await runTo(A.title_loop, 7);
-bank(7, () => { for (let i = 0; i < 6; i++) cpu.writemem(A.title_loop + i, 0xea); cpu.writemem(A.title_loop + 3, 0xa9); cpu.writemem(A.title_loop + 4, 0);
+bank(7, () => { cpu.writemem(A.title_loop + 5, 0xea); cpu.writemem(A.title_loop + 3, 0xa9); cpu.writemem(A.title_loop + 4, 0);
   for (let a = A.level_loop; a < A.level_loop + 24; a++) if (cpu.readmem(a) === 0xa6 && cpu.readmem(a + 1) === (A.level & 255)) { cpu.writemem(a, 0xa2); cpu.writemem(a + 1, 0); break; } });
 let idx=-1, vs=[], regs=[], lastVs=null;
 const h=cpu.debugWrite.add((addr,val)=>{ if(addr===0xfe00) idx=val;

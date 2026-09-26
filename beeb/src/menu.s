@@ -143,11 +143,12 @@ pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game
 ; ---------------------------------------------------------------- menu screen helpers
 ; clear the current back buffer ring ($3000-$7FFF) to black
   .if MODELB
-; Model B: the bar, both mirrors and both rings: all of main RAM from $0300
-        .assert (<BARADDR) = 0 && (<RINGEND_B) = 0, error, "the clear is whole pages"
+; Model B: both mirrors and both rings: main RAM from mirror A, above the bar, to the
+; top.  The bar is left alone: the menus' frame does not show it (menu_sections)
+        .assert (<MIRR_A) = 0 && (<RINGEND_B) = 0, error, "the clear is whole pages"
 clear_ring:
-        lda #>BARADDR               ; the bar, both mirrors and both rings: main RAM
-        sta w16+1                   ; from $0300 to the top ($8000), whole pages
+        lda #>MIRR_A                ; both mirrors and both rings: main RAM from $0800
+        sta w16+1                   ; to the top ($8000), whole pages
         lda #0
         sta w16
         tay
@@ -160,8 +161,8 @@ clear_ring:
   .else
 clear_ring:
         stz w16
-        lda #>BARADDR               ; from the bar, not the ring base: the bar sits below
-        sta w16+1                   ; $3000 now and the menu still wants it black
+        lda #>RINGBASE              ; the ring only: the bar below it is left alone (the
+        sta w16+1                   ; menus' frame does not show it: menu_sections)
         ldy #0
         tya
 @l:     sta (w16),y
@@ -223,17 +224,15 @@ menu_begin:
         sta rp
         lda #>menurec
         sta rp+1
-        lda #1
-        sta BARDIRTY
         rts
 
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stz curbuf                  ; (A is dead: build_sections loads it)
   .if MODELB
-        jsr m_build_sections        ; bank 7's
+        jsr m_build_sections        ; bank 7's menu_sections (the far table's F_BUILDSECT)
   .else
-        jsr build_sections          ; both are in the bank now
+        jsr menu_sections           ; build_sections, the bar section pointed off the bar
         stz NEXTBUF
   .endif
         stz NEXTSECT

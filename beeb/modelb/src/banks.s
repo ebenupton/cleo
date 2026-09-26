@@ -22,7 +22,7 @@
         FAR BANK_TILES, help_screen, in             ; F_HELP
         FAR BANK_TILES, level_select, in            ; F_LEVELSEL
         FAR BANK_TILES, winlose, in                 ; F_WINLOSE
-        FAR BANK_LVL, build_sections, in            ; F_BUILDSECT
+        FAR BANK_LVL, menu_sections, in             ; F_BUILDSECT (the menus': engine.s)
         FAR BANK_LVL, blank_palette, in             ; F_BLANKPAL
         FAR BANK_LVL, set_palette, in               ; F_SETPAL
         FAR BANK_LVL, load_title_b, in              ; F_LOADTITLE

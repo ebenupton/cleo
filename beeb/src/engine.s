@@ -351,7 +351,6 @@ MAPSTRIDE: .res 2                  ; bytes per map row (1 << maplw): drawrect wa
                                    ; row pointer by this instead of re-deriving it
 BARCACHE:  .res 16                 ; the nine digit values last blitted into the one bar
                                    ; its bar was last drawn with, $FF = unknown
-BARBG:     .res 1                 ; the bar needs its static template blitted
 DIRTYLIST: .res 2*2*16            ; per buffer dirty tiles (tx, ty)
 DIRTYCNT:  .res 2
 DISPSECT:  .res 1
@@ -2688,9 +2687,10 @@ blank_below:
 ; scrolls and is only written when its contents change.  It used to live in the two
 ; ring rows above the window, which move every frame the view scrolls vertically;
 ; re-copying 1280 bytes for that cost 13,310 cycles of an 80,000 cycle frame.
-; bar_bg: blit the static bar template (icons, labels, blank digit slots) from bank 4
-; into the current back buffer's fixed bar rows.  Source art, not a maintained buffer.
-        PLACE "CODE", "LGCCODE"     ; Model B: the bar is loaded into place by the loader
+; bar_bg: lay the static bar template (icons, labels, blank digit slots) from the span
+; list in bank 6 into the bar, once, at start-up (main.s).  Model B: the loader puts the
+; BAR file in place with the title (ldprog.s), and this only resets the digit cache.
+        PLACE "CODE", "LGCCODE"
 bar_bg:                             ; and never redrawn: only the digit cache is reset
         ldx #8                      ; level).  The template buries the digits, so the
         lda #$FF                    ; cached "already drawn" values are no longer true.
@@ -3041,16 +3041,9 @@ render_frame:                       ; is render_core in bank 5
   .endif
         ; ---- the bar first.  It is single buffered and drawn where it is displayed,
         ; so it has to be finished before the CRTC reaches it: T starts 40 lines after
-        ; the vsync wait_flip just returned from, which is 2560 cycles.  A full
-        ; template blit does not fit and does not need to -- it runs twice a level.
-        lda BARBG
-        beq :+
-        jsr bar_bg
-  .if MODELB
-        dec BARBG                   ; only ever set to 1 (game.s:248): 1 -> 0
-  .else
-        stz BARBG
-  .endif
+        ; the vsync wait_flip just returned from, which is 2560 cycles.  Only digits:
+        ; the template is laid once (Master: main.s; Model B: with the title) and
+        ; nothing erases it -- the menus keep to the ring (menu_sections).
 :       lda BARDIRTY
         beq :+
         jsr t_redraw_hud
@@ -3124,6 +3117,25 @@ render_done:                        ; (label for the phase timer harness)
 wait_flip:
         lda flipreq
         bne wait_flip
+        rts
+
+; menu_sections: the menus' frame.  build_sections, then buffer 0's first section (the
+; bar's, in play) shows two ring rows below the window instead: the menus never draw
+; there and clear_ring has made them black, so the menus look as they did but the bar
+; is neither shown nor touched while they run -- it is laid once and left in place.
+  .if MODELB
+MENURING = RING_A
+  .else
+MENURING = RINGBASE
+  .endif
+MENUBAR  = (MENURING + VISROWS*ROWBYTES) / 8
+        .assert VISROWS + BARROWS <= RINGROWS, error, "the menus' bar rows must be in the ring"
+menu_sections:
+        jsr build_sections
+        lda #>MENUBAR
+        sta BUF_SEC0
+        lda #<MENUBAR
+        sta BUF_SEC0+1
         rts
 
 ; ---------------------------------------------------------------- load mode
@@ -3479,7 +3491,6 @@ init_tables:                        ; (the tables themselves are the file TABLES
         lda #$FF
         sta tset                    ; no tile set resident yet
         stz BARDIRTY
-        stz BARBG
         rts
 
 

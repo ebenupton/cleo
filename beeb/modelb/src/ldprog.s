@@ -551,14 +551,7 @@ lv_load:
         lda #0
         sta cnt+1
         ldx PB_TILES
-        jsr bcopy
-        ; ---- the bar template, straight into place
-        stx dst                     ; (X = 0 from bcopy; <BARADDR = 0)
-        lda #>BARADDR
-        sta dst+1
-        lda #FI_BAR
-        jmp readfile                ; (the tile addresses are arithmetic: drawrect's gather)
-        .assert <BARADDR = 0, error, "lv_load: BARADDR's low byte"
+        jmp bcopy                   ; (the tile addresses are arithmetic: drawrect's gather)
 
 ; ---- helpers
 section:                            ; A = section 0..9 -> src = its start in the staged file
@@ -699,7 +692,15 @@ title_load:
         lda #F_TITLE_N
         sta cnt+1
         ldx PB_MAP
-        jmp bcopy
+        jsr bcopy
+        ; ---- the bar template, straight into place: once per return to the title, as the
+        ; menus never touch it (engine.s menu_sections) and a level does not either
+        stx dst                     ; (X = 0 from bcopy; <BARADDR = 0)
+        lda #>BARADDR
+        sta dst+1
+        lda #FI_BAR
+        jmp readfile
+        .assert <BARADDR = 0, error, "title_load: BARADDR's low byte"
         .assert (<STAGE | <MENU_BASE | <TITLE_ADDR) = 0, error, "title_load: page-aligned"
 
 ; ---------------------------------------------------------------- the packer's tables
