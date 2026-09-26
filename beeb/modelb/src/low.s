@@ -54,7 +54,8 @@ fcret:  sta fcA                     ; the target's A (Y must survive, X carries 
 ; player is in the menu overlay (bank 5): the vsync work leaves MUSON set only
 ; while the overlay is there, and it is stepped from here, between the banks, once
 ; a frame -- the vsync's sound_tick raises MUSTICK; the T1 steps are this same stub.
-irq_handler:
+  .if BHW                           ; (the converged Master: the Master's handler, in
+irq_handler:                        ;  main RAM with its chain -- engine.s)
         stx irq_x
         sty irq_y
         lda ROMSEL_CPY
@@ -77,6 +78,7 @@ irq_handler:
         ldx irq_x
         lda $FC
         rti
+  .endif
 
 ; ---------------------------------------------------------------- the tile blitter's map
 ; drawrect's row loop runs in bank 5 and reads the map in bank 6: the row pointer is arithmetic
@@ -133,10 +135,12 @@ callbank:                           ; A = the bank (the write bank is set by the
 MAPBUF:   .res 21                   ; a tile row of the rectangle: 21 tiles at most
 ; the mirror's bookkeeping (display.s): the blitters in bank 5 note what they wrote
 ; to the ring's last slot row, the copy in bank 7 reads it
+  .if BHW
 mirdty:   .res 2                    ; per buffer: the row has been written since the copy
 mirlo:    .res 2                    ; and which chars of it (in slot chars, 0..79)
 mirhi:    .res 2
 mirwcx:   .res 2                    ; the wcxm the copy was made for
+  .endif
 ; the level's shape, set by the loader: read from banks 5 and 7
 sprtab:   .res 2                    ; the sprite directory: bank 6, just above the map
 mapshr:   .res 1                    ; 8 - lw (maprow, maprow5)

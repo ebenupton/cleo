@@ -20,16 +20,17 @@ for (let f = 0; f < N; f++) {
   H.wr(A.keys, k); H.wr(A.hurt, 1); H.wr(A.health, 3);
   await H.runTo(A.frame_top);
   const cur = (H.rd(0xfe34) >> 2) & 1;   // the buffer the CPU sees (ACCCON X)
-  const cx = H.rd(A.BUF_CX + 2 * cur) | (H.rd(A.BUF_CX + 2 * cur + 1) << 8), cy = H.rd(A.BUF_CY + cur);
+  const cx = H.inBank("BUF_CX", () => H.rd(A.BUF_CX + 2 * cur) | (H.rd(A.BUF_CX + 2 * cur + 1) << 8)), cy = H.inBank("BUF_CY", () => H.rd(A.BUF_CY + cur));
   if (cx & 0x8000) continue;
   const lw = H.rd(A.maplw), stride = 1 << lw;
   const recs = [];
-  for (const bf of [0, 1]) { const nrec = H.rd(A.RECCNT + bf);
+  H.inBank("SPRREC", () => { for (const bf of [0, 1]) { const nrec = H.rd(A.RECCNT + bf);
   for (let i = 0; i < nrec; i++) { const b = A.SPRREC + (bf * MAXREC + i) * 10;
-    recs.push([H.rd(b + 5) | (H.rd(b + 6) << 8), H.rd(b + 7), H.rd(b + 8), H.rd(b + 9) & 0x7f]); } }
+    recs.push([H.rd(b + 5) | (H.rd(b + 6) << 8), H.rd(b + 7), H.rd(b + 8), H.rd(b + 9) & 0x7f]); } } });
   const near = (x, y) => recs.some(([rx, ry, w, h]) => x >= rx - 2 && x <= rx + w + 2 && y >= ry - 2 && y <= ry + h + 2);
   let fb = 0;
-  const map = bank(6, () => { const m = []; for (let r = 0; r < 16; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(H.rd(0x8900 + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
+  const MAP = H.banks ? 0x8800 : 0x8900;   // (a banked build: the Model B's layout, MAP6)
+  const map = bank(6, () => { const m = []; for (let r = 0; r < 16; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(H.rd(MAP + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
   for (let r = 0; r < 27; r++) for (let c = 0; c < 80; c++) {
     const x = cx + c, y = cy + r;
     if (near(x, y)) continue;

@@ -22,6 +22,14 @@
         .ifndef MODELB
 MODELB = 0
         .endif
+; MODELB is the Model B's STRUCTURE: code in the sideways banks with the data it reads,
+; far calls, the level gathered into the banks at load.  BHW is its HARDWARE: a 6502,
+; one screen of main RAM (two software rings with mirror rows), the 8271 or Acorn
+; 1770, the write-select boards.  A Master can take the structure alone: MODELB=1 with
+; BHW=0 (modelb/build.sh TARGET=master, "the converged Master").
+        .ifndef BHW
+BHW = MODELB
+        .endif
 
 ; XJSR name, idx: a call that stays in main RAM on the Master and crosses a bank on
 ; the Model B (idx names the far-table entry).
@@ -38,6 +46,14 @@ MODELB = 0
 .macro PLACE mseg, bseg
   .if ::MODELB
         .segment bseg
+  .else
+        .segment mseg
+  .endif
+.endmacro
+
+.macro PLACEH mseg, bseg              ; the same by HARDWARE: the interrupt handler's own
+  .if ::BHW                             ; work, which is in bank 7 with the Model B's
+        .segment bseg                   ; handler and in main RAM with the Master's
   .else
         .segment mseg
   .endif
@@ -114,7 +130,7 @@ MODELB = 0
 ;                        image (0 = the low-RAM image, as BANKREF)
 ;   wrselx b             after a switch to the bank in A AND X
 .macro WRREC kind, b, name          ; (the record: the image's bank, the store's address,
-  .if ::MODELB                        ;  the kind: 4..7 a constant bank, $FE "in X")
+  .if ::BHW                        ;  the kind: 4..7 a constant bank, $FE "in X")
         .ident(.concat("@wr_", name)):
         .pushseg
         .segment "WRFIX"
@@ -130,7 +146,7 @@ MODELB = 0
   .endif
 .endmacro
 .macro wrsel n, b, tag
-  .if ::MODELB
+  .if ::BHW
         sta ROMSEL
     .if .blank(tag)
         WRREC n, b, .sprintf("s_%d", n)
@@ -140,7 +156,7 @@ MODELB = 0
   .endif
 .endmacro
 .macro wrselx b
-  .if ::MODELB
+  .if ::BHW
         sta ROMSEL
         WRREC $FE, b, "x"
   .endif
@@ -153,7 +169,7 @@ MODELB = 0
   .endif
 .endmacro
 
-  .if .not ::MODELB
+  .if .not ::BHW
         .setcpu "65C02"
 .macro jmpx tab
         jmp (tab,x)
@@ -278,6 +294,7 @@ MODELB = 0
         lda mtmp
         plp
 .endmacro
+  .endif
 
 ; A far call: X = the index of a (bank, address-1) entry in FARTAB, which every
 ; bank carries a copy of at the same address.  A goes in and comes back; Y is
@@ -286,4 +303,3 @@ MODELB = 0
         ldx #idx
         jsr farcall
 .endmacro
-  .endif

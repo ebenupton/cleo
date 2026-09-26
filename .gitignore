@@ -8,3 +8,4 @@ beeb/profile/
 screenshots/
 __pycache__/
 beeb/modelb/build/
+beeb/modelb/buildm/

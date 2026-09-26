@@ -319,3 +319,37 @@ Y (the one site with Y live is `ldazy`), `bitimm` keeps A.
 VISLINES, which is why the reference for the lock-step test is a 21-row Master).  The
 picture starts 72 lines after vsync, 4 scanlines below where a standard frame's centre
 would put it.  The tiles and their ids are the Master's; neither target folds any.
+
+## The converged Master (TARGET=master)
+
+`TARGET=master sh modelb/build.sh` builds this target's STRUCTURE on a Master's
+HARDWARE into `modelb/buildm/cleom.ssd`: the same bank images (code beside the data
+its inner loop reads, the far table, the low-RAM crossings, the loader gathering every
+level into the banks, the menu overlay), but a 65C02, the Master's 32-row ring at
+$3000 in main and shadow RAM, the bar at $2B00, and two exceptions by design -- the
+Master's interrupt handler and chain in main RAM ($0600, with the keys and the sound
+effects), and the tile gather through a table in main RAM (LV_PAGE0 at $0400, per
+level, the packer's, the pair the Model B's gather computes) rather than arithmetic.
+
+How: src/cpu.inc splits the old define in two.  MODELB is the structure; BHW is the
+Model B's hardware (a 6502, one screen of main RAM with two software rings and mirror
+rows, the 8271 or Acorn 1770, the write-select boards), defaulting to MODELB.  Every
+conditional that is hardware tests BHW; the Master and the Model B assemble exactly as
+before (checked byte for byte), and the converged Master is MODELB=1 BHW=0 (cleo_m.cfg).
+Its loader stages the shared files in SHADOW screen RAM (ACCCON X set around every copy
+out of the stage) and the level's file in main screen RAM, then clears both.
+
+Verified against the Master: every level's displayable window (tools/wincmp.mjs) and
+scene identical over 400 frames, the real title-to-play load in sync
+(tools/loadsync2.mjs converged).  It found two latent Model B faults, both fixed here:
+the star's collect animation ends on sprite 42, which the packer never placed, and box
+stars take their art from their own background, not the level's set (a black-backed box
+on an outdoor level was never placed); placing them moved the sprite code in banks 4
+and 6 up to $BC40 and $BDA0.
+
+Cost against the Master (tools/bench.mjs, render + logic medians over identical scenes,
+levels 0-7): +1.6% to +3.6% a frame.  Per frame about 15 map strips (~95 cycles each),
+7 directory fetches (~180), 3 far calls (~90) and 9 bank calls (~25) -- ~3,200 cycles of
+render; the logic is 300-1,100 cycles CHEAPER (the map row is arithmetic, with no bank
+switch).  A level load takes longer: 726 frames from the menu's RETURN into play
+against 494, the loader reading the shared sprite files and itself every time.

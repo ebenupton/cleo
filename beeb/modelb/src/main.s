@@ -13,7 +13,9 @@
         .include "menu.s"
         .include "low.s"
         .include "disc.s"
+  .if BHW                           ; (the converged Master: the Master's chain, engine.s)
         .include "display.s"
+  .endif
         .include "banks.s"
         .include "init.s"
 

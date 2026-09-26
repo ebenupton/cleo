@@ -3,14 +3,14 @@
 // play has run a while.  Reports each frame whose period is not a standard 312 lines
 // (39936 cycles, +-64 for the chain's re-phase) and any flyback forced for want of a
 // vsync.  Unlike tools/loadsync.mjs the picture is in sync when the load begins.
-//   node tools/loadsync2.mjs master|modelb <disc> <labels>
+//   node tools/loadsync2.mjs master|modelb|converged <disc> <labels>
 import { findJsbeeb, loadLabels } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, disc, labels] = process.argv.slice(2);
-const s = new MachineSession(kind === "master" ? "Master" : "B-DFS1.2"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
+const s = new MachineSession(kind === "modelb" ? "B-DFS1.2" : "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));   // (converged: a Master)
 const cpu = s._machine.processor, A = loadLabels(labels), v = s._video;
-const P = kind === "master" ? null : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
+const P = kind === "master" ? null : kind === "converged" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
 const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
 const HV = []; let forced = 0; { const opc = v.paintAndClear.bind(v); v.paintAndClear = function () { if (v.bitmapY >= 768) forced++; HV.push([cyc(), v.bitmapY >= 768]); return opc(); }; }
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);

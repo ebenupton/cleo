@@ -91,7 +91,7 @@ LV_ALTTAB = $BE00                 ; classes x 8 (global: loaded once)
 ; Each buffer gets its own 20K screen, main and shadow, so both are an 80-char
 ; ring at $3000 with 27 rows visible and the status bar above.
 ROWCHARS  = 80
-  .if MODELB
+  .if BHW
 ; Model B: 32K of main RAM, and all but 768 bytes of it is the display.  Two rings of
 ; 23 slots, each with a mirror row below it (the rupture chain reads the row that
 ; straddles the ring end from there: see modelb/DESIGN.md), and the 2-row bar:
@@ -122,7 +122,7 @@ MAXDWY    = 8
 ROWBYTES  = ROWCHARS*8
 RINGCHARS = ROWCHARS*RINGROWS
 RINGBYTES = RINGCHARS*8
-  .if MODELB
+  .if BHW
 ; 23 x 640 = $3980 is not a whole number of pages, so the fold is 16 bit -- but both
 ; ring ENDS are page aligned, which keeps the fold TEST a byte compare (ringup), and
 ; both bases are at xx80, which makes the low byte's fold a subtraction of $80.
@@ -425,12 +425,26 @@ BINR:      .res 4                   ; the interrupt's
 NSTARL:    .res 1
 NOTHL:     .res 1
 BINOK:     .res 1
+    .if BHW
 BUF_SEC0:  .res 4
 BUF_SEC0T1: .res 4
 SECTAB:    .res 2*48
 SFXDUR:    .res 1
 LOADREQ:   .res 1                 ; 0 running, 1 stop asked, 2 stopped, 3 resume asked (load_begin)
 KEYSCAN:   .res 1
+    .else
+        .segment "TABLES"           ; the converged Master: the interrupt handler and its
+BUF_SEC0:  .res 4                   ; chain are the Master's, in main RAM, and so is
+BUF_SEC0T1: .res 4                  ; what they keep
+SECTAB:    .res 2*48
+SFXDUR:    .res 1
+LOADREQ:   .res 1
+KEYSCAN:   .res 1
+dispD:     .res 1
+OLDIRQ:    .res 2
+OLDIER:    .res 1
+NEXTBUF:   .res 1
+    .endif
         .segment "MNUBSS"           ; bank 5's menu overlay: the tune's player lives there
 MUSTMP:    .res 1                   ; (MUSON is in low RAM: the interrupt stub reads it)
 MUSDUR:    .res 1
@@ -469,7 +483,7 @@ NEXTSECT:  .res 1
 .macro ringmod                      ; A = a map char row -> its ring slot
 .if (RINGROWS & (RINGROWS - 1)) = 0
         and #(RINGROWS-1)
-.elseif ::MODELB
+.elseif ::BHW
         .local n1, n2               ; a row is 0..255 and the table RINGROWS*5 long:
         cmp #RINGROWS*5             ; two subtractions bring the row into it (main RAM
         bcc n1                      ; is short of a 256-entry table)
@@ -485,7 +499,7 @@ n2:     tax
 .endif
 .endmacro
 .macro ringmod7                     ; the same, by subtraction: for bank 7 (calc_ring,
-  .if ::MODELB                        ; once a frame), which has no copy of the table
+  .if ::BHW                        ; once a frame), which has no copy of the table
 :       cmp #RINGROWS
         bcc :+
         sbc #RINGROWS
@@ -500,7 +514,7 @@ n2:     tax
 ; The cmp leaves the carry set on the path that reaches the sbc, so the fold needs
 ; no sec of its own whatever the caller was holding.
 .macro ringup p                     ; p names the pointer whose high byte A holds;
-  .if ::MODELB                        ; the Master's fold never needs it
+  .if ::BHW                        ; the Master's fold never needs it
         cmp ringehi                 ; the buffer's ring end, high byte (select_backbuf)
         bcc :+
         sbc #>RINGBYTES             ; C = 1 from the compare, and stays 1: A >= >RINGEND
@@ -532,7 +546,7 @@ n2:     tax
         sta sp
         bcc :++                     ; past the fold's own anonymous label
         lda sp+1
-  .if ::MODELB
+  .if ::BHW
         adc #0                      ; C = 1 (the bcc fell through): +1, 2 bytes not 6
   .else
         inca
@@ -565,7 +579,17 @@ ringaddr:
         ringup sp
         sta sp+1
         rts
-  .if MODELB
+  .if MODELB && (.not BHW)          ; the converged Master: the Master's rows, with the
+RINGLO:                             ; code that reads them (both buffers alike: main
+  .repeat RINGROWS, r               ; and shadow share the addresses)
+        .byte <(RINGBASE + r*ROWBYTES)
+  .endrepeat
+RINGHI:
+  .repeat RINGROWS, r
+        .byte >(RINGBASE + r*ROWBYTES)
+  .endrepeat
+  .endif
+  .if BHW
 RINGHIOP := @rh + 1                 ; (after the rts: := ends the @ scope)
 ; the ring rows' addresses, assembled: both bases are xx80, so the low bytes are the
 ; two rings' alike and only the high bytes are per buffer
@@ -593,7 +617,7 @@ drawrect:
         bne :+
         rts
 :
-  .if MODELB
+  .if BHW
         lda mrow                    ; the map row the mirror follows (calc_ring): a rect
         sec                         ; that touches it says which window columns it wrote
         sbc rc_y
@@ -631,7 +655,7 @@ drawrect:
         sta rc_ro0
         lda rc_sc0
         adc rc_w
-  .if MODELB
+  .if BHW
         sbc #0                      ; C = 0 (<= 83, no carry): the -1
   .else
         deca
@@ -672,7 +696,19 @@ drawrect:
   .endif                            ;  write bank too, done here rather than in low RAM)
         ldy rc_nt
 @gl:
-  .if MODELB
+  .if MODELB && (.not BHW)
+        ; the converged Master: the Model B's strip of the map row (MAPBUF), then the
+        ; Master's table -- LV_PAGE0 in main RAM, the level's (the loader's), the pair
+        ; the Model B's gather below computes
+        lda MAPBUF,y
+        tax
+        lda LV_PAGE0,x
+        sta GATHERL,y
+        lda LV_PAGE0+$100,x
+        sta GATHERH,y
+        dey
+        bpl @gl
+  .elseif MODELB
         ; the tiles are contiguous from TILES (page aligned, 64 bytes each), so the
         ; address is arithmetic: no table beside them.  Ids from FLAT0 are fills -- a
         ; flat tile is two bytes alternating down every char (FLATTAB, the loader's;
@@ -814,7 +850,7 @@ drawrect:
         lda rc_sp+1
         sta sp+1
         ; a row spans <= 640 bytes: it can only cross the ring end if sp is within 768
-  .if MODELB
+  .if BHW
         cmp ringe3                  ; >RINGEND - 3 for the buffer being drawn
   .else
         cmp #(>RINGEND - 3)
@@ -867,14 +903,14 @@ drawrect:
         beq :+                      ; row cannot cross the ring end: no per-run check
         adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
         lda sp+1
-  .if MODELB
+  .if BHW
         adc ringneg                 ; 256 - >RINGEND for the buffer being drawn
   .else
         adc #(256 - (>RINGEND))     ; = adc #$85 ; C set iff sp+1+C >= >RINGEND
   .endif
         bcs @slow
 :
-  .if MODELB
+  .if BHW
         lda @jt-2,x                 ; jmpx less its pha/pla: every @b entry
         sta jv                      ; loads A before it reads it
         lda @jt-1,x
@@ -909,7 +945,7 @@ drawrect:
 .endmacro
 .macro CHARCPY c
 .if c = 0
-  .if ::MODELB
+  .if ::BHW
         ldy #0                      ; line 0 (staz would reload the same 0 into Y)
         lda (tp),y
         sta (sp),y
@@ -967,7 +1003,7 @@ drawrect:
         sta rc_sp+1
         rts
         ; ---- fills: a flat tile, a solid, a half tile's fill row -- no source bytes
-  .if .not MODELB
+  .if .not BHW
         ; the Master's LV_PAGE0 splits them: high byte $C0, one byte down every line
         ; (the low byte: a solid, or a flat whose pair is one byte) on a cascade that
         ; stores A alone; $E0, a pair (the low byte indexes FLATTAB) on the pair's
@@ -1084,7 +1120,7 @@ drawrect:
         dec tmp2
         bne @mc
         jmp @runend
-  .if MODELB
+  .if BHW
 @solid: ldy GATHERL,x               ; the flat pair: even lines from tp, odd from tp+1
         lda FLATTAB,y               ; (tp is otherwise unused on this path)
         sta tp
@@ -1137,13 +1173,13 @@ drawrect:
         beq :+
         adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
         lda sp+1
-  .if MODELB
+  .if BHW
         adc ringneg
   .else
         adc #(256 - >RINGEND)
   .endif
         bcs @fslow                  ; (@fslow sits before the cascade: in reach on both)
-  .if MODELB
+  .if BHW
 :       lda @ft-2,x                 ; jmpx @ft-2 less its pha/pla, and no load: A is
         sta jv                      ; dead, every entry is a FIL1, which loads tp+1
         lda @ft-1,x
@@ -1228,7 +1264,7 @@ scroll_validate:
         bcc @full
 :       ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+BUFROWS-1
         eor #$FF                    ; (A still holds w16)
-  .if MODELB
+  .if BHW
         adc #0                      ; C = 1 from the cmp: A = -w16, and C = 0 (w16 <> 0)
   .else
         inca
@@ -1238,7 +1274,7 @@ scroll_validate:
         sta rc_x
         lda wcx+1
         sta rc_x+1
-  .if MODELB
+  .if BHW
         bcc @docols                 ; C = 0 from the adc
   .else
         bra @docols
@@ -1274,7 +1310,7 @@ scroll_validate:
         cmp #<-30
         bcc @full
         eor #$FF
-  .if MODELB
+  .if BHW
         adc #0                      ; C = 1 from the cmp: A = -w16b, and C = 0
   .else
         inca
@@ -1282,7 +1318,7 @@ scroll_validate:
         sta rc_h
         lda wcy
         sta rc_y
-  .if MODELB
+  .if BHW
         bcc @dorows                 ; C = 0 from the adc
   .else
         bra @dorows
@@ -1353,7 +1389,7 @@ match_sprites:
         ; frame change there needs no erase either
         cmp #BOXID0
         bcc @next
-  .if MODELB
+  .if BHW
         lda (rp),y                  ; Y = 0 from the cmpz above
   .else
         ldaz rp
@@ -1364,7 +1400,7 @@ match_sprites:
         bne @pos
 @same:  lda #2                      ; 2 = identical, so its pixels are already right
 @pos:   sta tmp3
-  .if MODELB
+  .if BHW
         iny                         ; Y = 0 on both ways in (cmpz, ldaz)
   .else
         ldy #1
@@ -1543,7 +1579,7 @@ draw_sprites:
 ; both live at TITLE_ADDR of that bank.
         PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with the records and SPRMASK
 drawsprite:
-  .if MODELB
+  .if BHW
         ldx #0                      ; X is dead on entry (ldx spbank below)
         stx spclip                  ; set at every window edge the sprite is cut against
   .else
@@ -1554,7 +1590,7 @@ drawsprite:
         sbc #BOXN
 :
         sta sp_id
-  .if MODELB
+  .if BHW
         stx ptr+1                   ; X = 0 still
   .else
         stza ptr+1
@@ -1597,7 +1633,7 @@ drawsprite:
   .endif
         sta sp_flags
         bankimm ldx, BANK_SPR, BANK_LVL
-  .if MODELB
+  .if BHW
         lsr                         ; C = flags bit 2
         lsr
         lsr                         ; and bit 1 = flags bit 4
@@ -1608,7 +1644,7 @@ drawsprite:
   .endif
         bankimm ldx, (BANK_SPR|$80), BANK_LVL
 :
-  .if MODELB
+  .if BHW
         and #2
   .else
         bitimm $10              ; A still holds the flags byte
@@ -1748,7 +1784,7 @@ drawsprite:
         bcs @out0                   ; not taken: C = 0 for the adc below
         sta sp_c0
         adc sp_w
-  .if MODELB
+  .if BHW
         sbc #0                      ; C = 0 still (c0 + W < 256): A - 1, as deca
   .else
         deca
@@ -1758,7 +1794,7 @@ drawsprite:
         inc spclip                  ; and at the right
         lda #(ROWCHARS-1)
 :       sta sp_c1
-  .if MODELB
+  .if BHW
         lda #0                      ; A is dead at @vert: no need to keep it
         sta sp_c
         beq @vert                   ; always (Z from the lda #0)
@@ -1802,7 +1838,7 @@ drawsprite:
         clc                         ; only this arm arrives with C set
 @nc:
         ; lend = lb0 + ext - 1
-  .if MODELB
+  .if BHW
         ldx sp_ext                  ; X is dead here: ext - 1, carry kept
         dex
         txa
@@ -1873,7 +1909,7 @@ drawsprite:
         adc sp_r0
         sta (rp),y
         iny
-  .if MODELB
+  .if BHW
         ldx sp_c1                   ; width = c1 + 1 - c0 (X dead: ldx spclip below)
         inx
         txa
@@ -1889,7 +1925,7 @@ drawsprite:
         iny
         lda sp_r1
         sbc sp_r0                   ; C still set by the width sbc above (sp_c1 >= sp_c0)
-  .if MODELB
+  .if BHW
         adc #0                      ; and set by this one (sp_r1 >= sp_r0): + 1
   .else
         inca
@@ -1898,7 +1934,7 @@ drawsprite:
         beq :+                      ; may be visible next time and it has to be redrawn
         ora #$80
 :       sta (rp),y
-  .if MODELB
+  .if BHW
         lda mrow                    ; the mirror's row, relative to the window: if the
         sec                         ; sprite covers it, note the columns (see drawrect)
         sbc wcy
@@ -2052,7 +2088,7 @@ drawsprite:
         lda SWAPTAB,x
   .endif
   .if k = 0
-    .if ::MODELB
+    .if ::BHW
         sta (sp),y                  ; box sprite: Y = 0 still, from ldaz's ldy #0
     .else
         staz sp                     ; box sprite: every byte opaque, plain copy
@@ -2184,7 +2220,7 @@ name:
         beq l0                      ; the whole cell: the overwhelmingly common case, and
         asl                         ; it needs no table at all (was lda/asl/tax/jmpx, 21
         tax                         ; cycles of dispatch to reach the same place)
-  .if ::MODELB
+  .if ::BHW
         lda et-2,x                  ; jmpx without its pha/pla: A is dead at l1..l7
         sta jv
         lda et-1,x
@@ -2352,7 +2388,7 @@ pop:    ldy sp_lim
         iny
         CLINE mirror
 pnext:
-  .if ::MODELB
+  .if ::BHW
         inc sp_lim
         inc sp_lim
         lda sp_lim
@@ -2375,7 +2411,7 @@ name:
         bne partial
         lda tmp                     ; even: 0,2,4,6 -> entry p0..p3
         beq p0
-  .if ::MODELB
+  .if ::BHW
         cmp #4
         bcc p1
     .if mirror
@@ -2601,7 +2637,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         lda wcx+1
         adc #0
         sta w16+1
-  .if MODELB
+  .if BHW
         lda barq                    ; the composed row is the ring row above the window,
         bne @nomir                  ; the last slot when the window starts at slot 0
         lda tmp4                    ; C = 0 from the w16+1 adc (wcx < $8000)
@@ -2630,7 +2666,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         lda ringS+1
         adc #$FF                    ; C = 1: >= 0, already in the ring
         bcs @pnf
-  .if MODELB
+  .if BHW
         tax                         ; < 0: + RINGCHARS, 16 bit (23 rows is not whole pages)
         lda ptr
         adc #<RINGCHARS
@@ -2644,7 +2680,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         rol
         asl ptr
         rol
-  .if MODELB
+  .if BHW
         tax
         lda ptr                     ; the base is xx80, and which xx is the buffer's
         adc #<RING_A
@@ -2694,7 +2730,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         sta ptr
         bcc @fjmp
         lda ptr+1
-  .if MODELB
+  .if BHW
         adc #0                      ; C = 1: the bcc fell through; ringup's cmp resets it
   .else
         inca
@@ -2814,7 +2850,7 @@ bar_bg:                             ; and never redrawn: only the digit cache is
   .endif
 
 ; ============================================================================
-  .if .not MODELB                   ; (Model B: its rupture chain is modelb/src/display.s)
+  .if .not BHW                   ; (Model B: its rupture chain is modelb/src/display.s)
         .segment "LOGIC"           ; main RAM is full on a Master: this touches
                                     ; nothing but main RAM and the CRTC, so it can
                                     ; live in the bank the game logic already uses
@@ -3043,7 +3079,7 @@ build_sections:
 
 BARROWS = 2                        ; the status bar
 QROWS  = 39 - VISROWS - BARROWS    ; blank rows after the display: 312 lines in all
-  .if MODELB
+  .if BHW
 QVSYNC = 8                         ; vsync at Q row 8 of 16: the picture starts 64 lines after
                                    ; it, 4 lines below where a MODE 1 screen sits
   .else
@@ -3059,7 +3095,7 @@ QVSYNC = 3                         ; vsync at Q row 3 of 7: four rows (32 lines)
 ; select CPU access to the current back buffer (ACCCON X bit)
         PLACE "CODE", "TILCODE"     ; Model B: bank 5 (the menus are there too)
 select_backbuf:
-  .if MODELB
+  .if BHW
         ldx curbuf                  ; the buffer's ring: its base and end, the two
         lda @bhi,x                  ; derived constants the blitters' wrap tests use,
         sta ringbhi                 ; and its row table for ringaddr
@@ -3086,7 +3122,7 @@ select_backbuf:
         sta recp
         lda @rhi,x
         sta recp+1
-  .if MODELB
+  .if BHW
         lda @thl,x                  ; ringaddr's high bytes: this buffer's table
         sta RINGHIOP
         lda @thh,x
@@ -3117,7 +3153,7 @@ render_frame:                       ; is render_core in bank 5
 :       lda BARDIRTY
         beq :+
         jsr t_redraw_hud
-  .if MODELB
+  .if BHW
         dec BARDIRTY                ; only ever set to 1: 1 -> 0
   .else
         stz BARDIRTY
@@ -3168,7 +3204,7 @@ render_frame:                       ; is render_core in bank 5
   .endif
         ; hand over to ISR
         lda curbuf
-  .if .not MODELB
+  .if .not BHW
         sta NEXTBUF
   .endif
         beq :+
@@ -3193,7 +3229,7 @@ wait_flip:
 ; bar's, in play) shows two ring rows below the window instead: the menus never draw
 ; there and clear_ring has made them black, so the menus look as they did but the bar
 ; is neither shown nor touched while they run -- it is laid once and left in place.
-  .if MODELB
+  .if BHW
 MENURING = RING_A
   .else
 MENURING = RINGBASE
@@ -3404,7 +3440,11 @@ render_core:                        ; records stays here; bank 5 (the tiles, the
         farjsr F_RENDER5            ; scroll_validate, draw_dirty, blank_below
         jsr draw_sprites
         farjsr F_COPYPART           ; copy_partial
+    .if BHW
         jmp mirror_copy             ; the straddling row's copy (display.s)
+    .else
+        rts                         ; (the hardware folds the straddling row)
+    .endif
         .segment "TILCODE"
 render5:
         jsr scroll_validate
@@ -3522,7 +3562,7 @@ calc_ring:
         dey
         bpl @div                    ; borrow absorbed by the high byte
 @dd:    stx barq                    ; high byte went negative: X is the quotient
-  .if MODELB
+  .if BHW
         adc #ROWCHARS-1             ; C = 1 (the sec before dey): A + 80, the remainder,
         sta wcxm                    ; where the window starts in its slot
         lda #RINGROWS-1             ; the window row that lives in the last slot, and
@@ -3643,7 +3683,7 @@ draw_dirty:
         stz DIRTYCNT,x              ; A is dead: both callers reload it at once
 @done:  rts
 
-  .if .not MODELB                   ; (Model B: modelb/src/display.s, in bank 6)
+  .if .not BHW                   ; (Model B: modelb/src/display.s, in bank 6)
         .segment "CODE"
 
 ; ============================================================================
@@ -3852,6 +3892,20 @@ irq_handler:
         trb ACCCON                  ; CRTC while D = 0
 @sk:    jsr scan_keys
         jsr sound_tick
+  .if MODELB                        ; the converged Master: the title tune's player is in
+        lda MUSTICK                 ; bank 5's menu overlay, stepped as the Model B's
+        beq @exit                   ; interrupt stub does (low.s)
+        dec MUSTICK
+        lda ROMSEL_CPY
+        pha
+        lda #BANK_TILES             ; (the Master's banks are its own: no patch)
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jsr music_tick
+        pla
+        sta ROMSEL_CPY
+        sta ROMSEL
+  .endif
 @exit:
         ldy irq_y
         ldx irq_x
@@ -3866,8 +3920,8 @@ VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 8 + 2   ; -8: the step's load-
   .endif
 
 ; ---------------------------------------------------------------- keyboard
-        PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with the interrupt's own work
-scan_keys:
+        PLACEH "CODE", "LGCCODE"    ; the interrupt's own work: bank 7 with the Model B's
+scan_keys:                          ; handler, main RAM with the Master's
         lda #$7F
         sta VIA_DDRA
         lda #3
@@ -3879,7 +3933,7 @@ scan_keys:
         lda VIA_ORANH
         bpl :+
         lda keybits,x
-  .if MODELB
+  .if BHW
         ora keys
         sta keys
   .else
@@ -3964,7 +4018,7 @@ sound_tick:
         sta VIA_ORB                 ; keyboard autoscan on so the keyboard does not pull PA7
         pla
         sta VIA_ORANH
-  .if .not MODELB
+  .if .not BHW
         nop                         ; = lda #0: the store lands on the same cycle
         stz VIA_ORB
   .else
@@ -4019,7 +4073,7 @@ sndwrite_m:
         SNDWRITE_BODY
   .endif
 music_tick:
-  .if MODELB                        ; the overlay comes off the disc, so the loader
+  .if BHW                        ; the overlay comes off the disc, so the loader
         ldx PBOARD                  ; cannot patch a companion in: the write bank by hand
         beq @wr                     ; (A = this bank's socket, from the interrupt stub;
         cpx #BOARD_SOLIDISK         ;  MUSDUR, MUSNOTE and MUSPTR below are this bank's)
@@ -4118,7 +4172,7 @@ music_start:
         sta MUSPTR+1
         lda #1
         sta MUSDUR
-  .if MODELB
+  .if BHW
         lsr                         ; A = 0, C = 1
         sta MUSNOTE
         sta MUSNOTE+1
@@ -4134,7 +4188,7 @@ music_start:
 
         PLACE "CODE", "LGCCODE"     ; (bank 7 stops it: the overlay may be gone)
 music_stop:
-  .if MODELB
+  .if BHW
         lsr MUSON                   ; MUSON is 0 or 1: 6 cycles, as lda #0 / sta
   .else
         stz MUSON
@@ -4152,7 +4206,7 @@ music_stop:
         PLACE "CODE", "TILLOW"      ; Model B: bank 5's low corner, with init5 (once only)
 take_over:
         sei
-  .if .not MODELB
+  .if .not BHW
         lda IRQ1V
         sta OLDIRQ
         lda IRQ1V+1
@@ -4184,7 +4238,10 @@ take_over:
 ; ============================================================================
 ; CRTC / palette setup
 ; ============================================================================
-  .if .not MODELB                   ; (Model B: modelb/src/display.s)
+  .if .not BHW                   ; (Model B: modelb/src/display.s)
+    .if MODELB
+        .segment "LGCCODE"          ; (the converged Master: start7's, in bank 7)
+    .endif
 crtc_init:
         ; standard 20K-mode timings, no interlace, cursor off
         ldx #13
@@ -4237,8 +4294,8 @@ blank_palette:
         rts
   .if .not MODELB
   .endif
-  .if .not MODELB                   ; (Model B: static tables in main RAM (banks.s),
-        .segment "TABLES"           ;  and no disc loader -- modelb/src/disc.s)
+  .if .not MODELB                   ; (Model B: static tables in bank 7 (banks.s),
+        .segment "TABLES"           ;  and no disc loader here -- modelb/src/disc.s)
 mulrowlo:                         ; ring row r -> r * 80 chars
   .repeat RINGROWS, r
         .byte <(r*ROWCHARS)
@@ -4932,10 +4989,17 @@ ringaddr7:
         rol                         ; C = 0: bit 13 of the char (< 8192)
         pha
         lda sp
+  .if BHW
         adc #<RING_A
         sta sp
         pla
         adc ringbhi
+  .else
+        adc #<RINGBASE
+        sta sp
+        pla
+        adc #>RINGBASE
+  .endif
         ringup sp
         sta sp+1
         rts

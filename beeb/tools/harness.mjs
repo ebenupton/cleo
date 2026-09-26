@@ -48,8 +48,45 @@ const CHUNK = 90_000;          // < jsbeeb's MaxCyclesPerIter (100000) so each r
                                // exactly one execute() call -- see runTo for why
 const WRAP = 2_000_000;        // cpu.currentCycles wraps at 2e6 (cycleSeconds ticks)
 
+// A banked build (the Model B's layout, on either machine) has code and state in
+// sideways RAM, where one address names a different byte in each bank: the linker's
+// debug file says which bank each label is in (by its segment), so a PC break waits
+// for that bank to be paged ($F4, ROMSEL's copy) and a state read pages it first.
+const SEGBANK = [[/^(COMMON4|SPR4)/, 4], [/^(COMMON5|TIL|MNU)/, 5], [/^(COMMON6|MAPLO|SPR6)/, 6],
+                 [/^(COMMON7|LGC)/, 7]];
+export function loadBanks(dbgFile) {
+  if (!existsSync(dbgFile)) return null;
+  const segBank = new Map(), byName = new Map(), byPc = new Map();
+  const t = readFileSync(dbgFile, "utf8");
+  for (const m of t.matchAll(/^seg\tid=(\d+),name="(\w+)"/gm)) {
+    const e = SEGBANK.find(([re]) => re.test(m[2]));
+    if (e) segBank.set(m[1], e[1]);
+  }
+  if (!segBank.size) return null;
+  for (const m of t.matchAll(/^sym\tid=\d+,name="(\w+)",[^\n]*?val=0x([0-9A-F]+),seg=(\d+),type=lab/gm)) {
+    const b = segBank.get(m[3]);
+    if (b === undefined) continue;
+    byName.set(m[1], b);
+    const a = parseInt(m[2], 16);
+    byPc.set(a, byPc.has(a) && byPc.get(a) !== b ? -1 : b);   // (-1: two banks, ambiguous)
+  }
+  return { byName, byPc };
+}
+
 export class Harness {
-  constructor(s, A) { this.s = s; this.A = A; this.cpu = s._machine.processor; }
+  constructor(s, A, banks = null) { this.s = s; this.A = A; this.cpu = s._machine.processor; this.banks = banks; }
+  // is the CPU at pc, in the bank that label lives in?
+  at(pc, p) { if (p !== pc) return false; const b = this.banks?.byPc.get(pc); return b === undefined || b < 0 || this.cpu.readmem(0xf4) === b; }
+  // is the CPU at address a, in the bank the named label lives in? (an address that is
+  // no label -- the instruction after a jsr, say -- takes its bank from a neighbour)
+  atIn(a, name, p) { if (p !== a) return false; const b = this.banks?.byName.get(name); return b === undefined || this.cpu.readmem(0xf4) === b; }
+  // f() with the bank a named label lives in paged in (read side only)
+  inBank(name, f) {
+    const b = this.banks?.byName.get(name);
+    if (b === undefined) return f();
+    const was = this.cpu.readmem(0xf4); this.cpu.writemem(0xfe30, b);
+    try { return f(); } finally { this.cpu.writemem(0xfe30, was); }
+  }
 
   rd(a) { return this.cpu.readmem(a); }
   wr(a, v) { this.cpu.writemem(a, v); }
@@ -67,11 +104,11 @@ export class Harness {
   // the next runTo call, which is exactly the "advance to the next occurrence" we want.
   async runTo(pc, budget = 40_000_000) {
     const t0 = this.cyc();
-    const h = this.cpu.debugInstruction.add((p) => p === pc);
+    const h = this.cpu.debugInstruction.add((p) => this.at(pc, p));
     try {
       while (this.cyc() - t0 < budget) {
         await this.s.runFor(CHUNK);
-        if (this.cpu.pc === pc) return this.cyc() - t0;
+        if (this.at(pc, this.cpu.pc)) return this.cyc() - t0;
       }
     } finally { h.remove(); }
     throw new Error(`runTo(${pc.toString(16)}) timed out after ${budget} cycles`);
@@ -97,11 +134,14 @@ export class Harness {
     this.cpu.debugInstruction.add((pc, op) => {
       if (inWin) n++;
       if (inLogic) li++;
-      if (pc === A.frame_top) { lt0 = this.cyc(); inLogic = true; li = 0; }
-      else if (pc === A.render_frame && inLogic) { m.logic = this.cyc() - lt0; m.logicI = li; inLogic = false; }
-      if (pc === A.select_backbuf) { t0 = this.cyc(); inWin = true; m.isr = 0; m.isrCount = 0; n = 0; }
-      else if (pc === A.render_done && inWin) { m.work = this.cyc() - t0; m.instrs = n; inWin = false; m.frames++; }
-      else if (pc === A.irq_handler) { isrAt = this.cyc(); }
+      if (this.at(A.frame_top, pc)) { lt0 = this.cyc(); inLogic = true; li = 0; }
+      else if (inLogic && this.at(A.render_frame, pc)) { m.logic = this.cyc() - lt0; m.logicI = li; inLogic = false; }
+      // the window opens as render_frame's wait for the flip returns (its first
+      // instruction is that jsr): everything the frame does after, on either layout --
+      // a banked build selects the buffer through a far call, after the bar
+      if (!inWin && this.atIn(A.render_frame + 3, "render_frame", pc)) { t0 = this.cyc(); inWin = true; m.isr = 0; m.isrCount = 0; n = 0; }
+      else if (inWin && this.at(A.render_done, pc)) { m.work = this.cyc() - t0; m.instrs = n; inWin = false; m.frames++; }
+      else if (this.at(A.irq_handler, pc)) { isrAt = this.cyc(); }
       else if (isrAt >= 0 && op === 0x40) { exiting = true; }   // RTI: measure to the
       else if (exiting) {                                       // instruction after it
         if (inWin) { m.isr += this.cyc() - isrAt; m.isrCount++; }
@@ -120,10 +160,10 @@ export class Harness {
       ["wcx", A.wcx, 2], ["wcy", A.wcy, 1], ["wfine", A.wfine, 1], ["wy", A.wy, 2],
       ["curbuf", A.curbuf, 1],   // (not BUF_VALID: the Master encodes it in BUF_CX now)
       ["BUF_CX", A.BUF_CX, 4], ["BUF_CY", A.BUF_CY, 2],
-      ["BARDIRTY", A.BARDIRTY, 2],   // (not BARBG: gone, the bar is laid once)
+      ["BARDIRTY", A.BARDIRTY, 1],   // (one byte: one bar; not BARBG, gone)
       ["MIRR_R", A.MIRR_R, 2], ["MIRR_LO", A.MIRR_LO, 2],
       ["NSPR", A.NSPR, 1], ["SPRLIST", A.SPRLIST, 5 * MAXSPR, "sprites"],
-      ["RECCNT", A.RECCNT, 2], ["SPRREC", A.SPRREC, 2 * MAXREC * 10], ["KEEP", A.KEEP, MAXREC],
+      ["RECCNT", A.RECCNT, 2], ["SPRREC", A.SPRREC, 2 * MAXREC * 10, "rec"], ["KEEP", A.KEEP, MAXREC, "keep"],
       ["DIRTYCNT", A.DIRTYCNT, 2], ["DIRTYLIST", A.DIRTYLIST, 2 * 2 * 64, "dirty"],
       ["px", A.px, 2], ["py", A.py, 2], ["vx", A.vx, 2], ["vy", A.vy, 2],
       ["frame", A.frame, 2], ["health", A.health, 1], ["hurt", A.hurt, 1],
@@ -140,9 +180,20 @@ export class Harness {
         for (let bf = 0; bf < 2; bf++) { const c = Math.min(this.rd(this.A.DIRTYCNT + bf), n);
           for (let i = 0; i < 2 * c; i++) b[bf * 128 + i] = this.rd(this.A.DIRTYLIST + bf * 2 * n + i); }
       } else if (kind === "sprites" && this.A.SPR_XL !== undefined) {   // five arrays: as id,xl,xh,yl,yh records
-        const n = len / 5, F = [this.A.SPR_ID, this.A.SPR_XL, this.A.SPR_XH, this.A.SPR_YL, this.A.SPR_YH];
-        for (let i = 0; i < n; i++) for (let k = 0; k < 5; k++) b[i * 5 + k] = F[k] < 0x10000 ? this.rd(F[k] + i) : 0;
-      } else for (let i = 0; i < len; i++) b[i] = this.rd(addr + i);
+        // (each array to its own length, MAXSPR being a build's choice; the rest zero)
+        const n = Math.min(len / 5, this.A.SPR_XL - this.A.SPR_ID), F = [this.A.SPR_ID, this.A.SPR_XL, this.A.SPR_XH, this.A.SPR_YL, this.A.SPR_YH];
+        this.inBank("SPR_ID", () => { for (let i = 0; i < n; i++) for (let k = 0; k < 5; k++) b[i * 5 + k] = F[k] < 0x10000 ? this.rd(F[k] + i) : 0; });
+      } else if (kind === "rec" || kind === "keep") {   // per buffer, the records it holds
+        // (MAXREC is a build's choice: each buffer's live records, the rest zero)
+        const mr = (this.A.RECCNT - this.A.SPRREC) / 20, cap = len / (kind === "rec" ? 20 : 1);
+        this.inBank("SPRREC", () => {
+          if (kind === "keep") { for (let i = 0; i < Math.min(mr, cap); i++) b[i] = this.rd(addr + i); return; }
+          for (let bf = 0; bf < 2; bf++) {
+            const c = Math.min(this.rd(this.A.RECCNT + bf), mr, cap);
+            for (let i = 0; i < c * 10; i++) b[bf * cap * 10 + i] = this.rd(this.A.SPRREC + bf * mr * 10 + i);
+          }
+        });
+      } else this.inBank(name, () => { for (let i = 0; i < len; i++) b[i] = this.rd(addr + i); });
       h.update(name); h.update(b);
       parts[name] = b.toString("hex");
     }
@@ -159,6 +210,8 @@ export const ALLOW_DAMAGE = !!process.env.HARNESS_ALLOW_DAMAGE;
 export async function open({ disc, labels, level, quiet = true }) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);
+  const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));
+  if (banks && banks.byName.get("frame_top") !== undefined) return openBanked({ MachineSession, disc, A, banks, level, quiet });
   for (const need of ["frame_top", "select_backbuf", "render_done", "irq_handler", "level_init", "title_loop", "level_loop", "scan_keys", "keys"])
     if (A[need] === undefined) throw new Error(`labels are missing ${need} -- rebuild?`);
   const s = new MachineSession("Master");
@@ -176,6 +229,34 @@ export async function open({ disc, labels, level, quiet = true }) {
   const blink = patchBlink(H);
   if (blink !== 1 && !quiet) console.error(`WARNING: blink test matched ${blink} sites (expected 1)`);
   await H.runTo(A.frame_top, 40_000_000);        // from here on, everything is frames
+  H.installMeter();
+  return H;
+}
+
+// A banked build (the converged Master: modelb/build.sh TARGET=master) boots through
+// the Model B's loader, and its game loop is bank 7's: the title and the level are
+// patched there, as modelb/tools/bopen.mjs does for the Model B.
+async function openBanked({ MachineSession, disc, A, banks, level, quiet }) {
+  const s = new MachineSession("Master");
+  await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
+  const H = new Harness(s, A, banks);
+  const in7 = (f) => { const was = H.rd(0xf4); H.wr(0xfe30, 7); try { return f(); } finally { H.wr(0xfe30, was); } };
+  s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
+  await H.runTo(A.title_loop, 200_000_000);
+  in7(() => {
+    H.wr(A.title_loop + 5, 0xea);                 // keep jsr ensure_menu; jsr t_title_menu ->
+    H.wr(A.title_loop + 3, 0xa9); H.wr(A.title_loop + 4, 0);   // "start game"
+    let ok = false;
+    for (let a = A.level_loop; a < A.level_loop + 24; a++)
+      if (H.rd(a) === 0xa6 && H.rd(a + 1) === (A.level & 255)) { H.wr(a, 0xa2); H.wr(a + 1, level); ok = true; break; }
+    if (!ok) throw new Error("banked: ldx level not found in level_loop");
+  });
+  await H.runTo(A.level_init, 200_000_000);
+  if (banks.byName.get("scan_keys") === undefined) H.wr(A.scan_keys, 0x60);   // (main RAM)
+  else in7(() => H.wr(A.scan_keys, 0x60));
+  const blink = patchBlink(H);
+  if (blink !== 1 && !quiet) console.error(`WARNING: blink test matched ${blink} sites (expected 1)`);
+  await H.runTo(A.frame_top, 40_000_000);
   H.installMeter();
   return H;
 }

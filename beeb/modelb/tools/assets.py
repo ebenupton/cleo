@@ -30,24 +30,25 @@ spec = importlib.util.spec_from_file_location('conv', 'tools/convert.py')
 m = importlib.util.module_from_spec(spec)
 with contextlib.redirect_stdout(io.StringIO()):
     spec.loader.exec_module(m)
-OUT = os.path.join(BEEB, 'modelb', 'build')
+TARGET = os.environ.get('TARGET', 'modelb')     # 'master': the converged Master (build.sh)
+OUT = os.path.join(BEEB, 'modelb', os.environ.get('BD', 'build'))
 os.makedirs(OUT, exist_ok=True)
 
 def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
 SOLID_CYAN, SOLID_BLACK = 254, 255
-VISLINES = 160                              # 20 rows (engine.s, MODELB)
+VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 20 (engine.s)
 
 # ---------------------------------------------------------------- the banks' fixed shape
 # Code sits at the top of banks 4 and 6 and the data below it can be any size; the
 # level image of bank 5 is its code and BSS from $8100 and the tiles above them, page
 # aligned.  These are the bounds the linker config (cleo_b.cfg) and defs.inc share.
-B4_DATA = (0x8800, 0xBBE0)                  # bank 4: images and masks
+B4_DATA = (0x8800, 0xBC40)                  # bank 4: images and masks
 B4_HOLE = (0x8040, 0x8300)                  #   masks on their own below the tables
 B6_HOLE = (0x8180, 0x8300)                  # bank 6: below the tables, above the low image
 B6_SWAP = (0x8300, 0x8400)                  #   the page SWAPTAB would take: data here
-B6_TOP = 0xBD60                             #   the row loop and copy blitter above this
+B6_TOP = 0xBDA0                             #   the row loop and copy blitter above this
 MAP6 = 0x8800                               #   the map, then the directory, then images
 TILES_BASE, B5X = m.B_TILES, m.B_TILES_END  # bank 5: the tiles from here (page aligned)
                                             #   up to the row loop's region (cleo_b.cfg)
@@ -207,66 +208,88 @@ def pack_level(lv, sub):
 
     # ---- sprites: which images, and where each goes
     types = sorted(set(t for (t, x, y, e) in L['objs']))
-    ids = set(range(42))                    # Cleo, the boomerang (27..33), the common ones
+    ids = set(range(43))                    # Cleo, the boomerang (27..33), the common ones:
+                                            # through 42, the star's collect animation's end
     for t in types:
         if t in m.TYPE_IDS:
             lo, hi = m.TYPE_IDS[t]
             ids |= set(range(lo, hi + 1))
     imgs = sorted(set(m.entry[i][0] for i in ids if m.entry[i] is not None))
-    bxs = list(range(6, 12)) if gset == 1 else list(range(0, 6))
+    # the box stars' art by each star's class (convert.py star_class: 1 on sky, the
+    # first six boxes; 2 on black, the second six -- logic.s boxbase), not by the set
+    classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
+    bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
     tramps = [0, 1, 2] if 1 in types else []
     R6BASE = MAP6 + len(mapb) + 118 * 8
     regions = {'r4': [B4_DATA[0], B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
                'r6': [R6BASE, B6_TOP], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
-    fill = {r: 0 for r in regions}
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
-    def place(region, n):
-        base = regions[region][0] + fill[region]; fill[region] += n; return base
-    def room(region):
-        return regions[region][1] - regions[region][0] - fill[region]
-    img_addr, mask_addr, img_bank = {}, {}, {}
-    items = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
-    items += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]
-    items += [('tramp', f, len(m.tramp_bytes[f]), 0) for f in tramps]
+    items0 = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
+    items0 += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]
+    items0 += [('tramp', f, len(m.tramp_bytes[f]), 0) for f in tramps]
     def canmirror(it):
         return it[0] == 'img' and it[1] in mirrored
-    items.sort(key=lambda it: (0 if it[0] != 'img' else (1 if canmirror(it) else 2), -(it[2] + it[3])))
-    def try4(key, nd, nm):
-        if room('r4') >= nd + nm:
-            img_addr[key] = place('r4', nd); img_bank[key] = 4
-            if nm: mask_addr[key] = place('h4' if room('h4') >= nm else 'r4', nm)
-        elif room('r4') >= nd and room('h4') >= nm:
-            img_addr[key] = place('r4', nd); img_bank[key] = 4
-            if nm: mask_addr[key] = place('h4', nm)
-        elif room('h4') >= nd + nm:
-            img_addr[key] = place('h4', nd); img_bank[key] = 4
-            if nm: mask_addr[key] = place('h4', nm)
-        else:
-            return False
-        return True
-    def try6(key, nd, nm):
-        for r in ('r6', 'h6', 's6'):
-            if room(r) >= nd + nm:
-                img_addr[key] = place(r, nd); img_bank[key] = 6
-                if nm: mask_addr[key] = place(r, nm)
-                return True
-        for r in ('r6', 'h6'):
-            for rm in ('s6', 'h6', 'r6'):
-                if rm != r and room(r) >= nd and room(rm) >= nm:
+    def attempt(items, prefer4):
+        """One greedy placement in this order; None if something does not fit."""
+        fill = {r: 0 for r in regions}
+        img_addr, mask_addr, img_bank = {}, {}, {}
+        def place(region, n):
+            base = regions[region][0] + fill[region]; fill[region] += n; return base
+        def room(region):
+            return regions[region][1] - regions[region][0] - fill[region]
+        def try4(key, nd, nm):
+            if room('r4') >= nd + nm:
+                img_addr[key] = place('r4', nd); img_bank[key] = 4
+                if nm: mask_addr[key] = place('h4' if room('h4') >= nm else 'r4', nm)
+            elif room('r4') >= nd and room('h4') >= nm:
+                img_addr[key] = place('r4', nd); img_bank[key] = 4
+                if nm: mask_addr[key] = place('h4', nm)
+            elif room('h4') >= nd + nm:
+                img_addr[key] = place('h4', nd); img_bank[key] = 4
+                if nm: mask_addr[key] = place('h4', nm)
+            else:
+                return False
+            return True
+        def try6(key, nd, nm):
+            for r in ('r6', 'h6', 's6'):
+                if room(r) >= nd + nm:
                     img_addr[key] = place(r, nd); img_bank[key] = 6
-                    if nm: mask_addr[key] = place(rm, nm)
+                    if nm: mask_addr[key] = place(r, nm)
                     return True
-        return False
-    for kind, j, nd, nm in items:
-        key = (kind, j)
-        if canmirror((kind, j, nd, nm)):
-            assert try4(key, nd, nm), '%s: mirrored sprite does not fit bank 4: %s %d' % (name, kind, j)
-        elif kind != 'img':                 # the copy blitter is bank 6's alone
-            assert try6(key, nd, nm), '%s: box stars do not fit bank 6: %s %d' % (name, kind, j)
-        else:
-            if not (try6(key, nd, nm) or try4(key, nd, nm)):
-                raise SystemExit('%s: sprites do not fit: %s %d (%d+%d); room r4=%d h4=%d r6=%d h6=%d s6=%d'
-                                 % (name, kind, j, nd, nm, room('r4'), room('h4'), room('r6'), room('h6'), room('s6')))
+            for r in ('r6', 'h6'):
+                for rm in ('s6', 'h6', 'r6'):
+                    if rm != r and room(r) >= nd and room(rm) >= nm:
+                        img_addr[key] = place(r, nd); img_bank[key] = 6
+                        if nm: mask_addr[key] = place(rm, nm)
+                        return True
+            return False
+        for kind, j, nd, nm in items:
+            key = (kind, j)
+            if canmirror((kind, j, nd, nm)):
+                ok = try4(key, nd, nm)
+            elif kind != 'img':                 # the copy blitter is bank 6's alone
+                ok = try6(key, nd, nm)
+            else:
+                ok = (try4(key, nd, nm) or try6(key, nd, nm)) if prefer4 else (try6(key, nd, nm) or try4(key, nd, nm))
+            if not ok:
+                return None
+        return fill, img_addr, mask_addr, img_bank
+    # the fixed pieces first (the box stars, the mirrored images: each has one bank),
+    # then the rest largest first; when that greedy order leaves a hole too small,
+    # other orders of the rest, deterministically, until one fits
+    base_order = sorted(items0, key=lambda it: (0 if it[0] != 'img' else (1 if canmirror(it) else 2), -(it[2] + it[3])))
+    fixed = [it for it in base_order if it[0] != 'img' or canmirror(it)]
+    rest = [it for it in base_order if not (it[0] != 'img' or canmirror(it))]
+    import random
+    got = None
+    for trial in range(400):
+        order = rest if trial < 2 else random.Random(trial).sample(rest, len(rest))
+        got = attempt(fixed + order, trial % 2 == 1)
+        if got:
+            break
+    if got is None:
+        raise SystemExit('%s: sprites do not fit in any order tried' % name)
+    fill, img_addr, mask_addr, img_bank = got
     placement = bytearray()
     for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0])):
         ma = mask_addr.get((kind, j), 0)
@@ -298,6 +321,8 @@ def pack_level(lv, sub):
             ('tiles', T['B']['tiles']), ('place', placement), ('map', maprle), ('flat', T['flat']),
             ('halves', T['halves']), ('hpair', T['hpair']), ('mir', T['B']['mir']),
             ('dir', directory), ('smask', smask)]
+    if TARGET == 'master':                  # the gather's table (LV_PAGE0), for main RAM
+        secs.append(('page0', T['B']['page0']))
     off = 2 * len(secs)
     table = bytearray()
     body = bytearray()
@@ -305,7 +330,8 @@ def pack_level(lv, sub):
         o = off + len(body)
         table += bytes([o & 255, o >> 8])
         body += data
-    assert off + len(body) <= 0x7C00 - 0x5C00, (name, off + len(body))   # STAGE_LVL..LV_OBJS (defs.inc)
+    room = 0x8000 - 0x3000 if TARGET == 'master' else 0x7C00 - 0x5C00   # STAGE_LVL's (defs.inc)
+    assert off + len(body) <= room, (name, off + len(body))
     out('L%d' % (lv * 2 + sub), table + body)
     stats = dict(name=name, ntiles=T['ntiles'], nflat=T['nflat'], nhalf=T['nhalf'], nmir=T['nmir'], w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],

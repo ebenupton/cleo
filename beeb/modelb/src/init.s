@@ -70,7 +70,19 @@ start7:
         lda #$12
         sta seed+1
         jsr blank_palette           ; nothing on the screen is a picture until the title
+  .if .not BHW                      ; the converged Master: its handler's state in main RAM
+        .import __TABLES_RUN__: absolute, __TABLES_SIZE__: absolute
+        .assert __TABLES_SIZE__ < 256, error, "start7 zeroes TABLES with an 8-bit index"
+        ldx #<__TABLES_SIZE__       ; (LOADREQ above all: a load is not under way)
+        lda #0
+:       dex
+        sta __TABLES_RUN__,x
+        bne :-
+  .endif
         jsr crtc_init
+  .if .not BHW
+        jsr calc_ring               ; the Master's chain wants the ring's state (zeros here)
+  .endif
         ; both buffers' chains, for a blank window at the origin (ringS, barq, wfine
         ; are the zeros above), before the interrupt can walk one
         jsr build_sections

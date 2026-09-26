@@ -512,7 +512,7 @@ level_init:
   .if (>LV_OBJS) & 1
         inc t16+1                   ; Master $81: the bit the seed's >> 2 dropped
   .endif
-  .if MODELB
+  .if BHW
         ldx #0                      ; X is free until jsr @x8: (t16,x) is (t16), Y kept
         lda (t16,x)
   .else
@@ -560,7 +560,7 @@ level_init:
         ; bounding box defaults: x0 = (x-1)>>3, y0 = y>>3, x1 = x>>3, y1 = (y+1)>>3
         lda q1
         beq :+                      ; submin0 1 open-coded: A=0 stays 0, else A-1
-  .if MODELB
+  .if BHW
         clc                         ; A - 1: the carry dies at the lsr
         adc #$FF
   .else
@@ -581,7 +581,7 @@ level_init:
         lsr
         sta gy
         lda q2
-  .if MODELB
+  .if BHW
         clc                         ; A + 1: the carry dies at the lsr
         adc #1
   .else
@@ -635,7 +635,7 @@ level_init:
         sta gy1
         lda q2
         beq :+
-  .if ::MODELB
+  .if ::BHW
         sec                         ; A-1; the carry is dead (lsr follows)
         sbc #1
   .else
@@ -656,7 +656,7 @@ level_init:
         lsr
         sta gx0
         lda q1
-  .if ::MODELB
+  .if ::BHW
         clc                         ; A+1; the carry is dead (lsr follows)
         adc #1
   .else
@@ -750,7 +750,7 @@ level_init:
         sta O_DH,y
         lda q2
         beq :+                      ; submin0 1 specialised: max(q2-1, 0)
-.if MODELB
+.if BHW
         sbc #0                      ; C = 0 from mod16's exit (bcc -> rts): A-1
 .else
         deca
@@ -998,7 +998,7 @@ game_frame:
         sta BINR+2
         lda gy1
         sta BINR+3
-  .if MODELB
+  .if BHW
         lda #0                      ; one zero for both
         sta NSTARL
         sta NOTHL
@@ -1181,7 +1181,7 @@ player_hit:
         lda #1                      ; bar_touch, inlined
         sta BARDIRTY
         sta hurt
-  .if MODELB
+  .if BHW
         lda #0                      ; one zero for three stores
         sta control
         sta vx
@@ -1225,7 +1225,7 @@ player_dead:
 @respawn:
         mov16 px, startx
         mov16 py, starty
-  .if MODELB
+  .if BHW
         lda #0
         sta vx
         sta vx+1
@@ -1248,7 +1248,7 @@ player_dead:
         sta exiting                 ; game over handled by caller (lives == 0)
         rts
 :
-  .if MODELB
+  .if BHW
         lda #0
         sta facing
         sta running
@@ -1410,7 +1410,7 @@ player_update:
 :                                   ; placeholder - keeps the anonymous-label count
         bpl @push
 @fell:  mov16 evframe, frame
-  .if MODELB
+  .if BHW
         lda #0
         sta health
         sta control
@@ -1601,7 +1601,7 @@ player_update:
         bcc :+
         inc py+1
 :       stz alt                     ; A is dead: @hnext reloads it
-  .if ::MODELB
+  .if ::BHW
         beq @hnext                  ; the 6502 stz is lda #0 / sta: Z = 1
   .else
         bra @hnext
@@ -1630,7 +1630,7 @@ player_update:
         lda dpx+1
         bra @hstep
 @wall:
-  .if MODELB
+  .if BHW
         lda #0                      ; one zero for both (A is dead: @hdone reloads)
         sta vx
         sta vx+1
@@ -1649,7 +1649,7 @@ player_update:
         ; launch boomerang
         mov16 bx, px
         mov16 by, py
-  .if MODELB
+  .if BHW
         lda #0                      ; one zero for the four clears
         sta bvx
         sta bvy
@@ -1826,7 +1826,7 @@ player_update:
         bne @nocatch
         cpx #$F1                    ; low(ry+7) = X+15 < 15 iff X >= $F1
         bcc @nocatch
-.if MODELB
+.if BHW
         dec bactive                 ; bactive is 1 here (0/1 flag, nonzero on entry)
 .else
         stz bactive
@@ -2003,7 +2003,7 @@ process_object:
         sbc py+1
         sta ry+1
 @call:                              ; tail dispatch: the handler returns to our caller
-  .if ::MODELB                      ; jmpx less its pha/pla: every handler loads A before
+  .if ::BHW                      ; jmpx less its pha/pla: every handler loads A before
         lda @tab,x                  ; reading it (ob_none returns to a setbank or to
         sta jv                      ; the lean path's caller, which only gets types 0/1)
         lda @tab+1,x
@@ -2110,7 +2110,7 @@ ob_none:
 ; after checking r fits in -128..127 - anything wider fails every limit anyway).
 ; Returns carry set if inside. Clobbers A, X.
 inrange:
-  .if ::MODELB                      ; r fits -128..127 iff hi + (lo's sign) = 0 mod 256
+  .if ::BHW                      ; r fits -128..127 iff hi + (lo's sign) = 0 mod 256
         lda rx
         asl                         ; C = the low byte's sign
         lda rx+1
@@ -2132,7 +2132,7 @@ inrange:
         beq @no                     ; rx > lo
         cmp RNGTAB+1,x
         bcs @no                     ; rx < hi
-  .if ::MODELB
+  .if ::BHW
         lda ry
         asl
         lda ry+1
@@ -2219,7 +2219,7 @@ ob_star:
         bcs @nostep
         cmp #18                     ; cap: a collected star's A must not wrap 8-bit
         bcs @nostep                 ; (it would make the star reappear ~every 20s).
-  .if ::MODELB
+  .if ::BHW
         adc #1                      ; C = 0: the bcs was not taken
   .else
         inca                        ; A still holds it: there is no inc abs,y
@@ -2288,7 +2288,7 @@ boxbase: .byte 103, 109
 ob_tramp:
         lda O_AL,y
         beq :+
-  .if MODELB
+  .if BHW
         clc                         ; the carry is dead: cmp #10 below sets it
         adc #1                      ; (inca would keep it, through mtmp, at 6 bytes)
   .else
@@ -2451,7 +2451,7 @@ ob_snake:
         jsr addscore
 :       inc fc
         inc fc
-  .if MODELB
+  .if BHW
         lda #1                      ; 6502: one byte under stz fe / lda #1
         sta bounce
         lsr                         ; A = 0
@@ -2564,7 +2564,7 @@ ob_rsnake:
 @calc:  lda fa
         bpl :+
         eor #$FF
-  .if MODELB
+  .if BHW
         adc #0                      ; C = 1: the cmp #113 fell through (inca is 6 bytes)
   .else
         inca
@@ -3004,7 +3004,7 @@ ob_walker:
         bmi @bleft
         ; bvx > 0: if B < A: C = 0
         bge16 fb, fa, @bset
-  .if ::MODELB
+  .if ::BHW
         lda #0                      ; (stz's own expansion, spelled out for its Z)
         sta fc
         beq @bset                   ; always
@@ -3149,7 +3149,7 @@ ob_vanish:
 @ret:   rts
 @count: inc fe
         lda fe
-  .if ::MODELB
+  .if ::BHW
         and #3                      ; bitimm's save and restore of A are not needed:
         bne @done                   ; A is reloaded
         lda fe
@@ -3226,7 +3226,7 @@ ob_switch:
         lda fa
         ldx q5
         jsr m_mark_dirty
-  .if MODELB
+  .if BHW
         ldx fa                      ; inca is 6 bytes here
         inx
         txa

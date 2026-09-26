@@ -29,7 +29,7 @@ load_level:
         lda #8                      ; mapw = 8 << lw ; maph = 8 << lh
         sta mapw
         sta maph
-  .if MODELB
+  .if BHW
         lda #0
         sta mapw+1
         sta maph+1
@@ -175,7 +175,7 @@ clamp_window:
         lda wx+1
         sbc maxwx+1
         bmi @wxok
-  .if MODELB
+  .if BHW
         lda maxwx+1
         sta wx+1
         lda maxwx
@@ -210,7 +210,7 @@ clamp_window:
         lda maxwy+1
         sta wy+1
         rts
-  .if MODELB
+  .if BHW
 @wy0:   lda #0                      ; A dead: the caller's setbank reloads it
         sta wy
         sta wy+1
@@ -222,7 +222,7 @@ clamp_window:
 
 ; ---------------------------------------------------------------- game
 game_main:
-  .if MODELB
+  .if BHW
         lda #0                      ; A dead: ensure_menu loads title_res first
         sta hiscore
         sta hiscore+1
@@ -245,7 +245,7 @@ title_loop:
         bra title_loop
 new_game:
         stz level
-  .if MODELB
+  .if BHW
         sta score                   ; A = 0 (the stz)
         sta score+1
   .else
@@ -380,7 +380,7 @@ update_hiscore:
 :       rts
 
 ; ---------------------------------------------------------------- sound data
-        PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with sound_tick
+        PLACEH "CODE", "LGCCODE"    ; with sound_tick: bank 7 on the Model B, main RAM on a Master
 ; sfx steps: byte0 = channel/period latch ($80 | ch<<5 | lo4), byte1 = period hi (data byte), byte2 = volume ($90|ch<<5|att), duration
 sfxtab: .word sfx_jump, sfx_star, sfx_throw, sfx_hit, sfx_kill, sfx_power, sfx_die
 sfx_jump:  .byte $C0|8, 12, $D0, 2,  $C0|4, 9, $D2, 2,  $C0|0, 7, $D4, 2,  $C0|8, 5, $D6, 3, $FF

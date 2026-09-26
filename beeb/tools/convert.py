@@ -838,6 +838,26 @@ def pack_tiles(lv, sub):
     B['tiles'] = _tilelist(files, stored, loc)
     B['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR, 0])
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
+    # and the converged Master's LV_PAGE0 for these slots: its gather is a table (the
+    # Master's) over the Model B's layout -- a mirror is kind 3 at its source's slot
+    # (an id no tile has -- the rows past the map's end are read too, whatever lies
+    # there -- is a black fill: a zero high byte would clear the row loop's carry and
+    # run a copy off through the screen)
+    blo, bhi = bytearray(256), bytearray([0xC0] * 256)
+    for k in stored:
+        s_ = idof[k]
+        blo[s_], bhi[s_] = (s_ & 3) << 6, (B_TILES >> 8) + (s_ >> 2)
+    for i, k in enumerate(mirs):
+        s_ = B['slot'][mirrored[k]]
+        blo[mir0 + i], bhi[mir0 + i] = ((s_ & 3) << 6) | 3, (B_TILES >> 8) + (s_ >> 2)
+    for i, h in enumerate(hlist):
+        t, kk = half0 + i, B['HALFOFF'] + i
+        bhi[t] = (B['HALFPAGE'] >> 8) + (kk >> 3)
+        blo[t] = ((kk & 7) << 5) | (5 if t < half1 else 6 if t < half2 else 4)
+    for j in range(NFLAT + 2):
+        e, o = flattab[2 * j], flattab[2 * j + 1]
+        blo[FLAT0 + j], bhi[FLAT0 + j] = (e, 0xC0) if e == o else (2 * j, 0xE0)
+    B['page0'] = bytes(blo + bhi)
     # the Master: the same slots, then a copy of each mirrored tile as a full tile of
     # its own (by a list of its own: file index, file); load_tiles builds LV_PAGE0
     NS = NT + NMIR
@@ -845,7 +865,7 @@ def pack_tiles(lv, sub):
     assert M['HALFPAGE'] + (M['HALFOFF'] + NHALF) * 32 + len(halfpair) <= M_TILES_END
     M['tiles'] = _tilelist(files, stored, loc)
     # LV_PAGE0: per id, the pair the Model B's gather computes, for these slots
-    lo, hi = bytearray(256), bytearray(256)
+    lo, hi = bytearray(256), bytearray([0xC0] * 256)   # (unused ids: a black fill, as above)
     for k in stored:
         s_ = idof[k]
         lo[s_], hi[s_] = (s_ & 3) << 6, (M_TILES >> 8) + (s_ >> 2)

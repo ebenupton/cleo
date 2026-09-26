@@ -58,11 +58,13 @@ mulrowhi:
 .repeat RINGROWS, i
         .byte >(i*ROWCHARS)
 .endrepeat
+  .if BHW                           ; (the converged Master's ring is 32 rows: and #31)
         .segment "TILCODE"
 ringmodtab:                         ; A = a map char row (brought under RINGROWS*5 by
 .repeat RINGROWS*5, i               ; the ringmod macro) -> its ring slot
         .byte i .mod RINGROWS
 .endrepeat
+  .endif
 
 ; ---------------------------------------------------------------- the sprite banks
 ; MASKTAB0..3 at the same address in both banks that hold sprite data, so the
@@ -107,6 +109,7 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
 ; body, twice.
         .segment "TILBSS"
 menurec:   .res 10                  ; the menus' one sprite record (the prologue writes it)
+  .if BHW                           ; (the converged Master has no mirror: the hardware folds)
 .macro MIRDIRTY_BODY
         clc
         adc wcxm
@@ -139,6 +142,7 @@ mirdirty5:
         .segment "LGCCODE"
 mirdirty:
         MIRDIRTY_BODY
+  .endif
 
 ; the once-only part of the Master's init_tables that is bank 5's or low RAM's,
 ; then the interrupt takeover -- in bank 5's low corner, where once-only code costs

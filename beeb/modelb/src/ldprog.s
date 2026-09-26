@@ -10,10 +10,15 @@
 ;   LDPROG+0  lv_load     X = level index 0..15
 ;   LDPROG+3  title_load  the menu overlay to bank 5, the title pack to bank 6
 ; ============================================================================
+        .ifndef BHW                 ; (cpu.inc's flag: the Model B's hardware unless the
+BHW = 1                             ;  build says -D BHW=0, the converged Master)
+        .endif
         .include "defs_ld.inc"      ; the addresses the game exports (build.sh)
         .include "files.inc"        ; the disc's sector table (mkdfs.py table)
 ROMSEL     = $FE30
 ROMSEL_CPY = $F4
+ACCCON     = $FE34                  ; (the converged Master: bit 2, X, puts the CPU's
+                                    ;  $3000-$7FFF in shadow RAM -- where STAGE is)
 ; The banks are whichever sockets the boot loader found RAM in: it left their numbers
 ; in PBANK (low BSS, one byte per bank 4..7).  This program comes off the disc at
 ; every load, so the loader cannot patch it as it does the banks' code: every switch
@@ -105,6 +110,19 @@ plcopy: ldy #1
         lda (lp),y
         tay
         ldx PBANK-4,y               ; (Y: bcopy reloads it)
+  .if .not BHW
+        jmp scopy                   ; (a placed image comes from the stage)
+; the converged Master stages the shared files in shadow RAM: a copy out of the stage
+; reads with ACCCON X set (X and Y kept, as bcopy leaves them)
+scopy:  lda ACCCON
+        ora #4
+        sta ACCCON
+        jsr bcopy
+        lda ACCCON
+        and #$FB
+        sta ACCCON
+        rts
+  .endif
 ; copy cnt bytes from src (main RAM) to dst in bank X (a socket); bank 7 back afterwards
 bcopy:  stx ROMSEL_CPY
         stx ROMSEL
@@ -515,7 +533,43 @@ lv_load:
         lda #0
         sta cnt+1
         ldx PB_TILES
+  .if BHW
         jmp bcopy                   ; (the tile addresses are arithmetic: drawrect's gather)
+  .else
+        jsr bcopy
+        ; ---- the converged Master: the gather's table, to main RAM, and the screens
+        ; (main and shadow) cleared of what the load staged there -- a ring row the
+        ; window has not reached yet must not show it
+        lda #13
+        jsr section
+        lda #<LV_PAGE0
+        sta dst
+        lda #>LV_PAGE0
+        sta dst+1
+        lda #0
+        sta cnt
+        lda #2
+        sta cnt+1
+        ldx PB_LVL
+        jsr bcopy
+        lda ACCCON
+        ora #4
+        jsr @clr                    ; shadow
+        lda ACCCON
+        and #$FB
+@clr:   sta ACCCON                  ; (and main, falling in: X clear on the way out)
+        lda #0
+        sta dst
+        tay
+        ldx #$30
+@cp:    stx dst+1
+@cb:    sta (dst),y
+        iny
+        bne @cb
+        inx
+        bpl @cp                     ; to $7FFF
+        rts
+  .endif
 
 ; ---- helpers
 tcopy:                              ; tile A of the staged file, its row C (or all of it:
@@ -542,7 +596,11 @@ tcopy:                              ; tile A of the staged file, its row C (or a
         adc #>STAGE
         sta src+1
         ldx PB_TILES
+  .if BHW
         jmp bcopy
+  .else
+        jmp scopy
+  .endif
 nfiles: .res 1                      ; (lv_load's: the set's file count,
 hdst:   .res 2                      ;  the next half's slot,
 sv_half0:   .res 1                  ;  the tile shape on its way to bank 5)
@@ -572,7 +630,20 @@ stage:                              ; file A -> STAGE
         stx dst
         ldx #>STAGE
         stx dst+1
+  .if BHW
         jmp readfile
+  .else
+        pha                         ; the converged Master: into shadow RAM
+        lda ACCCON
+        ora #4
+        sta ACCCON
+        pla
+        jsr readfile
+        lda ACCCON
+        and #$FB
+        sta ACCCON
+        rts
+  .endif
 imgent:                             ; item -> ent = imgtab + item*10
         lda #0
         sta ent+1
@@ -661,7 +732,11 @@ title_load:
         lda #F_MENU_N
         sta cnt+1
         ldx PB_TILES
+  .if BHW
         jsr bcopy                   ; (src, cnt lo kept: bcopy, readfile leave them)
+  .else
+        jsr scopy
+  .endif
         lda #FI_TITLE
         jsr stage                   ; (dst lo 0 = <TITLE_ADDR)
         lda #>STAGE
@@ -671,7 +746,11 @@ title_load:
         lda #F_TITLE_N
         sta cnt+1
         ldx PB_MAP
+  .if BHW
         jsr bcopy
+  .else
+        jsr scopy
+  .endif
         ; ---- the bar template, straight into place: once per return to the title, as the
         ; menus never touch it (engine.s menu_sections) and a level does not either
         stx dst                     ; (X = 0 from bcopy; <BARADDR = 0)

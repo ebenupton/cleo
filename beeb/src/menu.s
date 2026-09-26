@@ -142,7 +142,7 @@ pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game
 
 ; ---------------------------------------------------------------- menu screen helpers
 ; clear the current back buffer ring ($3000-$7FFF) to black
-  .if MODELB
+  .if BHW
 ; Model B: both mirrors and both rings: main RAM from mirror A, above the bar, to the
 ; top.  The bar is left alone: the menus' frame does not show it (menu_sections)
         .assert (<MIRR_A) = 0 && (<RINGEND_B) = 0, error, "the clear is whole pages"
@@ -196,7 +196,7 @@ load_title:
 menu_begin:
         jsr m_blank_palette
         jsr m_wait_flip               ; the game may still have a flip pending
-  .if MODELB
+  .if BHW
         sta wx                      ; A = 0: m_wait_flip spun until flipreq was 0
         sta wx+1
         sta wy
@@ -231,6 +231,9 @@ menu_show:
         stz curbuf                  ; (A is dead: build_sections loads it)
   .if MODELB
         jsr m_build_sections        ; bank 7's menu_sections (the far table's F_BUILDSECT)
+    .if .not BHW
+        stz NEXTBUF                 ; (the converged Master: its handler's flip reads it)
+    .endif
   .else
         jsr menu_sections           ; build_sections, the bar section pointed off the bar
         stz NEXTBUF
@@ -394,7 +397,7 @@ clear_items:
         dey
         bpl :-
         inx
-  .if MODELB
+  .if BHW
         cpx #RINGROWS               ; the ring is 23 slots here: the tables end there
   .else
         cpx #28
@@ -442,7 +445,7 @@ help_screen:
         sta ptr
         lda helptab+1,y
         sta ptr+1
-  .if MODELB                        ; 84 px of window: i*10+16, the last line at 66
+  .if BHW                        ; 84 px of window: i*10+16, the last line at 66
         tya                         ; Y = 2i (C=0 from the asl above)
         asl
         adc tmp3                    ; i*5
@@ -509,7 +512,7 @@ winlose:
         jsr m_music_stop              ; the win/lose screen is silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "winlose picks the piece as TP_LOSE - mtop"
-  .if MODELB
+  .if BHW
         lda #0
         sta spx+1
         sta spy+1
@@ -537,7 +540,7 @@ winlose:
         sta ptr
         lda #>str_score
         sta ptr+1
-  .if MODELB
+  .if BHW
 SCORE_Y = 64                        ; 84 px of window: under big Cleo (28..59)
 HISCORE_Y = 76                      ; (a glyph row is a multiple of 4)
   .else
