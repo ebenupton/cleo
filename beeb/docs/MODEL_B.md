@@ -68,14 +68,14 @@ pointer and folds both bytes on the B.  The Master's expansion is unchanged.
 **Where the Master's tables live was the design decision.**  With 30K of the 32K as
 display, the main-RAM tables the Master's engine reads from anywhere (records,
 KEEP, the dirty lists, BUF_*, PART_*) had to become bank RAM owned by the code that
-uses them most.  Bank 5 (the tile blitter) owns them all, so the only per-sprite
+uses them most.  Bank 6 (the tile blitter) owns them all, so the only per-sprite
 crossing is the prologue's far call into the bank that holds the image.  The
 sprite list stays in low RAM because the logic fills it 24 times a step.
 
 **The level's sprites do not fit one bank.**  L1B's 61 images with masks are 17.9K;
 beside the row loop and its 1.25K of mask tables that is two banks' worth, which the
-Master's own directory flag `$10` (bank 6) already provides for.  The packer puts
-the box stars and every never-mirrored image in bank 6, so bank 6's copy of the row
+Master's own directory flag `$10` (bank 5) already provides for.  The packer puts
+the box stars and every never-mirrored image in bank 5, so bank 5's copy of the row
 loop has no mirrored blitter and no SWAPTAB (`SPRITE_LOOPS 0, 1`), and bank 4's has
 no copy blitter (`SPRITE_LOOPS 1, 0`).
 
@@ -98,7 +98,7 @@ byte order had to stay.  The B's own sector table is in its load-time program
 
 **Nothing the Master shows is folded away.**  The first full-game build folded a few
 tiles on the big outdoor levels to fit a bank that also held the blitter and the
-prologue.  Wrong trade: the tiles are the picture.  Bank 5 is nearly all tiles now
+prologue.  Wrong trade: the tiles are the picture.  Bank 6 is nearly all tiles now
 (L4B fills it to the byte), the code around them went to bank 7 and to main RAM,
 and a display row paid for the main RAM -- 22 ring slots, 20 visible, which also
 makes the rings whole pages and the fold a byte compare again.  (Bought back the
@@ -126,7 +126,7 @@ the shared one: 3.9K less on each disc, loads within 2% of before.
 
 **No table is built at run time.**  The last of them went back to being assembled or
 packed: the Master's LV_PAGE0 and map-row tables now come in the level's map piece
-(bank 6 $8300), the Model B's ring-row tables are assembled (select_backbuf points
+(bank 5 $8300), the Model B's ring-row tables are assembled (select_backbuf points
 ringaddr's high-byte operand at the buffer's; the low bytes are the two rings'
 alike, both bases xx80), and its sprite directory and SPRMASK come finished in the
 level file (LDPROG 3.1K -> 2.1K; the level file may be 8K now, LV_OBJS $7C00).  The
@@ -136,23 +136,23 @@ its exact size).
 
 **The row came back once the tiles shrank.**  Half and flat tiles freed 2.5K of bank
 5 on L4B; the 1.1K of code and state that had sat in main RAM went above the tiles
-with the row loop (bank 5, from $B620), the small of it bank 7 must read (the
+with the row loop (bank 6, from $B620), the small of it bank 7 must read (the
 records' matcher and eraser, sext, sprmul5, the row multiples, a second mirdirty)
 into bank 7, and the five bytes of state both read into low BSS.  Three far calls a
 frame plus one per erased rect, drawn sprite and changed tile: +4% on the frame.
 Two ways it bit: a scan of who uses what counted a macro's text, not its
 expansions, so bank 7's calc_ring lost its ring-modulus table (whole rows landed in
-the wrong slot); and the boot loader's piece table still loaded bank 5's code at
+the wrong slot); and the boot loader's piece table still loaded bank 6's code at
 its old address (the first jsr into it went to $0000).  The half tiles had to give
 up their page alignment for L4B to fit: they follow the full tiles at once, and the
 gather counts slots from the page they start in.  Grinding the crossings after --
 bank 7's own arithmetic ringaddr, a direct-switch thunk with a common entry vector
 at $BFFD in banks 4/5/6 for the sprite loop and the erased rect, mapstrip paging
-bank 5 back outright -- took the far calls a frame from 19 to 3 and the frame from
+bank 6 back outright -- took the far calls a frame from 19 to 3 and the frame from
 99.5k to 98.7k cycles: the thunk was never the cost, the drawing is.  And a check that
 reads its expectation from the thing it checks proves nothing: the loader still
-copied FLATTAB into bank 7 after the table moved to bank 5, the sky was black, and
-the ring check read the zeroed table from bank 5 and agreed with the zeroed ring.
+copied FLATTAB into bank 7 after the table moved to bank 6, the sky was black, and
+the ring check read the zeroed table from bank 6 and agreed with the zeroed ring.
 The screenshot caught it; bring2 now asserts the two solid pairs.
 
 **The 8271 latches "not ready".**  The title's idle let the controller unload the
@@ -189,7 +189,7 @@ header read after paging the bank it was to be written to.
 port: a tile that is one colour's dither is, in MODE 1, the same two bytes down
 every char, so it is an id and a pair in a table, and the row loop fills a run of
 them instead of copying 64 bytes.  Cleo's art is textured, so it is only five to
-seven tiles a level (~400 bytes of bank 5), but it is lossless and the check tools
+seven tiles a level (~400 bytes of bank 6), but it is lossless and the check tools
 (`bring2.py`) render from the pair table too.  The other Commando ideas were
 measured and left: a flip bit per cell would flip the ordered dither's phase
 against the neighbours (zero of Cleo's tiles are exact mirrors of another once

@@ -43,8 +43,8 @@ for pass in 1 2 3; do
 import re
 want = ['boot','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','SPR_TABLE','mapshr','MAPSTRIDE','FLATTAB',
-        'half0','half1','half2','halfhi','halfhi6','halfsub','mir0','MIRTAB','sprc_ok','sprx_ok','HPAIR0','HPAIR1',
-        'MENU_BASE','TITLE_ADDR','MAP6','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
+        'half0','half1','half2','halfhi','halfhi5','halfsub','mir0','MIRTAB','sprc_ok','sprx_ok','HPAIR0','HPAIR1',
+        'MENU_BASE','TITLE_ADDR','MAP5','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
 addr = {}
 import os
 BD = os.environ['BD']
@@ -80,8 +80,8 @@ EOF
 import os
 BD = os.environ['BD']
 pieces = [(4, 0x8000, 'b4x.bin'), (4, 0xBB00, 'b4t.bin'),
-          (5, 0x8000, 'b5x.bin'),                                 # (B5X in cleo_b.cfg)
-          (6, 0x8000, 'b6x.bin'), (6, 0xBC00, 'b6t.bin'),
+          (5, 0x8000, 'b5x.bin'), (5, 0xBC00, 'b5t.bin'),
+          (6, 0x8000, 'b6x.bin'),                                 # (B6X in cleo_b.cfg)
           (7, 0x7000, 'boot.bin'),        # main RAM (BOOTRAM): start-up and the low-RAM image
           (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin')]
 if os.environ.get('TARGET') == 'master':

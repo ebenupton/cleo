@@ -6,7 +6,7 @@
 //   node tools/menusync.mjs master <discA> <labelsA> <discB> <labelsB>
 //   node tools/menusync.mjs modelb <discA> <labelsA> <discB> <labelsB>
 // Compared: the ring memory (not the bar: the menus leave it alone) and the painted frame.
-import { findJsbeeb, loadLabels } from "./harness.mjs";
+import { findJsbeeb, loadLabels, loadBanks } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, dA, lA, dB, lB] = process.argv.slice(2);
@@ -16,7 +16,10 @@ async function boot(disc, labels) {
   const cpu = s._machine.processor, A = loadLabels(labels);
   const P = kind === "master" ? null : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
-  const at = () => cpu.pc === A.menu_keys && (!P || cpu.readmem(0xf4) === P[1]);
+  // the bank menu_keys is in (the build's own debug info; MENUBANK_A/B override it for a
+  // build from before the bank-5/6 swap, which the harness's segment table no longer names)
+  const mb = +(process.env[labels === lA ? "MENUBANK_A" : "MENUBANK_B"] ?? loadBanks(path.join(path.dirname(labels), "cleo.dbg"))?.byName.get("menu_keys") ?? 5);
+  const at = () => cpu.pc === A.menu_keys && (!P || cpu.readmem(0xf4) === P[mb - 4]);
   async function next() {
     const h = cpu.debugInstruction.add(() => at());
     try { for (let i = 0; i < 4000; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }

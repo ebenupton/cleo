@@ -219,8 +219,8 @@ O_DL    = O_CH + OBJN
 O_DH    = O_DL + OBJN
 O_EL    = O_DH + OBJN
 O_EH    = O_EL + OBJN
-  .if .not MODELB                  ; (Model B: labels in bank 6, page aligned)
-LV_MAPROWLO = $8300               ; bank 6: 256 : tile row -> map row address (the
+  .if .not MODELB                  ; (Model B: labels in bank 5, page aligned)
+LV_MAPROWLO = $8300               ; bank 5: 256 : tile row -> map row address (the
 LV_MAPROWHI = $8400               ;   level's map piece: convert.py)
   .endif
 
@@ -305,8 +305,8 @@ rise    = $DC                     ; 2 bytes
         PLACE "LOGIC", "LGCCODE"
 
 ; ============================================================================
-; Map queries.  The map is in bank 6 with the row tables and the row-page table,
-; so these select it and put bank 7 back; maptilew leaves bank 6 selected for a
+; Map queries.  The map is in bank 5 with the row tables and the row-page table,
+; so these select it and put bank 7 back; maptilew leaves bank 5 selected for a
 ; caller that is about to write through mapptr.
 ; ============================================================================
 ; get map byte at tile (X = tx, A = ty) -> A = byte, q1 = page (0/1).  The per-page
@@ -314,7 +314,7 @@ rise    = $DC                     ; 2 bytes
 ; every page-1 row's altitude lookup into LV_MAPROWLO: no ground, Cleo fell through
 ; the floor at the Vineyards spawn and wherever else those levels use page 1)
 maptile:
-        jsr maprow                  ; main RAM: the map is in bank 6 and this code is
+        jsr maprow                  ; main RAM: the map is in bank 5 and this code is
         txa                         ; in bank 7, so every touch goes through a helper
         tay
         jmp mapbyte

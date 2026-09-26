@@ -3,12 +3,12 @@
 
 Outputs (in build/):
   SPR      bank 4 image: sprite table, font, bar, digits, sprite data, sfx
-  TIL0     bank 5 image: compact tiles 0..255
-  TIL1     bank 6 image: compact tiles 256..
+  TIL0     bank 6 image: compact tiles 0..255
+  TIL1     bank 5 image: compact tiles 256..
   ALT      altitude classes + table (bank 7 @ &A900)
-  L<n>A/B  level packs: map (bank 6), then header, objects, attr and alt class
+  L<n>A/B  level packs: map (bank 5), then header, objects, attr and alt class
            by tile id (bank 7 @ &8000)
-  TITLE    title pack (bank 6 @ &8900, over the map): logo, you/win/lose, big cleo
+  TITLE    title pack (bank 5 @ &8900, over the map): logo, you/win/lose, big cleo
   preview PNGs for eyeballing the dither
 """
 import struct, sys, os, json
@@ -485,7 +485,7 @@ def tramp_class(cm, x, y):           # 1 = its rectangle is all solid black (bak
 # Renumber so that every tile carrying pixel data comes first.  A solid tile is
 # filled by drawrow from a constant and its 64 bytes are never read, so it needs
 # no room in a tile bank: giving those tiles ids above 255 puts the whole game's
-# tile data in bank 5 alone, and bank 6 keeps only the box stars.  Sorting is
+# tile data in bank 6 alone, and bank 5 keeps only the box stars.  Sorting is
 # stable within each group, so runs like the vanish animation stay contiguous.
 # ---------------------------------------------------------------------------
 # the vanish and flower animations must stay contiguous, so a solid frame inside
@@ -542,7 +542,7 @@ open(os.path.join(OUT, 'ALT'), 'wb').write(altfile)
 BANK_TILES = 5                       # every tile is in this bank now
 rng = np.random.RandomState(1234)
 level_tiles = []
-level_split = {}                     # level -> sectors of map (the bank-6 piece)
+level_split = {}                     # level -> sectors of map (the bank-5 piece)
 def name_of(lv, sub):
     return 'L%d%s' % (lv, 'B' if sub == 0 else 'A')
 
@@ -734,8 +734,8 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # tile of its own, and its gather is a table (LV_PAGE0) the packer builds: per id, the
 # pair the Model B's gather computes -- the same encoding, so the one row loop reads
 # both.
-B_TILES, B_TILES_END = 0x8900, 0xC000       # the Model B's bank 5: tiles above its code and variables
-M_TILES, M_TILES_END = 0x8000, 0xC000       # the Master's: all of bank 5
+B_TILES, B_TILES_END = 0x8900, 0xC000       # the Model B's bank 6: tiles above its code and variables
+M_TILES, M_TILES_END = 0x8000, 0xC000       # the Master's: all of bank 6
 def _layout(stored, hlist, halfpair, base, end, loc):
     slot = {k: i for i, k in enumerate(stored)}
     NT, NHALF = len(stored), len(hlist)
@@ -898,7 +898,7 @@ for (lv, sub), L in levels.items():
     # A level is loaded in two pieces: the game logic has bank 7 (inherited from the
     # Model B, which had no HAZEL), and the map is the only thing big enough to make
     # the room for it.
-    #   staged at $3000, then bank 6 from $8300 (unpack_map, engine.s):
+    #   staged at $3000, then bank 5 from $8300 (unpack_map, engine.s):
     #                        the map's row addresses (256 lo, 256 hi: LV_MAPROWLO/HI),
     #                        LV_PAGE0 (512: the gather's pair by tile id), and at $8700
     #                        the tile list (256: the file count, each file's count,
@@ -1027,7 +1027,7 @@ print('refy snapped:', snapped)
 SPR_DIGITS = 0x8140
 SPR_BAR    = 0x83C0
 SPR_DATA   = 0x8000               # the mask planes need the room: the font, digits and
-                                  # bar spans go to bank 6 behind the box stars (below)
+                                  # bar spans go to bank 5 behind the box stars (below)
 SPR_ANDY   = 0x8000                     # ANDY 4K RAM, paged at $8000 with ROMSEL bit7
 BANK4_END  = 0xC000
 ANDY_END   = 0x9000
@@ -1106,11 +1106,11 @@ for (im, full, src), shift in zip(images, img_shift):
 
 # greedy assignment: fill bank4 data region first (largest sprites there), rest to ANDY
 order = sorted(range(len(images)), key=lambda j: -len(img_bytes[j]))
-img_addr = [None] * len(images)         # (base_addr, region: 0 bank 4, 1 ANDY, 2 bank 6)
+img_addr = [None] * len(images)         # (base_addr, region: 0 bank 4, 1 ANDY, 2 bank 5)
 b4 = SPR_DATA
 an = SPR_ANDY
 SPILL_BASE, SPILL_END = 0xBE00, 0xC000  # a few small images (with their
-b6 = SPILL_BASE                          # masks) in bank 6 above the HUD blobs, flag bit 4
+b6 = SPILL_BASE                          # masks) in bank 5 above the HUD blobs, flag bit 4
 data_end = BANK4_END - sum(len(m) for m in img_mask)   # the masks take the top
 for j in order:
     n = len(img_bytes[j])
@@ -1130,7 +1130,7 @@ print('sprite images', len(images),
 mask_addr = [None] * len(images)
 for j in range(len(images)):
     n = len(img_mask[j])
-    if img_addr[j][1] == 2:                       # bank 6 spill: mask right after its data
+    if img_addr[j][1] == 2:                       # bank 5 spill: mask right after its data
         mask_addr[j] = img_addr[j][0] + len(img_bytes[j])
         continue
     if b4 + n > BANK4_END:
@@ -1139,14 +1139,14 @@ for j in range(len(images)):
     assert not img_addr[j][1] or b4 >= 0x9000, j    # ANDY sprite: mask above ANDY's window
     mask_addr[j] = b4
     b4 += n
-print('mask planes %d bytes; bank 4 %d/%d used; %d images (%d bytes) spilled to bank 6 $BE00'
+print('mask planes %d bytes; bank 4 %d/%d used; %d images (%d bytes) spilled to bank 5 $BE00'
       % (sum(len(m) for m in img_mask), b4 - 0x8000, 0x4000, sum(1 for a in img_addr if a[1] == 2), b6 - SPILL_BASE))
 
 # box stars: each spin frame (34..39) composited over cyan and over black in a box just
 # wide enough to cover its own art AND the previous frame's, so drawing frame N erases
 # frame N-1 with no mask and no erase pass.  The frames are all 24 lines tall but the
 # spin narrows to a sliver, so the narrow ones carry a narrower box.  Stored after the
-# tiles in bank 6 (flag bit4), drawn with the copy blitter (flag bit3).
+# tiles in bank 5 (flag bit4), drawn with the copy blitter (flag bit3).
 BOX_H = 12                      # game px (24 lines)
 FIELD = 14                      # px: the widest frame, hotspot at px 6
 box_art = []
@@ -1258,15 +1258,15 @@ print('trampoline black boxes: widths', [w for _l, w in tramp_geom],
       '= %d bytes' % sum(len(b) for b in tramp_bytes))
 
 allbox_bytes = box_bytes + tramp_bytes
-BOX_BASE = 0xB000                  # bank 6, above anything a level's tiles can reach
+BOX_BASE = 0xB000                  # bank 5, above anything a level's tiles can reach
 assert BOX_BASE + sum(len(b) for b in allbox_bytes) <= 0xC000
-print('box stars at $%04X in bank 6; classes per level:' % BOX_BASE,
+print('box stars at $%04X in bank 5; classes per level:' % BOX_BASE,
       ' '.join('L%d%s=%s' % (lv, 'B' if sub == 0 else 'A', '/'.join(map(str, v))) for (lv, sub), v in sorted(star_stats.items())),
       '(regular/cyan/black, and how many boxes an enemy can reach)')
 
 # sprite table: 8 bytes each: ptr lo, ptr hi, W, H(game px), refx, refy, flags, lines
 # flags: bit0 mirror, bit1 full (always set now), bit2 data in ANDY, bit3 copy blitter,
-# bit4 data in bank 6 (box stars 103..114)
+# bit4 data in bank 5 (box stars 103..114)
 table = bytearray()
 for i in range(103):
     e = entry[i]
@@ -1408,14 +1408,14 @@ barspans += bytes([0xFF, 0xFF])
 print('bar: %d span bytes vs %d raw (%d free in bank 4)'
       % (len(barspans), len(barbytes), len(barbytes) - len(barspans)))
 
-# bank 6, in the box-star file, behind the boxes: the HUD's digits and the bar.  The
+# bank 5, in the box-star file, behind the boxes: the HUD's digits and the bar.  The
 # menus' font is a file of its own, FONT, assembled into bank 7 beside the menu code
 # (menu.s font_art), so the text drawer reads it in place.
 boxfile = b''.join(allbox_bytes)
 open(os.path.join(OUT, 'FONT'), 'wb').write(font)
 SPR_DIGITS = BOX_BASE + len(boxfile); boxfile += digits
 SPR_BAR = BOX_BASE + len(boxfile); boxfile += barspans
-HUD_BANK = 6
+HUD_BANK = 5                    # the box-star file's bank (game.s: BANK_TIL1)
 assert BOX_BASE + len(boxfile) <= SPILL_BASE, len(boxfile)
 for j in range(len(images)):
     base, region = img_addr[j]
@@ -1430,7 +1430,7 @@ for j in range(len(images)):
         m = mask_addr[j]
         bank4[m - 0x8000:m - 0x8000 + len(img_mask[j])] = img_mask[j]
 # (after the spill is filled: written before it, the file carried zeros for every image
-# spilled to bank 6 -- ids 31, 86-89, 98 and 99 drew nothing)
+# spilled to bank 5 -- ids 31, 86-89, 98 and 99 drew nothing)
 if b6 > SPILL_BASE:                           # spilled images at $BE00: pad up to them
     boxfile = boxfile.ljust(SPILL_BASE - BOX_BASE, b'\0') + bytes(spill[:b6 - SPILL_BASE])
 open(os.path.join(OUT, 'BOX'), 'wb').write(boxfile)
@@ -1467,7 +1467,7 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     mask = mask_plane(alpha) if not opaque else b''
     return W, (2 * h if full else h), h, data, col, mask
 
-TITLE_ADDR = 0x8900               # bank 6, where the map and the box stars go during a level
+TITLE_ADDR = 0x8900               # bank 5, where the map and the box stars go during a level
 title = bytearray()
 tdir = []
 pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38, 58, 39, 13, True), ('lose', 0, 71, 45, 13, True)]

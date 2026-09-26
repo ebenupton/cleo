@@ -18,14 +18,14 @@
         OUTC STAGE
         OUTC STAGE_LVL
         OUTC TITLE_ADDR
-        OUTC MAP6
+        OUTC MAP5
         OUTC LV_OBJS
         OUTC LV_PAGE0
         OUTC TAILBUF
         OUTC SPRC_BASE
         OUTC SPRC_LEN
-        OUTC SPRC6_BASE
-        OUTC SPRC6_LEN
+        OUTC SPRC5_BASE
+        OUTC SPRC5_LEN
         OUTC SPRX_LEN
         OUTC BOARD_STD
         OUTC BOARD_WATFORD

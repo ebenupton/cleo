@@ -423,7 +423,7 @@ build_sections:
 ; one displayed row that straddles the ring end can be read as a single run.  Only
 ; the chars that row takes from it -- wcxm..79 -- need to be right, and when the
 ; window is slot aligned no row straddles at all.  It is made only when its row
-; has been written: the blitters note the range (mirdirty, bank 5).
+; has been written: the blitters note the range (mirdirty, bank 6).
 mirror_copy:
         ldx curbuf
         lda wcxm

@@ -1,9 +1,9 @@
 ; ============================================================================
 ; Main RAM, $0140-$02FF: what has to be visible whatever bank is paged in.  The
 ; far-call thunk, the interrupt stub (the handler itself is in bank 7), the two
-; map fetches the tile blitter makes from bank 5, and the sprite list.  The
+; map fetches the tile blitter makes from bank 6, and the sprite list.  The
 ; Master's own main-RAM map helpers (maprow, mapbyte, mapput, pagelogic) land here
-; too, from engine.s: they page bank 6 in and bank 7 back exactly as they do there.
+; too, from engine.s: they page bank 5 in and bank 7 back exactly as they do there.
 ; ============================================================================
         .segment "LOWCODE"
 
@@ -55,7 +55,7 @@ fcret:  sta fcA                     ; the target's A (Y must survive, X carries 
 ; The chain step and the vsync work are in bank 7 with their tables: this pages it
 ; in around them.  The step's timing (VS2T) allows for the ~30 cycles that
 ; takes, in place of the hold loop the Master's handler has.  The title tune's
-; player is in the menu overlay (bank 5): the vsync work leaves MUSON set only
+; player is in the menu overlay (bank 6): the vsync work leaves MUSON set only
 ; while the overlay is there, and it is stepped from here, between the banks, once
 ; a frame -- the vsync's sound_tick raises MUSTICK; the T1 steps are this same stub.
   .if BHW                           ; (the converged Master: the Master's handler, in
@@ -85,11 +85,11 @@ irq_handler:                        ;  main RAM with its chain -- engine.s)
   .endif
 
 ; ---------------------------------------------------------------- the tile blitter's map
-; drawrect's row loop runs in bank 5 and reads the map in bank 6: the row pointer is arithmetic
+; drawrect's row loop runs in bank 6 and reads the map in bank 5: the row pointer is arithmetic
 ; (a map is 32, 64, 128 or 256 tiles wide: row * 2^lw is row * 256 shifted right by
 ; mapshr = 8 - lw, which the loader sets from the header) and the strip copy is the
 ; one bank switch a tile row costs.
-maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 << lw) + rc_tx0
+maprow6:                            ; A = tile row -> ptr = LV_MAP + row * (1 << lw) + rc_tx0
         jsr maprow                  ; (X kept; the logic's mapptr is its scratch) A = mapptr+1, C = 0
         sta ptr+1                   ; tx0 < the map's width: no carry out of the low byte
         lda mapptr
@@ -98,18 +98,18 @@ maprow5:                            ; A = tile row -> ptr = LV_MAP + row * (1 <<
         rts
 
 mapstrip:                           ; (ptr) = the row's first tile: its gather, run in
-        bankimm lda, BANK_MAP, 0    ; bank 6 beside the map (engine.s gather6), into
-        sta ROMSEL_CPY              ; GATHERL/GATHERH here; bank 5 back (the write bank:
+        bankimm lda, BANK_MAP, 0    ; bank 5 beside the map (engine.s gather5), into
+        sta ROMSEL_CPY              ; GATHERL/GATHERH here; bank 6 back (the write bank:
         sta ROMSEL                  ; drawrect sets it after the call)
-        jsr gather6
+        jsr gather5
         bankimm lda, BANK_TILES, 0
         sta ROMSEL_CPY
         sta ROMSEL
         rts
 
-; the title pack's directory is in bank 6 and the prologue in bank 7: an entry's
-; eight bytes come across here (bank 6's fetch8), and ptr is left pointing at the copy
-dirfetch:                           ; ptr -> the entry in bank 6
+; the title pack's directory is in bank 5 and the prologue in bank 7: an entry's
+; eight bytes come across here (bank 5's fetch8), and ptr is left pointing at the copy
+dirfetch:                           ; ptr -> the entry in bank 5
         bankimm lda, BANK_MAP, 0
         sta ROMSEL_CPY
         sta ROMSEL
@@ -128,13 +128,13 @@ callbank:                           ; A = the bank (the write bank is set by the
         jmp pagelogic
 
         .segment "LOWBSS"
-GATHERH:  .res 21                   ; a tile row's gather (gather6): 21 tiles at most --
+GATHERH:  .res 21                   ; a tile row's gather (gather5): 21 tiles at most --
 MAPBUF = GATHERH                    ; and dirfetch's eight bytes, drawsprite's, when no
                                     ; rect is being drawn
         .segment "LOWBSS2"          ; the rest of low RAM, above the code
 GATHERL:  .res 21
         .segment "LOWBSS"
-; the mirror's bookkeeping (display.s): the blitters in bank 5 note what they wrote
+; the mirror's bookkeeping (display.s): the blitters in bank 6 note what they wrote
 ; to the ring's last slot row, the copy in bank 7 reads it
   .if BHW
 mirdty:   .res 2                    ; per buffer: the row has been written since the copy
@@ -143,7 +143,7 @@ mirhi:    .res 2
 mirwcx:   .res 2                    ; the wcxm the copy was made for
   .endif
 ; the level's shape, set by the loader: read from banks 5 and 7
-mapshr:   .res 1                    ; 8 - lw (maprow, maprow5)
+mapshr:   .res 1                    ; 8 - lw (maprow, maprow6)
 MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
 MUSON:    .res 1                    ; the tune plays: the interrupt stub steps it
 MUSTICK:  .res 1                    ; a frame's step is due: the vsync's sound_tick says so

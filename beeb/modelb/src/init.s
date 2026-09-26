@@ -60,7 +60,7 @@ boot:   sei
         inc curbuf
         jsr build_sections
         dec curbuf                  ; (1 -> 0: build_sections only reads it)
-        ; bank 5's state: the ring work's, zero as the Master's tables; spbank
+        ; bank 6's state: the ring work's, zero as the Master's tables; spbank
         bankimm lda, BANK_TILES, BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
@@ -73,7 +73,7 @@ boot:   sei
         bne :-
         bankimm lda, BANK_SPR, BANK_LVL
         sta spbank
-        jsr take_over               ; the interrupt: bank 5 still paged, as it was
+        jsr take_over               ; the interrupt: bank 6 still paged, as it was
         jsr pagelogic               ; bank 7 (low RAM's, the image copied above)
         jsr disc_init               ; a 1770 board: reset, and the head found
         jmp game_main               ; the title menu loads its overlay and starts the tune

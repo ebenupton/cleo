@@ -8,7 +8,7 @@
 ; is bank 7's and reads into main RAM.
 ;
 ;   LDPROG+0  lv_load     X = level index 0..15
-;   LDPROG+3  title_load  the menu overlay to bank 5, the title pack to bank 6
+;   LDPROG+3  title_load  the menu overlay to bank 6, the title pack to bank 5
 ; ============================================================================
         .ifndef BHW                 ; (cpu.inc's flag: the Model B's hardware unless the
 BHW = 1                             ;  build says -D BHW=0, the converged Master)
@@ -23,11 +23,11 @@ ACCCON     = $FE34                  ; (the converged Master: bit 2, X, puts the 
 ; in PBANK (low BSS, one byte per bank 4..7).  This program comes off the disc at
 ; every load, so the loader cannot patch it as it does the banks' code: every switch
 ; here reads the physical bank from PBANK, and the placement lists' bank bytes
-; (4 or 6, the packer's) go through it too.
-BANK_MAP   = 6                      ; (the placement lists' number for bank 6)
+; (4 or 5, the packer's) go through it too.
+BANK_MAP   = 5                      ; (the placement lists' number for bank 5)
 PB_SPR     = PBANK
-PB_TILES   = PBANK + 1
-PB_MAP     = PBANK + 2
+PB_TILES   = PBANK + 2
+PB_MAP     = PBANK + 1
 PB_LVL     = PBANK + 3
 ; A Solidisk or Watford board takes the bank a store goes to from a register of its own
 ; (defs.inc BOARD_*): the game's code was patched for it at boot, this program reads
@@ -237,7 +237,7 @@ lv_load:
         dex
         bne :-
         sta MAPSTRIDE
-        ; ---- the map, run-length coded, into bank 6: exactly its 1 << (lw + lh) bytes
+        ; ---- the map, run-length coded, into bank 5: exactly its 1 << (lw + lh) bytes
         ; (the stream is not terminated: what follows it in the file is the next section)
         lda LV_HDR                  ; lw + lh - 8 (at least 2: a map is at least 1K)
         clc
@@ -248,16 +248,16 @@ lv_load:
 :       asl
         dex
         bne :-
-        adc #>MAP6                  ; (C = 0: at most 8K) the page after the map
+        adc #>MAP5                  ; (C = 0: at most 8K) the page after the map
         sta mapend
         lda #6
         jsr section
-        .assert <MAP6 = 0, error, "dst's low byte is 0 still"
-        lda #>MAP6
+        .assert <MAP5 = 0, error, "dst's low byte is 0 still"
+        lda #>MAP5
         sta dst+1
         jsr unrle
         ; ---- the tiles (convert.py pack_tiles): each of the level's files of the tile
-        ; set staged in turn and its tiles copied to their slots in bank 5 -- the full
+        ; set staged in turn and its tiles copied to their slots in bank 6 -- the full
         ; tiles by the tile list (the files: each one's number and its full tiles; then
         ; each tile's index in its file), the half tiles by the half list (index,
         ; row | the file's place in the list << 1)
@@ -417,8 +417,8 @@ lv_load:
         iny
 :       sty HPAIR1+1
         lda sv_halfhi
-        sta halfhi                  ; (bank 5's: the row loop's @hfill)
-        lda PB_MAP                  ; the gather's shape: bank 6, beside it (gather6)
+        sta halfhi                  ; (bank 6's: the row loop's @hfill)
+        lda PB_MAP                  ; the gather's shape: bank 5, beside it (gather5)
         jsr pgbank
         lda sv_half0
         sta half0
@@ -427,7 +427,7 @@ lv_load:
         lda sv_half2
         sta half2
         lda sv_halfhi
-        sta halfhi6
+        sta halfhi5
         lda sv_halfsub
         sta halfsub
         lda sv_mir0
@@ -472,16 +472,16 @@ lv_load:
         sta src
         lda #>(STAGE + SPRC_LEN)
         sta src+1
-        lda #<SPRC6_BASE
+        lda #<SPRC5_BASE
         sta dst
-        lda #>SPRC6_BASE
+        lda #>SPRC5_BASE
         sta dst+1
-        lda #<SPRC6_LEN
+        lda #<SPRC5_LEN
         sta cnt
-        lda #>SPRC6_LEN
+        lda #>SPRC5_LEN
         sta cnt+1
         ldx PB_MAP
-        jsr sccopy                  ; the plain ones: the top of bank 6
+        jsr sccopy                  ; the plain ones: the top of bank 5
         inc sprc_ok
 @sprx:  lda #FI_SPRX
         sta fnum
@@ -576,7 +576,7 @@ lv_load:
         sta cnt+1
         ldx PB_LVL
         jsr bcopy
-        ; ---- the flat tiles' pairs, into bank 5 with the blitter's fill
+        ; ---- the flat tiles' pairs, into bank 6 with the blitter's fill
         lda #7
         jsr section
         lda #<FLATTAB
@@ -706,7 +706,7 @@ kpart:  stx cnt                     ; X pages between the stage's page A and pag
         rts
   .endif
 tcopy:                              ; tile A of the staged file, its row C (or all of it:
-        stx cnt                     ; C = 0, X = 64), X bytes to dst in bank 5
+        stx cnt                     ; C = 0, X = 64), X bytes to dst in bank 6
         ldx #0
         stx cnt+1
         tax
@@ -736,7 +736,7 @@ tcopy:                              ; tile A of the staged file, its row C (or a
   .endif
 nfiles: .res 1                      ; (lv_load's: the set's file count,
 hdst:   .res 2                      ;  the next half's slot,
-sv_half0:   .res 1                  ;  the tile shape on its way to bank 5)
+sv_half0:   .res 1                  ;  the tile shape on its way to bank 6)
 sv_half1:   .res 1
 sv_half2:   .res 1
 sv_halfhi:  .res 1
@@ -813,7 +813,7 @@ srccnt:                             ; (ent),Y = offset lo, hi, length lo, hi -> 
         lda (ent),y
         sta cnt+1
         rts
-unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c+1
+unrle:                              ; src (packed) -> dst in bank 5: c < 128 = c+1
         lda PB_MAP
         jsr pgbank
 @c:     lda dst+1
@@ -889,7 +889,7 @@ title_load:
         jsr scopy
   .endif
         lda #0                      ; the title pack reaches the resident sprites' part
-        sta sprc_ok                 ; in bank 6: the next level puts them back
+        sta sprc_ok                 ; in bank 5: the next level puts them back
         ; ---- the bar template, straight into place: once per return to the title, as the
         ; menus never touch it (engine.s menu_sections) and a level does not either
         stx dst                     ; (X = 0 from bcopy; <BARADDR = 0)

@@ -45,21 +45,21 @@ VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 
 
 # ---------------------------------------------------------------- the banks' fixed shape
 # Code sits at the bottom of banks 4, 5 and 6 (each entered at $8000) and the mask
-# tables at the top of 4 and 6; bank 5's tiles run from its code's next page to the
-# end; bank 6's map is a fixed 8K below its mask tables.  These are the bounds the
+# tables at the top of 4 and 6; bank 6's tiles run from its code's next page to the
+# end; bank 5's map is a fixed 8K below its mask tables.  These are the bounds the
 # linker config (cleo_b.cfg) and defs.inc share.
 B4_DATA = (0x83C0, 0xBB00)                  # bank 4: images and masks, between the row loop
                                             #   ($8000) and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (no hole now: one run)
-B6_DATA = (0x8310, 0x9C00)                  # bank 6: all its sprites, one run, between the row
+B5_DATA = (0x8310, 0x9C00)                  # bank 5: all its sprites, one run, between the row
                                             #   loop + gather and the map: the resident part
                                             #   (SPRC6) at the bottom, the level's above it
-B6_HOLE = (0x9C00, 0x9C00)                  #   (no hole now)
-B6_SWAP = (0x9C00, 0x9C00)
-MAP6 = 0x9C00                               # the map: a fixed 8K below MASKTAB0-3 ($BC00)
-B6_TOP = MAP6                               #   (the end of bank 6's sprites)
-TILES_BASE, B5X = m.B_TILES, m.B_TILES_END  # bank 5: the tiles from here (page aligned),
-                                            #   above the code (cleo_b.cfg B5X), to the end
+B5_HOLE = (0x9C00, 0x9C00)                  #   (no hole now)
+B5_SWAP = (0x9C00, 0x9C00)
+MAP5 = 0x9C00                               # the map: a fixed 8K below MASKTAB0-3 ($BC00)
+B5_TOP = MAP5                               #   (the end of bank 5's sprites)
+TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page aligned),
+                                            #   above the code (cleo_b.cfg B6X), to the end
 
 # ---------------------------------------------------------------- the shared files
 # The sprites every level draws -- Cleo, the boomerang, the stars (ids 0..42) -- are
@@ -79,7 +79,7 @@ COMMON = sorted(set(m.entry[i][0] for i in list(range(43)) + [43, 44, 45] if m.e
                                             # (and the trampoline, which 15 levels of 16 have)
 # The mirrored ones must be in bank 4 (its sprite loop has the dot-reversal table);
 # bank 4 cannot also hold the plain ones beside the biggest levels' mirrored enemies,
-# so those go to the top of bank 6, above any map and its directory.  The title pack
+# so those go to the top of bank 5, above any map and its directory.  The title pack
 # reaches that far, so the menus cost a reload of the block (ldprog.s title_load).
 _mirrored_all = set(m.entry[i][0] for i in range(103) if m.entry[i] is not None and m.entry[i][1])
 common_addr, common_mask, common_bank = {}, {}, {}
@@ -92,7 +92,7 @@ def _pack(js, base):
     return blk
 c4 = [j for j in COMMON if j in _mirrored_all]
 # the plain ones: bank 4 takes what it can spare beside the biggest level's mirrored
-# enemies (largest first), the top of bank 6 the rest
+# enemies (largest first), the top of bank 5 the rest
 _sz = lambda j: len(m.img_bytes[j]) + len(m.img_mask[j])
 _maxmir = 0
 for (_lv, _sub), _L in m.levels.items():
@@ -110,18 +110,18 @@ for j in sorted((j for j in COMMON if j not in _mirrored_all), key=lambda j: -_s
     else:
         c6.append(j)
 sprc4 = _pack(c4, B4_DATA[0])
-TRAMP_LEN = sum(len(b) for b in m.tramp_bytes)   # the trampoline's boxes: bank 6 (the copy blitter's)
-C6_LEN = sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c6) + TRAMP_LEN
-C6_BASE = B6_DATA[0]
-sprc6 = _pack(c6, C6_BASE)
+TRAMP_LEN = sum(len(b) for b in m.tramp_bytes)   # the trampoline's boxes: bank 5 (the copy blitter's)
+C5_LEN = sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c6) + TRAMP_LEN
+C5_BASE = B5_DATA[0]
+sprc5 = _pack(c6, C5_BASE)
 tramp_addr = {}
 for f in range(3):
-    tramp_addr[f] = C6_BASE + len(sprc6); sprc6 += m.tramp_bytes[f]
+    tramp_addr[f] = C5_BASE + len(sprc5); sprc5 += m.tramp_bytes[f]
 for j in c4: common_bank[j] = 4
-for j in c6: common_bank[j] = 6
+for j in c6: common_bank[j] = 5
 COMMON_END = B4_DATA[0] + len(sprc4)
-assert COMMON_END <= B4_DATA[1] and C6_BASE + C6_LEN <= B6_DATA[1] and MAP6 + 0x2000 <= 0xBC00
-sprc = sprc4 + sprc6
+assert COMMON_END <= B4_DATA[1] and C5_BASE + C5_LEN <= B5_DATA[1] and MAP5 + 0x2000 <= 0xBC00
+sprc = sprc4 + sprc5
 out('SPRC', sprc)
 sprx, imgtab = bytearray(), bytearray()
 for j in range(NIMG):
@@ -137,11 +137,11 @@ imgtab += bytes(30)
 assert len(sprx) <= 0x4000                  # STAGE's 16K
 out('SPRX', sprx)
 out('imgtab.bin', imgtab)
-print('sprites: SPRC %d bytes (bank 4 $%04X-$%04X, bank 6 $%04X-$%04X), SPRX %d bytes'
-      % (len(sprc), B4_DATA[0], COMMON_END, C6_BASE, B6_TOP, len(sprx)))
+print('sprites: SPRC %d bytes (bank 4 $%04X-$%04X, bank 5 $%04X-$%04X), SPRX %d bytes'
+      % (len(sprc), B4_DATA[0], COMMON_END, C5_BASE, B5_TOP, len(sprx)))
 
 # the directory template: the Master's entry less its pointer, which becomes the item
-# index and its kind; the loader writes the pointer and the bank-6 flag
+# index and its kind; the loader writes the pointer and the bank-5 flag
 sprdir = bytearray()
 for i in range(103):
     e = m.entry[i]
@@ -267,9 +267,9 @@ def pack_level(lv, sub):
     classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
     bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
     tramps = []                             # (resident: SPRC)
-    R6BASE = C6_BASE + C6_LEN               # above the resident part, up to the map
+    R5BASE = C5_BASE + C5_LEN               # above the resident part, up to the map
     regions = {'r4': [COMMON_END, B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
-               'r6': [R6BASE, B6_DATA[1]], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
+               'r6': [R5BASE, B5_DATA[1]], 's6': [B5_SWAP[0], B5_SWAP[1]], 'h6': [B5_HOLE[0], B5_HOLE[1]]}
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
     items0 = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
     items0 += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]
@@ -297,16 +297,16 @@ def pack_level(lv, sub):
             else:
                 return False
             return True
-        def try6(key, nd, nm):
+        def try5(key, nd, nm):
             for r in ('r6', 'h6', 's6'):
                 if room(r) >= nd + nm:
-                    img_addr[key] = place(r, nd); img_bank[key] = 6
+                    img_addr[key] = place(r, nd); img_bank[key] = 5
                     if nm: mask_addr[key] = place(r, nm)
                     return True
             for r in ('r6', 'h6'):
                 for rm in ('s6', 'h6', 'r6'):
                     if rm != r and room(r) >= nd and room(rm) >= nm:
-                        img_addr[key] = place(r, nd); img_bank[key] = 6
+                        img_addr[key] = place(r, nd); img_bank[key] = 5
                         if nm: mask_addr[key] = place(rm, nm)
                         return True
             return False
@@ -314,10 +314,10 @@ def pack_level(lv, sub):
             key = (kind, j)
             if canmirror((kind, j, nd, nm)):
                 ok = try4(key, nd, nm)
-            elif kind != 'img':                 # the copy blitter is bank 6's alone
-                ok = try6(key, nd, nm)
+            elif kind != 'img':                 # the copy blitter is bank 5's alone
+                ok = try5(key, nd, nm)
             else:
-                ok = (try4(key, nd, nm) or try6(key, nd, nm)) if prefer4 else (try6(key, nd, nm) or try4(key, nd, nm))
+                ok = (try4(key, nd, nm) or try5(key, nd, nm)) if prefer4 else (try5(key, nd, nm) or try4(key, nd, nm))
             if not ok:
                 return None
         return fill, img_addr, mask_addr, img_bank
@@ -343,13 +343,13 @@ def pack_level(lv, sub):
         placement += bytes([item_index(kind, j), img_bank[(kind, j)], a & 255, a >> 8, ma & 255, ma >> 8])
     placement += b'\xff'
     for f in range(3):                      # (the resident block, for the directory)
-        img_addr[('tramp', f)] = tramp_addr[f]; img_bank[('tramp', f)] = 6
+        img_addr[('tramp', f)] = tramp_addr[f]; img_bank[('tramp', f)] = 5
     for j in COMMON:
         img_addr[('img', j)] = common_addr[j]; img_bank[('img', j)] = common_bank[j]
         if j in common_mask:
             mask_addr[('img', j)] = common_mask[j]
     # the directory and SPRMASK as the game reads them: the template's entries with each
-    # placed item's address (and bank 6's flag), and each sprite id's mask address
+    # placed item's address (and bank 5's flag), and each sprite id's mask address
     byitem = {item_index(*k): k for k in img_addr}
     directory, smask = bytearray(), bytearray()
     for i in range(118):
@@ -360,7 +360,7 @@ def pack_level(lv, sub):
         else:
             a = img_addr[k]
             e = bytearray([a & 255, a >> 8]) + t[2:8]
-            if img_bank[k] == 6:
+            if img_bank[k] == 5:
                 e[6] |= 0x10
             directory += e; ma = mask_addr.get(k, 0)
         if i < 118 - 15:                    # the box ids (the last 15) have no entry
@@ -407,15 +407,15 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by modelb/tools/assets.py: the bounds every level fits\n')
     f.write('SOLID_CYAN = %d\nSOLID_BLACK = %d\nFLAT0 = %d\nNFLAT = %d\nMAXMIR = %d\n' % (SOLID_CYAN, SOLID_BLACK, m.FLAT0, m.NFLAT, m.MAXMIR))
     f.write('BOXID0 = 103\nBOXN = 15\n')
-    f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC6_BASE = $%04X\nSPRC6_LEN = %d\nSPRX_LEN = %d\n'
-            % (B4_DATA[0], len(sprc4), C6_BASE, len(sprc6), len(sprx)))
-    f.write('TITLE_ADDR = $8900\n')         # bank 6, as the Master: over the map
+    f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC5_BASE = $%04X\nSPRC5_LEN = %d\nSPRX_LEN = %d\n'
+            % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
+    f.write('TITLE_ADDR = $8900\n')         # bank 5, as the Master: over the map
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
     f.write('HUD_BANK = 7\n')
     f.write('SPR_BAR = 0\nSPR_DIGITS = digits_art\nSPR_FONT = font_art\n')
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
-    f.write('SPR6_MIRROR = 0\n')            # bank 6 holds no image that is drawn mirrored
+    f.write('SPR5_MIRROR = 0\n')            # bank 5 holds no image that is drawn mirrored
     f.write('SPR4_COPY = 0\n')              # and bank 4 nothing the copy blitter draws
-    f.write('B4_DATA_END = $%04X\nB6_TOP = $%04X\nMAP6 = $%04X\n' % (B4_DATA[1], B6_TOP, MAP6))
+    f.write('B4_DATA_END = $%04X\nB5_TOP = $%04X\nMAP5 = $%04X\n' % (B4_DATA[1], B5_TOP, MAP5))
     f.write('NIMGTAB = %d\n' % (NIMG + 15))
 print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))

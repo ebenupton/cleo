@@ -69,7 +69,7 @@ BHW = MODELB
 ; bank from PBANK (low BSS, four bytes indexed by bank - 4).  On the Master all of
 ; this is the plain instruction.
 ;   bankimm op, n, b   op #n, the operand a bank number: in bank b's image (0 = the
-;                      low-RAM image, which is copied down from bank 6's); a fourth
+;                      low-RAM image, which is copied down from bank 5's); a fourth
 ;                      argument tells two alike sites in one routine apart
 ;   setbank n, b       page bank n in, from code in bank b (A destroyed); likewise
 ;   ldpbank op, n      op #n from code the loader cannot patch: PBANK's byte instead

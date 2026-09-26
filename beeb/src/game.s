@@ -21,8 +21,8 @@ load_level:
         jsr loadfile
         lda tmp2                    ; the map piece, staged in screen RAM
         jsr loadfile
-        jsr unpack_map              ; to bank 6: its head as it is, the map unpacked
-        jsr load_tiles              ; the level's tiles, from the tile set's files, to bank 5
+        jsr unpack_map              ; to bank 5: its head as it is, the map unpacked
+        jsr load_tiles              ; the level's tiles, from the tile set's files, to bank 6
         ; geometry
         setbank BANK_LVL
   .endif
@@ -236,7 +236,7 @@ game_main:
   .endif
 title_loop:
   .if MODELB
-        jsr ensure_menu             ; the menus are bank 5's overlay: in place first
+        jsr ensure_menu             ; the menus are bank 6's overlay: in place first
   .endif
         jsr t_title_menu
         cmp #MENU_HELP

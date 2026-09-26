@@ -1,6 +1,6 @@
 ; ============================================================================
 ; CLEO - menus, title, help, level select, win/lose, pause  (LOGIC segment: bank 7;
-; Model B: bank 5's menu overlay, MNUCODE, loaded over the tiles for the menus)
+; Model B: bank 6's menu overlay, MNUCODE, loaded over the tiles for the menus)
 ; ============================================================================
         PLACE "LOGIC", "MNUCODE"
 
@@ -63,7 +63,7 @@ glyph_index:
         rts
 
 ; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows.  The font is in the
-; menu code's own bank (Master: bank 7, font_art below; Model B: the overlay in bank 5,
+; menu code's own bank (Master: bank 7, font_art below; Model B: the overlay in bank 6,
 ; banks.s), so the rows are read in place through w16b.
 draw_glyph:
         stza w16b+1
@@ -174,7 +174,7 @@ clear_ring:
         rts
   .endif
 
-; load the title pack into bank 6 unless it is still there (a level load replaces it);
+; load the title pack into bank 5 unless it is still there (a level load replaces it);
 ; the palette goes black first so neither the disc load nor the screen build-up shows
 load_title:
         jsr m_blank_palette
@@ -689,7 +689,7 @@ l7:         .byte "NEFERTITI", 0
 str_score:  .byte "SCORE", 0
 str_hiscore:.byte "HISCORE", 0
 
-  .if .not MODELB                   ; (Model B: spbank in bank 5, menurec in bank 7 with the
+  .if .not MODELB                   ; (Model B: spbank in bank 6, menurec in bank 7 with the
         .zeropage                   ;  prologue, title_res in low RAM)
 spbank:    .res 1
         .segment "TABLES"
@@ -707,7 +707,7 @@ msel:      .res 1
 mclear:    .res 1
 mlast:     .res 1                  ; item index the cursor was last drawn at
   .if .not MODELB
-title_res: .res 1                  ; title pack resident in bank 6
+title_res: .res 1                  ; title pack resident in bank 5
   .endif
 tx:        .res 1
 ty:        .res 1

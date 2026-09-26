@@ -1,11 +1,11 @@
 ; ============================================================================
 ; The banks' static tables and the few routines that exist only here.  Everything
 ; a level brings -- tiles, map, sprites, directory, its tables -- is loaded into
-; the banks by ldprog.s; the menu overlay (bank 5 from MENU_BASE) is the menus with
+; the banks by ldprog.s; the menu overlay (bank 6 from MENU_BASE) is the menus with
 ; the tune and the font, and is loaded the same way.
 ;
 ; $8000 of bank 7 is the far table: the thunk in low RAM pages bank 7 to read it,
-; whichever bank called (only bank 7 and the bank-5 menu overlay ever do).  Then the
+; whichever bank called (only bank 7 and the bank-6 menu overlay ever do).  Then the
 ; small tables more than one bank's code indexes (sprmul5, the row multiples, the ring
 ; modulus).  The Master builds these at start-up; here they are assembled.
 ; ============================================================================
@@ -16,7 +16,7 @@
 .endmacro
 .macro COMMON_TABLES in             ; the far table, bank 7's alone
         .assert * = FARTAB, error, "the far table must be at FARTAB"
-        FAR BANK_TILES, render5, in                 ; F_RENDER5
+        FAR BANK_TILES, render6, in                 ; F_RENDER6
         FAR BANK_TILES, select_backbuf, in          ; F_SELBB
         FAR BANK_TILES, title_menu, in              ; F_TITLE     (the menu overlay)
         FAR BANK_TILES, help_screen, in             ; F_HELP
@@ -40,7 +40,7 @@
 ; ---------------------------------------------------------------- the small tables
 ; The Master builds these at start-up; here they are assembled, each in the bank of
 ; the code that indexes it: the sprite multiples and the row multiples are bank 7's
-; (the prologue, the records, the chain), the ring modulus bank 5's (ringaddr).
+; (the prologue, the records, the chain), the ring modulus bank 6's (ringaddr).
         .segment "LGCDATA"
 mulrowlo:
 .repeat RINGROWS, i
@@ -60,8 +60,8 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
 
 ; ---------------------------------------------------------------- the sprite banks
 ; MASKTAB0..3 at the same address in both banks that hold sprite data, so the
-; prologue in bank 5 can name a mask page for either; SWAPTAB in bank 4 alone
-; (bank 6 draws nothing mirrored: the packer keeps such images out, and that page
+; prologue in bank 6 can name a mask page for either; SWAPTAB in bank 4 alone
+; (bank 5 draws nothing mirrored: the packer keeps such images out, and that page
 ; holds data instead).  The values are the Master's init_tables' (MODE 1).
 .macro MASK4 f                      ; AND mask by pair: keep what is NOT opaque
   .if f = 0
@@ -89,7 +89,7 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
 .endrepeat
         .segment "SPR4MASK"
         MASK_TABLES
-        .segment "SPR6MASK"
+        .segment "SPR5MASK"
         MASK_TABLES
 
 ; ---------------------------------------------------------------- main RAM: the mirror's notes
@@ -97,7 +97,7 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
 ; follows, X = the last (0..79).  Those chars sit in the last slot row at wcxm on;
 ; only the ones up to char 79 are in it (the rest wrapped to slot row 0), and only
 ; those from wcxm are ever read (display.s).  Called by the tile blitter's head and
-; copy_partial (bank 5: mirdirty5) and the sprite prologue (bank 7: mirdirty): one
+; copy_partial (bank 6: mirdirty6) and the sprite prologue (bank 7: mirdirty): one
 ; body, twice.
         .segment "LGCBSS"           ; bank 7: the prologue, which writes it through rp, runs
 menurec:   .res 10                  ; there (the menus' one sprite record; the menus in bank
@@ -132,7 +132,7 @@ menurec:   .res 10                  ; there (the menus' one sprite record; the m
 @out:   rts
 .endmacro
         .segment "TILCODE"
-mirdirty5:
+mirdirty6:
         MIRDIRTY_BODY
         .segment "LGCCODE"
 mirdirty:
@@ -181,7 +181,7 @@ SPR_TABLE:  .res 118*8              ; the sprite directory as the packer finishe
                                     ; (the level's addresses): the loader's, read by
                                     ; the prologue in place
 
-; ---------------------------------------------------------------- bank 5: the menu overlay
+; ---------------------------------------------------------------- bank 6: the menu overlay
         .segment "MNUDATA"
 MUSIC_ADDR:                         ; 144 bytes of periods (the table itself, here),
         .incbin "build/music.bin"   ; then the note stream

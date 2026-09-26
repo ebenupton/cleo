@@ -296,7 +296,7 @@ load_level_b:
         jsr LDPROG                  ; lv_load
         jmp ld_resume
 
-; the menu overlay into bank 5 and the title pack into bank 6
+; the menu overlay into bank 6 and the title pack into bank 5
 load_title_b:
         jsr load_begin
         sei

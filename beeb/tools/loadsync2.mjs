@@ -20,7 +20,7 @@ async function to(pc, bank, budget = 6000) {
   try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }
   throw new Error("not reached: " + pc.toString(16));
 }
-for (let k = 0; k < 20; k++) { await to(A.menu_keys, 5); await s.runFor(1); }
+for (let k = 0; k < 20; k++) { await to(A.menu_keys, 6); await s.runFor(1); }
 const t0 = cyc(); const n0 = HV.length; forced = 0;
 s.keyDown(13); await s.runFor(200000); s.keyUp(13);
 await to(A.frame_top, 7, 60000);
