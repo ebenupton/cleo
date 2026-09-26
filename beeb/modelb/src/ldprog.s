@@ -478,101 +478,31 @@ lv_load:
         lda fnum
         cmp #3
         bne @sfile
-        ; ---- the directory and SPRMASK, from the template and the placement list
+        ; ---- the directory and SPRMASK, as the packer finished them (assets.py)
+        lda #11
+        jsr section
         lda sprtab
         sta dst
         lda sprtab+1
         sta dst+1
+        lda #<(118*8)
+        sta cnt
+        lda #>(118*8)
+        sta cnt+1
+        ldx PB_MAP
+        jsr bcopy
+        lda #12
+        jsr section
         lda #<SPRMASK
-        sta ent
-        lda #>SPRMASK
-        sta ent+1
-        lda #<sprdir
-        sta lp
-        lda #>sprdir
-        sta lp+1
-        lda #118
-        sta nt
-@dir:   lda PB_MAP                  ; the directory's bank, for both paths
-        jsr pgbank
-        ldy #0
-        lda (lp),y
-        sta item
-        cmp #$FF
-        beq @dnone
-        jsr findplace               ; src -> the placement entry, or C set
-        bcs @dnone
-        ldy #2
-        lda (src),y
-        ldy #0
-        sta (dst),y
-        ldy #3
-        lda (src),y
-        ldy #1
-        sta (dst),y
-        iny
-:       lda (lp),y
-        sta (dst),y
-        iny
-        cpy #8
-        bne :-
-        ldy #1
-        lda (src),y                 ; the bank: bank 6's images carry the flag
-        cmp #BANK_MAP
-        bne :+
-        ldy #6
-        lda (lp),y
-        ora #$10
-        sta (dst),y
-:       ldy #4                      ; the mask: X = lo, Y = hi
-        lda (src),y
-        tax
-        iny
-        lda (src),y
-        tay
-@dmask: lda PB_LVL
-        jsr pgbank              ; box ids (the last 15) have no entry
-        lda nt
-        cmp #16
-        bcc @dnext
-        tya
-        ldy #1
-        sta (ent),y
-        txa
-        dey
-        sta (ent),y
-        bcs @dnext                  ; (C set: the cmp)
-@dnone: lda #0
-        ldy #7
-:       sta (dst),y
-        dey
-        bpl :-
-        tax                         ; no mask: X = Y = 0
-        tay
-        beq @dmask
-@dnext:
-        lda lp
-        clc
-        adc #8
-        sta lp
-        bcc :+
-        inc lp+1
-:       lda dst
-        clc
-        adc #8
         sta dst
-        bcc :+
-        inc dst+1
-:       lda ent
-        clc
-        adc #2
-        sta ent
-        bcc :+
-        inc ent+1
-:       dec nt
-        beq :+
-        jmp @dir
-:
+        lda #>SPRMASK
+        sta dst+1
+        lda #2*BOXID0
+        sta cnt
+        lda #0
+        sta cnt+1
+        ldx PB_LVL
+        jsr bcopy
         ; ---- the flat tiles' pairs, into bank 5 with the blitter's fill
         lda #7
         jsr section
@@ -678,24 +608,6 @@ srccnt:                             ; (ent),Y = offset lo, hi, length lo, hi -> 
         lda (ent),y
         sta cnt+1
         rts
-findplace:                          ; item -> src = the placement entry; C = 1 if none
-        lda #5
-        jsr section
-:       ldy #0
-        lda (src),y
-        cmp #$FF
-        beq @none
-        cmp item
-        beq @found
-        lda src
-        clc
-        adc #6
-        sta src
-        bcc :-
-        inc src+1
-        bne :-
-@found: clc
-@none:  rts                         ; (C = 1 from the cmp #$FF)
 unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c+1
         lda PB_MAP
         jsr pgbank
@@ -772,4 +684,3 @@ title_load:
 
 ; ---------------------------------------------------------------- the packer's tables
 imgtab: .incbin "build/imgtab.bin"  ; per item: file, offset, length, mask file, offset, length
-sprdir: .incbin "build/sprdir.bin"  ; the directory template: item, kind, W, h, rx, ry, flags, lines

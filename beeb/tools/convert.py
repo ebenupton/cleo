@@ -689,6 +689,32 @@ for side in (1, 3, 2):
         NTFILES += 1
 assert NTFILES == 3                 # the loaders' file tables name three
 
+def rle(data):
+    """PackBits-like: c < 128 = c+1 literal bytes follow; c >= 128 = the next byte
+    repeated c-126 times (2..129).  ldprog.s decodes it."""
+    out_, i, n = bytearray(), 0, len(data)
+    while i < n:
+        j = i
+        while j + 1 < n and data[j + 1] == data[i] and j - i < 128:
+            j += 1
+        run = j - i + 1
+        if run >= 2:
+            out_ += bytes([126 + run, data[i]]); i += run; continue
+        j = i
+        while j < n and j - i < 128 and not (j + 2 < n and data[j] == data[j + 1] == data[j + 2]):
+            j += 1
+        out_ += bytes([j - i - 1]) + data[i:j]; i = j
+    return out_
+def unrle(data):
+    o, i = bytearray(), 0
+    while i < len(data):
+        c = data[i]; i += 1
+        if c < 128:
+            o += data[i:i + c + 1]; i += c + 1
+        else:
+            o += bytes([data[i]]) * (c - 126); i += 1
+    return o
+
 def attr_of(c):
     a = 3
     if c in push_tiles:
@@ -705,7 +731,7 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # The ids are the same on both targets, so the two run the same logic on the same
 # level: they are laid out for the Model B's tile bank, the smaller.  The Master's is
 # big enough for every level as it stands, so it stores a mirrored id's tile as a full
-# tile of its own, and its gather is a table (LV_PAGE0) its loader builds: per id, the
+# tile of its own, and its gather is a table (LV_PAGE0) the packer builds: per id, the
 # pair the Model B's gather computes -- the same encoding, so the one row loop reads
 # both.
 B_TILES, B_TILES_END = 0x8100, 0xB620       # the Model B's bank 5: tiles to its row loop
@@ -818,6 +844,22 @@ def pack_tiles(lv, sub):
     M = dict(NT=NS, HALFPAGE=M_TILES + ((NS * 64) & ~255), HALFOFF=((NS * 64) & 255) // 32)
     assert M['HALFPAGE'] + (M['HALFOFF'] + NHALF) * 32 + len(halfpair) <= M_TILES_END
     M['tiles'] = _tilelist(files, stored, loc)
+    # LV_PAGE0: per id, the pair the Model B's gather computes, for these slots
+    lo, hi = bytearray(256), bytearray(256)
+    for k in stored:
+        s_ = idof[k]
+        lo[s_], hi[s_] = (s_ & 3) << 6, (M_TILES >> 8) + (s_ >> 2)
+    for i, k in enumerate(mirs):
+        s_ = NT + i
+        lo[mir0 + i], hi[mir0 + i] = (s_ & 3) << 6, (M_TILES >> 8) + (s_ >> 2)
+    for i, h in enumerate(hlist):
+        t, kk = half0 + i, M['HALFOFF'] + i
+        hi[t] = (M['HALFPAGE'] >> 8) + (kk >> 3)
+        lo[t] = ((kk & 7) << 5) | (5 if t < half1 else 6 if t < half2 else 4)
+    for j in range(NFLAT + 2):
+        e, o = flattab[2 * j], flattab[2 * j + 1]
+        lo[FLAT0 + j], hi[FLAT0 + j] = (e, 0xC0) if e == o else (2 * j, 0xE0)
+    M['page0'] = bytes(lo + hi)
     M['mirs'] = b''.join(bytes([loc(k)[1], pos(k)]) for k in mirs)
     M['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, M['HALFPAGE'] >> 8, M['HALFOFF'], mir0, NMIR, 0])
     return dict(local=local, B=B, M=M, flat=flattab, halves=halflist, hpair=halfpair,
@@ -836,16 +878,26 @@ for (lv, sub), L in levels.items():
     # A level is loaded in two pieces: the game logic has bank 7 (inherited from the
     # Model B, which had no HAZEL), and the map is the only thing big enough to make
     # the room for it.
-    #   bank 6, from $8700:  the tile list (256: the file count, each file's count,
+    #   staged at $3000, then bank 6 from $8300 (unpack_map, engine.s):
+    #                        the map's row addresses (256 lo, 256 hi: LV_MAPROWLO/HI),
+    #                        LV_PAGE0 (512: the gather's pair by tile id), and at $8700
+    #                        the tile list (256: the file count, each file's count,
     #                        each stored tile's index in its file), the half list, the
     #                        halves' fill pairs and the mirror copies' list (256), the
-    #                        map at $8900 (row-major)
+    #                        map at $8900 (row-major), run-length coded as the
+    #                        Model B's (rle)
     #   bank 7, from $8000:  header (256: the fixed fields, FLATTAB at +32), objects
     #                        (1024), attr by tile id (256), alt class by tile id (256)
     name = name_of(lv, sub)
     assert len(T['M']['tiles']) <= 256 and len(T['halves']) + len(T['hpair']) + len(T['M']['mirs']) <= 256
-    packm = (T['M']['tiles'].ljust(0x100, b'\0')
-             + (T['halves'] + T['hpair'] + T['M']['mirs']).ljust(0x100, b'\0') + mapbytes.tobytes())
+    stride = 1 << L['lw']           # the map's row addresses, every row a byte can name
+    rows = [(0x8900 + r * stride) & 0xFFFF for r in range(256)]
+    maprle = rle(mapbytes.tobytes())       # the Model B's coding: unpack_map (engine.s)
+    assert unrle(maprle) == mapbytes.tobytes()
+    packm = (bytes(a & 255 for a in rows) + bytes(a >> 8 for a in rows) + T['M']['page0']
+             + T['M']['tiles'].ljust(0x100, b'\0')
+             + (T['halves'] + T['hpair'] + T['M']['mirs']).ljust(0x100, b'\0') + maprle)
+    packm = packm.ljust((len(packm) + 255) & ~255, b'\0')   # the tables piece starts a sector
     pack = bytearray()
     hdr = bytearray()
     hdr += bytes([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1], len(L['objs']), 1])

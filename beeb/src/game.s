@@ -17,10 +17,11 @@ load_level:
         asl                         ; two pieces: map, bank-7 tables (C = 0: X < 128)
         adc #FI_L0A
         sta tmp2
+        inca                        ; the tables first: unpack_map reads the header
         jsr loadfile
-        lda tmp2
-        inca
+        lda tmp2                    ; the map piece, staged in screen RAM
         jsr loadfile
+        jsr unpack_map              ; to bank 6: its head as it is, the map unpacked
         jsr load_tiles              ; the level's tiles, from the tile set's files, to bank 5
         ; geometry
         setbank BANK_LVL
@@ -102,37 +103,37 @@ FTMODE .set 0
         FILE F_MUSIC_SEC, F_MUSIC_N, BANK_LVL,  MUSIC_ADDR
         FILE F_ALT_SEC,   F_ALT_N,   BANK_LVL,  LV_ALTTAB
         FILE F_TITLE_SEC, F_TITLE_N, BANK_MAP,  TITLE_ADDR
-        FILE F_L0A_SEC, LM_L0A, BANK_MAP, LV_TLIST
+        FILE F_L0A_SEC, LM_L0A, 0, SCREEN
         FILE F_L0A_SEC + LM_L0A, F_L0A_N - LM_L0A, BANK_LVL, LV_HDR
-        FILE F_L0B_SEC, LM_L0B, BANK_MAP, LV_TLIST
+        FILE F_L0B_SEC, LM_L0B, 0, SCREEN
         FILE F_L0B_SEC + LM_L0B, F_L0B_N - LM_L0B, BANK_LVL, LV_HDR
-        FILE F_L1A_SEC, LM_L1A, BANK_MAP, LV_TLIST
+        FILE F_L1A_SEC, LM_L1A, 0, SCREEN
         FILE F_L1A_SEC + LM_L1A, F_L1A_N - LM_L1A, BANK_LVL, LV_HDR
-        FILE F_L1B_SEC, LM_L1B, BANK_MAP, LV_TLIST
+        FILE F_L1B_SEC, LM_L1B, 0, SCREEN
         FILE F_L1B_SEC + LM_L1B, F_L1B_N - LM_L1B, BANK_LVL, LV_HDR
-        FILE F_L2A_SEC, LM_L2A, BANK_MAP, LV_TLIST
+        FILE F_L2A_SEC, LM_L2A, 0, SCREEN
         FILE F_L2A_SEC + LM_L2A, F_L2A_N - LM_L2A, BANK_LVL, LV_HDR
-        FILE F_L2B_SEC, LM_L2B, BANK_MAP, LV_TLIST
+        FILE F_L2B_SEC, LM_L2B, 0, SCREEN
         FILE F_L2B_SEC + LM_L2B, F_L2B_N - LM_L2B, BANK_LVL, LV_HDR
-        FILE F_L3A_SEC, LM_L3A, BANK_MAP, LV_TLIST
+        FILE F_L3A_SEC, LM_L3A, 0, SCREEN
         FILE F_L3A_SEC + LM_L3A, F_L3A_N - LM_L3A, BANK_LVL, LV_HDR
-        FILE F_L3B_SEC, LM_L3B, BANK_MAP, LV_TLIST
+        FILE F_L3B_SEC, LM_L3B, 0, SCREEN
         FILE F_L3B_SEC + LM_L3B, F_L3B_N - LM_L3B, BANK_LVL, LV_HDR
-        FILE F_L4A_SEC, LM_L4A, BANK_MAP, LV_TLIST
+        FILE F_L4A_SEC, LM_L4A, 0, SCREEN
         FILE F_L4A_SEC + LM_L4A, F_L4A_N - LM_L4A, BANK_LVL, LV_HDR
-        FILE F_L4B_SEC, LM_L4B, BANK_MAP, LV_TLIST
+        FILE F_L4B_SEC, LM_L4B, 0, SCREEN
         FILE F_L4B_SEC + LM_L4B, F_L4B_N - LM_L4B, BANK_LVL, LV_HDR
-        FILE F_L5A_SEC, LM_L5A, BANK_MAP, LV_TLIST
+        FILE F_L5A_SEC, LM_L5A, 0, SCREEN
         FILE F_L5A_SEC + LM_L5A, F_L5A_N - LM_L5A, BANK_LVL, LV_HDR
-        FILE F_L5B_SEC, LM_L5B, BANK_MAP, LV_TLIST
+        FILE F_L5B_SEC, LM_L5B, 0, SCREEN
         FILE F_L5B_SEC + LM_L5B, F_L5B_N - LM_L5B, BANK_LVL, LV_HDR
-        FILE F_L6A_SEC, LM_L6A, BANK_MAP, LV_TLIST
+        FILE F_L6A_SEC, LM_L6A, 0, SCREEN
         FILE F_L6A_SEC + LM_L6A, F_L6A_N - LM_L6A, BANK_LVL, LV_HDR
-        FILE F_L6B_SEC, LM_L6B, BANK_MAP, LV_TLIST
+        FILE F_L6B_SEC, LM_L6B, 0, SCREEN
         FILE F_L6B_SEC + LM_L6B, F_L6B_N - LM_L6B, BANK_LVL, LV_HDR
-        FILE F_L7A_SEC, LM_L7A, BANK_MAP, LV_TLIST
+        FILE F_L7A_SEC, LM_L7A, 0, SCREEN
         FILE F_L7A_SEC + LM_L7A, F_L7A_N - LM_L7A, BANK_LVL, LV_HDR
-        FILE F_L7B_SEC, LM_L7B, BANK_MAP, LV_TLIST
+        FILE F_L7B_SEC, LM_L7B, 0, SCREEN
         FILE F_L7B_SEC + LM_L7B, F_L7B_N - LM_L7B, BANK_LVL, LV_HDR
         FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
         FILE F_TABLES_SEC, F_TABLES_N, 0, $0400             ; main RAM: bank 0 selects none

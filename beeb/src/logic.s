@@ -220,8 +220,8 @@ O_DH    = O_DL + OBJN
 O_EL    = O_DH + OBJN
 O_EH    = O_EL + OBJN
   .if .not MODELB                  ; (Model B: labels in bank 6, page aligned)
-LV_MAPROWLO = $A900               ; bank 6: 256 : tile row -> map row address
-LV_MAPROWHI = $AA00
+LV_MAPROWLO = $8300               ; bank 6: 256 : tile row -> map row address (the
+LV_MAPROWHI = $8400               ;   level's map piece: convert.py)
   .endif
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)

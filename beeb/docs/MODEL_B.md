@@ -124,6 +124,16 @@ tiles, 61 of them used by both kinds of level and once stored twice), in three f
 cut by who uses a tile -- outdoor, shared, indoor -- so a level stages its side's and
 the shared one: 3.9K less on each disc, loads within 2% of before.
 
+**No table is built at run time.**  The last of them went back to being assembled or
+packed: the Master's LV_PAGE0 and map-row tables now come in the level's map piece
+(bank 6 $8300), the Model B's ring-row tables are assembled (select_backbuf points
+ringaddr's high-byte operand at the buffer's; the low bytes are the two rings'
+alike, both bases xx80), and its sprite directory and SPRMASK come finished in the
+level file (LDPROG 3.1K -> 2.1K; the level file may be 8K now, LV_OBJS $7C00).  The
+Master's disc paid 1K a level for it, so its maps are run-length coded as the B's
+(unpack_map: staged in screen RAM, the map piece's head copied, the map unpacked to
+its exact size).
+
 **The row came back once the tiles shrank.**  Half and flat tiles freed 2.5K of bank
 5 on L4B; the 1.1K of code and state that had sat in main RAM went above the tiles
 with the row loop (bank 5, from $B620), the small of it bank 7 must read (the

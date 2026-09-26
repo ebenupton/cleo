@@ -48,7 +48,7 @@ with open('build/defs_ld.inc', 'w') as f:
             f.write('; %s: not in labels.txt (a constant?)\n' % n)
 EOF
     # the constants ld65 does not list
-    grep -E '^(MENU_BASE|TILES|NFLAT|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE|LV_OBJS|BOARD_STD|BOARD_WATFORD|BOARD_SOLIDISK|WRSEL_WATFORD|WRSEL_SOLIDISK)\s*=' src/defs.inc build/assets.inc \
+    grep -E '^(MENU_BASE|TILES|NFLAT|BOXID0|NMIPAGE|LDPROG|STAGE|STAGE_LVL|TITLE_ADDR|MAP6|BANKCODE|LV_OBJS|BOARD_STD|BOARD_WATFORD|BOARD_SOLIDISK|WRSEL_WATFORD|WRSEL_SOLIDISK)\s*=' src/defs.inc build/assets.inc \
         | sed 's/^[^:]*://; s/;.*//' >> build/defs_ld.inc
     echo 'BARADDR = $0300' >> build/defs_ld.inc
     ca65 --cpu 6502 -I build -I src -o build/ldprog.o src/ldprog.s -l build/ldprog.lst

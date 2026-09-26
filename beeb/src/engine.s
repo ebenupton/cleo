@@ -54,14 +54,17 @@ BANK_MAP  = 6                     ; the map and the tables read alongside it
 ; does have HAZEL, so that placement is now a free choice rather than a forced
 ; one -- moving the logic there would hand bank 7 back.
   .if .not MODELB                 ; (the Model B's gather computes the same per tile)
+LV_MPIECE = $8300                 ; the level's map piece loads from here: the row
+                                  ; tables (LV_MAPROWLO/HI, logic.s), then
 LV_PAGE0  = $8500                 ; tile id -> the gather's pair: 256 lo, 256 hi, what
-                                  ; drawrect's row loop reads (GATHERL/H), load_tiles'
-LV_TLIST  = $8700                 ; the lists it gathers the level's tiles by: the map
-                                  ; piece's head (convert.py pack_tiles)
+                                  ; drawrect's row loop reads (GATHERL/H), then
+LV_TLIST  = $8700                 ; the lists load_tiles gathers the level's tiles by,
+                                  ; and the map at $8900 (convert.py pack_tiles)
 TILES     = $8000                 ; bank 5: the level's tiles, 64 bytes a slot
 LV_MAP    = $8900                 ; up to 8K, row major
   .endif
-;         $A900  LV_MAPROWLO, LV_MAPROWHI (built by level_init, see logic.s)
+;         $8300  LV_MAPROWLO, LV_MAPROWHI (the level's map piece, with LV_PAGE0 and
+;                the tile lists: convert.py)
 ;         $B000  box stars, $B800 music
 
 ; bank 7
@@ -397,8 +400,6 @@ mir0:      .res 1                   ; the first mirrored tile's id (the loader's
 rowbit:    .res 1                   ; the char row being drawn, as a flag bit (1, 2)
 MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
         ; bank 5 still, with the ring work that keeps it (init5 zeroes the segment)
-RINGLO:    .res RINGROWS            ; the buffer being drawn (select_backbuf rebuilds them)
-RINGHI:    .res RINGROWS
 BUF_CY:    .res 2
 BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 FLATTAB:   .res 2*(NFLAT+2)         ; the level's flat tiles: (even line, odd line) by
@@ -560,10 +561,27 @@ ringaddr:
         adc RINGLO,x
         sta sp
         lda sp+1
-        adc RINGHI,x
+@rh:    adc RINGHI,x                ; (Model B: the buffer's table, select_backbuf's)
         ringup sp
         sta sp+1
         rts
+  .if MODELB
+RINGHIOP := @rh + 1                 ; (after the rts: := ends the @ scope)
+; the ring rows' addresses, assembled: both bases are xx80, so the low bytes are the
+; two rings' alike and only the high bytes are per buffer
+RINGLO:
+  .repeat RINGROWS, r
+        .byte <(RING_A + r*ROWBYTES)
+  .endrepeat
+RINGHI:                             ; ring A's, and the operand's value at start
+  .repeat RINGROWS, r
+        .byte >(RING_A + r*ROWBYTES)
+  .endrepeat
+RINGHI_B:
+  .repeat RINGROWS, r
+        .byte >(RING_B + r*ROWBYTES)
+  .endrepeat
+  .endif
 
 ; ============================================================================
 ; drawrect: draw map tiles into the current back buffer.
@@ -3072,7 +3090,7 @@ select_backbuf:
   .if MODELB
         ldx curbuf                  ; the buffer's ring: its base and end, the two
         lda @bhi,x                  ; derived constants the blitters' wrap tests use,
-        sta ringbhi                 ; and the row table from its base
+        sta ringbhi                 ; and its row table for ringaddr
         lda @ehi,x
         sta ringehi
         sec
@@ -3097,7 +3115,13 @@ select_backbuf:
         lda @rhi,x
         sta recp+1
   .if MODELB
-        jmp build_ring              ; the row table from the base (recp untouched)
+        lda @thl,x                  ; ringaddr's high bytes: this buffer's table
+        sta RINGHIOP
+        lda @thh,x
+        sta RINGHIOP+1
+        rts
+@thl:   .byte <RINGHI, <RINGHI_B
+@thh:   .byte >RINGHI, >RINGHI_B
 @bhi:   .byte >RING_A, >RING_B
 @ehi:   .byte >RINGEND_A, >RINGEND_B
   .else
@@ -4496,10 +4520,7 @@ mapput: pha
 init_maprows:                       ; the row address is arithmetic here (maprow,
         rts                         ; maprow5): there is no table to build
   .else
-init_maprows:
-        lda #BANK_MAP
-        sta ROMSEL_CPY
-        sta ROMSEL
+init_maprows:                       ; (just the stride: the tables are the map piece's)
         ldx maplw                   ; row stride = 1 << maplw bytes: lw = 8 shifts
         lda #1                      ; the 1 out into the carry, the high byte
 :       asl
@@ -4510,45 +4531,11 @@ init_maprows:
         txa                         ; (X = 0)
         rol
         sta t16b+1
-        sta MAPSTRIDE+1
-        ldy #<LV_MAP                ; Y = row address lo, A = hi, X = row
-        lda #>LV_MAP
-:       sta LV_MAPROWHI,x
-        pha
-        tya
-        sta LV_MAPROWLO,x
-        clc
-        adc t16b
-        tay
-        pla
-        adc t16b+1
-        inx
-        bne :-
+        sta MAPSTRIDE+1             ; (the row tables are the map piece's: convert.py)
         jmp pagelogic
   .endif
 
 
-        PLACE "LOW2", "TILCODE"     ; Model B: bank 5, with select_backbuf
-; the screen address of each ring row, from the base of the buffer being drawn (the
-; Model B's: the Master's rows are the same for both buffers, assembled in TABLES)
-  .if MODELB
-build_ring:
-        lda #<RING_A                ; both bases are xx80: the high byte is the buffer's
-        sta RINGLO
-        lda ringbhi
-        sta RINGHI
-        ldx #0                      ; C = 0 from both callers; then from the cpx
-@r:     lda RINGLO,x                ; each row from the one before it
-        adc #<ROWBYTES
-        sta RINGLO+1,x
-        lda RINGHI,x
-        adc #>ROWBYTES
-        sta RINGHI+1,x
-        inx
-        cpx #RINGROWS-1
-        bne @r
-        rts
-  .endif
   .if .not MODELB
         .segment "CODE"
 
@@ -4561,8 +4548,7 @@ build_ring:
 ; file), and at
 ; $8800 the half list (index, row | file << 1), the halves' fill pairs and the mirror
 ; copies' list (index, file): the Master stores a mirrored id's tile as it is, in the
-; slots after the full tiles.  Then LV_PAGE0, the gather's table: per id, the pair
-; drawrect's Model B gather computes per tile.
+; slots after the full tiles.  LV_PAGE0, the gather's table, came in the same piece.
 LSTAGE = SCREEN                     ; a set file
 LLIST  = $7700                      ; the lists, copied down out of bank 6
 LHALF  = LLIST + $100
@@ -4585,14 +4571,6 @@ load_tiles:
         sta rc_nt                   ; the halves
         lda LV_HDR+21
         sta rc_subc                 ; the full tiles
-        lda LV_HDR+24               ; half0, half1, half2 (the builder's)
-        sta rc_x
-        lda LV_HDR+25
-        sta rc_x+1
-        lda LV_HDR+26
-        sta rc_y
-        lda LV_HDR+29
-        sta rc_w                    ; mir0
         lda LV_HDR+30
         sta rc_sub                  ; the mirrored tiles
         lda LV_HDR+27
@@ -4774,84 +4752,78 @@ load_tiles:
         inc tp+1
         dex
         bne :-
-        ; ---- LV_PAGE0: the gather's pair for every id (drawrect's Model B gather)
-        setbank BANK_MAP
-        lda w16                     ; HALFOFF*32 -> HALFOFF
-        lsr
-        lsr
-        lsr
-        lsr
-        lsr
-        sta tmp
-        lda rc_x
-        clc
-        sbc tmp
-        sta rc_sc0                  ; half0 - HALFOFF - 1
-        lda rc_subc
-        clc
-        sbc rc_w
-        sta rc_ro0                  ; NT - mir0 - 1: a mirror's slot is id + this + 1
-        ldx #0
-@id:    txa
-        cmp #FLAT0
-        bcs @bflat
-        cmp rc_x                    ; half0
-        bcs @bhalf
-@bslot: tay                         ; a full tile (or a mirror's copy): slot A, kind 0
-        lsr
-        lsr
-        ora #>TILES
-        sta LV_PAGE0+$100,x
-        tya
-        and #3
-        lsr
-        ror
-        ror                         ; (slot & 3) << 6
-        bra @blo
-@bhalf: cmp rc_w                    ; mir0
-        bcs @bmir
-        clc
-        sbc rc_sc0                  ; k, the slot from the halves' page
-        sta tmp
-        lsr
-        lsr
-        lsr
-        clc
-        adc halfhi
-        sta LV_PAGE0+$100,x
-        lda tmp
-        asl
-        asl
-        asl
-        asl
-        asl                         ; (k & 7) << 5
-        cpx rc_x+1                  ; below half1 4|1 (top fills), else 4|2
-        adc #5
-        cpx rc_y                    ; from half2: 4, both rows stored
-        bcc @blo
-        eor #2
-        bra @blo
-@bmir:  adc rc_ro0                  ; (C set: + 1)
-        bra @bslot
-@bflat: sbc #FLAT0                  ; a fill: one byte ($C0) or a pair ($E0)
-        asl
-        tay
-        lda FLATTAB,y
-        cmp FLATTAB+1,y
-        bne @bpair
-        sta LV_PAGE0,x
-        lda #$C0
-        bra @bhi
-@bpair: tya
-        sta LV_PAGE0,x
-        lda #$E0
-@bhi:   sta LV_PAGE0+$100,x
-        bra @bnext
-@blo:   sta LV_PAGE0,x
-@bnext: inx
-        bne @id
         rts
 lt_fi:  .byte FI_TILES0, FI_TILES1, FI_TILES2   ; the set's files (convert.py TSET)
+
+; The level's map piece, staged at SCREEN: its head (the row tables, LV_PAGE0, the tile
+; lists: 1.5K) to bank 6 as it is, then the map, run-length coded as the Model B's
+; (convert.py rle: c < 128 = c+1 literals, else the next byte c-126 times), unpacked
+; to LV_MAP, 1 << (lw + lh) bytes.
+unpack_map:
+        setbank BANK_LVL
+        lda LV_HDR                  ; lw + lh - 8: the map's pages as a power of two
+        clc
+        adc LV_HDR+1
+        sbc #7                      ; (C = 0: - 8)
+        tax
+        lda #1
+:       asl
+        dex
+        bne :-
+        adc #>LV_MAP                ; (C = 0: a few pages)
+        sta tmp3                    ; the map's end page
+        setbank BANK_MAP
+        ldx #0
+:
+  .repeat 6, k
+        lda SCREEN+k*256,x
+        sta LV_MPIECE+k*256,x
+  .endrepeat
+        inx
+        bne :-
+        .assert LV_MAP = LV_MPIECE + $600, error, "the map follows the piece's head"
+        lda #<(SCREEN+$600)
+        sta tp
+        lda #>(SCREEN+$600)
+        sta tp+1
+        stz sp
+        .assert <LV_MAP = 0, error, "LV_MAP page aligned"
+        lda #>LV_MAP
+        sta sp+1
+        ldy #0
+@c:     lda sp+1
+        cmp tmp3
+        bcs @end
+        lda (tp),y
+        jsr @next                   ; (A untouched)
+        tax                         ; X = the count, N = the control byte's sign
+        bmi @run
+        inx                         ; c+1 literals
+@lit:   lda (tp),y
+        jsr @next
+        sta (sp),y
+        jsr @dnext
+        dex
+        bne @lit
+        beq @c
+@run:   sbc #125                    ; (C = 0 from the bcs) c - 126
+        tax
+        lda (tp),y
+        jsr @next
+@r:     sta (sp),y
+        jsr @dnext
+        dex
+        bne @r
+        beq @c
+@next:  inc tp
+        bne :+
+        inc tp+1
+:       rts
+@dnext: inc sp
+        bne :+
+        inc sp+1
+:
+@end:   rts
 lt_src: php                         ; A = a tile's index in the staged file, C = its
         pha                         ; row -> tp (the row's 32 bytes, or the tile's 64)
         lsr

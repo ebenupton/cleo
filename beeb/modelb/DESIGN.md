@@ -40,7 +40,7 @@ of state) is bank 5's now, and the little of its state bank 7 reads is in low BS
 
 While a level loads the display is black and $0D00-$7BFF is the loader's: the NMI
 transfer routine at $0D00, the load-time program at $0E00, a shared file staged at
-$1C00, the level's own file at $5C00, the level's objects at $7800 (LV_OBJS: main
+$1C00, the level's own file at $5C00 (8K at most), the level's objects at $7C00 (LV_OBJS: main
 RAM, read once by level_init before the first render; the file is staged below them
 because they are copied while it is still being read).
 
@@ -49,7 +49,7 @@ because they are copied while it is still being read).
 | Bank | Fixed | Per level (the loader's) | During the menus |
 |---|---|---|---|
 | 4 | the far table, SWAPTAB + MASKTAB0..3 at $8300, the sprite row loop at $BBE0 (`SPRITE_LOOPS 1, 0`) | images and masks $8800-$BBDF, masks alone in the hole $8040-$82FF | (untouched) |
-| 5 | the far table, then init5 + take_over in the low corner ($8040, once only); from $B620 the tile blitter (drawrect, its clip, the row loop, the gather), ringaddr and the ring modulus, select_backbuf and build_ring, scroll_validate, the dirty lists and mark/draw_dirty, copy_partial, blank_below, mirdirty, and the buffers' state (RINGLO/HI, BUF_CX/CY, PART_CY/F, FLATTAB) | the full tiles from $8100 (up to 193: L4B), the half tiles' stored rows from the 32-byte slot after them (up to 34), their pair table after those | the menu overlay from $8100: menu.s, the tune and its player, the font |
+| 5 | the far table, then init5 + take_over in the low corner ($8040, once only); from $B620 the tile blitter (drawrect, its clip, the row loop, the gather), ringaddr and the ring modulus, select_backbuf (which points ringaddr at its buffer's assembled row table), scroll_validate, the dirty lists and mark/draw_dirty, copy_partial, blank_below, mirdirty, and the buffers' state (BUF_CX/CY, PART_CY/F, FLATTAB) | the full tiles from $8100 (up to 193: L4B), the half tiles' stored rows from the 32-byte slot after them (up to 34), their pair table after those | the menu overlay from $8100: menu.s, the tune and its player, the font |
 | 6 | the far table, the start-up and the low-RAM image at $8040, MASKTAB0..3 at $8400, the row loop without the mirrored blitter at $BD60 (`SPRITE_LOOPS 0, 1`) | the map at $8800 (up to 8K), the sprite directory above it (`sprtab`), the rest of the sprites, more in the hole $8180-$8300 and the page SWAPTAB would take | the title pack at $8900, over the map |
 | 7 | the far table, the entry vector, the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue and SPRMASK, draw_sprites, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
@@ -218,17 +218,16 @@ A level load, palette black, interrupts off (`load_level_b`):
 
 1. bank 7 copies the NMI stubs to $0D00 and reads LDPROG to $0E00
 2. LDPROG reads the level file to $5C00; the header, attr and altcls go to bank 7,
-   the objects to $7800; the shape (mapshr, MAPSTRIDE, sprtab) is set; the map is
+   the objects to $7C00; the shape (mapshr, MAPSTRIDE, sprtab) is set; the map is
    RLE-decoded straight into bank 6
-3. the level's tile set is staged at $1C00 and its tiles copied into bank 5 by the
-   tile list
+3. the tile set's files the level needs are staged at $1C00 in turn and its tiles
+   copied into bank 5 by the tile list
 4. SPR, SPRAND and BOX are staged in turn; every image and mask the placement list
    names is copied to its bank and address (an image's mask may live in another
    file: SPRAND images keep their masks in SPR)
-5. the directory is built into bank 6 from the template (`sprdir.bin`: the
-   Master's entries less their pointers, which become the item and its kind), the
-   pointer and the bank-6 flag filled in from the placement; SPRMASK (bank 7,
-   the ids below the boxes) likewise
+5. the directory goes to bank 6 and SPRMASK (bank 7, the ids below the boxes) as
+   the packer finished them: the Master's entries with each image's placed address
+   and bank-6 flag (no table is built at load: every one is assembled or packed)
 6. the half tiles' rows and pairs go above the full tiles (the fill's operands
    patched to the table), the flat tiles' pairs to FLATTAB; the bar template is
    read to $0300

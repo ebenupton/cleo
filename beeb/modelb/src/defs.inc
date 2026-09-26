@@ -40,7 +40,7 @@ TILES     = $8100                   ; bank 5: this level's tiles, 64 bytes each,
 MENU_BASE = TILES                   ; or the menu overlay, over them
 LV_MAP    = MAP6                    ; bank 6, $8800: row major, up to 8K; the sprite
                                     ; directory follows it (sprtab, set by the loader)
-LV_OBJS   = $7800                   ; the level's objects, 6 bytes each: main RAM (the
+LV_OBJS   = $7C00                   ; the level's objects, 6 bytes each (894 at most): main RAM (the
                                     ; display, black while they are read: level_init
                                     ; reads them once, before the first render)
 
@@ -98,8 +98,8 @@ WRSEL_SOLIDISK = $FE60
 NMIPAGE   = $0D00                   ; the disc transfer routine, while a load runs
 LDPROG    = $0E00                   ; the load-time program (ldprog.s), read there
 STAGE     = $1C00                   ; a shared file staged here, 16K at most ($5BFF)
-STAGE_LVL = $5C00                   ; the level's own file, under 7K (tools/assets.py
-                                    ; asserts it): the objects go to LV_OBJS ($7800)
+STAGE_LVL = $5C00                   ; the level's own file, 8K at most (tools/assets.py
+                                    ; asserts it): the objects go to LV_OBJS ($7C00)
                                     ; while it is still being read
 FDC8271_CMD = $FE80                 ; the 8271: command/status, parameter/result, data
 FDC8271_PAR = $FE81

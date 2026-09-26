@@ -9,11 +9,10 @@ the game's own loader (ldprog.s) stages one at a time in display RAM and copies 
 pieces a level needs into the banks, where the packer here decided they go.  What
 this writes to build/:
 
-   L0..L15        per level: header, objects, attr/altcls, the level's tile list
-                  (set-local id per level-local id), the sprite placement list,
-                  the RLE map.  A small table of section offsets at the top.
-   sprdir.bin     the 118-entry directory template: (image, kind) in place of the
-                  pointer; the loader fills the pointer and the bank flag in
+   L0..L15        per level: header, objects, attr/altcls, the level's tile lists
+                  (convert.py pack_tiles), the sprite placement list, the RLE map,
+                  the finished sprite directory and SPRMASK.  A small table of
+                  section offsets at the top.
    imgtab.bin     per image, box and trampoline: which shared file holds it and
                   where, and the same for its mask
    digits.bin     the HUD's digits (bank 7); font.bin (the menu image); alt.bin
@@ -117,7 +116,6 @@ for f in range(3):
     lo, wc = m.tramp_geom[f]
     sprdir += bytes([item_index('tramp', f), 2, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255, (-8) & 255, 2 | 8, m.TRAMP_H * 2])
 assert len(sprdir) == 118 * 8
-out('sprdir.bin', sprdir)
 
 out('digits.bin', m.digits)
 out('font.bin', m.font)
@@ -129,31 +127,7 @@ if not os.path.exists(MUS):
 out('music.bin', open(MUS, 'rb').read())
 
 # ---------------------------------------------------------------- per-level helpers
-def rle(data):
-    """PackBits-like: c < 128 = c+1 literal bytes follow; c >= 128 = the next byte
-    repeated c-126 times (2..129).  ldprog.s decodes it."""
-    out_, i, n = bytearray(), 0, len(data)
-    while i < n:
-        j = i
-        while j + 1 < n and data[j + 1] == data[i] and j - i < 128:
-            j += 1
-        run = j - i + 1
-        if run >= 2:
-            out_ += bytes([126 + run, data[i]]); i += run; continue
-        j = i
-        while j < n and j - i < 128 and not (j + 2 < n and data[j] == data[j + 1] == data[j + 2]):
-            j += 1
-        out_ += bytes([j - i - 1]) + data[i:j]; i = j
-    return out_
-def unrle(data):
-    o, i = bytearray(), 0
-    while i < len(data):
-        c = data[i]; i += 1
-        if c < 128:
-            o += data[i:i + c + 1]; i += c + 1
-        else:
-            o += bytes([data[i]]) * (c - 126); i += 1
-    return o
+rle, unrle = m.rle, m.unrle
 
 SPRITES_OF = {0: 1, 1: 1, 2: 1, 3: 2, 4: 1, 5: 1, 6: 1, 7: 1, 8: 0, 9: 1, 10: 1, 11: 0, 12: 1}
 def cellbox(t, x, y, e):                    # level_init's gx0, gx1, gy, gy1, in cells
@@ -298,13 +272,32 @@ def pack_level(lv, sub):
         ma = mask_addr.get((kind, j), 0)
         placement += bytes([item_index(kind, j), img_bank[(kind, j)], a & 255, a >> 8, ma & 255, ma >> 8])
     placement += b'\xff'
+    # the directory and SPRMASK as the game reads them: the template's entries with each
+    # placed item's address (and bank 6's flag), and each sprite id's mask address
+    byitem = {item_index(*k): k for k in img_addr}
+    directory, smask = bytearray(), bytearray()
+    for i in range(118):
+        t = sprdir[i * 8:i * 8 + 8]
+        k = byitem.get(t[0]) if t[0] != 0xFF else None
+        if k is None:
+            directory += bytes(8); ma = 0
+        else:
+            a = img_addr[k]
+            e = bytearray([a & 255, a >> 8]) + t[2:8]
+            if img_bank[k] == 6:
+                e[6] |= 0x10
+            directory += e; ma = mask_addr.get(k, 0)
+        if i < 118 - 15:                    # the box ids (the last 15) have no entry
+            smask += bytes([ma & 255, ma >> 8])
+    assert len(smask) == 2 * 103
 
     # ---- the file: a table of section offsets, then the sections
     maprle = rle(mapb)
     assert unrle(maprle) == mapb
     secs = [('hdr', hdr), ('objs', objs), ('attr', attr), ('altcls', acls),
             ('tiles', T['B']['tiles']), ('place', placement), ('map', maprle), ('flat', T['flat']),
-            ('halves', T['halves']), ('hpair', T['hpair']), ('mir', T['B']['mir'])]
+            ('halves', T['halves']), ('hpair', T['hpair']), ('mir', T['B']['mir']),
+            ('dir', directory), ('smask', smask)]
     off = 2 * len(secs)
     table = bytearray()
     body = bytearray()
@@ -312,7 +305,7 @@ def pack_level(lv, sub):
         o = off + len(body)
         table += bytes([o & 255, o >> 8])
         body += data
-    assert off + len(body) <= 0x7800 - 0x5C00, (name, off + len(body))   # STAGE_LVL..LV_OBJS (defs.inc)
+    assert off + len(body) <= 0x7C00 - 0x5C00, (name, off + len(body))   # STAGE_LVL..LV_OBJS (defs.inc)
     out('L%d' % (lv * 2 + sub), table + body)
     stats = dict(name=name, ntiles=T['ntiles'], nflat=T['nflat'], nhalf=T['nhalf'], nmir=T['nmir'], w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],
