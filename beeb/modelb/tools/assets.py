@@ -44,18 +44,22 @@ SOLID_CYAN, SOLID_BLACK = 254, 255
 VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 20 (engine.s)
 
 # ---------------------------------------------------------------- the banks' fixed shape
-# Code sits at the top of banks 4 and 6 and the data below it can be any size; the
-# level image of bank 5 is its code and BSS from $8100 and the tiles above them, page
-# aligned.  These are the bounds the linker config (cleo_b.cfg) and defs.inc share.
+# Code sits at the bottom of banks 4, 5 and 6 (each entered at $8000) and the mask
+# tables at the top of 4 and 6; bank 5's tiles run from its code's next page to the
+# end; bank 6's map is a fixed 8K below its mask tables.  These are the bounds the
+# linker config (cleo_b.cfg) and defs.inc share.
 B4_DATA = (0x83C0, 0xBB00)                  # bank 4: images and masks, between the row loop
                                             #   ($8000) and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (no hole now: one run)
-B6_HOLE = (0x8310, 0x8800)                  # bank 6: between the row loop + gather and the map
-B6_SWAP = (0x8800, 0x8800)                  #   (none now)
-B6_TOP = 0xBC00                             #   MASKTAB0-3 above this
-MAP6 = 0x8800                               #   the map, then images (the directory: bank 7)
-TILES_BASE, B5X = m.B_TILES, m.B_TILES_END  # bank 5: the tiles from here (page aligned)
-                                            #   up to the row loop's region (cleo_b.cfg)
+B6_DATA = (0x8310, 0x9C00)                  # bank 6: all its sprites, one run, between the row
+                                            #   loop + gather and the map: the resident part
+                                            #   (SPRC6) at the bottom, the level's above it
+B6_HOLE = (0x9C00, 0x9C00)                  #   (no hole now)
+B6_SWAP = (0x9C00, 0x9C00)
+MAP6 = 0x9C00                               # the map: a fixed 8K below MASKTAB0-3 ($BC00)
+B6_TOP = MAP6                               #   (the end of bank 6's sprites)
+TILES_BASE, B5X = m.B_TILES, m.B_TILES_END  # bank 5: the tiles from here (page aligned),
+                                            #   above the code (cleo_b.cfg B5X), to the end
 
 # ---------------------------------------------------------------- the shared files
 # The sprites every level draws -- Cleo, the boomerang, the stars (ids 0..42) -- are
@@ -108,7 +112,7 @@ for j in sorted((j for j in COMMON if j not in _mirrored_all), key=lambda j: -_s
 sprc4 = _pack(c4, B4_DATA[0])
 TRAMP_LEN = sum(len(b) for b in m.tramp_bytes)   # the trampoline's boxes: bank 6 (the copy blitter's)
 C6_LEN = sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c6) + TRAMP_LEN
-C6_BASE = B6_TOP - C6_LEN
+C6_BASE = B6_DATA[0]
 sprc6 = _pack(c6, C6_BASE)
 tramp_addr = {}
 for f in range(3):
@@ -116,7 +120,7 @@ for f in range(3):
 for j in c4: common_bank[j] = 4
 for j in c6: common_bank[j] = 6
 COMMON_END = B4_DATA[0] + len(sprc4)
-assert COMMON_END <= B4_DATA[1] and C6_BASE >= MAP6 + 0x2000
+assert COMMON_END <= B4_DATA[1] and C6_BASE + C6_LEN <= B6_DATA[1] and MAP6 + 0x2000 <= 0xBC00
 sprc = sprc4 + sprc6
 out('SPRC', sprc)
 sprx, imgtab = bytearray(), bytearray()
@@ -263,9 +267,9 @@ def pack_level(lv, sub):
     classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
     bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
     tramps = []                             # (resident: SPRC)
-    R6BASE = MAP6 + len(mapb)              # (the directory: bank 7, SPR_TABLE)
+    R6BASE = C6_BASE + C6_LEN               # above the resident part, up to the map
     regions = {'r4': [COMMON_END, B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
-               'r6': [R6BASE, C6_BASE], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
+               'r6': [R6BASE, B6_DATA[1]], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
     items0 = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
     items0 += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]

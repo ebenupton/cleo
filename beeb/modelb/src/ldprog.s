@@ -237,7 +237,19 @@ lv_load:
         dex
         bne :-
         sta MAPSTRIDE
-        ; ---- the map, run-length coded, into bank 6
+        ; ---- the map, run-length coded, into bank 6: exactly its 1 << (lw + lh) bytes
+        ; (the stream is not terminated: what follows it in the file is the next section)
+        lda LV_HDR                  ; lw + lh - 8 (at least 2: a map is at least 1K)
+        clc
+        adc LV_HDR+1
+        sbc #7                      ; (C = 0: - 8)
+        tax
+        lda #1
+:       asl
+        dex
+        bne :-
+        adc #>MAP6                  ; (C = 0: at most 8K) the page after the map
+        sta mapend
         lda #6
         jsr section
         .assert <MAP6 = 0, error, "dst's low byte is 0 still"
@@ -729,6 +741,7 @@ sv_half1:   .res 1
 sv_half2:   .res 1
 sv_halfhi:  .res 1
 sv_halfsub: .res 1
+mapend:     .res 1                  ; the page after the level's map (unrle)
 sv_mir0:    .res 1
 section:                            ; A = section 0..9 -> src = its start in the staged file
         asl                         ; (C = 0: A < 128)
@@ -804,8 +817,8 @@ unrle:                              ; src (packed) -> dst in bank 6: c < 128 = c
         lda PB_MAP
         jsr pgbank
 @c:     lda dst+1
-        cmp #>(MAP6 + $2000)        ; the map is 8K at most: stop there whatever the
-        bcs @end                    ; stream says
+        cmp mapend                  ; the map's end: stop there (the stream runs on into
+        bcs @end                    ; the next section)
         ldy #0
         lda (src),y
         jsr @next                   ; (A untouched)

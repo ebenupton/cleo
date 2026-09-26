@@ -27,7 +27,7 @@ for (let f = 0; f < N; f++) {
     const recs = bank(7, () => { const r = []; for (const b2 of [0, 1]) for (let i = 0; i < rd(A.RECCNT + b2); i++) { const b = A.SPRREC + (b2 * MAXREC + i) * 10;
       r.push([rd(b + 5) | (rd(b + 6) << 8), rd(b + 7), rd(b + 8), rd(b + 9) & 0x7f]); } return r; });
     const near = (x, y) => recs.some(([rx, ry, w, h]) => x >= rx - 2 && x <= rx + w + 2 && y >= ry - 2 && y <= ry + h + 2);
-    const map = bank(6, () => { const m = []; for (let r = 0; r < 12; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(rd(0x8800 + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
+    const map = bank(6, () => { const m = []; for (let r = 0; r < 12; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(rd(0x9C00 + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
     for (let r = 0; r < 21; r++) for (let c = 0; c < 80; c++) {
       const x = cx + c, y = cy + r;
       if (near(x, y)) continue;

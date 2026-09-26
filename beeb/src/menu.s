@@ -689,7 +689,7 @@ l7:         .byte "NEFERTITI", 0
 str_score:  .byte "SCORE", 0
 str_hiscore:.byte "HISCORE", 0
 
-  .if .not MODELB                   ; (Model B: spbank and menurec in bank 5 with the
+  .if .not MODELB                   ; (Model B: spbank in bank 5, menurec in bank 7 with the
         .zeropage                   ;  prologue, title_res in low RAM)
 spbank:    .res 1
         .segment "TABLES"

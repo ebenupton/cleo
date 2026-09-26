@@ -99,8 +99,11 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
 ; those from wcxm are ever read (display.s).  Called by the tile blitter's head and
 ; copy_partial (bank 5: mirdirty5) and the sprite prologue (bank 7: mirdirty): one
 ; body, twice.
+        .segment "LGCBSS"           ; bank 7: the prologue, which writes it through rp, runs
+menurec:   .res 10                  ; there (the menus' one sprite record; the menus in bank
+                                    ; 5 only set rp to it).  It was in TILBSS, and so written
+                                    ; at bank 7's copy of that address, until 26 Sep 2026
         .segment "TILBSS"
-menurec:   .res 10                  ; the menus' one sprite record (the prologue writes it)
   .if BHW                           ; (the converged Master has no mirror: the hardware folds)
 .macro MIRDIRTY_BODY
         clc
