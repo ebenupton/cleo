@@ -50,8 +50,8 @@ because they are copied while it is still being read).
 |---|---|---|---|
 | 4 | the far table, SWAPTAB + MASKTAB0..3 at $8300, the sprite row loop at $BBE0 (`SPRITE_LOOPS 1, 0`) | images and masks $8800-$BBDF, masks alone in the hole $8040-$82FF | (untouched) |
 | 5 | the far table, then init5 + take_over in the low corner ($8040, once only); from $B620 the tile blitter (drawrect, its clip, the row loop, the gather), ringaddr and the ring modulus, select_backbuf (which points ringaddr at its buffer's assembled row table), scroll_validate, the dirty lists and mark/draw_dirty, copy_partial, blank_below, mirdirty, and the buffers' state (BUF_CX/CY, PART_CY/F, FLATTAB) | the full tiles from $8100 (up to 193: L4B), the half tiles' stored rows from the 32-byte slot after them (up to 34), their pair table after those | the menu overlay from $8100: menu.s, the tune and its player, the font |
-| 6 | the far table, the start-up and the low-RAM image at $8040, MASKTAB0..3 at $8400, the row loop without the mirrored blitter at $BD60 (`SPRITE_LOOPS 0, 1`) | the map at $8800 (up to 8K), the sprite directory above it (`sprtab`), the rest of the sprites, more in the hole $8180-$8300 and the page SWAPTAB would take | the title pack at $8900, over the map |
-| 7 | the far table, the entry vector, the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue and SPRMASK, draw_sprites, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
+| 6 | the far table, the start-up and the low-RAM image at $8040, MASKTAB0..3 at $8400, the row loop without the mirrored blitter at $BD60 (`SPRITE_LOOPS 0, 1`) | the map at $8800 (up to 8K), the rest of the sprites above it, more in the hole $8180-$8300 and the page SWAPTAB would take | the title pack at $8900, over the map |
+| 7 | the far table, the entry vector, the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue, SPRMASK and the level's sprite directory (`SPR_TABLE`, loaded), draw_sprites, calc_ring, the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
 Every bank starts with the same far table at $8000 (banks.s `COMMON_TABLES`), so the
 thunk in low RAM reads it whatever bank is paged in (17 entries).  The small tables
@@ -115,15 +115,15 @@ target, and rts's into it: ~90 cycles, nesting and interrupt safe; A goes in and
 comes back, Y survives, X does not.  Two things the Master does inline go through
 main RAM here because a bank cannot page another over itself: the tile blitter's map
 row is fetched into MAPBUF a tile row at a time (`mapstrip`, which returns to the
-caller's bank), and the sprite prologue's directory entry comes into MAPBUF too
-(`dirfetch`, which is mapstrip with a count of 8; the title pack's entries and mask
-addresses come the same way).
+caller's bank).  The title pack's directory entries and mask addresses, in bank 6,
+come into MAPBUF too (`dirfetch`, mapstrip with a count of 8); the game's own
+directory is in bank 7 beside the prologue, which reads it in place as the Master's
+does (it lived above the map in bank 6 until 26 Sep 2026: ~1,250 cycles a frame).
 
 The map's row address is arithmetic on both sides (`maprow` in low RAM for the
 logic, `maprow5` for the blitter): a map is 32, 64, 128 or 256 tiles wide, and row
 x 2^lw is row x 256 shifted right by `mapshr` = 8 - lw, which the loader sets from
-the header along with `MAPSTRIDE` (the blitter's row step) and `sprtab` (where the
-directory sits: just above a map of 1 << (lw + lh) bytes).  Both keep X, which the
+the header along with `MAPSTRIDE` (the blitter's row step).  Both keep X, which the
 logic has live across them.
 
 ## The disc, and the loader
@@ -229,7 +229,7 @@ A level load, palette black, interrupts off (`load_level_b`):
    else) is staged and every image and mask the placement list names is copied to its
    bank and address.  The converged Master keeps SPRX after its first read, in HAZEL
    and ANDY (exactly its 12K), and rebuilds the stage from them
-5. the directory goes to bank 6 and SPRMASK (bank 7, the ids below the boxes) as
+5. the directory (bank 7, SPR_TABLE) and SPRMASK (bank 7, the ids below the boxes) go as
    the packer finished them: the Master's entries with each image's placed address
    and bank-6 flag (no table is built at load: every one is assembled or packed)
 6. the half tiles' rows and pairs go above the full tiles (the fill's operands
@@ -281,8 +281,8 @@ There is no pause on either target (removed 26 Sep 2026).
   `ringbhi/ringehi/ringe3/ringneg` and rebuilds RINGLO/HI from the buffer's base.
 - `drawrect` is whole in bank 5 (erase_old reaches its clip through `F_DRAWRECT`);
   the map fetch is `maprow5` + `mapstrip`; the gather is arithmetic.
-- `drawsprite`: no bank switching in the prologue; the directory entry via `dirfetch`
-  from `sprtab`; the dispatch index goes in `sp_disp` and the loop copy patches its
+- `drawsprite`: no bank switching in the prologue; the directory read in place
+  (bank 7, as the Master's); the dispatch index goes in `sp_disp` and the loop copy patches its
   own jump; the hand-over to the row loop is a far call chosen by `sp_dbank`.
 - the mirror's bookkeeping: three MODELB blocks (drawrect, drawsprite, copy_partial)
   call `mirdirty` with the window columns written to the row the mirror follows;

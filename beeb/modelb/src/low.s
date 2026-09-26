@@ -142,7 +142,6 @@ mirhi:    .res 2
 mirwcx:   .res 2                    ; the wcxm the copy was made for
   .endif
 ; the level's shape, set by the loader: read from banks 5 and 7
-sprtab:   .res 2                    ; the sprite directory: bank 6, just above the map
 mapshr:   .res 1                    ; 8 - lw (maprow, maprow5)
 MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
 MUSON:    .res 1                    ; the tune plays: the interrupt stub steps it

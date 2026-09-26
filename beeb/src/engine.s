@@ -1573,8 +1573,8 @@ draw_sprites:
         rts
 
 ; draw one sprite: A = id ; spx, spy = map px (ref point)
-; A = sprite id. Game sprites (spbank = BANK_SPR): directory is in main RAM at
-; SPR_TABLE; sprite data is in bank 4, or in ANDY ($8000, ROMSEL bit7) when the
+; A = sprite id. Game sprites (spbank = BANK_SPR): directory is in bank 7 at
+; SPR_TABLE (both targets: the Model B's is the level's, loaded by ldprog.s); sprite data is in bank 4, or in ANDY ($8000, ROMSEL bit7) when the
 ; entry's flag bit2 is set. Title pieces (spbank != BANK_SPR): directory and data
 ; both live at TITLE_ADDR of that bank.
         PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with the records and SPRMASK
@@ -1609,28 +1609,14 @@ drawsprite:
         stx ROMSEL_CPY          ; the directory and none of it reads sprite data
         stx ROMSEL
   .endif
-  .if MODELB
-        clc
-        adc sprtab                  ; the directory sits above the map: where the
-        sta ptr                     ; loader put it (low.s)
-        lda ptr+1
-        adc sprtab+1
-        sta ptr+1
-        jsr dirfetch                ; the directory is in bank 6: its eight bytes come
-  .else                             ; into low RAM and ptr points there
         adc #<(SPR_TABLE-1)         ; C = 1 from the cpx (X = BANK_SPR): the -1 takes it back
         .assert <SPR_TABLE <> 0, error, "drawsprite: adc #<(SPR_TABLE-1) needs <SPR_TABLE nonzero"
         sta ptr
         lda ptr+1
         adc #>SPR_TABLE
         sta ptr+1
-  .endif
-  .if MODELB
-        lda MAPBUF+6                ; dirfetch left ptr = MAPBUF
-  .else
         ldy #6
         lda (ptr),y
-  .endif
         sta sp_flags
         bankimm ldx, BANK_SPR, BANK_LVL
   .if BHW
@@ -1705,15 +1691,7 @@ drawsprite:
         lda TITLE_ADDR+$81,x
         sta sp_mbase+1
   .endif
-@entry2:
-  .if MODELB                        ; both ways in end with dirfetch: ptr = MAPBUF
-        lda MAPBUF
-        sta sp_ptr
-        lda MAPBUF+1
-        sta sp_ptr+1
-        lda MAPBUF+2
-        sta sp_w
-  .else
+@entry2:                            ; (Model B title pieces: ptr = MAPBUF, dirfetch's copy)
         ldaz ptr
         sta sp_ptr
         ldy #1
@@ -1722,15 +1700,10 @@ drawsprite:
         iny
         lda (ptr),y
         sta sp_w
-  .endif
         beq @out0
 :                                   ; keep the bare label: it preserves the anonymous-label count
-  .if MODELB
-        lda MAPBUF+7                ; ptr = MAPBUF (dirfetch)
-  .else
         ldy #7
         lda (ptr),y
-  .endif
         sta sp_lines
         sta sp_ext
         lsr

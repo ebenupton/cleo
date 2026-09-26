@@ -14,9 +14,9 @@
 ;   5  the level's tiles (the Master's own count, up to 233) with the tile blitter's
 ;      row loop, scroll_validate, draw_dirty and blank_below above them; the menu
 ;      overlay (the menus, the tune, the font) goes over the tiles for the menus
-;   6  the map, the sprite directory and the rest of the sprites with their own copy
+;   6  the map and the rest of the sprites with their own copy
 ;      of the row loop; the title pack sits over the map during the menus
-;   7  the logic, the game loop, the level's tables, the sprite prologue and its
+;   7  the logic, the game loop, the level's tables and sprite directory, the sprite prologue and its
 ;      records, copy_partial, the display driver, the interrupt's work, the sound,
 ;      the HUD, the disc driver
 ; Every level is gathered from the disc into the banks by the loader (ldprog.s),
@@ -40,8 +40,8 @@ BANKENTRY = $BFFD                   ; banks 4, 5 and 6: a jump to the routine ba
 TILES     = $8100                   ; bank 5: this level's tiles, 64 bytes each, by id,
                                     ; page aligned (drawrect's gather is arithmetic)
 MENU_BASE = TILES                   ; or the menu overlay, over them
-LV_MAP    = MAP6                    ; bank 6, $8800: row major, up to 8K; the sprite
-                                    ; directory follows it (sprtab, set by the loader)
+LV_MAP    = MAP6                    ; bank 6, $8800: row major, up to 8K; the level's
+                                    ; bank-6 sprites follow it
   .if BHW
 LV_OBJS   = $7C00                   ; the level's objects, 6 bytes each (894 at most): main RAM (the
                                     ; display, black while they are read: level_init

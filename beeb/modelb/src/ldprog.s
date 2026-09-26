@@ -226,7 +226,7 @@ lv_load:
                                     ;  follows the 256-byte attr in the file)
         .assert LV_ALTCLS = LV_ATTR0 + $100, error, "copy256 leaves dst at LV_ALTCLS"
         jsr copy256
-        ; ---- the shape: maprow's shift, the row stride, the directory's address
+        ; ---- the shape: maprow's shift, the row stride
         lda LV_HDR+22
         sta mapshr
         stx MAPSTRIDE+1             ; X = 0: copy256 ends in bcopy
@@ -237,17 +237,6 @@ lv_load:
         dex
         bne :-
         sta MAPSTRIDE
-        lda LV_HDR                  ; the map is 1 << (lw + lh) bytes, at least 1K
-        adc LV_HDR+1                ; (C = 0: the stride's last rol shifted out a 0)
-        adc #$F8                    ; - 8 (C = 0: lw + lh < 256)
-        tax
-        lda #1
-:       asl
-        dex
-        bne :-
-        adc #>MAP6                  ; (C = 0: the map is under 32K)
-        sta sprtab+1
-        stx sprtab                  ; X = 0 from the loop
         ; ---- the map, run-length coded, into bank 6
         lda #6
         jsr section
@@ -549,15 +538,15 @@ lv_load:
         ; ---- the directory and SPRMASK, as the packer finished them (assets.py)
         lda #11
         jsr section
-        lda sprtab
+        lda #<SPR_TABLE             ; bank 7, beside the prologue that reads it
         sta dst
-        lda sprtab+1
+        lda #>SPR_TABLE
         sta dst+1
         lda #<(118*8)
         sta cnt
         lda #>(118*8)
         sta cnt+1
-        ldx PB_MAP
+        ldx PB_LVL
         jsr bcopy
         lda #12
         jsr section

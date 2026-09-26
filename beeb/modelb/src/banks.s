@@ -203,6 +203,9 @@ LV_BINOTH:  .res BINMAX
 SPRMASK:    .res 2*BOXID0           ; mask plane address by sprite id (the boxes, from
                                     ; BOXID0, have none): the loader's, read by the
                                     ; prologue (this bank)
+SPR_TABLE:  .res 118*8              ; the sprite directory as the packer finished it
+                                    ; (the level's addresses): the loader's, read by
+                                    ; the prologue in place
 
 ; ---------------------------------------------------------------- bank 5: the menu overlay
         .segment "MNUDATA"

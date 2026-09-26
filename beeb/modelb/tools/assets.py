@@ -52,7 +52,7 @@ B4_HOLE = (0x8040, 0x8300)                  #   masks on their own below the tab
 B6_HOLE = (0x8180, 0x8300)                  # bank 6: below the tables, above the low image
 B6_SWAP = (0x8300, 0x8400)                  #   the page SWAPTAB would take: data here
 B6_TOP = 0xBDA0                             #   the row loop and copy blitter above this
-MAP6 = 0x8800                               #   the map, then the directory, then images
+MAP6 = 0x8800                               #   the map, then images (the directory: bank 7)
 TILES_BASE, B5X = m.B_TILES, m.B_TILES_END  # bank 5: the tiles from here (page aligned)
                                             #   up to the row loop's region (cleo_b.cfg)
 
@@ -115,7 +115,7 @@ for f in range(3):
 for j in c4: common_bank[j] = 4
 for j in c6: common_bank[j] = 6
 COMMON_END = B4_DATA[0] + len(sprc4)
-assert COMMON_END <= B4_DATA[1] and C6_BASE >= MAP6 + 0x2000 + 118 * 8
+assert COMMON_END <= B4_DATA[1] and C6_BASE >= MAP6 + 0x2000
 sprc = sprc4 + sprc6
 out('SPRC', sprc)
 sprx, imgtab = bytearray(), bytearray()
@@ -262,7 +262,7 @@ def pack_level(lv, sub):
     classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
     bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
     tramps = []                             # (resident: SPRC)
-    R6BASE = MAP6 + len(mapb) + 118 * 8
+    R6BASE = MAP6 + len(mapb)              # (the directory: bank 7, SPR_TABLE)
     regions = {'r4': [COMMON_END, B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
                'r6': [R6BASE, C6_BASE], 's6': [B6_SWAP[0], B6_SWAP[1]], 'h6': [B6_HOLE[0], B6_HOLE[1]]}
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
