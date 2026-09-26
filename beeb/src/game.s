@@ -135,6 +135,8 @@ FTMODE .set 0
         FILE F_L7B_SEC, LM_L7B, BANK_MAP, LV_MAP
         FILE F_L7B_SEC + LM_L7B, F_L7B_N - LM_L7B, BANK_LVL, LV_HDR
         FILE F_SPRAND_SEC, F_SPRAND_N, BANK_SPR|$80, $8000   ; -> ANDY (ROMSEL bit7)
+        FILE F_TABLES_SEC, F_TABLES_N, 0, $0400             ; main RAM: bank 0 selects none
+        FILE F_PAGE0_SEC, F_PAGE0_N, BANK_MAP, LV_PAGE0
 .endmacro
 FTMODE .set 0
 ft_seclo: FILE_LIST
@@ -157,6 +159,8 @@ FI_ALT = 6
 FI_TITLE = 7
 FI_L0A = 8                        ; two pieces per level: map, bank-7 tables
 FI_SPRAND = 40
+FI_TABLES = 41
+FI_PAGE0 = 42
 
   .endif
 

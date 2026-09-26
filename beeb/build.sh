@@ -9,7 +9,10 @@ for l in 0 1 2 3 4 5 6 7; do for s in A B; do DATA="$DATA L$l$s:build/L$l$s:8400
 # LOGIC goes last: it is written by the same link that reads files.inc, so only its
 # own length may move, and the file table takes that from the linker, not from here
 [ -f build/LOGIC ] || : > build/LOGIC
-DATA="$DATA LOGIC:build/LOGIC:8900"
+# TABLES and PAGE0 are written by the link too, but at fixed sizes (fill = yes)
+[ -s build/TABLES ] || head -c 2304 /dev/zero > build/TABLES
+[ -s build/PAGE0 ] || head -c 512 /dev/zero > build/PAGE0
+DATA="$DATA TABLES:build/TABLES:0400 PAGE0:build/PAGE0:8500 LOGIC:build/LOGIC:8900"
 python3 tools/mkdfs.py table build/files.inc '!BOOT:build/BOOT' $DATA
 ca65 -g --cpu 65C02 ${DBGHIT:+-D DBGHIT=1} ${DBGTILE:+-D DBGTILE=1} ${DBGSND:+-D DBGSND=1} ${PARALLAX:+-D PARALLAX=1} ${VISROWSDEF:+-D VISROWSDEF=$VISROWSDEF} -I src -I build -o build/main.o src/main.s -l build/main.lst
 ld65 -C cleo.cfg -o build/CLEO build/main.o -m build/map.txt -Ln build/labels.txt --dbgfile build/cleo.dbg

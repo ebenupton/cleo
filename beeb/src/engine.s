@@ -298,10 +298,18 @@ MUSPTR:   .res 2
 
 ; ---------------------------------------------------------------- tables (uninitialised RAM $0400-$0CFF)
   .if .not MODELB
-        .segment "TABLES"
-MASKTAB0:  .res 1024              ; four contiguous pages, one per column phase (SPRMSK):
-                                  ; 1K aligned, so phase = page & 3.  SWAPTAB, SECTAB and
-                                  ; music_tab move to CODE to make the room.
+        .segment "TABLES"           ; the file TABLES, loaded to $0400 at start-up: the
+                                  ; static tables assembled, everything else zero
+MASKTAB0:                         ; four contiguous pages, one per column phase (SPRMSK):
+                                  ; 1K aligned, so phase = page & 3.  MASKTABk[m] is the AND
+                                  ; mask for column k of mask byte m: its bit pair
+                                  ; (m >> (6 - 2k)) & 3 -> $FF $CC $33 $00 (none, right,
+                                  ; left, both opaque)
+  .repeat 4, k
+    .repeat 256, m
+        .byte ($0033CCFF >> (((m >> (6 - 2*k)) & 3) * 8)) & $FF
+    .endrepeat
+  .endrepeat
 MASKTAB1 = MASKTAB0 + $100
 MASKTAB2 = MASKTAB0 + $200
 MASKTAB3 = MASKTAB0 + $300
@@ -310,8 +318,14 @@ MASKTAB3 = MASKTAB0 + $300
                                    ; the blank-run tag and must leave the screen byte
                                    ; alone, $82 is its mirror, $44 forces a black left
                                    ; pixel.  Substituting X for IDENT,x is therefore wrong.
-RINGLO:    .res RINGROWS          ; ring row r -> screen address
-RINGHI:    .res RINGROWS
+RINGLO:                           ; ring row r -> screen address (both buffers: main and
+  .repeat RINGROWS, r             ;  shadow share the addresses)
+        .byte <(RINGBASE + r*ROWBYTES)
+  .endrepeat
+RINGHI:
+  .repeat RINGROWS, r
+        .byte >(RINGBASE + r*ROWBYTES)
+  .endrepeat
 GATHERL:   .res 24                ; per-row tile gather: tile address lo | bank (low nibble)
 GATHERH:   .res 24                ;                       tile address hi
 SPRLIST:   .res 5*MAXSPR          ; sprite draw list: id, xlo, xhi, ylo, yhi
@@ -2502,8 +2516,6 @@ ds_done: rts
   .if withmirror
         SPRMSK sprFM, 1
   .endif
-mask4:  .byte $FF, $CC, $33, $00    ; AND mask by pair (bit 1 = left opaque, bit 0 = right):
-                                    ; keep what is NOT opaque -- right only opaque keeps the left dots
 .endmacro
   .if ::MODELB
         .segment "SPR4CODE"
@@ -2531,9 +2543,13 @@ sp_mpg0:  .res 1                  ; MASKTAB page of the sprite's first column: >
 sp_mh:    .res 1                  ; pixel rows = mask bytes per column group
 sp_mrp:   .res 2                  ; mask pointer for the current row's first column
 sp_mbase: .res 2                  ; the sprite's mask plane
-SWAPTAB:   .res 256               ; four-dot reversal for mirroring
+SWAPTAB:                          ; four-dot reversal for mirroring: dot i is bits 7-i and
+  .repeat 256, sv                 ; 3-i, so 7<->4, 6<->5, 3<->0, 2<->1
+        .byte ((sv & $88) >> 3) | ((sv & $44) >> 1) | ((sv & $22) << 1) | ((sv & $11) << 3)
+  .endrepeat
 SECTAB:    .res 2*48              ; per buffer: 6 sections x 8 bytes
-music_tab: .res 144               ; SN76489 periods for MIDI 24..95, decoded at start-up
+music_tab:                        ; SN76489 periods for MIDI 24..95: the first 144 bytes of
+        .incbin "build/MUSIC", 0, 144   ; the MUSIC file (tools/midi2snd.py)
         SPRFULL sprFC, 0, 1         ; box stars: pre-composited on their background, no mask
   .endif
 
@@ -3514,92 +3530,7 @@ calc_ring:
 ; table init
 ; ============================================================================
         .segment "LOGIC"            ; cold, and main RAM under the screen is full
-init_tables:
-        ldx #0
-@mt:    txa                         ; MASKTABk[x] = mask4[(x >> (6 - 2k)) & 3]
-        asl                         ; x >> 6 as a 9-bit rotate: bits 7,6 -> 1,0
-        rol
-        rol
-        and #3
-        tay
-        lda mask4,y
-        sta MASKTAB0,x
-        txa
-        lsr
-        lsr
-        lsr
-        lsr
-        and #3
-        tay
-        lda mask4,y
-        sta MASKTAB1,x
-        txa
-        lsr
-        lsr
-        and #3
-        tay
-        lda mask4,y
-        sta MASKTAB2,x
-        txa
-        and #3
-        tay
-        lda mask4,y
-        sta MASKTAB3,x
-        inx
-        bne @mt
-
-@t:     txa
-        ; MODE 1: a byte is four dots, bit 7-i / bit 3-i for dot i; mirroring reverses
-        ; them: 7<->4, 6<->5, 3<->0, 2<->1
-
-        and #$88
-        lsr
-        lsr
-        lsr
-        sta tmp
-        txa
-        and #$44
-        lsr
-        ora tmp
-        sta tmp
-        txa
-        and #$22
-        asl
-        ora tmp
-        sta tmp
-        txa
-        and #$11
-        asl
-        asl
-        asl
-        ora tmp
-        sta SWAPTAB,x
-        inx
-        bne @t
-        jsr build_ring              ; ring row -> screen address
-        ; row slot -> chars
-        stz w16
-        ldy #0                      ; Y = the running high byte
-        ldx #0
-@m80:   tya
-        sta mulrowhi,x
-        lda w16
-        sta mulrowlo,x
-        clc
-        adc #ROWCHARS
-        sta w16
-        bcc :+
-        iny
-:       inx
-        cpx #RINGROWS
-        bne @m80
-        .assert <(RINGROWS*ROWCHARS) = 0, error, "init_tables: A = 0 after the mulrow loop"
-@m:     sta sprmul5-RINGROWS,x      ; X runs on from RINGROWS, A = 0 from the last adc
-        clc
-        adc #5
-        inx
-        cpx #RINGROWS+MAXSPR
-        bne @m
+init_tables:                        ; (the tables themselves are the file TABLES)
         stz RECCNT
         stz RECCNT+1
         stz DIRTYCNT
@@ -4069,22 +4000,7 @@ MUSIC_SEQ  = MUSIC_ADDR + 144
   .if MODELB
 MUSIC_TAB  = MUSIC_ADDR             ; the player is in the data's bank: no copy needed
   .else
-MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), decoded into RAM
-  .endif
-; decode the period table (the first 144 hidden bytes) into music_tab; bank 5 loaded
-  .if MODELB
-music_init = init_maprows           ; Model B: nothing to decode -- an rts in bank 7
-  .else
-music_init:
-        lda #BANK_LVL
-        sta ROMSEL_CPY
-        sta ROMSEL
-        ldx #144
-:       lda MUSIC_ADDR-1,x
-        sta music_tab-1,x
-        dex
-        bne :-
-        rts
+MUSIC_TAB  = music_tab              ; 72 x 2 byte periods (MIDI 24..95), assembled in CODE
   .endif
         PLACE "CODE", "MNUCODE"     ; Model B: the menu overlay, with the tune
   .if MODELB
@@ -4308,11 +4224,44 @@ blank_palette:
         sbc #$10
         bcs :-
         rts
+  .if .not MODELB
+; LV_PAGE0: tile id -> tile data address, the file PAGE0 loaded into bank 6 at $8500.
+; Ids 0..253 address 64 bytes each from $8000 in the tile bank; 254 and 255 are the two
+; solid fills, which own no bytes there -- hi bit 6 says "fill from a constant" and lo
+; bit 4 picks cyan over black.  The same for every level and both sets.
+        .segment "PAGE0"
+        .assert * = LV_PAGE0, error, "PAGE0 must be linked at LV_PAGE0"
+  .repeat 256, i                    ; lo: (id & 3) << 6
+    .if i = SOLID_CYAN
+        .byte $10
+    .elseif i = SOLID_BLACK
+        .byte 0
+    .else
+        .byte (i & 3) << 6
+    .endif
+  .endrepeat
+  .repeat 256, i                    ; hi: $80 | id >> 2
+    .if i = SOLID_CYAN || i = SOLID_BLACK
+        .byte $C0
+    .else
+        .byte $80 | (i >> 2)
+    .endif
+  .endrepeat
+  .endif
   .if .not MODELB                   ; (Model B: static tables in main RAM (banks.s),
         .segment "TABLES"           ;  and no disc loader -- modelb/src/disc.s)
-sprmul5: .res MAXSPR
-mulrowlo: .res RINGROWS
-mulrowhi: .res RINGROWS
+sprmul5:                          ; i * 5: the sprite list's stride
+  .repeat MAXSPR, i
+        .byte i*5
+  .endrepeat
+mulrowlo:                         ; ring row r -> r * 80 chars
+  .repeat RINGROWS, r
+        .byte <(r*ROWCHARS)
+  .endrepeat
+mulrowhi:
+  .repeat RINGROWS, r
+        .byte >(r*ROWCHARS)
+  .endrepeat
         .code
 
 ; ============================================================================
@@ -4326,7 +4275,7 @@ FDC_TRK  = $FE29
 FDC_SEC  = $FE2A
 FDC_DATA = $FE2B
 
-        .segment "TABLES"
+        .segment "CODE"             ; (not TABLES: loading that file would overwrite these)
 ld_sec:    .res 2
 ld_n:      .res 1
 ld_trk:    .res 1
@@ -4589,57 +4538,15 @@ init_maprows:
         jmp pagelogic
   .endif
 
-; build_tileaddr: the tile id -> data address table, into bank 6 at LV_PAGE0.  Ids
-; 0..253 address 64 bytes each from $8000 in the tile bank; 254 and 255 are the two
-; solid fills, which own no bytes there -- hi bit 6 says "fill from a constant" and
-; lo bit 4 picks cyan over black.  Constant, so this runs once at startup.
-  .if .not MODELB                   ; (Model B: the address is arithmetic, drawrect's gather)
-        .segment "LOW2"
-build_tileaddr:
-        lda #BANK_MAP
-        sta ROMSEL_CPY
-        sta ROMSEL
-        ldx #0
-@t:     txa
-        ror                         ; (id & 3) << 6: three rotates put bits 1,0 at 7,6
-        ror
-        ror
-        and #$C0
-        sta LV_PAGE0,x
-        txa
-        lsr
-  .if MODELB
-        lsr
-        clc                         ; the tiles sit at TILES (page aligned), not $8000
-        adc #>TILES
-  .else
-        sec                         ; $80 | id >> 2
-        ror
-  .endif
-        sta LV_PAGE0+256,x
-        inx
-        bne @t
-        lda #$C0                    ; the two solid ids carry a fill, not an address
-        sta LV_PAGE0+256+SOLID_CYAN
-        sta LV_PAGE0+256+SOLID_BLACK
-        lda #$10
-        sta LV_PAGE0+SOLID_CYAN
-        stz LV_PAGE0+SOLID_BLACK
-        jmp pagelogic
-  .endif
-
 
         PLACE "LOW2", "TILCODE"     ; Model B: bank 5, with select_backbuf
-; the screen address of each ring row, from the base of the buffer being drawn
-build_ring:
+; the screen address of each ring row, from the base of the buffer being drawn (the
+; Model B's: the Master's rows are the same for both buffers, assembled in TABLES)
   .if MODELB
+build_ring:
         lda #<RING_A                ; both bases are xx80: the high byte is the buffer's
         sta RINGLO
         lda ringbhi
-  .else
-        stz RINGLO
-        lda #>RINGBASE
-  .endif
         sta RINGHI
         ldx #0                      ; C = 0 from both callers; then from the cpx
 @r:     lda RINGLO,x                ; each row from the one before it
@@ -4652,6 +4559,7 @@ build_ring:
         cpx #RINGROWS-1
         bne @r
         rts
+  .endif
   .if .not MODELB
         .segment "CODE"
 

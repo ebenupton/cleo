@@ -52,26 +52,15 @@ start:
         sta __LOW2_START__+256,y
         iny
         bne :-
-        ; The tables are bss and nothing has zeroed them.  A Master happens to hand
-        ; them over clear, but SECIDX picking up a stray value walks the rupture
-        ; chain off the end of SECTAB, so they are cleared rather than trusted.
-        stz ptr                     ; <$0400 is 0
-        lda #>$0400
-        sta ptr+1
-        ldx #$0D - >$0400           ; pages $04..$0C
-        tya                         ; Y = 0 from the copy above
-:       sta (ptr),y
-        iny
-        bne :-
-        inc ptr+1
-        dex
-        bne :-
         jsr blank_palette
         jsr disc_init
+        lda #FI_TABLES              ; $0400-$0CFF: the static tables, everything else zero
+        jsr loadfile                ; (a stray SECIDX would walk the chain off SECTAB)
         lda #FI_LOGIC               ; the game logic lives in bank 7 above the level
         jsr loadfile                ; tables, so it has to come in before init_tables
         jsr t_init_tables
-        jsr build_tileaddr          ; tile id -> address, constant for every level
+        lda #FI_PAGE0               ; tile id -> address, constant for every level
+        jsr loadfile
         lda #FI_SPR
         jsr loadfile
         lda #FI_SPRAND
@@ -82,7 +71,6 @@ start:
         jsr loadfile
         lda #FI_ALT
         jsr loadfile
-        jsr music_init              ; period table out of the tile bits into RAM
         lda #$34
         sta seed
         lda #$12
