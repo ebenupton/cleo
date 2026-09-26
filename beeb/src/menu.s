@@ -495,29 +495,6 @@ level_select:
         jmp menu_list
 
 ; pause menu: returns 0 resume, 1 exit
-  .if .not MODELB                  ; (the Model B's t_pause_menu is its own stub, game.s)
-pause_menu:
-        jsr menu_begin
-        lda #<menu2
-        sta z:menuptr
-        lda #>menu2
-        sta z:menuptr+1
-        lda #14
-        sta mstep
-        stz mclear
-        lda #2
-        ldx #40
-        jsr menu_list
-        ldy #$80                    ; invalidate game buffers: an unreachable window x
-        sty BUF_CX+1                ; (A = the result survives)
-        sty BUF_CX+3
-        ldx #0
-        stx RECCNT
-        stx RECCNT+1
-        inx
-        stx BARDIRTY
-        rts
-  .endif
 
 ; win/lose: A = 1 win, 0 lose ; score/hiscore shown
 winlose:
@@ -683,11 +660,8 @@ draw_number:
 
 ; ---------------------------------------------------------------- strings
 menu1:      .word s_start, s_help
-menu2:      .word s_resume, s_exit
 s_start:    .byte "START GAME", 0
 s_help:     .byte "HELP", 0
-s_exit:     .byte "EXIT", 0
-s_resume:   .byte "RESUME GAME", 0
 helptab:    .word h1, h2, h3, h4, h5, h6
 h1:         .byte "Z X TO RUN", 0
 h2:         .byte "RETURN TO JUMP", 0

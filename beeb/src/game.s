@@ -380,10 +380,10 @@ ensure_menu:
         inc title_res
 :       rts
   .endif
-  .if MODELB
-; The pause key freezes the game -- the menu overlay is not in bank 5 during a level,
-; so there is no list to draw: ESCAPE again resumes, RETURN leaves for the title.
-; Returns 0 resume, 1 exit, as the Master's pause_menu does.
+; The pause key freezes the game: ESCAPE again resumes, RETURN leaves for the title.
+; Both targets (the Master had a RESUME / EXIT menu; it cleared the screen, bar
+; included, and nothing drew the bar's template back).  Returns A = 0 and Z = 1 to
+; resume, non-zero to exit: the caller branches on Z straight after the jsr.
 t_pause_menu:
 :       lda keys                    ; the pause key released first
         and #K_MENU
@@ -401,7 +401,6 @@ t_pause_menu:
 @resume:
         lda #0
         rts
-  .endif
 update_hiscore:
         lda hiscore
         cmp score

@@ -13,7 +13,7 @@ m = {c['key']: c for c in json.load(open(f'{here}/build/grind/merged.json'))}
 applied = [e for e in json.load(open(f'{here}/build/grind/applied.json')) if e['result'] == 'applied']
 N = len(applied) if sys.argv[2] == 'all' else int(sys.argv[2])
 for f in {e['file'] for e in applied} | {'src/engine.s'}:
-    txt = subprocess.run(['git', 'show', f'HEAD:beeb/{f}'], cwd=here, capture_output=True, text=True, check=True).stdout
+    txt = subprocess.run(['git', 'show', f'{os.environ.get("GRIND_BASE", "HEAD")}:beeb/{f}'], cwd=here, capture_output=True, text=True, check=True).stdout
     open(f'{dst}/beeb/{f}', 'w').write(txt)
 gone = []                                   # (file, line_now, delta) of skipped edits
 for e in applied[:N]:

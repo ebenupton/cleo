@@ -4751,7 +4751,6 @@ pagelogic:                          ; A, X, Y and the carry all come through int
         TOBANK "help_screen"
         TOBANK "level_init"
         TOBANK "level_select"
-        TOBANK "pause_menu"
         TOBANK "title_menu"
         TOBANK "winlose"
         TOMAIN "addsprite"
