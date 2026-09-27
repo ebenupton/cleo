@@ -20,7 +20,7 @@ console.log(`pc=$${cpu.pc.toString(16)} bank=${cpu.readmem(0xf4)} sp=$${cpu.s.to
 console.log(JSON.stringify(st));
 // which bank-7 label is the PC in (from the map's segment ranges)
 const segs = []; for (const m of readFileSync("build/map.txt", "utf8").matchAll(/^(\w+)\s+([0-9A-F]{6})\s+([0-9A-F]{6})\s+([0-9A-F]{6})/gm)) segs.push([m[1], parseInt(m[2],16), parseInt(m[3],16)]);
-const bankof = { LGCLO:7, LGCENT:7, LGCCODE:7, LGCDATA:7, TILCODE:5, TILDATA:5, SPR4CODE:4, SPR6CODE:6, LOWCODE:0, MAPLO:6 };
+const bankof = { LGCENT:7, LGCCODE:7, LGCDATA:7, TILCODE:5, TILDATA:5, SPR4CODE:4, SPR6CODE:6, LOWCODE:0, MAPLO:6 };
 const pc = cpu.pc, bank = cpu.readmem(0xf4);
 let best = null;
 for (const [n, a] of Object.entries(lab)) { if (a > pc || n.startsWith("__")) continue;

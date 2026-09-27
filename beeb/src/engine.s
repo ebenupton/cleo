@@ -407,8 +407,8 @@ PBANK:     .res 4                   ; the physical bank of each of banks 4..7 (t
                                     ; cpu.inc -- read by what the loader cannot patch)
 PBOARD:    .res 1                   ; and the board: BOARD_STD / WATFORD / SOLIDISK (defs.inc),
                                     ; right after PBANK (start7 copies the five together)
-        .segment "LGCLOBSS"         ; bank 7, below the level's tables: the sprite
-SPRREC:    .res 2*MAXREC*10         ; prologue's records
+        .segment "LGCBSS"           ; bank 7: the sprite prologue's records
+SPRREC:    .res 2*MAXREC*10
 RECCNT:    .res 2
 KEEP:      .res MAXREC
 dpass:     .res 1
@@ -1390,7 +1390,7 @@ erase_old:                          ; redraws are bank 6's tile blitter: a far c
 ; Sprites
 ; ============================================================================
 ; add sprite to draw list: A = id, spx/spy = map px
-        PLACE "CODE", "LGCLO"       ; Model B: the logic's bank writes SPRLIST in low RAM
+        PLACE "CODE", "LGCCODE"     ; banked: bank 7, with the logic that calls it
 addsprite:
         ldx NSPR
         cpx #MAXSPR
@@ -4565,7 +4565,7 @@ mapput: pha
 
 ; the level's map row address table, from maplw (level_init's first job)
   .if MODELB
-        .segment "LGCLO"
+        .segment "LGCCODE"
 init_maprows:                       ; the row address is arithmetic here (maprow,
         rts                         ; maprow6): there is no table to build
   .else
@@ -5065,7 +5065,7 @@ m_select_backbuf = select_backbuf
 ; ============================================================================
 ; Random
 ; ============================================================================
-        PLACE "CODE", "LGCLO"
+        PLACE "CODE", "LGCCODE"
 rnd:    lsr seed+1
         ror seed
         bcc :+

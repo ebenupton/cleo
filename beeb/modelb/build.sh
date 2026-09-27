@@ -87,7 +87,7 @@ pieces = [(4, 0x8000, 'b4x.bin'), (4, 0xBB00, 'b4t.bin'),
           (5, 0x8000, 'b5x.bin'), (5, 0xBC00, 'b5t.bin'),
           (6, 0x8000, 'b6x.bin'),                                 # (B6X in cleo_b.cfg)
           (7, 0x7000, 'boot.bin'),        # main RAM (BOOTRAM): start-up and the low-RAM image
-          (7, 0x8000, 'b7a.bin'), (7, 0x8520, 'b7.bin')]
+          (7, 0x8220, 'b7.bin')]
 if os.environ.get('TARGET') == 'master':
     pieces.append((7, 0x0600, 'mcode.bin'))         # main RAM: the Master's handler and chain
 tab, body, img = bytearray([len(pieces)]), bytearray(), {}

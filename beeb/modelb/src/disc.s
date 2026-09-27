@@ -196,7 +196,7 @@ read_sectors:
         jmp @track
 @done:  rts
 
-        .segment "LGCLO"            ; (the helpers: below the records, where there is room)
+        .segment "LGCCODE"          ; (the helpers)
 i_idle: lda FDC8271_CMD             ; the 8271 takes a command when not busy
         bmi i_idle
         rts
