@@ -36,7 +36,7 @@ MASKTAB3  = MASKTAB0 + $300
 BANKENTRY = $8000                   ; banks 4, 5 and 6: the routine bank 7 calls once a
                                     ; sprite or rect starts the bank (low.s callbank):
                                     ; the sprite row loop's ds_entry, bank6_entry
-TILES     = $8900                   ; bank 6: this level's tiles, 64 bytes each, by id,
+TILES     = $8700                   ; bank 6: this level's tiles, 64 bytes each, by id,
                                     ; page aligned (drawrect's gather is arithmetic)
 MENU_BASE = TILES                   ; or the menu overlay, over them
 LV_MAP    = MAP5                    ; bank 5, $9C00: row major, a fixed 8K below the
@@ -140,7 +140,7 @@ FDC1770_DAT = $FE2B
 ; rows, and the rare rest.  A goes in and comes back, Y survives, X does not.
 ; (The sprite row loop, erase_old's rects and the prologue's ring address do not go
 ; through the table: low.s callbank, engine.s ringaddr7.)
-F_RENDER6   = 0*3                   ; scroll_validate + draw_dirty + blank_below, bank 6
+F_RENDER6   = 0*3                   ; scroll_validate, bank 6 (draw_dirty, blank_below: bank 7)
 F_SELBB     = 1*3                   ; select_backbuf        bank 6
 F_TITLE     = 2*3                   ; the menus: bank 6's overlay, present only while
 F_HELP      = 3*3                   ;   title_res says so
@@ -154,7 +154,5 @@ F_MUSSTOP   = 10*3                  ; music_stop      bank 7
 F_DIV10     = 11*3                  ; div10_16        bank 7
 F_DRAWSPR   = 12*3                  ; drawsprite      bank 7 (the menus' title pieces)
 F_CALCRING  = 13*3                  ; calc_ring       bank 7 (the menus)
-F_COPYPART  = 14*3                  ; copy_partial    bank 6
-F_MARKDIRTY = 15*3                  ; mark_dirty      bank 6 (the logic; X in farx)
-NFAR        = 16
+NFAR        = 14
 .assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"

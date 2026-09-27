@@ -393,15 +393,16 @@ halfhi:    .res 1                   ; the halves' page (the loader's), for @hfil
 rowbit:    .res 1                   ; the char row being drawn, as a flag bit (1, 2)
         ; bank 6 still, with the ring work that keeps it (init5 zeroes the segment)
 BUF_CY:    .res 2
-BUF_BOTOK: .res 2                 ; the slot below the playfield is black (blank_below)
 FLATTAB:   .res 2*(NFLAT+2)         ; the level's flat tiles: (even line, odd line) by
                                     ; id - FLAT0, the loader's; the solids are the last two
+        .segment "LGCBSS"           ; bank 7: mark_dirty and draw_dirty are there
 DIRTYLIST: .res 2*2*DIRTYMAX
         .segment "LOWBSS"           ; main RAM: the buffers' state bank 7 reads too
 BUF_CX:    .res 4                   ; (bank 7 invalidates a buffer: high byte $80)
+BUF_BOTOK: .res 2                   ; the slot below the playfield is black: scroll_validate
+                                    ; (bank 6) clears it, blank_below (bank 7) sets it
 spbank:    .res 1
 DIRTYCNT:  .res 2                   ; (the game loop)
-farx:      .res 1                   ; X across a far call (farcall needs X: m_mark_dirty)
 PBANK:     .res 4                   ; the physical bank of each of banks 4..7 (the loader's:
                                     ; cpu.inc -- read by what the loader cannot patch)
 PBOARD:    .res 1                   ; and the board: BOARD_STD / WATFORD / SOLIDISK (defs.inc),
@@ -2486,7 +2487,7 @@ music_tab:                        ; SN76489 periods for MIDI 24..95: the first 1
 ; copy_partial: copy lines wfine..7 of ring row wcy into lines 0..(7-wfine) of the
 ; ring row above the window (the "A" section source), for the columns drawn since.
 ; ============================================================================
-        PLACE "CODE", "TILCODE"     ; Model B: bank 6, with the ring work
+        PLACE "CODE", "LGCCODE"     ; banked: bank 7, beside render_core (no far call)
 copy_partial:                       ; the whole row, every frame the fine scroll is not 0
         lda wfine                   ; (it used to track the columns drawn since the last
         bne :+                      ;  copy: measured, that saved under 0.3% of a frame)
@@ -2511,11 +2512,15 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         tax
         dex
         lda tmp4
-        jsr mirdirty6
+        jsr mirdirty                ; (bank 7's copy)
 @nomir:
   .endif
         lda wcy
-        jsr ringaddr                ; sp = source start (row wcy, first dirty column)
+  .if MODELB
+        jsr ringaddr7               ; sp = source start (row wcy, first dirty column)
+  .else
+        jsr ringaddr
+  .endif
         ; source: sp is the char, and the copy starts wfine lines into it.  Offsetting
         ; sp by wfine (under 8, and a char is 8-aligned) keeps its page crossings on
         ; the real char boundaries, so spnext's fold still lands where it should
@@ -2613,7 +2618,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
 ; the map's bottom row it is whatever that never-drawn slot last held.  So when the
 ; window sits on the bottom row, blank the slot, once per buffer per arrival.
 ; ============================================================================
-        PLACE "CODE", "TILCODE"     ; Model B: bank 6, with the ring work
+        PLACE "CODE", "LGCCODE"     ; banked: bank 7, beside render_core
 blank_below:
         lda wfine
         bne @no
@@ -2633,7 +2638,11 @@ blank_below:
         sta w16+1                   ; chars that may straddle the ring end
         lda wcy
         adc #VISROWS-1              ; C = 1 from cmp maxwy+1 (equal)
-        jsr ringaddr                ; sp = its ring address
+  .if MODELB
+        jsr ringaddr7               ; sp = its ring address
+  .else
+        jsr ringaddr
+  .endif
         ldx #ROWCHARS
 @char:  lda #0
         ldy #7
@@ -3303,19 +3312,16 @@ render_core:                        ; records stays here; bank 6 (the tiles, the
         jsr calc_ring
         jsr match_sprites
         jsr erase_old
-        farjsr F_RENDER6            ; scroll_validate, draw_dirty, blank_below
+        farjsr F_RENDER6            ; scroll_validate (bank 6: it draws the new strips)
+        jsr draw_dirty              ; (bank 7 from here: the rects through callbank)
+        jsr blank_below
         jsr draw_sprites
-        farjsr F_COPYPART           ; copy_partial
+        jsr copy_partial
     .if BHW
         jmp mirror_copy             ; the straddling row's copy (display.s)
     .else
         rts                         ; (the hardware folds the straddling row)
     .endif
-        .segment "TILCODE"
-render6:
-        jsr scroll_validate
-        jsr draw_dirty
-        jmp blank_below
   .endif
 
 
@@ -3613,15 +3619,10 @@ init_tables:                        ; (the tables themselves are the file TABLES
 ; ============================================================================
 ; dirty tiles: redraw changed map tiles (both buffers keep their own list)
 ; ============================================================================
-        PLACE "LOW2", "TILCODE"     ; Model B: bank 6 (the logic reaches it through the
-  .if MODELB                        ; far table, which takes X: m_mark_dirty parks it)
-mark_dirty_x:                       ; (the only entry here: ty stays in farx)
-  .endif
+        PLACE "LOW2", "LGCCODE"     ; banked: bank 7, with the logic that calls it
 mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lists)
         sta tmp
-  .if .not MODELB
         stx tmp2
-  .endif
         ldx #1
 @b:     lda DIRTYCNT,x
         cmp #DIRTYMAX
@@ -3633,11 +3634,7 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
 @b0:    tay
         lda tmp
         sta DIRTYLIST,y
-  .if MODELB
-        lda farx                    ; ty, where m_mark_dirty parked it
-  .else
         lda tmp2
-  .endif
         sta DIRTYLIST+1,y
         inc DIRTYCNT,x
 @next:  dex
@@ -3650,7 +3647,7 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
         sta BUF_CX+1,y
         bne @next                   ; (always)
 
-        PLACE "LOW2", "TILCODE"     ; Model B: bank 6, with drawrect
+        PLACE "LOW2", "LGCCODE"     ; banked: bank 7 (drawrect_clip through callbank)
 draw_dirty:
         ldx curbuf
         lda DIRTYCNT,x
@@ -3679,7 +3676,12 @@ draw_dirty:
         sta rc_w
         lsr                         ; 4 >> 1 = 2
         sta rc_h
+  .if MODELB
+        bankimm lda, BANK_TILES, BANK_LVL   ; bank 6's, by low RAM's direct switch
+        jsr callbank                ; (BANKENTRY is drawrect_clip)
+  .else
         jsr drawrect_clip
+  .endif
         dec lcnt
         bne @l
         ldx curbuf
@@ -4968,11 +4970,8 @@ t_redraw_hud = redraw_hud
 m_addsprite  = addsprite
 m_clamp_window = clamp_window
 m_rnd        = rnd
-        .segment "LGCCODE"          ; two of bank 6's, reached from the logic and the
-m_mark_dirty:                       ; sprite prologue: farcall takes X, so mark_dirty's
-        stx farx                    ; X = ty crosses in farx
-        ldx #F_MARKDIRTY
-        jmp farcall
+m_mark_dirty = mark_dirty          ; (bank 7's own now: a plain call)
+        .segment "LGCCODE"
 ; bank 7's own ringaddr, for the sprite prologue: the ring modulus by subtraction (no
 ; table this side), the row multiple from the tables the chain keeps here, the
 ; buffer's base from select_backbuf (both bases are xx80: ringbhi is the page)

@@ -734,7 +734,7 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # tile of its own, and its gather is a table (LV_PAGE0) the packer builds: per id, the
 # pair the Model B's gather computes -- the same encoding, so the one row loop reads
 # both.
-B_TILES, B_TILES_END = 0x8900, 0xC000       # the Model B's bank 6: tiles above its code and variables
+B_TILES, B_TILES_END = 0x8700, 0xC000       # the Model B's bank 6: tiles above its code and variables
 M_TILES, M_TILES_END = 0x8000, 0xC000       # the Master's: all of bank 6
 def _layout(stored, hlist, halfpair, base, end, loc):
     slot = {k: i for i, k in enumerate(stored)}

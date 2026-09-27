@@ -16,7 +16,7 @@
 .endmacro
 .macro COMMON_TABLES in             ; the far table, bank 7's alone
         .assert * = FARTAB, error, "the far table must be at FARTAB"
-        FAR BANK_TILES, render6, in                 ; F_RENDER6
+        FAR BANK_TILES, scroll_validate, in         ; F_RENDER6
         FAR BANK_TILES, select_backbuf, in          ; F_SELBB
         FAR BANK_TILES, title_menu, in              ; F_TITLE     (the menu overlay)
         FAR BANK_TILES, help_screen, in             ; F_HELP
@@ -30,8 +30,6 @@
         FAR BANK_LVL, div10_16, in                  ; F_DIV10
         FAR BANK_LVL, drawsprite, in                ; F_DRAWSPR
         FAR BANK_LVL, calc_ring, in                 ; F_CALCRING
-        FAR BANK_TILES, copy_partial, in            ; F_COPYPART
-        FAR BANK_TILES, mark_dirty_x, in            ; F_MARKDIRTY (the logic)
         .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"
 .endmacro
         .segment "COMMON7"
