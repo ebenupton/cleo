@@ -729,7 +729,7 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # pair from its id; the Master's is a table (LV_PAGE0, B['page0'], the file's last two
 # sectors) of the same pairs, so the one row loop reads both.
 TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mirrored tiles)
-B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xC000   # bank 6: tiles above its code and variables (defs.inc TILES)
+B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xBF58   # bank 6: tiles above its code and variables, below the solid's fill (defs.inc TILES, TILES_END)
 def _layout(stored, hlist, halfpair, base, end, loc):
     slot = {k: i + 1 for i, k in enumerate(stored)}     # (slot 0: the solid, id 0)
     NT, NHALF = len(stored) + 1, len(hlist)
@@ -839,9 +839,9 @@ def pack_tiles(lv, sub):
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
     # and the Master's LV_PAGE0 for these slots: per id, the pair the Model B's gather
     # computes -- a mirror is kind 3 at its source's slot (an id no tile has -- the
-    # rows past the map's end are read too, whatever lies there -- is a black fill, $40
-    # low 0: a high byte with bit 7 clear is a fill, the row loop's bpl)
-    blo, bhi = bytearray(256), bytearray([0x40] * 256)
+    # rows past the map's end are read too, whatever lies there -- is a black fill:
+    # $40, FLATTAB's last pair; a high byte with bit 7 clear is a fill, the row loop's bpl)
+    blo, bhi = bytearray([2 * (NFLAT + 1)] * 256), bytearray([0x40] * 256)
     bhi[0] = 0                      # id 0: the solid, a zero high byte (the row loop's beq)
     for k in stored:
         s_ = idof[k]
@@ -854,8 +854,7 @@ def pack_tiles(lv, sub):
         bhi[t] = (B['HALFPAGE'] >> 8) + (kk >> 3)
         blo[t] = ((kk & 7) << 5) | (5 if t < half1 else 6 if t < half2 else 4)
     for j in range(NFLAT + 2):
-        e, o = flattab[2 * j], flattab[2 * j + 1]
-        blo[FLAT0 + j], bhi[FLAT0 + j] = (e, 0x40) if e == o else (2 * j, 0x60)
+        blo[FLAT0 + j], bhi[FLAT0 + j] = 2 * j, 0x40
     B['page0'] = bytes(blo + bhi)
     return dict(local=local, B=B, flat=flattab, halves=halflist, hpair=halfpair,
                 ntiles=NT, nhalf=NHALF, nmir=NMIR, nflat=len(flats), usage=usage)

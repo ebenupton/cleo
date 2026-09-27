@@ -481,12 +481,9 @@ loop reads:
   row fills (bit 0 the top, bit 1 the bottom, neither: both rows are the stored one);
   the row loop tests against `rowbit` (1 for the top character row, 2 for the bottom);
 - a fill: GATHERH bit 7 clear, so the row loop's one `bpl` after the load finds every
-  fill and a tile run pays nothing more.  GATHERH = 0 is the level's solid (id 0): on
-  the Master the store-only cascade with the patched byte, on the Model B the patched
-  byte as a pair into its one fill cascade.  Otherwise, on the Model B GATHERH = $40
-  and GATHERL indexes the pair in FLATTAB; on the Master LV_PAGE0 splits them: $40 with
-  GATHERL the byte itself (the other solid, or a flat whose two bytes are equal), $60
-  with GATHERL indexing the pair.
+  fill and a tile run pays nothing more.  GATHERH = 0 is the level's solid (id 0): the
+  patched byte as a pair; otherwise GATHERH = $40 and GATHERL indexes the pair in
+  FLATTAB.  Every fill goes down the one pair cascade (PCHAR), on both machines.
 
 On the Model B `gather5` computes the pair from the id with the level's shape (half0,
 half1, half2, halfhi5, halfsub, in zero page), since main RAM has no room for a table.

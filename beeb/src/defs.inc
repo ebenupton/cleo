@@ -35,6 +35,8 @@ TILES     = $8600                   ; bank 6: this level's tiles, 64 bytes each,
   .endif
                                     ; page aligned (drawrect's gather is arithmetic);
                                     ; slot 0 is id 0, the solid: filled, never stored
+TILES_END = $BF58                   ; and to here: above, the solid's fill (TILHI, the
+                                    ; Model B's size on both; convert.py B_TILES_END)
 MENU_BASE = TILES                   ; or the menu overlay, over them
 LV_MAP    = MAP5                    ; bank 5, $9C00: row major, a fixed 8K below the
                                     ; mask tables; the level's sprites below it

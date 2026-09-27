@@ -565,21 +565,17 @@ drawrect:
         jmp @rowy
 @done:  rts
         ; ---- a fill, from @run's bpl (here, behind @drawrow, in its reach): the other
-        ; fills to @solid; id 0, the level's solid -- one byte, the loader's (SOLIDF),
-        ; down every line -- here
-@fx:
-  .if .not BHW
-        asl                         ; $40 -> $80, $60 -> $C0: the A @solid takes
-  .endif
-        jmp @solid                  ; (C is set: set at every entry to @run)
+        ; fills to @solid; id 0, the level's solid, to @sol0 at the top of the bank
 @fill:  bne @fx                     ; (Z from @run's load: 0 is the level's solid)
-  .if BHW
-@sol0:
-@s0f:   lda #0                      ; SOLIDF: the fill -- as a pair for the Model B's
-        sta tp                      ; one fill cascade
-        sta tp+1
-        jmp @fillgo
-  .else
+        jmp @sol0
+@fx:    jmp @solid                  ; (C is set: set at every entry to @run)
+        ; ---- id 0, the level's solid: one byte, the loader's (SOLIDF), stored down every
+        ; line of the run.  It reads nothing from the bank, so it sits above the tiles
+        ; (TILHI), out of the full code area below TILES -- still in this scope, for its
+        ; jumps back into the loop.
+        .pushseg
+        .segment "TILHI"
+        .assert * = TILES_END, error, "TILHI must start at TILES_END (defs.inc, the cfgs' B6H)"
 @sol0:  lda #4                      ; (C is set at every entry to @run)
         sbc rc_subc                 ; chars in this run, as @tpset
         cmp cnt
@@ -595,16 +591,50 @@ drawrect:
         beq :+
         adc sp                      ; C is clear: the asl's above shifted out zeros
         lda sp+1
+  .if BHW
+        adc ringneg
+  .else
         adc #(256 - >RINGEND)
+  .endif
         bcs @s0slow
 :
+  .if BHW
+        lda @mt-2,x                 ; jmpx less its pha/pla
+        sta jv
+        lda @mt-1,x
+        sta jv+1
+@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
+        jmp (jv)
+  .else
 @s0f:   lda #0                      ; SOLIDF: the fill, stored alone
         jmpx @mt-2
-@s0slow:
-        lda @s0f+1
-        sta tp                      ; (@mslow's fill)
-        jmp @mslow
   .endif
+@s0slow:                            ; a run across the ring end (once a row at most): the
+        lda @s0f+1                  ; pair cascade's char-at-a-time copy, as a pair
+        sta tp
+        sta tp+1
+        jmp @fslow
+@mt:    .word @m7, @m15, @m23, @m31
+.macro MFIL k
+        ldy #k
+        sta (sp),y
+        .repeat 7
+        dey
+        sta (sp),y
+        .endrepeat
+.endmacro
+@m31:   MFIL 31
+@m23:   MFIL 23
+@m15:   MFIL 15
+@m7:    ldy #7
+        .repeat 6
+        sta (sp),y
+        dey
+        .endrepeat
+        sta (sp),y
+        staz sp                     ; line 0 non-indexed
+        jmp @advsp
+        .popseg
 @drawrow:
         inc rc_y                    ; the row this draws: nothing in @drawrow reads rc_y
         ; ---- screen base (per-rect ringaddr, +640 per row)
@@ -762,79 +792,6 @@ drawrect:
         ringup rc_sp
         sta rc_sp+1
         rts
-        ; ---- fills: a flat tile, a solid, a half tile's fill row -- no source bytes
-  .if .not BHW
-        ; the Master's LV_PAGE0 splits them: high byte $40, one byte down every line
-        ; (the low byte: the other solid, or a flat whose pair is one byte) on a cascade
-        ; that stores A alone; $60, a pair (the low byte indexes FLATTAB) on the pair's
-        ; cascade (@spair)
-@sp2:   jmp @spair                 ; (out of bmi's reach below the cascade)
-@solid: asl                         ; (A = the high byte << 1, @fx's: $80 -> 0, $C0 -> $80)
-        bmi @sp2
-        lda GATHERL,x
-        sta tp                      ; fill value (tp is otherwise unused on this path)
-        lda #4                      ; C = 1: the asl shifted out the high byte's bit 6
-        sbc rc_subc
-        cmp cnt
-        bcc :+
-        lda cnt
-:       sta rc_n
-        asl
-        tax
-        asl
-        asl
-        sta tmp
-        ldy rc_wrap                 ; test without destroying A (= 8*rc_n)
-        beq :+
-        adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
-        lda sp+1
-        adc #(256 - >RINGEND)
-        bcs @mslow
-:       lda tp
-        jmpx @mt-2
-@mt:    .word @m7, @m15, @m23, @m31
-@mslow: lda rc_n
-        sta tmp2
-@msc:   lda tp
-        ldy #7
-        sta (sp),y
-        dey
-        sta (sp),y
-        dey
-        sta (sp),y
-        dey
-        sta (sp),y
-        dey
-        sta (sp),y
-        dey
-        sta (sp),y
-        dey
-        sta (sp),y
-        staz sp                     ; line 0 non-indexed
-        spnext
-        dec tmp2
-        bne @msc
-        jmp @runend
-.macro MFIL k
-        ldy #k
-        sta (sp),y
-        .repeat 7
-        dey
-        sta (sp),y
-        .endrepeat
-.endmacro
-@m31:   MFIL 31
-@m23:   MFIL 23
-@m15:   MFIL 15
-@m7:    ldy #7
-        .repeat 6
-        sta (sp),y
-        dey
-        .endrepeat
-        sta (sp),y
-        staz sp                     ; line 0 non-indexed
-        jmp @advsp
-  .endif
   .if TILEMIRROR                    ; (cpu.inc: off by default -- no level needs a mirror)
         ; ---- a mirrored full tile: its source's chars right to left, each byte's two
         ; game pixels swapped -- ((b & $33) << 2) | ((b & $CC) >> 2); the dither is per
@@ -883,21 +840,15 @@ drawrect:
         bne @mc
         jmp @runend
   .endif
-  .if BHW
+        ; ---- fills: a flat tile, the other solid, a half tile's fill row -- no source
+        ; bytes: a pair, even lines tp, odd tp+1, down every char (the level's solid,
+        ; id 0, comes in at @fillgo from @sol0)
 @solid: ldy GATHERL,x               ; the flat pair: even lines from tp, odd from tp+1
         lda FLATTAB,y               ; (tp is otherwise unused on this path)
         sta tp
         lda FLATTAB+1,y
         sta tp+1
         bcs @fillgo                 ; (always: C is set at every entry to @run)
-  .else
-@spair: ldy GATHERL,x               ; the pair: even lines from tp, odd from tp+1
-        lda FLATTAB,y
-        sta tp
-        lda FLATTAB+1,y
-        sta tp+1
-        bcs @fillgo                 ; (always: the asl's carry is the high byte's bit 6)
-  .endif
 @hfill:
   .if TILEMIRROR
         lda GATHERL,x               ; the kind: bit 2 clear is a mirror (3), set a half
