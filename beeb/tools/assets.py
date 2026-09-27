@@ -184,8 +184,9 @@ assert len(sprdir) == 118 * 8
 # (tools/drawfreq.json, test/drawfreq.mjs's: draws a frame by sprite id, both
 # machines averaged), for the placement that costs the sprite loops least (sprpack.py)
 import json
-sys.path.insert(0, os.path.join(BEEB, 'beebgame', 'tools'))   # (the engine's sprite placer)
-import sprpack
+sys.path.insert(0, os.path.join(BEEB, 'beebgame', 'tools'))   # (the engine's sprite placer
+import sprpack                                                  #  and level file writer)
+import levelfile as lf
 GEOM = {}                                   # item index -> (columns, lines)
 for i in range(118):
     t = sprdir[i * 8:i * 8 + 8]
@@ -291,7 +292,6 @@ with open(os.path.join(OUT, 'title.inc'), 'w') as f:
     f.write('tp_rows: .byte %s\n' % ', '.join(str(p[2]) for p in m.title_pieces))
 
 # ---------------------------------------------------------------- per-level helpers
-rle, unrle = m.rle, m.unrle
 
 SPRITES_OF = {0: 1, 1: 1, 2: 1, 3: 2, 4: 1, 5: 1, 6: 1, 7: 1, 8: 0, 9: 1, 10: 1, 11: 0, 12: 1}
 def cellbox(t, x, y, e):                    # level_init's gx0, gx1, gy, gy1, in cells
@@ -418,6 +418,9 @@ def settle_level(level, img_addr, mask_addr, img_bank, regions):
     return img_addr, mask_addr, c0, c1
 
 # ---------------------------------------------------------------- one level
+# Cleo's fields in the level header (logic.s level_init): the start and exit, in tiles,
+# and the special tiles' ids (the vanishing blocks, the flowers)
+HDR_STARTX, HDR_STARTY, HDR_EXITX, HDR_EXITY, HDR_SPECIAL = 2, 3, 4, 5, 8
 def pack_level(lv, sub):
     L = m.levels[(lv, sub)]
     name = m.name_of(lv, sub)
@@ -434,14 +437,12 @@ def pack_level(lv, sub):
     h, w = cm.shape
     specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
 
-    # ---- tables
-    hdr = bytearray([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1],
-                     len(L['objs']), 1])
-    for cid in specials:
-        hdr.append(local.get(cid, 255))
-    assert len(hdr) == 20
-    hdr += T['B']['hdr']                    # +20..+31: the tiles' shape (pack_tiles)
-    assert len(hdr) == 32
+    # ---- tables: the header's game fields (the rest is the engine's: levelfile), as
+    # logic.s level_init reads them
+    ghdr = {HDR_STARTX: L['start'][0], HDR_STARTY: L['start'][1], HDR_EXITX: L['exit'][0],
+            HDR_EXITY: L['exit'][1], 7: 1}          # (+7: unread, kept as it was)
+    for i, cid in enumerate(specials):
+        ghdr[HDR_SPECIAL + i] = local.get(cid, 255)
     objs = bytearray()
     reach = m.enemy_reach(L['objs'])
     for (t, x, y, ex) in L['objs']:
@@ -455,7 +456,6 @@ def pack_level(lv, sub):
             selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
             e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
         objs += bytes([t, x, y] + e)
-    assert len(L['objs']) <= 149
     attr = bytearray(256)
     acls = bytearray(256)
     for c in sorted(local):
@@ -486,11 +486,8 @@ def pack_level(lv, sub):
     # each region: the order and padding that cost the sprite loops least (sprpack)
     fill, img_addr, mask_addr, img_bank, items0, regions, imgs = place_sprites(lv, sub)
     img_addr, mask_addr, cost0, cost1 = settle_level(lv * 2 + sub, img_addr, mask_addr, img_bank, regions)
-    placement = bytearray()
-    for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0])):
-        ma = mask_addr.get((kind, j), 0)
-        placement += bytes([item_index(kind, j), img_bank[(kind, j)], a & 255, a >> 8, ma & 255, ma >> 8])
-    placement += b'\xff'
+    placement = lf.placement([(item_index(kind, j), img_bank[(kind, j)], a, mask_addr.get((kind, j), 0))
+                              for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0]))])
     for f in range(3):                      # (the resident block, for the directory)
         img_addr[('tramp', f)] = tramp_addr[f]; img_bank[('tramp', f)] = 5
     for j in COMMON:
@@ -500,50 +497,28 @@ def pack_level(lv, sub):
     # the directory and SPRMASK as the game reads them: the template's entries with each
     # placed item's address (and bank 5's flag), and each sprite id's mask address
     byitem = {item_index(*k): k for k in img_addr}
-    directory, smask = bytearray(), bytearray()
-    for i in range(118):
+    entries, masks = [], []
+    for i in range(lf.DIR_N):
         t = sprdir[i * 8:i * 8 + 8]
         k = byitem.get(t[0]) if t[0] != 0xFF else None
-        if k is None:
-            directory += bytes(8); ma = 0
-        else:
-            a = img_addr[k]
-            e = bytearray([a & 255, a >> 8]) + t[2:8]
-            if img_bank[k] == 5:
-                e[6] |= 0x10
-            directory += e; ma = mask_addr.get(k, 0)
-        if i < 118 - 15:                    # the box ids (the last 15) have no entry
-            smask += bytes([ma & 255, ma >> 8])
-    assert len(smask) == 2 * 103
+        entries.append(None if k is None else (img_addr[k], img_bank[k], t[2:8]))
+        if i < lf.MASK_N:                   # the box ids (the last 15) have no mask
+            masks.append(0 if k is None else mask_addr.get(k, 0))
+    directory, smask = lf.directory(entries, masks)
 
-    # ---- the file: a table of section offsets, then the sections
-    maprle = rle(mapb)
-    assert unrle(maprle) == mapb
-    secs = [('hdr', hdr), ('objs', objs), ('attr', attr), ('altcls', acls),
-            ('tiles', T['B']['tiles']), ('place', placement), ('map', maprle), ('flat', T['flat']),
-            ('halves', T['halves']), ('hpair', T['hpair']), ('mir', T['B']['mir']),
-            ('dir', directory), ('smask', smask)]
-    # the Master's gather is a table (LV_PAGE0), for main RAM: the file's last two
-    # sectors, whole, so the Model B (arithmetic) reads the file short of them (ldprog.s
-    # LFILE: PAGE0_SECS)
-    secs.append(('page0', T['B']['page0']))
-    assert len(T['B']['page0']) == 512
-    off = 2 * len(secs)
-    table = bytearray()
-    body = bytearray()
-    for nm_, data in secs:
-        if nm_ == 'page0':
-            body += bytes(-(off + len(body)) % 256)     # to a sector boundary
-        o = off + len(body)
-        table += bytes([o & 255, o >> 8])
-        body += data
-    assert (off + len(body)) % 256 == 0
-    assert off + len(body) - 512 <= 0x7C00 - 0x5C00, (name, off + len(body))   # the Model B's STAGE_LVL
-    assert off + len(body) <= 0x8000 - 0x3000, (name, off + len(body))         # the Master's (defs.inc)
-    out('L%d' % (lv * 2 + sub), table + body)
+    # ---- the file (beebgame's levelfile: the engine's format)
+    data = lf.encode(lf.Level(lw=L['lw'], lh=L['lh'], game_header=ghdr, shape=lf.Shape(**T['B']['shape']),
+                              objects=bytes(objs), tile_tables=(bytes(attr), bytes(acls)),
+                              tiles=T['B']['tiles'], placement=placement, map=mapb, flat=T['flat'],
+                              halves=T['halves'], hpair=T['hpair'], mir=T['B']['mir'],
+                              directory=directory, masks=smask, page0=T['B']['page0']))
+    back = lf.decode(data)
+    assert back['map'] == mapb and back['objs'] == bytes(objs) and back['dir'] == directory
+    maprle = lf.rle(mapb)                   # (for the report)
+    out('L%d' % (lv * 2 + sub), data)
     stats = dict(name=name, ntiles=T['ntiles'], nflat=T['nflat'], nhalf=T['nhalf'], nmir=T['nmir'], w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],
-                 maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=off + len(body), cost0=cost0, cost1=cost1)
+                 maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=len(data), cost0=cost0, cost1=cost1)
     return stats
 
 # ---- the resident block, placed for the loops too: it may pad into the room the

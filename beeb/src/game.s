@@ -20,13 +20,13 @@ load_level:
         stz mapw+1
         stz maph+1
   .endif
-        ldx LV_HDR
+        ldx LV_HDR+HDR_LW
         stx maplw
 :       asl mapw
         rol mapw+1
         dex
         bne :-
-        ldx LV_HDR+1
+        ldx LV_HDR+HDR_LH
         stx maplh
 :       asl maph
         rol maph+1

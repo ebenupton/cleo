@@ -684,32 +684,6 @@ for side in (1, 3, 2):
         NTFILES += 1
 assert NTFILES == 3                 # the loaders' file tables name three
 
-def rle(data):
-    """PackBits-like: c < 128 = c+1 literal bytes follow; c >= 128 = the next byte
-    repeated c-126 times (2..129).  ldprog.s decodes it."""
-    out_, i, n = bytearray(), 0, len(data)
-    while i < n:
-        j = i
-        while j + 1 < n and data[j + 1] == data[i] and j - i < 128:
-            j += 1
-        run = j - i + 1
-        if run >= 2:
-            out_ += bytes([126 + run, data[i]]); i += run; continue
-        j = i
-        while j < n and j - i < 128 and not (j + 2 < n and data[j] == data[j + 1] == data[j + 2]):
-            j += 1
-        out_ += bytes([j - i - 1]) + data[i:j]; i = j
-    return out_
-def unrle(data):
-    o, i = bytearray(), 0
-    while i < len(data):
-        c = data[i]; i += 1
-        if c < 128:
-            o += data[i:i + c + 1]; i += c + 1
-        else:
-            o += bytes([data[i]]) * (c - 126); i += 1
-    return o
-
 def attr_of(c):
     a = 3
     if c in push_tiles:
@@ -835,8 +809,9 @@ def pack_tiles(lv, sub):
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc)
     assert all(B['slot'][k] == idof[k] + TOFF for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
-    B['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR,
-                      0x0F if sol0 == 1 else 0x00])    # +31: the solid's fill byte (ldprog.s)
+    B['shape'] = dict(ntiles=NT, mapshr=lw, nhalf=NHALF, half0=half0, half1=half1, half2=half2,
+                      halfpage=B['HALFPAGE'] >> 8, halfoff=B['HALFOFF'], mir0=mir0, nmir=NMIR,
+                      solidfill=0x0F if sol0 == 1 else 0x00)    # (beebgame levelfile.Shape)
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
     # and the Master's LV_PAGE0 for these slots: per id, the pair the Model B's gather
     # computes -- a mirror is kind 3 at its source's slot (an id no tile has -- the

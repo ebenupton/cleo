@@ -16,7 +16,7 @@ how it meets the engine, its menus, its packer and its tests.
 | `src/gamedata.s` | the tables: the altitude classes, the HUD's digits, the object state; the tune, the font, the title pieces |
 | `src/keymap.inc` | the keys, for the engine's keyboard scan |
 | `tools/convert.py` | the original game's data (the JARs, `../v500/`) to the BBC's: art dithered to MODE 1, the maps, the objects, the tile set, the bar, the font, the title pieces |
-| `tools/assets.py` | the packer: the level files, SPRC, SPRX, imgtab.bin, assets.inc |
+| `tools/assets.py` | the packer: what goes in each level (written by beebgame's `levelfile.py`: the header's game fields HDR_STARTX..HDR_SPECIAL are Cleo's), SPRC, SPRX, imgtab.bin, assets.inc |
 
 `build.sh` sets beebgame's build driver going (`beebgame/tools/build.sh`) with Cleo's
 root, assets step and tune.

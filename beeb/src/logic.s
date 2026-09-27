@@ -423,25 +423,32 @@ gettileattr:
 ; ============================================================================
 ; Level initialisation (the loader has gathered the level into the banks)
 ; ============================================================================
+; Cleo's fields in the level header (tools/assets.py writes them): the start and the
+; exit in tiles; the special tiles from HDR_SPECIAL
+HDR_STARTX = 2
+HDR_STARTY = 3
+HDR_EXITX  = 4
+HDR_EXITY  = 5
+HDR_SPECIAL = 8
 level_init:
         ; header
-        lda LV_HDR+2
+        lda LV_HDR+HDR_STARTX
         jsr @x8
         sta startx
         stx startx+1
-        lda LV_HDR+3
+        lda LV_HDR+HDR_STARTY
         jsr @x8
         sta starty
         stx starty+1
-        lda LV_HDR+4
+        lda LV_HDR+HDR_EXITX
         jsr @x8
         sta exitx
         stx exitx+1
-        lda LV_HDR+5
+        lda LV_HDR+HDR_EXITY
         jsr @x8
         sta exity
         stx exity+1
-        lda LV_HDR+6
+        lda LV_HDR+HDR_NOBJ
         sta nobj
         lda maplw
         sec
@@ -3104,11 +3111,11 @@ ob_vanish:
         sta q5                      ; tile y (q4/q5: gx/gy are the live grid-walk cursor)
         jsr maptile                 ; sets mapptr, Y = tx; X kept, bank 7 back
         ldx q1
-        lda LV_HDR+8,x
+        lda LV_HDR+HDR_SPECIAL,x
         jsr mapput                  ; X and Y kept
         iny
         sty q4                      ; tile x + 1
-        lda LV_HDR+9,x
+        lda LV_HDR+HDR_SPECIAL+1,x
         jsr mapput
         dey
         tya                         ; tile x
