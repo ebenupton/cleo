@@ -240,19 +240,6 @@ mirror_copy:
         rts
 
 ; ---------------------------------------------------------------- the CRTC
-        .segment "BOOT"             ; start-up's, in main RAM (init.s)
-crtc_init:                          ; start the chain at the bar and let vsync re-phase
-        ldx #7                      ; written from the end of the tables: R8 = 0 first (no
-@w:     lda @reg,x                  ; interlace: the MOS's MODE 1 leaves interlace sync on,
-        sta CRTC_IDX                ; which puts every other field's vsync half a scanline
-        lda @val,x                  ; later; the Master's crtc_init writes 0 too), R10 = $20
-        sta CRTC_DAT                ; (the MOS's cursor off), ... R12/R13 last
-        dex
-        bpl @w
-        rts
-@reg:   .byte 13, 12, 7, 6, 4, 9, 10, 8
-@val:   .byte <BARCRTC, >BARCRTC, 30, BARROWS, BARROWS-1, 7, $20, 0
-
         .segment "LGCBSS"
 crtcbm:   .res 2                    ; the buffer being built: its mirror redirect (base -
                                     ; RINGCHARS; its CRTC base, crtcb, is zero page's)

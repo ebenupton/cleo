@@ -3701,21 +3701,25 @@ take_over:
 ; ============================================================================
 ; CRTC / palette setup
 ; ============================================================================
-  .if .not BHW                   ; (Model B: display.s)
         .segment "BOOT"             ; start-up's, in main RAM
+; The frame a load parks in (load_begin): a standard 312-line frame with the vsync on
+; the chain's row, curR7 = LDR7 -- the first vsync re-phases from it and the chain
+; takes over, as after a load.  Every register, from the end of the tables: R8 = 0
+; (no interlace: the MOS's MODE 1 leaves interlace sync on, which puts every other
+; field's vsync half a scanline later), R10 = $20 (cursor off), R12/R13 last.
 crtc_init:
-        ; standard 20K-mode timings, no interlace, cursor off
         ldx #13
-:       stx CRTC_IDX
-        lda crtctab,x
+@w:     lda @reg,x
+        sta CRTC_IDX
+        lda @val,x
         sta CRTC_DAT
         dex
-        bpl :-
-        lda crtctab+7
+        bpl @w
+        lda #LDR7
         sta curR7
         rts
-crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
-  .endif
+@reg:   .byte 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+@val:   .byte <BARCRTC, >BARCRTC, 8, $20, 7, 0, LDR7, VISROWS, 0, LDR4, $28, 98, ROWCHARS, 127
 
         .segment "LGCCODE"          ; bank 7 (the menus call it through xcall)
 set_palette:
