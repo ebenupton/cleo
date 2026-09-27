@@ -6,6 +6,7 @@
 # assets/v500, the contents of CleoV500.jar).
 #   sh build.sh                 # build/cleo.ssd
 #   TILEMIRROR=1 sh build.sh    # the tile blitter's mirrored tiles too (no level needs them)
+#   NFLAT=n sh build.sh         # n flat tiles a level (default 4: L4B needs all four)
 set -e
 cd "$(dirname "$0")"
 [ -f beebgame/tools/build.sh ] || { echo "beebgame is missing: git submodule update --init"; exit 1; }

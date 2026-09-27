@@ -46,7 +46,7 @@ os.makedirs(OUT, exist_ok=True)
 def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
-SOLID_CYAN, SOLID_BLACK = 254, 255
+SOLID_CYAN, SOLID_BLACK = m.SOLID_CYAN, m.SOLID_BLACK   # (convert.py's: the top two ids)
 VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the Model B's: VISROWS 30 / 21 (engine.s)
 
 # ---------------------------------------------------------------- the banks' fixed shape

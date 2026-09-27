@@ -640,15 +640,24 @@ for (lv, sub), cm in maps.items():
 #   mir0 .. mir0+NMIR-1  a full tile drawn mirrored left-right from the slot in
 #                        MIRTAB: only as many as the bank needs, the least used first
 #                        (TILEMIRROR builds only; none otherwise)
-#   FLAT0 .. 253         flat tiles: two bytes alternating down every char (FLATTAB)
+#   FLAT0 .. 253         flat tiles, NFLAT of them: two bytes alternating down every
+#                        char (FLATTAB)
 #   254, 255             the solids, cyan and black (FLATTAB's last two pairs): the
 #                        level's other solid, where it has both
+# So NFLAT + 3 ids are fills (id 0, the flats, the two solids) and cost no bank 6
+# room; the rest are the tiles.
 # The mirror is exact: the dither is per game pixel with no position term, so a
 # game pixel's 2x2 dots move as a unit -- reverse the chars and swap the byte's
 # two pixels, ((b & $33) << 2) | ((b & $CC) >> 2).
 # ----------------------------------------------------------------------------
-FLAT0 = 250
-NFLAT = SOLID_CYAN - FLAT0          # 4 flats a level at most, then the two solids
+# NFLAT, the flat tiles a level may have, is a build parameter (NFLAT=n sh build.sh;
+# 4 by default): each is two bytes of FLATTAB in bank 6 in place of 64 in the tile run,
+# but takes an id from the tiles'.  A level with more flat tiles than that stores the
+# rest, the least used, as full tiles (they draw the same).  The engine reads FLAT0
+# and NFLAT from assets.inc.
+NFLAT = int(os.environ.get('NFLAT', '4'))
+FLAT0 = SOLID_CYAN - NFLAT          # the flats, then the two solids at the top
+assert 0 < NFLAT < 64, NFLAT
 MAXMIR = 24
 TILE_CHUNK = 256                    # tiles in a set file: 16K, what either machine stages
 def mirror_byte(b):
@@ -706,12 +715,14 @@ TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mir
 B_TILES, B_TILES_END = 0x8600, 0xC000       # bank 6: the tiles' page origin (defs.inc TILES), to the end
 TOFF = 4 if TILEMIRROR else 2               # id k's slot: k + TOFF, the first tile clear of the
                                             # code and its variables (engine.s asserts it; assets.inc)
-def _layout(stored, hlist, halfpair, base, end, loc):
+def _layout(stored, hlist, halfpair, base, end, loc, name='', demoted=0):
     slot = {k: i + 1 + TOFF for i, k in enumerate(stored)}     # (id 0, the solid, has none)
     NT, NHALF = len(stored) + 1 + TOFF, len(hlist)
     HALFPAGE = base + ((NT * 64) & ~255)
     HALFOFF = ((NT * 64) & 255) // 32
-    assert HALFPAGE + (HALFOFF + NHALF) * 32 + len(halfpair) <= end, ('tiles do not fit', NT, NHALF)
+    assert HALFPAGE + (HALFOFF + NHALF) * 32 + len(halfpair) <= end, \
+        '%s: its tiles do not fit bank 6 (%d full, %d half%s)' % (
+            name, NT - 1 - TOFF, NHALF, ', %d of them flat tiles past NFLAT = %d: raise NFLAT' % (demoted, NFLAT) if demoted else '')
     return dict(slot=slot, NT=NT, HALFPAGE=HALFPAGE, HALFOFF=HALFOFF)
 def _tilelist(files, stored, loc):
     """The level's files (the set's numbers) with the full tiles each gives, then each
@@ -758,6 +769,11 @@ def pack_tiles(lv, sub):
             halves['pair'].append((k, 0, b'\0\0'))
         else:
             fulls.append(k)
+    demoted = max(0, len(flats) - NFLAT)
+    if demoted:                         # more than the ids: the most used are flats, the
+        keep = set(k for k, fp in sorted(flats, key=lambda f: -use[f[0]])[:NFLAT])
+        fulls += [k for k, fp in flats if k not in keep]      # rest stored as full tiles
+        flats = [f for f in flats if f[0] in keep]
     loc = lambda k: TSET[k[0]]
     for v in halves.values():
         v.sort(key=lambda h: loc(h[0]))
@@ -807,7 +823,7 @@ def pack_tiles(lv, sub):
     halflist = b''.join(bytes([loc(h[0])[1], h[1] | pos(h[0]) << 1]) for h in hlist)
     lw = 8 - levels[(lv, sub)]['lw']
     # the layout: the stored tiles at slot = id, a mirror by its source's slot
-    B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc)
+    B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc, name_of(lv, sub), demoted)
     assert all(B['slot'][k] == idof[k] + TOFF for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
     B['shape'] = dict(ntiles=NT, mapshr=lw, nhalf=NHALF, half0=half0, half1=half1, half2=half2,
