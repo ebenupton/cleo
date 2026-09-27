@@ -5,12 +5,19 @@
 ; page banks freely (ldprog.s).  Both controllers raise NMI for every byte, so the
 ; transfer routine sits at NMIPAGE, which is display RAM during a level and free
 ; while the palette is black.  The boot loader (loader.s) says which controller and
-; which drive (dsk_type, dsk_drv) before the game starts.
+; which drive (drv_type, drv_unit) before the game starts.
 ; ============================================================================
-        .include "files.inc"        ; F_LDPROG_SEC/N: where the loader is
+        .include "files.inc"        ; the disc's sector table (one disc, both machines)
+  .if BHW                           ; this machine's load-time program
+F_LDPROG_SEC = F_LDPROGB_SEC
+F_LDPROG_N   = F_LDPROGB_N
+  .else
+F_LDPROG_SEC = F_LDPROGM_SEC
+F_LDPROG_N   = F_LDPROGM_N
+  .endif
         .segment "LGCBSS"
-dsk_type: .res 1                    ; 0 = 8271, 1 = 1770 (loader.s decides at boot)
-dsk_drv:  .res 1                    ; 0 or 1: the drive DFS had current
+drv_type: .res 1                    ; 0 = 8271, 1 = 1770 (loader.s decides at boot: init.s
+drv_unit: .res 1                    ; copies them here) and the drive DFS had current, 0 or 1
 ld_sec:   .res 2                    ; read_sectors: first sector, count, destination
 ld_n:     .res 1
 ld_dst:   .res 2
@@ -114,7 +121,7 @@ read_sectors:
         sta NMI_I_STA+2
         sta NMI_W_STA+2
         sty LD_DONE                 ; (Y = 0 throughout read_sectors)
-        lda dsk_type
+        lda drv_type
         bne @wd
         ; ---- 8271: read data, multi-record, 256-byte sectors -- after two commands
         ; DFS also sends.  The drive control output (special register $23): select +
@@ -125,7 +132,7 @@ read_sectors:
         ; (it did: the title's idle stops the motor, and the level never loaded).
         jsr i_idle
         lda #$40                    ; bits 7,6 select the drive: $40 = 0, $80 = 1
-        ldx dsk_drv
+        ldx drv_unit
         beq :+
         asl
 :       tax                         ; (the helpers keep X)
@@ -227,13 +234,13 @@ w_trk:    .res 1                    ; the 1770's head, as far as this driver kno
 ; the 8271 keeps DFS's state and needs nothing
         .segment "BOOT"
 disc_init:
-        lda dsk_type
+        lda drv_type
         beq @done
   .if BHW
         lda #$08                    ; reset held (bit 5 low), FM
         sta FDC1770_CTL
         lda #$29                    ; reset released, FM, drive 0
-        ldx dsk_drv
+        ldx drv_unit
         beq :+
         lda #$2A                    ; drive 1 (the old ora/bne path's 7 cycles)
         bne :++
@@ -242,7 +249,7 @@ disc_init:
   .else
         lda #$20                    ; the Master's latch: reset held (bit 2 low)
         sta FDC1770_CTL
-        ldx dsk_drv                 ; then the drive (and side), FM, reset released
+        ldx drv_unit                 ; then the drive (and side), FM, reset released
         lda @drvsel,x
         sta FDC1770_CTL
         nop
@@ -267,7 +274,7 @@ disc_boot:
         sta NMIPAGE,x               ; are their run addresses (cleo_b.cfg)
         dex
         bpl :-
-        lda dsk_type
+        lda drv_type
         beq :+
         lda #<NMI_W                 ; a 1770: the page's jump goes to its stub
         sta NMIPAGE+1

@@ -21,7 +21,6 @@
         OUTC MAP5
         OUTC LV_OBJS
         OUTC LV_PAGE0
-        OUTC TAILBUF
         OUTC SPRC_BASE
         OUTC SPRC_LEN
         OUTC SPRC5_BASE

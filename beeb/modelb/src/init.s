@@ -5,10 +5,18 @@
 ; on, so none of this needs a place in a bank: once play starts the display
 ; overwrites it.  The tables it builds on the Master are static here (banks.s).
 ; ============================================================================
-        .segment "BOOT"
+        .segment "BOOTHDR"          ; (first in BOOTRAM: before the routines the rest of
+                                    ;  the sources put in BOOT)
+; the boot loader's findings, at fixed addresses on both machines (one loader serves
+; both): the controller, the drive, the physical bank of each of banks 4..7, the board
+dsk_type:  .res 1
+dsk_drv:   .res 1
+dsk_banks: .res 4
+dsk_board: .res 1
         .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute, __LOWCODE_SIZE__: absolute
         .import __TILBSS_RUN__: absolute, __TILBSS_SIZE__: absolute
-boot:   sei
+boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $7000, the entry $7007"
+        sei
         ldx #$3F                    ; the stack is 64 bytes: $0100-$013F
         txs
         lda #0                      ; zero page ($F0-$FF is the MOS's: $F4 is the
@@ -33,6 +41,10 @@ boot:   sei
         sta PBANK,x                 ; the low BSS)
         dex
         bpl @pb
+        lda dsk_type                ; the disc driver's own copies (this piece is screen
+        sta drv_type                ; memory once play starts)
+        lda dsk_drv
+        sta drv_unit
         jsr lvreset                 ; the records, the buffers' state
         ; MUSON and SFXREQ: the zeros above (low BSS, zero page)
         ; (music_init: an rts on the Model B, whose period table is static)
@@ -77,7 +89,3 @@ boot:   sei
         jsr pagelogic               ; bank 7 (low RAM's, the image copied above)
         jsr disc_init               ; a 1770 board: reset, and the head found
         jmp game_main               ; the title menu loads its overlay and starts the tune
-; the loader's: the physical bank of each of banks 4..7 and the board -- read once,
-; above, into PBANK and PBOARD
-dsk_banks: .res 4
-dsk_board: .res 1

@@ -20,7 +20,7 @@ if (MA.LV_OBJST === undefined) MA.LV_OBJST = 0xb000;   // a constant on the Mast
 // gathers the level from the disc
 const BA = loadLabels("build/labels.txt");
 const bs = new MachineSession(process.env.BMODEL ?? "B-DFS1.2");
-await bs.initialise(); await bs.boot(30); bs.loadDisc(path.resolve("build/cleob.ssd"));
+await bs.initialise(); await bs.boot(30); bs.loadDisc(path.resolve("build/cleo.ssd"));
 const bcpu = bs._machine.processor;
 if (process.env.BBOARD) boardEmu(bcpu, process.env.BBOARD);   // a Watford or Solidisk board (bopen.mjs)
 // the Model B's banks are the lowest four sockets the boot loader finds RAM in (jsbeeb:

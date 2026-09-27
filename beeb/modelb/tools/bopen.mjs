@@ -30,7 +30,7 @@ export function boardEmu(cpu, kind) {
   };
 }
 
-export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2", disc = "build/cleob.ssd", labels = "build/labels.txt", keys = false, onSession = null } = {}) {
+export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2", disc = "build/cleo.ssd", labels = "build/labels.txt", keys = false, onSession = null } = {}) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);
   const s = new MachineSession(model);

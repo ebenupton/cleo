@@ -6,7 +6,7 @@ const seq = (process.argv[2] ?? "18").split(",").map(Number), frames = seq.lengt
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const A = loadLabels("build/labels.txt");
 const s = new MachineSession("B-DFS1.2");
-await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleob.ssd"));
+await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleo.ssd"));
 const MAXSPR = parseInt(/MAXSPRDEF = (\d+)/.exec((await import("node:fs")).readFileSync("build/assets.inc", "utf8"))[1]);
 const cpu = s._machine.processor;
 const bank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, b); cpu.writemem(0xfe30, b); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };

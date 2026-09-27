@@ -22,7 +22,7 @@ the mismatching cells by row.
 
 then from `modelb/`, with a disc built:
 
-    tools/hbeebem/build/hbeebem --userdata tools/hbeebem/build/userdata --disc build/cleob.ssd \
+    tools/hbeebem/build/hbeebem --userdata tools/hbeebem/build/userdata --disc build/cleo.ssd \
         --labels build/labels.txt --frames 240 --seed 3 --level 1 --shotevery 20 --out /tmp/hb > /tmp/hb.txt
     node tools/bdump.mjs 240 3 1 -1 /tmp/jb 20 > /tmp/jb.txt
     python3 tools/hbeebem/cmpdump.py /tmp/hb.txt /tmp/jb.txt

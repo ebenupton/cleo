@@ -15,8 +15,7 @@ Keys: `Z`/`X` or cursor left/right run, `RETURN` (or `SPACE`, cursor up, `:`) ju
 
 Needs Python 3 with Pillow + numpy, and cc65 (`ca65`/`ld65`).
 
-    python3 tools/convert.py   # JAR assets -> build/SPR, TIL0, TIL1, ALT, L*, TITLE (+ previews)
-    ./build.sh                 # music, assemble, link, build/cleo.ssd
+    sh modelb/build.sh         # music, assets, both machines, one disc: modelb/build/cleo.ssd
 
 The original JAR contents are expected in `../v500/` (unzipped `CleoV500.jar`).
 
@@ -59,8 +58,10 @@ transitions and the "BONUS LEVEL" banner sprite.
 
 ## The Model B
 
-`modelb/` builds the same game for a Model B with 64K of sideways RAM (four banks)
-from these sources with `MODELB=1`: `sh modelb/build.sh` writes `modelb/build/cleob.ssd`.
+One disc, `modelb/build/cleo.ssd`, runs on a Master 128 and on a Model B with 64K of
+sideways RAM (four banks): the sources are assembled once per machine (`BHW=1`, the
+Model B's hardware; `BHW=0`, the Master's), the boot loader picks the machine's bank
+images, and the levels and every other shared file are on the disc once.
 All sixteen levels, loaded from the disc by the game's own driver (8271 or Acorn 1770,
 decided at boot), the Master's tiles and tile ids, 21 visible rows, the menus in an
 overlay.  `modelb/DESIGN.md`.

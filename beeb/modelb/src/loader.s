@@ -9,7 +9,7 @@
 ; controller the game's own driver is to use, and the game.  Everything else -- the
 ; menu overlay, the title pack, every level -- the game loads itself (disc.s,
 ; ldprog.s), reading the physical banks from PBANK, which start7 fills from the
-; four bytes this leaves in the start-up piece (dsk_banks).
+; four bytes this leaves in the start-up piece's header (init.s, $7000).
 ; ============================================================================
         .setcpu "6502"
         .include "defs_ld.inc"      ; boot, dsk_type, dsk_drv, dsk_banks, dsk_board,
@@ -30,7 +30,16 @@ ztmp    = $76
 
         .segment "CODE"
 start:
-        lda ROMSELC
+        ; ---- the machine: one disc, each machine its own bank images (BANKSB, BANKSM).
+        ; OSBYTE 0 with X = 1 gives the MOS version in X: 3 and up are a Master's
+        lda #0
+        ldx #1
+        jsr OSBYTE
+        cpx #3
+        bcc :+
+        lda #'M'
+        sta fname+5
+:       lda ROMSELC
         sta oldbank
         jsr findram                 ; the four banks, into map -- or fewer, and C set
         bcc :+
@@ -257,7 +266,9 @@ start:
         inc zsrc+1
         bne @wfix                   ; (zsrc never wraps)
 @wfixdone:
-        ; ---- the driver's configuration, the banks themselves and the board, into bank 7
+        ; ---- the driver's configuration, the banks themselves and the board, into the
+        ; start-up piece's header ($7000, both machines' init.s; bank 7's socket stays
+        ; the one stores reach, as the start-up expects)
         ldx map+3
         jsr selwr
         lda fdc
@@ -512,7 +523,7 @@ bestb:    .byte 0
 map:      .res 4                    ; the socket of each of banks 4..7
 score:    .res 16                   ; per socket: 0..2 as above, $FE an alias, $FF not RAM
 saved:    .res 16
-fname:    .byte "BANKS", 13
+fname:    .byte "BANKSB", 13          ; (the B patched to M on a Master: start)
 gbpb:     .byte 0                   ; OSGBPB 6: the data address is all it reads
           .word drvname, $FFFF
           .res 8

@@ -58,30 +58,46 @@ nt    = $B8
 .macro FILE name
         .byte <.ident(.concat("F_", name, "_SEC")), >.ident(.concat("F_", name, "_SEC")), .ident(.concat("F_", name, "_N"))
 .endmacro
+; a level file ends with the Master's LV_PAGE0 table, in sectors of its own (assets.py):
+; the Model B, whose gather is arithmetic, stops before them
+.macro LFILE name
+  .if BHW
+        .byte <.ident(.concat("F_", name, "_SEC")), >.ident(.concat("F_", name, "_SEC")), .ident(.concat("F_", name, "_N")) - PAGE0_SECS
+  .else
+        FILE name
+  .endif
+.endmacro
+PAGE0_SECS = 2                      ; (512 bytes: 256 lo, 256 hi)
 ftab:   FILE "SPRX"                 ; 0: the sprites placed per level (imgtab's file 0)
         FILE "SPRC"                 ; 1: the sprites every level draws: bank 4, once
         FILE "SPRC"                 ; 2: (unused)
         FILE "TILES0"               ; 3, 4: the tile set's outdoor and shared files
         FILE "TILES1"
-        FILE "MENU"                 ; 5
+  .if BHW                           ; 5: this machine's menu overlay
+        FILE "MENUB"
+F_MENU_N = F_MENUB_N
+  .else
+        FILE "MENUM"
+F_MENU_N = F_MENUM_N
+  .endif
         FILE "TITLE"                ; 6
         FILE "BAR"                  ; 7
-        FILE "L0"                   ; 8..23: the levels
-        FILE "L1"
-        FILE "L2"
-        FILE "L3"
-        FILE "L4"
-        FILE "L5"
-        FILE "L6"
-        FILE "L7"
-        FILE "L8"
-        FILE "L9"
-        FILE "L10"
-        FILE "L11"
-        FILE "L12"
-        FILE "L13"
-        FILE "L14"
-        FILE "L15"
+        LFILE "L0"                   ; 8..23: the levels
+        LFILE "L1"
+        LFILE "L2"
+        LFILE "L3"
+        LFILE "L4"
+        LFILE "L5"
+        LFILE "L6"
+        LFILE "L7"
+        LFILE "L8"
+        LFILE "L9"
+        LFILE "L10"
+        LFILE "L11"
+        LFILE "L12"
+        LFILE "L13"
+        LFILE "L14"
+        LFILE "L15"
         FILE "TILES2"               ; 24: and its indoor file
 tfi:    .byte 3, 4, 24              ; the tile set's files (convert.py TSET) by number
 FI_SPRX = 0
@@ -657,12 +673,10 @@ mainram:
         pla
         rts
 ; SPRX's residency on the converged Master: the stage (shadow RAM, $3000) to HAZEL
-; ($C000, ACCCON Y), ANDY ($8000, ROMSEL bit 7) and main RAM (TAILBUF) -- keep -- and
-; back -- unkeep.  Only under a load: interrupts are off, and the MOS's interrupt
-; entry is under HAZEL.
+; ($C000, ACCCON Y) and ANDY ($8000, ROMSEL bit 7) -- keep -- and back -- unkeep.  Only
+; under a load: interrupts are off, and the MOS's interrupt entry is under HAZEL.
 SPRX_PAGES = (SPRX_LEN + 255) / 256
-        .assert SPRX_PAGES - $30 <= >($2B00 - TAILBUF), error, "SPRX outgrows HAZEL, ANDY and the tail"
-        .assert <TAILBUF = 0, error, "TAILBUF page aligned"
+        .assert SPRX_PAGES <= $30, error, "SPRX outgrows HAZEL and ANDY (12K)"
 keep:   sec
         .byte $24                   ; (bit zp: skips the clc)
 unkeep: clc
@@ -682,12 +696,7 @@ unkeep: clc
         jsr kpart
         lda PB_LVL                  ; (bank 7 back, ANDY out)
         jsr pgbank
-        ldx #SPRX_PAGES - $30       ; the rest, main RAM
-        beq :+
-        lda #>STAGE + $30
-        ldy #>TAILBUF
-        jsr kpart
-:       plp
+        plp
         lda ACCCON
         and #$F3
         sta ACCCON

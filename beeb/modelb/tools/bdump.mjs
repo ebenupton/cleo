@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs";
 const frames = parseInt(process.argv[2] ?? "100"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "0");
 const shot = parseInt(process.argv[5] ?? "-1"), out = process.argv[6] ?? "build/jb", every = parseInt(process.argv[7] ?? "0");
 // BDISC / BLABELS: another disc image and its labels
-const B = await openB({ level: LEVEL, disc: process.env.BDISC ?? "build/cleob.ssd", labels: process.env.BLABELS ?? "build/labels.txt" }); const { s, cpu, A, bank } = B;
+const B = await openB({ level: LEVEL, disc: process.env.BDISC ?? "build/cleo.ssd", labels: process.env.BLABELS ?? "build/labels.txt" }); const { s, cpu, A, bank } = B;
 const zp = ["px","py","vx","vy","anim","evframe","facing","running","firing","hurt","control","bx","by","bvx","bvy","bcnt","bactive","bounce","stars","exiting","lives","health","score","frame","wx","wy","lastkeys","gridsh"];
 const two = new Set(["px","py","vx","vy","evframe","bx","by","bvx","bvy","score","frame","wx","wy"]);
 const NOBJ = cpu.readmem(A.nobj), OBJN = 149;

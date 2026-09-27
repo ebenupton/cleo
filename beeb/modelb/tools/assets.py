@@ -48,14 +48,15 @@ VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 
 # tables at the top of 4 and 6; bank 6's tiles run from its code's next page to the
 # end; bank 5's map is a fixed 8K below its mask tables.  These are the bounds the
 # linker config (cleo_b.cfg) and defs.inc share.
-# The sprites start exactly where each bank's code ends: every byte the code does not
-# take is sprite room.  The code's ends are the linker's (modelb/build/map.txt), set here
-# by hand because the packer runs before the assembler; engine.s asserts them both ways,
-# so the build stops if the code grows into the sprites or leaves a gap below them.
+# The sprites start exactly where the Model B's code ends in each bank: every byte its
+# code does not take is sprite room.  One disc serves both machines, so the level files
+# -- the sprites' addresses -- are one layout: the Master's code, a little shorter,
+# leaves a gap below them.  The ends are the linker's (modelb/build/map.txt), set here
+# by hand because the packer runs before the assembler; engine.s asserts them (exactly
+# on the Model B, at most on the Master), so the build stops if they move.
 _MIR = os.environ.get('TILEMIRROR') == '1'
-B4_CODE_END = 0x8392 if TARGET == 'master' else 0x83AF             # the row loop (SPR4CODE)
-B5_CODE_END = ((0x8271 if _MIR else 0x8258) if TARGET == 'master'   # the row loop, the gather
-               else (0x8302 if _MIR else 0x82CA))                    #   and its shape (MAP5BSS)
+B4_CODE_END = 0x83AF                        # the row loop (SPR4CODE)
+B5_CODE_END = 0x8302 if _MIR else 0x82CA    # the row loop, the gather and its shape (MAP5BSS)
 B4_DATA = (B4_CODE_END, 0xBB00)             # bank 4: images and masks, between the row loop
                                             #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (no hole now: one run)
@@ -419,17 +420,23 @@ def pack_level(lv, sub):
             ('tiles', T['B']['tiles']), ('place', placement), ('map', maprle), ('flat', T['flat']),
             ('halves', T['halves']), ('hpair', T['hpair']), ('mir', T['B']['mir']),
             ('dir', directory), ('smask', smask)]
-    if TARGET == 'master':                  # the gather's table (LV_PAGE0), for main RAM
-        secs.append(('page0', T['B']['page0']))
+    # the Master's gather is a table (LV_PAGE0), for main RAM: the file's last two
+    # sectors, whole, so the Model B (arithmetic) reads the file short of them (ldprog.s
+    # LFILE: PAGE0_SECS)
+    secs.append(('page0', T['B']['page0']))
+    assert len(T['B']['page0']) == 512
     off = 2 * len(secs)
     table = bytearray()
     body = bytearray()
     for nm_, data in secs:
+        if nm_ == 'page0':
+            body += bytes(-(off + len(body)) % 256)     # to a sector boundary
         o = off + len(body)
         table += bytes([o & 255, o >> 8])
         body += data
-    room = 0x8000 - 0x3000 if TARGET == 'master' else 0x7C00 - 0x5C00   # STAGE_LVL's (defs.inc)
-    assert off + len(body) <= room, (name, off + len(body))
+    assert (off + len(body)) % 256 == 0
+    assert off + len(body) - 512 <= 0x7C00 - 0x5C00, (name, off + len(body))   # the Model B's STAGE_LVL
+    assert off + len(body) <= 0x8000 - 0x3000, (name, off + len(body))         # the Master's (defs.inc)
     out('L%d' % (lv * 2 + sub), table + body)
     stats = dict(name=name, ntiles=T['ntiles'], nflat=T['nflat'], nhalf=T['nhalf'], nmir=T['nmir'], w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],

@@ -7,7 +7,7 @@
 cd "$(dirname "$0")/.."
 F=${1:-600}
 B="build/base/cleo.ssd build/base/labels.txt build/cleo.ssd build/labels.txt"
-BB="build/base/cleob.ssd build/base/labels.txt build/cleob.ssd build/labels.txt"
+BB="build/base/cleob.ssd build/base/labels.txt build/cleo.ssd build/labels.txt"
 {
 for l in 0 1 2 3 4 5 6 7; do
   echo "M state L$l|node tools/statediff.mjs $B $l $F|identical over"

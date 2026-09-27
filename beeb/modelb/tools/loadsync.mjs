@@ -11,7 +11,7 @@ import { pathToFileURL } from "node:url"; import path from "node:path";
 process.chdir("/Users/ebenupton/cleo/beeb/modelb");
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const A = loadLabels("build/labels.txt");
-const s = new MachineSession("B-DFS1.2"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleob.ssd"));
+const s = new MachineSession("B-DFS1.2"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleo.ssd"));
 const cpu = s._machine.processor, v=s._video;
 const P = cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
 const PB = (b) => (b >= 4 && b <= 7 ? P[b - 4] : b);

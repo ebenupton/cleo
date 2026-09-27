@@ -329,10 +329,18 @@ VISLINES, which is why the reference for the lock-step test is a 21-row Master).
 picture starts 72 lines after vsync, 4 scanlines below where a standard frame's centre
 would put it.  The tiles and their ids are the Master's; neither target folds any.
 
-## The converged Master (TARGET=master)
+## The Master (BHW=0), and the one disc
 
-`TARGET=master sh modelb/build.sh` builds this target's STRUCTURE on a Master's
-HARDWARE into `modelb/buildm/cleom.ssd`: the same bank images (code beside the data
+`sh modelb/build.sh` builds both machines -- `build/` for the Model B, `buildm/` for
+the Master -- against one sector table onto one disc, `build/cleo.ssd` (31 files, the
+DFS limit).  The boot loader asks the MOS its version (OSBYTE 0: 3 and up is a
+Master) and reads BANKSB or BANKSM; it writes its findings to the start-up piece's
+header at $7000 and jumps to $7007, the same on both.  Each machine's LDPROG and menu
+overlay are its own (LDPROGB/M, MENUB/M); the levels, the sprites, the tiles, the
+title and the bar are shared, so both pack the sprites at the Model B's code ends
+(the Master's shorter code leaves a gap).  A level file ends with the Master's
+LV_PAGE0 table in two sectors of its own; the Model B reads the file short of them
+(ldprog.s LFILE).  The Master's build is the same bank images (code beside the data
 its inner loop reads, the far table, the low-RAM crossings, the loader gathering every
 level into the banks, the menu overlay), but a 65C02, the Master's 32-row ring at
 $3000 in main and shadow RAM, the bar at $2B00, and two exceptions by design -- the

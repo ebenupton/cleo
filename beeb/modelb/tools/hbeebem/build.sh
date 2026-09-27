@@ -38,6 +38,6 @@ fi
 cp "$BEEBEM_USERDATA"/BeebFile/BBC/OS12.rom "$BEEBEM_USERDATA"/BeebFile/BBC/BASIC2.rom "$BEEBEM_USERDATA"/BeebFile/BBC/DNFS.rom "$UD/BeebFile/BBC/"
 sed 's#\\#/#g' "$BEEBEM_USERDATA/Roms.cfg" > "$UD/Roms.cfg"
 echo "built $OUT/hbeebem; run from modelb/:"
-echo "  $OUT/hbeebem --userdata $UD --disc build/cleob.ssd --labels build/labels.txt --frames 240 --seed 3 --level 1 --shotevery 20 --out /tmp/hb"
+echo "  $OUT/hbeebem --userdata $UD --disc build/cleo.ssd --labels build/labels.txt --frames 240 --seed 3 --level 1 --shotevery 20 --out /tmp/hb"
 echo "  node tools/bdump.mjs 240 3 1 -1 /tmp/jb 20 > /tmp/jb.txt; python3 tools/hbeebem/cmpdump.py /tmp/hb.txt /tmp/jb.txt"
 echo "  python3 tools/hbeebem/cmpshots.py /tmp/hb_f20.ppm /tmp/jb_f20.png"

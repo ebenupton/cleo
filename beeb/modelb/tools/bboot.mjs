@@ -12,7 +12,7 @@ const { MachineSession } = await import(pathToFileURL(base + "machine-session.js
 const A = loadLabels("build/labels.txt");
 const names = new Map(Object.entries(A).map(([n, a]) => [a, n]));
 const s = new MachineSession(model);
-await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleob.ssd"));
+await s.initialise(); await s.boot(30); s.loadDisc(path.resolve("build/cleo.ssd"));
 const cpu = s._machine.processor;
 // BSWRAM="a,b,c,..." puts the sideways RAM in those sockets (jsbeeb's own: 0-7); the
 // boot loader takes the lowest four it finds, or says why not with fewer

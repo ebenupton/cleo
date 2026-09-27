@@ -7,7 +7,7 @@ import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const s = new MachineSession("B-DFS1.2");
 await s.initialise(); await s.boot(30);
-s.loadDisc(path.resolve("build/cleob.ssd"));
+s.loadDisc(path.resolve("build/cleo.ssd"));
 const cpu = s._machine.processor;
 const lab = []; for (const m of readFileSync("build/labels.txt", "utf8").matchAll(/^al ([0-9A-F]+) \.(\w+)$/gm)) lab.push([parseInt(m[1], 16), m[2]]);
 lab.sort((a, b) => a[0] - b[0]);

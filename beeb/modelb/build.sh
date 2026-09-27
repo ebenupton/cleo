@@ -1,49 +1,65 @@
 #!/bin/sh
-# Cleo, Model B target: the Master's sources (../src) assembled with MODELB=1 and
-# this directory's own files, every level packed by tools/assets.py, and a
-# disc the game loads itself from (docs/PLAN_MODELB_FULL.md).
+# Cleo: one disc for the BBC Model B (64K of sideways RAM) and the Master 128.  The
+# sources (../src and src/) are assembled twice: BHW=1 for the Model B's hardware into
+# build/, BHW=0 for the Master's into buildm/ -- the same structure, the level gathered
+# into the banks by the game's own loader -- against one sector table.  The boot loader
+# picks the machine's bank images (BANKSB, BANKSM); each machine's LDPROG and menu
+# overlay are its own; everything else, the levels included, is on the disc once.
 set -e
 cd "$(dirname "$0")"
-# TARGET=master builds the CONVERGED MASTER: this target's structure (the bank images,
-# the loader, the far calls) on a Master's hardware -- 65C02, the 32-row ring in main
-# and shadow RAM, the Master's interrupt handler and chain in main RAM, its 1770 --
-# into buildm/cleom.ssd (src/cpu.inc: MODELB=1, BHW=0).
-if [ "$TARGET" = master ]; then
-    BD=buildm; CPU=65C02; DEFS="-D BHW=0"; CFG=cleo_m.cfg; SSD=cleom; BARADDR='$2B00'
-else
-    BD=build; CPU=6502; DEFS=""; CFG=cleo_b.cfg; SSD=cleob; BARADDR='$0300'
-fi
 # TILEMIRROR=1 builds the tile blitter's mirrored tiles (src/cpu.inc), which move the
 # tiles up a page: the converter (tools/convert.py) and the linker areas follow it
-if [ "$TILEMIRROR" = 1 ]; then DEFS="$DEFS -D TILEMIRROR=1"; else TILEMIRROR=0; fi
-export BD TARGET TILEMIRROR
-mkdir -p $BD
-[ -n "$SKIP_ASSETS" ] || { python3 ../tools/midi2snd.py && python3 tools/assets.py; }   # (assets.py runs ../tools/convert.py)
-sed "s#\"build/#\"$BD/#g" $CFG > $BD/game.cfg
-[ "$TILEMIRROR" = 1 ] && sed -i.bak 's#start = \$8000, size = \$0600#start = $8000, size = $0700#; s#start = \$8600, size = \$3A00#start = $8700, size = $3900#; s#start = \$8000, size = \$02D0#start = $8000, size = $0310#' $BD/game.cfg
+if [ "$TILEMIRROR" = 1 ]; then MIRDEF="-D TILEMIRROR=1"; else TILEMIRROR=0; MIRDEF=""; fi
+export TILEMIRROR
+settarget() {                       # $1: modelb or master
+    TARGET=$1
+    if [ "$TARGET" = master ]; then
+        BD=buildm; CPU=65C02; DEFS="-D BHW=0 $MIRDEF"; CFG=cleo_m.cfg; BARADDR='$2B00'
+    else
+        BD=build; CPU=6502; DEFS="$MIRDEF"; CFG=cleo_b.cfg; BARADDR='$0300'
+    fi
+    export BD TARGET
+}
+[ -n "$SKIP_ASSETS" ] || python3 ../tools/midi2snd.py
+for t in modelb master; do
+    settarget $t
+    mkdir -p $BD
+    [ -n "$SKIP_ASSETS" ] || python3 tools/assets.py      # (assets.py runs ../tools/convert.py)
+    sed "s#\"build/#\"$BD/#g" $CFG > $BD/game.cfg
+    [ "$TILEMIRROR" = 1 ] && sed -i.bak 's#start = \$8000, size = \$0600#start = $8000, size = $0700#; s#start = \$8600, size = \$3A00#start = $8700, size = $3900#; s#start = \$8000, size = \$02D0#start = $8000, size = $0310#' $BD/game.cfg
+    for f in BANKS MENU LDPROG; do [ -f $BD/$f ] || : > $BD/$f; done
+done
+# what both machines read is packed once: the two packs must agree
+for f in SPRX SPRC BAR L0 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15; do
+    cmp -s build/$f buildm/$f || { echo "build/$f and buildm/$f differ: the level layout is not one"; exit 1; }
+done
 
-# the disc's file list, in disc order: what every load reads first (LDPROG) by the
-# boot files, the shared files together, the levels after them
-DISC="!BOOT:$BD/BOOT LOADER:$BD/LOADER BANKS:$BD/BANKS LDPROG:$BD/LDPROG MENU:$BD/MENU BAR:$BD/BAR"
-DISC="$DISC SPRX:$BD/SPRX SPRC:$BD/SPRC TILES0:../build/TILES0 TILES1:../build/TILES1 TITLE:../build/TITLE"
-for l in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do DISC="$DISC L$l:$BD/L$l"; done
+# the disc's file list, in disc order: the boot files, each machine's pieces, the
+# shared files together, the levels after them
+DISC="!BOOT:build/BOOT LOADER:build/LOADER BANKSB:build/BANKS BANKSM:buildm/BANKS"
+DISC="$DISC LDPROGB:build/LDPROG LDPROGM:buildm/LDPROG MENUB:build/MENU MENUM:buildm/MENU BAR:build/BAR"
+DISC="$DISC SPRX:build/SPRX SPRC:build/SPRC TILES0:../build/TILES0 TILES1:../build/TILES1 TITLE:../build/TITLE"
+for l in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do DISC="$DISC L$l:build/L$l"; done
 DISC="$DISC TILES2:../build/TILES2"
-for f in BOOT LOADER BANKS MENU LDPROG; do [ -f $BD/$f ] || : > $BD/$f; done
-printf '*RUN LOADER\r' > $BD/BOOT
+[ -f build/LOADER ] || : > build/LOADER
+printf '*RUN LOADER\r' > build/BOOT
 
-# Two passes: the sector table (files.inc) needs the files' sizes, and bank 7 and
-# LDPROG carry entries from it.  No size depends on a sector number, so the second
-# pass is stable (the third checks that).
+# Passes: the sector table (files.inc) needs the files' sizes, and bank 7 and LDPROG
+# carry entries from it.  No size depends on a sector number, so the second pass is
+# stable (the third checks that).
 for pass in 1 2 3; do
-    [ $pass = 3 ] && cp $BD/files.inc $BD/files.prev
-    python3 ../tools/mkdfs.py table $BD/files.inc $DISC
-    [ $pass = 3 ] && { cmp -s $BD/files.inc $BD/files.prev || { echo "files.inc did not settle"; exit 1; }; break; }
-    # the include order matters: this target's build/ and src/ before the Master's src/
-    ca65 -g --cpu $CPU $DEFS -I $BD -I src -I ../src \
-         -o $BD/main.o src/main.s -l $BD/main.lst
-    ld65 -C $BD/game.cfg -o $BD/unused.bin $BD/main.o -m $BD/map.txt -Ln $BD/labels.txt --dbgfile $BD/cleo.dbg
-    # what the loaders need from the game: its addresses
-    python3 - <<'EOF'
+    [ $pass = 3 ] && cp build/files.inc build/files.prev
+    python3 ../tools/mkdfs.py table build/files.inc $DISC
+    cp build/files.inc buildm/files.inc
+    [ $pass = 3 ] && { cmp -s build/files.inc build/files.prev || { echo "files.inc did not settle"; exit 1; }; break; }
+    for t in modelb master; do
+        settarget $t
+        # the include order matters: this target's build/ and src/ before ../src
+        ca65 -g --cpu $CPU $DEFS -I $BD -I src -I ../src \
+             -o $BD/main.o src/main.s -l $BD/main.lst
+        ld65 -C $BD/game.cfg -o $BD/unused.bin $BD/main.o -m $BD/map.txt -Ln $BD/labels.txt --dbgfile $BD/cleo.dbg
+        # what the loaders need from the game: its addresses
+        python3 - <<'EOF'
 import re
 want = ['boot','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','SPR_TABLE','mapshr','MAPSTRIDE','FLATTAB',
@@ -64,23 +80,21 @@ with open(BD + '/defs_ld.inc', 'w') as f:
         else:
             f.write('; %s: not in labels.txt (a constant?)\n' % n)
 EOF
-    # the constants ld65 does not list: assembled with the game's own flags, so the
-    # hardware conditionals in defs.inc resolve as they do in the game (src/ldconst.s)
-    ca65 --cpu $CPU $DEFS -I $BD -I src -I ../src -o /dev/null src/ldconst.s > $BD/ldconst.out
-    grep ' = ' $BD/ldconst.out >> $BD/defs_ld.inc
-    grep '^al ' $BD/ldconst.out >> $BD/labels.txt
-    echo "BARADDR = $BARADDR" >> $BD/defs_ld.inc
-    ca65 --cpu 6502 $DEFS -I $BD -I src -o $BD/ldprog.o src/ldprog.s -l $BD/ldprog.lst
-    ld65 -C ldprog.cfg -o $BD/LDPROG $BD/ldprog.o
-    ca65 --cpu 6502 $DEFS -I $BD -I src -o $BD/loader.o src/loader.s
-    ld65 -C loader.cfg -o $BD/LOADER $BD/loader.o
-    # BANKS: the fixed pieces with their table, then the bank-number patch list (every
-    # byte of the pieces that holds a bank number, cpu.inc BANKREF) ending in $FF: the
-    # boot loader rewrites those bytes to the banks it found RAM in.  Each entry is
-    # checked against the pieces here: a wrong bank on a bankimm would land outside
-    # them or on a byte that is no bank number.  Then the write-bank store list (cpu.inc
-    # wrsel: bank, address, kind; every entry must sit on a `sta $FE30`), ending in $FF.
-    python3 - <<'EOF'
+        # the constants ld65 does not list: assembled with the game's own flags, so the
+        # hardware conditionals in defs.inc resolve as they do in the game (src/ldconst.s)
+        ca65 --cpu $CPU $DEFS -I $BD -I src -I ../src -o /dev/null src/ldconst.s > $BD/ldconst.out
+        grep ' = ' $BD/ldconst.out >> $BD/defs_ld.inc
+        grep '^al ' $BD/ldconst.out >> $BD/labels.txt
+        echo "BARADDR = $BARADDR" >> $BD/defs_ld.inc
+        ca65 --cpu 6502 $DEFS -I $BD -I src -o $BD/ldprog.o src/ldprog.s -l $BD/ldprog.lst
+        ld65 -C ldprog.cfg -o $BD/LDPROG $BD/ldprog.o
+        # BANKS: the fixed pieces with their table, then the bank-number patch list (every
+        # byte of the pieces that holds a bank number, cpu.inc BANKREF) ending in $FF: the
+        # boot loader rewrites those bytes to the banks it found RAM in.  Each entry is
+        # checked against the pieces here: a wrong bank on a bankimm would land outside
+        # them or on a byte that is no bank number.  Then the write-bank store list (cpu.inc
+        # wrsel: bank, address, kind; every entry must sit on a `sta $FE30`), ending in $FF.
+        python3 - <<'EOF'
 import os
 BD = os.environ['BD']
 pieces = [(4, 0x8000, 'b4x.bin'), (4, 0xBB00, 'b4t.bin'),
@@ -117,8 +131,16 @@ assert 0x2000 + len(banks) <= 0x7000, 'BANKS (read to $2000) would run into the 
 open(BD + '/BANKS', 'wb').write(banks)
 print('BANKS: %d pieces, %d bytes, %d bank patches, %d write-bank stores' % (len(pieces), len(tab) + len(body), len(fix) // 3, len(wr) // 4))
 EOF
+    done
+    # the boot loader, one for both machines: the start-up header it writes and the
+    # entry it jumps to are at the same addresses on both (init.s)
+    for n in boot dsk_type dsk_drv dsk_banks dsk_board; do
+        [ "$(grep "^$n = " build/defs_ld.inc)" = "$(grep "^$n = " buildm/defs_ld.inc)" ] || { echo "$n differs between the machines"; exit 1; }
+    done
+    ca65 --cpu 6502 -I build -I src -o build/loader.o src/loader.s
+    ld65 -C loader.cfg -o build/LOADER build/loader.o
 done
-python3 ../tools/mkdfs.py build $BD/$SSD.ssd CLEOB \
-    "!BOOT:$BD/BOOT:0000:FFFF" "LOADER:$BD/LOADER:1900:1900" \
+python3 ../tools/mkdfs.py build build/cleo.ssd CLEO \
+    "!BOOT:build/BOOT:0000:FFFF" "LOADER:build/LOADER:1900:1900" \
     $(echo $DISC | tr ' ' '\n' | grep -v '^!BOOT\|^LOADER' | tr '\n' ' ')
-ls -l $BD/BANKS $BD/MENU $BD/LDPROG $BD/$SSD.ssd
+ls -l build/BANKS buildm/BANKS build/cleo.ssd
