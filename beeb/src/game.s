@@ -3,7 +3,7 @@
 ; the sound effects.  Bank 7 on both machines; what differs between them is
 ; under BHW (the Model B's hardware).
 ; ============================================================================
-        .segment "LGCCODE"          ; bank 7, with the logic it drives
+        .segment "GAMECODE"         ; bank 7, with the logic it drives
 VSPEG     = 3                       ; vsyncs a rendered frame: 16.7 Hz of render
 ; ---------------------------------------------------------------- level loading
 ; X = level index 0..15 (even = main, odd = bonus)

@@ -3,14 +3,14 @@
 ; digits, the object state) and the menus' image (the tune, the font, the title
 ; pieces).  The engine's are beebgame's banks.s.
 ; ============================================================================
-        .segment "LGCDATA"
+        .segment "GAMEDATA"
 LV_ALTTAB:                          ; alt class -> eight altitudes (global)
         .incbin "alt.bin"
 digits_art:                         ; the HUD's ten digits, 16 bytes each: a nibble per
         .incbin "digits.bin"      ; byte column and two game rows (assets.py)
 DIGTOP:     .incbin "digtab.bin", 0, 16   ; a nibble's top scanline byte
 DIGBOT:     .incbin "digtab.bin", 16, 16  ; and its bottom one
-        .segment "LGCBSS"
+        .segment "GAMEBSS"
 ; the object state arrays, laid out as logic.s names them: O_STAMP + k*OBJN, then
 ; the grid heads and chains and the cached bin walk lists.  level_init's clear runs
 ; 2560 bytes from LV_OBJST, which stays inside these.

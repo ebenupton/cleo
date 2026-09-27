@@ -292,7 +292,7 @@ rise:     .res 2
 grow:     .res 1                  ; bucket walk: gy << gridsh
         .zeropage
 
-        .segment "LGCCODE"      
+        .segment "GAMECODE"      
 
 ; ============================================================================
 ; Map queries.  The map is in bank 5 and this code in bank 7, so every touch goes
@@ -3186,7 +3186,7 @@ ob_switch:
 ; ============================================================================
 ; Status bar digits (drawn straight into the bar, from bank 7's packed digits)
 ; ============================================================================
-        .segment "LGCCODE"          ; bank 7, with the digit art
+        .segment "GAMECODE"         ; bank 7, with the digit art
 ; draw digit A at bar pixel column X (even), digit slot Y (0..8): its 16 packed bytes
 ; become 64 bytes of the bar.
 ;
@@ -3320,7 +3320,7 @@ div10_16:
         sta q1
         rts
 
-        .segment "LGCCODE"
+        .segment "GAMECODE"
 ; ============================================================================
 ; bar_bg: the bar has a fixed home outside the ring, so it stays put however the
 ; window scrolls and is only written when its contents change (in the ring it would
@@ -3352,11 +3352,11 @@ rnd:    lsr seed+1
 
         .segment "LOWBSS"           ; (low RAM: the engine's segment, the game's bytes)
 BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
-        .segment "LGCBSS"           ; the bin walk's
+        .segment "GAMEBSS"          ; the bin walk's
 BINR:      .res 4
 BINOK:     .res 1
 
-        .segment "LGCCODE"      
+        .segment "GAMECODE"      
 ; ============================================================================
 ; Sound effect ids
 ; ============================================================================
