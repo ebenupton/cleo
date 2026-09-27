@@ -3,21 +3,20 @@
 // play has run a while.  Reports each frame whose period is not a standard 312 lines
 // (39936 cycles, +-64 for the chain's re-phase) and any flyback forced for want of a
 // vsync.  The picture is in sync when the load begins.
-//   node test/loadsync2.mjs converged|modelb <disc> <labels>
-// `converged` is the Master (banked, bank 7 in socket 7); `master` is for a retired
-// unbanked build.  The Model B is the 8271 (B-DFS1.2), or BMODEL=B1770.
+//   node test/loadsync2.mjs master|modelb <disc> <labels>
+// The Model B is the 8271 (B-DFS1.2), or BMODEL=B1770.
 import { findJsbeeb, loadLabels } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, disc, labels] = process.argv.slice(2);
-const s = new MachineSession(kind === "modelb" ? (process.env.BMODEL ?? "B-DFS1.2") : "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));   // (converged: a Master)
+const s = new MachineSession(kind === "modelb" ? (process.env.BMODEL ?? "B-DFS1.2") : "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
 const cpu = s._machine.processor, A = loadLabels(labels), v = s._video;
-const P = kind === "master" ? null : kind === "converged" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
+const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
 const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
 const HV = []; let forced = 0; { const opc = v.paintAndClear.bind(v); v.paintAndClear = function () { if (v.bitmapY >= 768) forced++; HV.push([cyc(), v.bitmapY >= 768]); return opc(); }; }
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 async function to(pc, bank, budget = 6000) {
-  const at = () => cpu.pc === pc && (bank === undefined || !P || cpu.readmem(0xf4) === P[bank - 4]);
+  const at = () => cpu.pc === pc && (bank === undefined || cpu.readmem(0xf4) === P[bank - 4]);
   const h = cpu.debugInstruction.add(() => at());
   try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }
   throw new Error("not reached: " + pc.toString(16));

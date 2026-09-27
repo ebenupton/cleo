@@ -171,17 +171,6 @@ clear_ring:
         rts
   .endif
 
-; load the overlay and the title pack unless they are still in (a level load replaces
-; both); the palette goes black first so neither the load nor the screen build-up shows
-load_title:
-        jsr m_blank_palette
-        lda title_res
-        bne :+
-        jsr m_loadfile              ; (disc.s load_title_b; game.s's ensure_menu has
-                                    ;  always brought them in before a menu runs)
-        inc title_res
-:       rts
-
 ; menu_begin: window at (0,0), buffer 0 as work buffer, cleared; screen blanked until
 ; menu_show has flipped the finished page in
 menu_begin:
@@ -259,7 +248,7 @@ text_centred:
 :       iny
         lda (ptr),y
         bne :-
-:       tya
+        tya
         asl
         asl                         ; len*4
         eor #$FF                    ; WINPX/2 - A, without parking A in memory
@@ -393,7 +382,6 @@ clear_items:
 ; ---------------------------------------------------------------- screens
 ; title menu: returns 0 start, 1 help, 2 exit
 title_menu:
-        jsr load_title
         lda MUSON
         bne :+
         jsr m_music_start             ; only if not already playing (back from help)
@@ -490,7 +478,7 @@ level_select:
 ; win/lose: A = 1 win, 0 lose; score and hi-score shown
 winlose:
         sta mtop                    ; the win/lose flag (not tmp4: the sprite prologue
-        jsr load_title              ; uses it, and the lose screen cycled the WIN frames)
+                                    ; uses it, and the lose screen cycled the WIN frames)
         jsr m_music_stop              ; the win/lose screen is silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "winlose picks the piece as TP_LOSE - mtop"
@@ -593,7 +581,7 @@ HISCORE_Y = 96
         jsr menu_keys
         and #(K_FIRE|K_RIGHT)
         beq @loop
-:       rts
+        rts
 
 ; w16 >>= X
 shr16x: txa                         ; Z from X (A dead at both callers)

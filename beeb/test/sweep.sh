@@ -26,7 +26,7 @@ jobs() {
     done
     echo "node test/menusync.mjs master $REF/cleo.ssd $REF/master/labels.txt $NEW/cleo.ssd $NEW/master/labels.txt > $OUT/menus_master.txt"
     echo "node test/menusync.mjs modelb $REF/cleo.ssd $REF/modelb/labels.txt $NEW/cleo.ssd $NEW/modelb/labels.txt > $OUT/menus_modelb.txt"
-    echo "node test/loadsync2.mjs converged $NEW/cleo.ssd $NEW/master/labels.txt > $OUT/load_master.txt"
+    echo "node test/loadsync2.mjs master $NEW/cleo.ssd $NEW/master/labels.txt > $OUT/load_master.txt"
     echo "node test/loadsync2.mjs modelb $NEW/cleo.ssd $NEW/modelb/labels.txt > $OUT/load_8271.txt"
     echo "BMODEL=B1770 node test/loadsync2.mjs modelb $NEW/cleo.ssd $NEW/modelb/labels.txt > $OUT/load_1770.txt"
     for b in watford solidisk; do

@@ -61,11 +61,7 @@ MAXDWY    = 8
   .else
 VSPEG     = 3                     ; vsyncs a rendered frame (game.s): 16.7 Hz of render
 RINGROWS  = 32                    ; the whole 20K: the hardware fold IS the ring wrap
-  .ifdef VISROWSDEF
-VISROWS   = VISROWSDEF            ; a test build: the Model B's window on the Master, so
-  .else                           ; the two can be run in lock step (-D VISROWSDEF=21)
 VISROWS   = 30                    ; visible char rows: 240 lines = 120 game px (the
-  .endif
                                   ; original is 108: a 128-line phone screen less a
                                   ; 20-line HUD).  30 fills the ring exactly: 31 held
                                   ; + the composed row.
@@ -506,7 +502,7 @@ drawrect:
         jsr mirdirty6
 @nomir:
   .endif
-:       ; ---- per-rect invariants  (the ':' is kept: it holds the anonymous label count): tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
+        ; ---- per-rect invariants: tx0 = rc_x >> 2 ; tiles-1 = ((rc_x + rc_w - 1) >> 2) - tx0
         lda rc_x+1
         sta w16+1                   ; the ring address's copy, from this load too
         lsr                         ; C = bit 0, A = bit 1 (rc_x+1 <= 3)
@@ -669,7 +665,7 @@ drawrect:
         clc                         ; this never carries before the last char, and after
         adc #8                      ; that tp is dead (@run rewrites both bytes)
         sta tp
-:       spnext                      ; (the label KEPT, unreferenced: anonymous count)
+        spnext
         dex
         dex
         bne @sc
@@ -715,10 +711,9 @@ drawrect:
 @advsp: lda sp
         adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
-        bcc :++
+        bcc :+
         inc sp+1                    ; no ringup: both entries to @advsp have already
-:                                   ; proved the run stays below RINGEND (rc_wrap).
-        ; KEPT, unreferenced, so the anonymous-label count through drawrect is unchanged
+                                    ; proved the run stays below RINGEND (rc_wrap).
 :
 @runend:
         lda cnt
@@ -959,8 +954,6 @@ drawrect:
 @fslow: lda rc_n
         sta tmp2
 @fsc:   PCHAR 0
-:                                   ; KEPT, unreferenced, so the anonymous-label
-        ; count through drawrect is unchanged
         spnext
         dec tmp2
         bne @fsc
@@ -984,7 +977,7 @@ HPAIR1  := HPAIR0 + 5
         .segment "TILCODE"          ; bank 6, with the row loop
 scroll_validate:
         ldx curbuf                  ; (an invalid buffer holds BUF_CX = $80xx, which the
-:       txa                         ;  |dx| >= 80 test below sends to @full; the ':' is kept for the label count)
+        txa                         ;  |dx| >= 80 test below sends to @full)
         asl
         tay
         ; dy = wcy - BUF_CY
@@ -1004,10 +997,10 @@ scroll_validate:
         beq @dxpos
         cmp #$FF
         bne @full
-:       lda w16                     ; (anonymous label kept: it holds the label count)
+        lda w16
         cmp #<-79
         bcc @full
-:       ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+BUFROWS-1
+        ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+BUFROWS-1
         eor #$FF                    ; (A still holds w16)
   .if BHW
         adc #0                      ; C = 1 from the cmp: A = -w16, and C = 0 (w16 <> 0)
@@ -1307,7 +1300,7 @@ draw_sprites:
 @endpass:
         dec dpass
         bpl @pass                   ; (in range on both machines)
-:       ldx curbuf
+        ldx curbuf
         lda NSPR
         sta RECCNT,x
         rts
@@ -1315,7 +1308,7 @@ draw_sprites:
 ; draw one sprite: A = id ; spx, spy = map px (ref point)
 ; Game sprites (spbank = BANK_SPR): the directory is the level's, in bank 7 at
 ; SPR_TABLE (ldprog.s); the data is in bank 4, or bank 5 when the entry's flag bit 4
-; is set (bit 2 would select ANDY, $8000 with ROMSEL bit 7: the packer never sets it).
+; is set.
 ; Title pieces (spbank != BANK_SPR): directory and data both live at TITLE_ADDR of
 ; that bank.
         .segment "LGCCODE"          ; bank 7, with the records and SPRMASK
@@ -1355,22 +1348,7 @@ drawsprite:
         lda (ptr),y
         sta sp_flags
         bankimm ldx, BANK_SPR, BANK_LVL
-  .if BHW
-        lsr                         ; C = flags bit 2
-        lsr
-        lsr                         ; and bit 1 = flags bit 4
-        bcc :+
-  .else
-        bitimm 4
-        beq :+
-  .endif
-        bankimm ldx, (BANK_SPR|$80), BANK_LVL
-:
-  .if BHW
-        and #2
-  .else
-        bitimm $10              ; A still holds the flags byte
-  .endif
+        and #$10                    ; bit 4: the data is in bank 5
         beq :+
         bankimm ldx, BANK_TIL1, BANK_LVL
 :       stx sp_dbank            ; wanted later: the directory is still being read
@@ -1417,7 +1395,6 @@ drawsprite:
         lda (ptr),y
         sta sp_w
         beq @out0
-:                                   ; keep the bare label: it preserves the anonymous-label count
         ldy #7
         lda (ptr),y
         sta sp_lines
@@ -1574,7 +1551,6 @@ drawsprite:
         lsr
         lsr
         sta sp_r0                   ; sta sets no flags: Z still from the third lsr
-:                                   ; (kept: it holds the anonymous label count)
 @nopart:
         ; ---- record rect in current sprite record
         ldy #5
@@ -2279,8 +2255,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         bne :+                      ;  saves under 0.3% of a frame: measured)
         rts
 :
-:
-:       lda #ROWCHARS               ; (the three ':' keep the anonymous label count)
+        lda #ROWCHARS
         sta cnt
         lda #0
         sta tmp4                    ; first column to copy
@@ -2749,7 +2724,7 @@ render_frame:
         ; rows after the vsync wait_flip just returned from (32 lines on the Master,
         ; 64 on the Model B).  Only digits: the template comes with the title (the BAR
         ; file) and nothing erases it -- the menus keep to the ring (menu_sections).
-:       lda BARDIRTY
+        lda BARDIRTY
         beq :+
         jsr t_redraw_hud
   .if BHW
@@ -3113,7 +3088,7 @@ gather5:
         adc #5                      ; below half1 4|1 (top fills), else 4|2 (C from cpx)
         cpx half2
         bcc @gh2                    ; below half2: done
-:       eor #2                      ; from half2 (so from half1): 6 -> 4, both stored
+        eor #2                      ; from half2 (so from half1): 6 -> 4, both stored
 @gh2:   sta GATHERL,y
         dey
         bpl @gl
@@ -3932,16 +3907,16 @@ blank_palette:
 ; A = tile row -> mapptr = address of that map row
 maprow:                             ; row * 2^lw = (row << 8) >> (8 - lw): mapshr is
         ldy #0                      ; the loader's; no table to page in.  X
-        sty mapptr                  ; is kept (the logic calls this with it live);
+        sty z:mapptr                ; is kept (the logic calls this with it live);
         ldy mapshr                  ; Y comes back 0
         beq :++
 :       lsr
-        ror mapptr
+        ror z:mapptr                ; (z: mapptr is logic.s's, defined after this)
         dey
         bne :-
 :       clc
         adc #>LV_MAP
-        sta mapptr+1
+        sta z:mapptr+1
         rts
 
 ; A = (mapptr),y ; Y preserved
@@ -4060,7 +4035,6 @@ m_wait_flip:                        ; (its own copy: two instructions)
         lda flipreq
         bne m_wait_flip
         rts
-        XCALL "m_loadfile", load_title_b, 0
         XCALL "m_music_stop", music_stop, 0
         XCALL "m_build_sections", menu_sections, 0
         XCALL "m_div10_16", div10_16, 0

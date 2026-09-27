@@ -107,7 +107,6 @@
         lda var+1
         eor #$80
         sbc #(>((imm)+1) ^ $80)
-:                                   ; placeholder - keeps the anonymous-label count
         bcs label
 .endmacro
 ; branch if var < imm (signed 16)
@@ -117,7 +116,6 @@
         lda var+1
         eor #$80                    ; bias both sides by $8000 and compare unsigned:
         sbc #(>(imm) ^ $80)         ; the bias on the constant is free at assembly time
-:                                   ; placeholder - keeps the anonymous-label count
         bcc label
 .endmacro
 ; branch if var >= imm (signed 16)
@@ -127,7 +125,6 @@
         lda var+1
         eor #$80
         sbc #(>(imm) ^ $80)
-:                                   ; placeholder - keeps the anonymous-label count
         bcs label
 .endmacro
 ; branch if var <= imm (signed 16)
@@ -137,7 +134,6 @@
         lda var+1
         eor #$80
         sbc #(>((imm)+1) ^ $80)
-:                                   ; placeholder - keeps the anonymous-label count
         bcc label
 .endmacro
 ; branch if a > b (both 16-bit vars)
@@ -727,7 +723,6 @@ level_init:
         jsr m_rnd
         and #$0F
         sta t16+1
-:                                   ; placeholder - keeps the anonymous-label count
         jsr mod16
         lda t16
         sta O_DL,y
@@ -810,7 +805,6 @@ level_init:
         lda gy1                     ; C set <=> gy <= gy1: another grid row
         cmp gy
         bcs @bx
-:                                   ; placeholder - keeps the anonymous-label count
 @nextobj:
         ldy obj
         beq @objdone
@@ -1000,7 +994,7 @@ game_frame:
 :       asl
         dex
         bne :-
-:       sta grow
+        sta grow
 @cells: lda grow
         clc
         adc gx
@@ -1120,7 +1114,7 @@ game_frame:
         lda facing                  ; 0 or 1 (1 = left)
         lsr                         ; C = facing
         ror                         ; A = facing << 7: player_hit tests only hx+1's sign
-:       sta hx+1                    ; facing left -> hx negative -> vx = +768
+        sta hx+1                    ; facing left -> hx negative -> vx = +768
   .ifdef DBGHIT
         lda #250                    ; the readout shows 25009 for a kill tile (obj and
         sta obj                     ; otype are free here: the walk is over for this step)
@@ -1392,7 +1386,6 @@ player_update:
         sbc py+1
         cpy #24
         sbc #0
-:                                   ; placeholder - keeps the anonymous-label count
         bpl @push
 @fell:  mov16 evframe, frame
   .if BHW
@@ -1431,9 +1424,8 @@ player_update:
         beq :+
         bpl @air
 :
-:       cmp #3                      ; A = q6 (push), still
+        cmp #3                      ; A = q6 (push), still
         beq @air
-:
         ; ground: vx = vx*61>>6 + push*24
         lda vx
         asl
@@ -2365,7 +2357,6 @@ ob_snake:
         bne @coll                   ; Z = 0: the cmp #5 did not match
 @c0:    jsr @pausef
         bcs @coll
-:
         inc fb
         bne :+
         inc fb+1
@@ -2398,7 +2389,6 @@ ob_snake:
         eor #$80
         cpx #<128
         sbc #(>128 ^ $80)
-:                                   ; placeholder - keeps the anonymous-label count
         bcs @coll
         lda fb                      ; C = 0: the bcs @coll above was not taken
         adc #16
@@ -2489,7 +2479,6 @@ ob_snake:
         eor #$80
         cpx #<128
         sbc #(>128 ^ $80)
-:                                   ; placeholder - keeps the anonymous-label count
         bcs @done
         lda fc
         cmp #2
@@ -2703,7 +2692,7 @@ ob_bat:
         adc #1                      ; A = fe < 8 and C = 0 from the bcc:
         and #7                      ; fe = (fe + 1) & 7
         sta fe
-:       ; rx += C>>1 ; ry += D>>1
+        ; rx += C>>1 ; ry += D>>1
         lda fc+1                    ; X:Y = fc >> 1 (arithmetic); rx += it, spx += it
         cmp #$80
         ror a
@@ -2747,7 +2736,7 @@ ob_bat:
         ; chase
         bpl16 rx, @rxpos
         bge16 fc, fa, @ydir
-:       inc fc                      ; (label kept: the anonymous count is unchanged)
+        inc fc
         bne @ydir
         inc fc+1
         bra @ydir
@@ -2760,7 +2749,7 @@ ob_bat:
 :       dec fc
 @ydir:  bpl16 ry, @rypos
         bge16 fd, fb, @boom
-:       inc fd
+        inc fd
         bne @boom
         inc fd+1
         bra @boom
@@ -2824,8 +2813,8 @@ ob_bat:
         bcc @fr
         lda #65
 @fr:    sta q1
-        bge16 px, spx, :++          ; spx > px: one frame on
-:       inc q1
+        bge16 px, spx, :+           ; spx > px: one frame on
+        inc q1
 :       ; wobble: x += BAT_OFFSET[(frame + obj*5) & 15] ; y += BAT_OFFSET[((5*frame>>2) + obj*7) & 15]
         lda obj
         asl
@@ -2881,7 +2870,6 @@ ob_bat:
         bvc :+
         eor #$80
 :       bpl @done
-:
         clc                         ; add16i fa, 120, keeping the new low byte in X
         lda fa
         adc #120

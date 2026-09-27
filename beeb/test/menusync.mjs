@@ -14,12 +14,10 @@ const N = 40;
 async function boot(disc, labels) {
   const s = new MachineSession(kind === "master" ? "Master" : "B-DFS1.2"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const cpu = s._machine.processor, A = loadLabels(labels);
-  const P = kind === "master" ? null : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
+  const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
-  // the bank menu_keys is in (the build's own debug info; MENUBANK_A/B override it for a
-  // reference build whose debug info the harness's segment table cannot place)
-  const mb = +(process.env[labels === lA ? "MENUBANK_A" : "MENUBANK_B"] ?? loadBanks(path.join(path.dirname(labels), "cleo.dbg"))?.byName.get("menu_keys") ?? 5);
-  const at = () => cpu.pc === A.menu_keys && (!P || cpu.readmem(0xf4) === P[mb - 4]);
+  const mb = loadBanks(path.join(path.dirname(labels), "cleo.dbg")).byName.get("menu_keys");   // the overlay's bank
+  const at = () => cpu.pc === A.menu_keys && cpu.readmem(0xf4) === P[mb - 4];
   async function next() {
     const h = cpu.debugInstruction.add(() => at());
     try { for (let i = 0; i < 4000; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }

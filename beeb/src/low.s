@@ -18,8 +18,9 @@
 ; xcall: the menus' crossing -- their overlay (bank 6) calls a few routines in bank 7,
 ; and the game loop its four entries.  X = the bank, ctgt = the address; A goes in
 ; and comes back, Y is untouched, X is destroyed.  The caller's bank waits on the stack,
-; so it nests (a menu calls load_title, which reads the disc...).  Not hot: a handful a
-; menu frame.  (A crosses in fcA: nothing runs between its store and its load but this.)
+; so it nests (the game loop calls a menu, which calls bank 7's div10_16).  Not hot: a
+; handful a menu frame.  (A crosses in fcA: nothing runs between its store and its load
+; but this.)
 xcall:  sta fcA
         lda ROMSEL_CPY
         pha

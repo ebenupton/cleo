@@ -210,37 +210,13 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);
   const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));
-  if (banks && banks.byName.get("frame_top") !== undefined) return openBanked({ MachineSession, disc, A, banks, level, quiet, onSession });
-  for (const need of ["frame_top", "select_backbuf", "render_done", "irq_handler", "level_init", "title_loop", "level_loop", "scan_keys", "keys"])
-    if (A[need] === undefined) throw new Error(`labels are missing ${need} -- rebuild?`);
-  const s = new MachineSession("Master");
-  await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
-  const H = new Harness(s, A);
-  if (onSession) onSession(H);                   // (a tool's hooks, before anything runs)
-  s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
-  await H.runTo(A.title_loop, 120_000_000);
-  H.wr(A.title_loop, 0xa9); H.wr(A.title_loop + 1, 0); H.wr(A.title_loop + 2, 0xea);
-  let ok = false;
-  for (let a = A.level_loop; a < A.level_loop + 16; a++)
-    if (H.rd(a) === 0xa6 && H.rd(a + 1) === (A.level & 255)) { H.wr(a, 0xa2); H.wr(a + 1, level); ok = true; break; }
-  if (!ok) throw new Error("ldx level not found in level_loop");
-  await H.runTo(A.level_init, 40_000_000);
-  H.wr(A.scan_keys, 0x60);                       // inputs come from the harness only
-  const blink = patchBlink(H);
-  if (blink !== 1 && !quiet) console.error(`WARNING: blink test matched ${blink} sites (expected 1)`);
-  await H.runTo(A.frame_top, 40_000_000);        // from here on, everything is frames
-  H.installMeter();
-  return H;
-}
-
-// A banked build (the Master's; the unbanked path above is for a retired build's
-// reference disc) boots through the loader, and its game loop is bank 7's: the title
-// and the level are patched there, as bopen.mjs does for the Model B.
-async function openBanked({ MachineSession, disc, A, banks, level, quiet, onSession }) {
+  if (!banks || banks.byName.get("frame_top") === undefined) throw new Error(`${labels}: no cleo.dbg beside it with the banks -- rebuild?`);
+  // boot through the loader; the game loop is bank 7's, so the title and the level are
+  // patched there, as bopen.mjs does for the Model B
   const s = new MachineSession("Master");
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const H = new Harness(s, A, banks);
-  if (onSession) onSession(H);
+  if (onSession) onSession(H);                   // (a tool's hooks, before anything runs)
   const in7 = (f) => { const was = H.rd(0xf4); H.wr(0xfe30, 7); try { return f(); } finally { H.wr(0xfe30, was); } };
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   await H.runTo(A.title_loop, 200_000_000);
@@ -250,14 +226,13 @@ async function openBanked({ MachineSession, disc, A, banks, level, quiet, onSess
     let ok = false;
     for (let a = A.level_loop; a < A.level_loop + 24; a++)
       if (H.rd(a) === 0xa6 && H.rd(a + 1) === (A.level & 255)) { H.wr(a, 0xa2); H.wr(a + 1, level); ok = true; break; }
-    if (!ok) throw new Error("banked: ldx level not found in level_loop");
+    if (!ok) throw new Error("ldx level not found in level_loop");
   });
   await H.runTo(A.level_init, 200_000_000);
-  if (banks.byName.get("scan_keys") === undefined) H.wr(A.scan_keys, 0x60);   // (main RAM)
-  else in7(() => H.wr(A.scan_keys, 0x60));
+  in7(() => H.wr(A.scan_keys, 0x60));            // inputs come from the harness only
   const blink = patchBlink(H);
   if (blink !== 1 && !quiet) console.error(`WARNING: blink test matched ${blink} sites (expected 1)`);
-  await H.runTo(A.frame_top, 40_000_000);
+  await H.runTo(A.frame_top, 40_000_000);        // from here on, everything is frames
   H.installMeter();
   return H;
 }

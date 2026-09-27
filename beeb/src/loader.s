@@ -183,8 +183,7 @@ start:
         dec npieces
         bne @piece
         ; ---- the bank patches: (bank, address) x n, $FF -- zsrc is on them, the pieces
-        ; being done.  The byte is a bank number in its low nibble (bit 7 on one of them
-        ; is the Master's ANDY flag, which the Model B never takes: kept as it is).
+        ; being done.  The byte is a bank number, 4..7.
 @fix:   lda (zsrc),y                ; (Y = 0 here: the copy loop and this loop leave it so)
         bmi @fixdone                ; the $FF (a bank is 4..7)
         jsr selbank
@@ -196,10 +195,8 @@ start:
         sta zdst+1
         ldy #0
         lda (zdst),y
-        and #$0F
         tax
-        eor (zdst),y                ; the high nibble, kept
-        ora map-4,x
+        lda map-4,x
         sta (zdst),y
         lda zsrc
         clc

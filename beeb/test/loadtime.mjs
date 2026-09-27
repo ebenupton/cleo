@@ -2,8 +2,7 @@
 // load itself with the palette black -- the level's FIRST load (the resident sets come
 // in with it) and a SECOND (the level ended and loaded again: the harness pins the level
 // number, so it is the same level, as it would stand after any other).
-//   node test/loadtime.mjs converged|modelb <disc> <labels> <level>
-// (`converged` is the Master; `master` is for a retired unbanked build)
+//   node test/loadtime.mjs master|modelb <disc> <labels> <level>
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 const [kind, disc, labels, lvS] = process.argv.slice(2);
@@ -21,7 +20,7 @@ if (kind === "modelb") {
   B.bank(7, () => B.cpu.writemem(B.A.exiting, 1));
   await B.runTo(B.A.level_init, 7, 60000);
 } else {
-  const H = await open({ disc, labels, level: lv, onSession: (H) => hook(H.cpu, H.A, () => H.cyc(), () => kind !== "converged" || H.cpu.readmem(0xf4) === 7) });
+  const H = await open({ disc, labels, level: lv, onSession: (H) => hook(H.cpu, H.A, () => H.cyc(), () => H.cpu.readmem(0xf4) === 7) });
   H.wr(H.A.exiting, 1);
   await H.runTo(H.A.level_init, 400_000_000);
 }

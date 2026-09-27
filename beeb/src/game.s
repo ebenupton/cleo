@@ -222,7 +222,7 @@ game_won:
         jsr t_winlose
         jmp title_loop
 ; the menu overlay into bank 6 and the title pack into bank 5, unless they are still
-; in (a level load replaces both; menu.s's load_title makes the same test)
+; in (a level load replaces both): before every menu, since the overlay is the menus
 ensure_menu:
         lda title_res
         bne :+

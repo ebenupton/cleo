@@ -30,9 +30,9 @@ for (let f = 0; f < N; f++) {
     recs.push([H.rd(b + 5) | (H.rd(b + 6) << 8), H.rd(b + 7), H.rd(b + 8), H.rd(b + 9) & 0x7f]); } } });
   const near = (x, y) => recs.some(([rx, ry, w, h]) => x >= rx - 2 && x <= rx + w + 2 && y >= ry - 2 && y <= ry + h + 2);
   let fb = 0;
-  const MAP = H.banks ? 0x9C00 : 0x8900;   // (a banked build: MAP5; $8900 a retired build's)
+  const MAP = 0x9C00;                       // MAP5
   const map = bank(5, () => { const m = []; for (let r = 0; r < 16; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(H.rd(MAP + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
-  for (let r = 0; r < 27; r++) for (let c = 0; c < 80; c++) {
+  for (let r = 0; r < 30; r++) for (let c = 0; c < 80; c++) {
     const x = cx + c, y = cy + r;
     if (near(x, y)) continue;
     const id = map[(y >> 1) - (cy >> 1)][(x >> 2) - (cx >> 2)];

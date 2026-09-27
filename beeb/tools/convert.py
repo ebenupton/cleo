@@ -532,7 +532,6 @@ altfile = b''.join(sorted(classes, key=lambda r: classes[r]))
 # ----------------------------------------------------------------------------
 # Level packs
 # ----------------------------------------------------------------------------
-BANK_TILES = 5                       # (unused; the game's tile bank is 6: defs.inc)
 rng = np.random.RandomState(1234)
 def name_of(lv, sub):
     return 'L%d%s' % (lv, 'B' if sub == 0 else 'A')
@@ -726,7 +725,6 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # sectors) of the same pairs, so the one row loop reads both.
 TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mirrored tiles)
 B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xC000   # bank 6: tiles above its code and variables (defs.inc TILES)
-M_TILES, M_TILES_END = 0x8000, 0xC000       # the M layout's (below): all of bank 6
 def _layout(stored, hlist, halfpair, base, end, loc):
     slot = {k: i for i, k in enumerate(stored)}
     NT, NHALF = len(stored), len(hlist)
@@ -743,7 +741,7 @@ def _tilelist(files, stored, loc):
 
 def pack_tiles(lv, sub):
     """The level's tile ids, and the lists that gather its tiles: B, the layout both
-    machines load (M, an alternative layout, is computed but nothing reads it)."""
+    machines load."""
     cm = maps[(lv, sub)]
     g = tileset_of(lv, sub)
     specials = [special['VANISH0'] + i for i in range(8)] + [special['FLOWER0'] + i for i in range(4)]
@@ -850,31 +848,7 @@ def pack_tiles(lv, sub):
         e, o = flattab[2 * j], flattab[2 * j + 1]
         blo[FLAT0 + j], bhi[FLAT0 + j] = (e, 0xC0) if e == o else (2 * j, 0xE0)
     B['page0'] = bytes(blo + bhi)
-    # M: the same slots from $8000, then a copy of each mirrored tile as a full tile
-    # of its own (by a list of its own: file index, file) -- unused by the packer
-    NS = NT + NMIR
-    M = dict(NT=NS, HALFPAGE=M_TILES + ((NS * 64) & ~255), HALFOFF=((NS * 64) & 255) // 32)
-    assert M['HALFPAGE'] + (M['HALFOFF'] + NHALF) * 32 + len(halfpair) <= M_TILES_END
-    M['tiles'] = _tilelist(files, stored, loc)
-    # its table, as LV_PAGE0 for these slots
-    lo, hi = bytearray(256), bytearray([0xC0] * 256)   # (unused ids: a black fill, as above)
-    for k in stored:
-        s_ = idof[k]
-        lo[s_], hi[s_] = (s_ & 3) << 6, (M_TILES >> 8) + (s_ >> 2)
-    for i, k in enumerate(mirs):
-        s_ = NT + i
-        lo[mir0 + i], hi[mir0 + i] = (s_ & 3) << 6, (M_TILES >> 8) + (s_ >> 2)
-    for i, h in enumerate(hlist):
-        t, kk = half0 + i, M['HALFOFF'] + i
-        hi[t] = (M['HALFPAGE'] >> 8) + (kk >> 3)
-        lo[t] = ((kk & 7) << 5) | (5 if t < half1 else 6 if t < half2 else 4)
-    for j in range(NFLAT + 2):
-        e, o = flattab[2 * j], flattab[2 * j + 1]
-        lo[FLAT0 + j], hi[FLAT0 + j] = (e, 0xC0) if e == o else (2 * j, 0xE0)
-    M['page0'] = bytes(lo + hi)
-    M['mirs'] = b''.join(bytes([loc(k)[1], pos(k)]) for k in mirs)
-    M['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, M['HALFPAGE'] >> 8, M['HALFOFF'], mir0, NMIR, 0])
-    return dict(local=local, B=B, M=M, flat=flattab, halves=halflist, hpair=halfpair,
+    return dict(local=local, B=B, flat=flattab, halves=halflist, hpair=halfpair,
                 ntiles=NT, nhalf=NHALF, nmir=NMIR, nflat=len(flats), usage=usage)
 
 # ----------------------------------------------------------------------------
