@@ -56,12 +56,7 @@ irq_handler:                        ;  chain: engine.s)
         jsr pagelogic               ; bank 7, write bank too (VS2T allows for it)
         jsr isr_body
         lda MUSTICK                 ; the vsync's sound_tick, while the tune plays; the
-        beq @nomus                  ; T1 steps come through here too and must not count
-        dec MUSTICK                 ; (1 -> 0: MUSON's value, which is 0 or 1)
-        bankimm lda, BANK_TILES, 0
-        sta ROMSEL_CPY
-        sta ROMSEL
-        jsr music_tick              ; (sets its own write bank: it is disc-loaded code)
+        bne @mus                    ; T1 steps come through here too and must not count
 @nomus: pla
         sta ROMSEL_CPY
         sta ROMSEL
@@ -71,6 +66,12 @@ irq_handler:                        ;  chain: engine.s)
         ldx irq_x
         lda $FC
         rti
+@mus:   dec MUSTICK                 ; (1 -> 0: MUSON's value, which is 0 or 1)
+        bankimm lda, BANK_TILES, 0
+        sta ROMSEL_CPY
+        sta ROMSEL
+        jsr music_tick              ; (sets its own write bank: it is disc-loaded code)
+        jmp @nomus
   .endif
 
 ; ---------------------------------------------------------------- the tile blitter's map

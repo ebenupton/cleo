@@ -334,10 +334,8 @@ tilexy: lda qx+1
 ; getinfo: A = alt byte for pixel (qx, qy), 8 if outside the map
 getinfo:
         jsr tilexy                  ; X = qx>>3, A = qy>>3
-        bcc :+
-        lda #8
-        rts
-:       jsr maptile
+        bcs @out8                   ; (outside: out of line, after the rts)
+        jsr maptile
         ; alt class = LV_ALTCLS[tile id]
         tay
         lda LV_ALTCLS,y
@@ -350,6 +348,8 @@ getinfo:
         eor qx
         tay
         lda LV_ALTTAB,y
+        rts
+@out8:  lda #8                      ; outside the map
         rts
 
 ; getaltitude: A = altitude (signed) at pixel (qx, qy)  [qy modified]

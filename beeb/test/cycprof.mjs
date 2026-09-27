@@ -6,7 +6,7 @@
 // taken and not, the cycles a frame a taken branch spends over falling through (what
 // turning it round could save, before whatever the turning costs), and the page
 // crossings' cycles a frame.  Run over the usual key script with the player unhurt.
-//   node test/cycprof.mjs master|modelb <disc> <labels> [levels=0,2,4,6] [frames=150] [rows=40] [sort=cross|taken]
+//   node test/cycprof.mjs master|modelb <disc> <labels> [levels=0,2,4,6] [frames=150] [rows=40] [cross|taken|line=file:line,...]
 import { open, loadBanks } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";
@@ -100,7 +100,11 @@ for (const [k, [ex, tk, extra]] of st) {
 const all = [...lines].map(([k, r]) => ({ k, ex: per(r.ex), tk: per(r.tk), nt: per(r.ex - r.tk), cross: per(r.cross) }));
 const tot = all.reduce((a, r) => ({ cross: a.cross + r.cross, tk: a.tk + r.tk }), { cross: 0, tk: 0 });
 console.log(`${machine}: levels ${levels.join(",")} x ${frames} frames; a frame: ${tot.cross.toFixed(0)} cycles in page crossings, ${tot.tk.toFixed(0)} branches taken`);
-if (sortBy === "cross") {
+if (sortBy.startsWith("line=")) {                               // every site on the lines named
+  const want = sortBy.slice(5).split(",");
+  for (const r of all.filter((r) => want.some((w) => r.k.includes(w + " ") || r.k.includes(w + "  ") || r.k.endsWith(w))))
+    console.log(`  exec ${r.ex.toFixed(1).padStart(7)}  taken ${r.tk.toFixed(1).padStart(7)}  cross ${r.cross.toFixed(1).padStart(6)}  ${r.k}`);
+} else if (sortBy === "cross") {
   console.log("\npage crossings, cycles a frame (branches' included):");
   for (const r of all.sort((p, q) => q.cross - p.cross).slice(0, rows)) console.log(`  ${r.cross.toFixed(1).padStart(8)}  ${r.k}   (exec ${r.ex.toFixed(0)})`);
 } else {

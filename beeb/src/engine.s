@@ -852,15 +852,8 @@ drawrect:
         bne @mc
         jmp @runend
   .endif
-        ; ---- fills: a flat tile, the other solid, a half tile's fill row -- no source
-        ; bytes: a pair, even lines tp, odd tp+1, down every char (the level's solid,
-        ; id 0, comes in at @fillgo from @sol0)
-@solid: ldy GATHERL,x               ; the flat pair: even lines from tp, odd from tp+1
-        lda FLATTAB,y               ; (tp is otherwise unused on this path)
-        sta tp
-        lda FLATTAB+1,y
-        sta tp+1
-        bcs @fillgo                 ; (always: C is set at every entry to @run)
+        ; ---- fills: a half tile's fill row, a flat tile, the other solid -- no source
+        ; bytes: a pair, even lines tp, odd tp+1, down every char
 @hfill:
   .if TILEMIRROR
         lda GATHERL,x               ; the kind: bit 2 clear is a mirror (3), set a half
@@ -884,6 +877,12 @@ drawrect:
 @hp0:   lda $FFFF,y                 ; lda HALFPAIR,y: the pair, from where the loader
         sta tp                      ; put the table (it patches both operands: HPAIR0,
 @hp1:   lda $FFFF,y                 ; HPAIR1, defined after the row loop)
+        sta tp+1
+        jmp @fillgo                 ; (the rarer: @solid falls through)
+@solid: ldy GATHERL,x               ; the flat pair: even lines from tp, odd from tp+1
+        lda FLATTAB,y               ; (tp is otherwise unused on this path)
+        sta tp
+        lda FLATTAB+1,y
         sta tp+1
 @fillgo:
         lda #4
@@ -1291,9 +1290,8 @@ draw_sprites:
         clc
         adc #10
         sta rp
-        bcc :+
-        inc rp+1
-:       inc spi
+        bcs @rpc                    ; (the carry out of line, after the rts)
+@rpb:   inc spi
         bne @l                      ; spi <= NSPR: never wraps to 0
 @endpass:
         dec dpass
@@ -1302,6 +1300,8 @@ draw_sprites:
         lda NSPR
         sta RECCNT,x
         rts
+@rpc:   inc rp+1
+        jmp @rpb
 
 ; draw one sprite: A = id ; spx, spy = map px (ref point)
 ; Game sprites (spbank = BANK_SPR): the directory is the level's, in bank 7 at
@@ -2145,8 +2145,7 @@ sprretPk:                           ; mask blitter: next phase is the next page;
         clc
         adc sp_mh
         sta mptr
-        bcc @pk
-        inc mptr+1
+        bcs sprmpc                  ; (out of line, after ds_done)
 @pk:
 sprretP:                            ; next column: source pointer + lines
         lda ptr
@@ -2189,6 +2188,8 @@ ds_rowdone:
 ds_done: rts
 sprpinc: inc ptr+1
         jmp sprnext
+sprmpc: inc mptr+1
+        jmp sprretP
 sprscold:
         spcold sprsback
 
