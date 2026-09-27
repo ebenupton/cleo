@@ -730,11 +730,7 @@ level_init:
         sta O_DH,y
         lda q2
         beq :+                      ; submin0 1 specialised: max(q2-1, 0)
-.if BHW
         sbc #0                      ; C = 0 from mod16's exit (bcc -> rts): A-1
-.else
-        deca
-.endif
 :       lsr
         lsr
         lsr
@@ -2088,21 +2084,11 @@ ob_none:
 ; after checking r fits in -128..127 - anything wider fails every limit anyway).
 ; Returns carry set if inside. Clobbers A, X.
 inrange:
-  .if ::BHW                      ; r fits -128..127 iff hi + (lo's sign) = 0 mod 256
-        lda rx
+        lda rx                      ; r fits -128..127 iff hi + (lo's sign) = 0 mod 256
         asl                         ; C = the low byte's sign
         lda rx+1
         adc #0                      ; $FF+1 and 0+0 are 0; nothing else is
         bne @no
-  .else
-        lda rx+1
-        inca                         ; $FF -> 0, 0 -> 1, anything else >= 2
-        cmp #2
-        bcs @no
-        lda rx
-        eor rx+1                    ; low byte sign must agree with the high byte
-        bmi @no
-  .endif
         lda rx
         eor #$80
         cmp RNGTAB,x
@@ -2110,21 +2096,11 @@ inrange:
         beq @no                     ; rx > lo
         cmp RNGTAB+1,x
         bcs @no                     ; rx < hi
-  .if ::BHW
         lda ry
         asl
         lda ry+1
         adc #0
         bne @no
-  .else
-        lda ry+1
-        inca
-        cmp #2
-        bcs @no
-        lda ry
-        eor ry+1
-        bmi @no
-  .endif
         lda ry
         eor #$80
         cmp RNGTAB+2,x
@@ -2197,11 +2173,7 @@ ob_star:
         bcs @nostep
         cmp #18                     ; cap: a collected star's A must not wrap 8-bit
         bcs @nostep                 ; (it would make the star reappear ~every 20s).
-  .if ::BHW
         adc #1                      ; C = 0: the bcs was not taken
-  .else
-        inca                        ; A still holds it: there is no inc abs,y
-  .endif
         sta O_AL,y
 @nostep:
         cmp #12
@@ -2536,11 +2508,7 @@ ob_rsnake:
 @calc:  lda fa
         bpl :+
         eor #$FF
-  .if BHW
         adc #0                      ; C = 1: the cmp #113 fell through (inca is 6 bytes)
-  .else
-        inca
-  .endif
 :       jsr square                  ; returns A = t16, the low byte
         lsr t16+1                   ; rise = (A*A >> 3) - 28, the low byte shifted in A;
         ror a                       ; t16 itself is dead after this

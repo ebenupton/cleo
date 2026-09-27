@@ -18,9 +18,7 @@
 ; level is gathered from the disc into the banks by the loader (ldprog.s), which runs
 ; in main RAM while the palette is black.
 ; ============================================================================
-  .if BHW
-VSPEG     = 3                       ; vsyncs a rendered frame, as the Master's (engine.s)
-  .endif
+VSPEG     = 3                       ; vsyncs a rendered frame (game.s): 16.7 Hz of render
 
 SWAPTAB   = $BB00                   ; static in bank 4, below the mask tables: dot
 MASKTAB0  = $BC00                   ; reversal (bank 5 draws nothing mirrored); the
@@ -64,7 +62,6 @@ ringe3   = $E2                      ;   >RINGEND-3 and 256->RINGEND (drawrect's 
 ringneg  = $E3
 mrow     = $E4                      ; the map char row in the ring's last slot (calc_ring)
 wcxm     = $E5                      ; ringS mod 80: the mirror's first useful char
-rstar    = $E6                      ; the window row that lives in the last slot
 sp_disp  = $E7                      ; the sprite's blitter index, for the loop's bank
 sp_mpg0  = $E8
 sp_mh    = $E9
@@ -124,11 +121,19 @@ FDC1770_CMD = $FE84                 ; then the WD1770 at $FE84-$FE87
 FDC1770_TRK = $FE85
 FDC1770_SEC = $FE86
 FDC1770_DAT = $FE87
+FDC_RESET   = $08                   ; the latch: reset held (bit 5 low), FM
+FDC_DRV0    = $29                   ;   reset released, FM, drive 0 / drive 1 (bits 0, 1)
+FDC_DRV1    = $2A
+FDC_SIDE1   = $04                   ;   side 1 (bit 2)
   .else
 FDC1770_CTL = $FE24                 ; the Master's: its drive control latch, then the
 FDC1770_CMD = $FE28                 ; WD1770 at $FE28-$FE2B
 FDC1770_TRK = $FE29
 FDC1770_SEC = $FE2A
 FDC1770_DAT = $FE2B
+FDC_RESET   = $20                   ; the latch: reset held (bit 2 low)
+FDC_DRV0    = $25                   ;   reset released, FM, drive 0 / drive 1 (bits 0, 1)
+FDC_DRV1    = $26
+FDC_SIDE1   = $10                   ;   side 1 (bit 4)
   .endif
 

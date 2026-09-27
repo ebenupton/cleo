@@ -56,21 +56,17 @@ ROWCHARS  = 80
 ;   $0300 bar  $0800 mirror A  $0A80 ring A  $4400 mirror B  $4680 ring B  $8000
 RINGROWS  = 23
 VISROWS   = 21                    ; 168 lines = 84 game px
-BUFROWS   = VISROWS + 1
-MAXDWY    = 8
   .else
-VSPEG     = 3                     ; vsyncs a rendered frame (game.s): 16.7 Hz of render
 RINGROWS  = 32                    ; the whole 20K: the hardware fold IS the ring wrap
 VISROWS   = 30                    ; visible char rows: 240 lines = 120 game px (the
                                   ; original is 108: a 128-line phone screen less a
                                   ; 20-line HUD).  30 fills the ring exactly: 31 held
                                   ; + the composed row.
+  .endif
 BUFROWS   = VISROWS + 1           ; rows held: the visible ones plus the bottom partial's
 ; The camera follows Cleo one for one, so her fall speed is also how far the window
-; moves in a frame.  A char row is four map pixels.  Main and shadow are separate,
-; so nothing in the layout forces a limit; this one is a play decision.
+; moves in a frame.  A char row is four map pixels: a play decision.
 MAXDWY    = 8
-  .endif
 ROWBYTES  = ROWCHARS*8
 RINGCHARS = ROWCHARS*RINGROWS
 RINGBYTES = RINGCHARS*8
@@ -82,6 +78,8 @@ RINGBYTES = RINGCHARS*8
 ; (the code every bank calls is the low RAM below it: low.s).
 RING_A    = $0A80
 RING_B    = $4680
+RING0     = RING_A                ; buffer 0's ring (the menus' too)
+CLEAR0    = MIRR_A                ; the menus' clear: mirrors and rings, to $8000
 MIRR_A    = RING_A - ROWBYTES
 MIRR_B    = RING_B - ROWBYTES
 RINGEND_A = RING_A + RINGBYTES
@@ -100,6 +98,8 @@ BUF0      = $3000
 ; That is the whole reason RINGROWS is 32 -- it is not a choice, it is the size of the
 ; region the hardware wraps.
 RINGBASE  = BUF0
+RING0     = RINGBASE              ; buffer 0's ring (the menus' too)
+CLEAR0    = RINGBASE              ; the menus' clear: buffer 0's ring, to $8000
 RINGEND   = RINGBASE + RINGBYTES
 ; The composed top row has to be INSIDE the screen: it is per buffer, and anything below
 ; $3000 is only main RAM to the CRTC (the bar gets away with it by being single buffered
@@ -311,7 +311,6 @@ SECTAB:    .res 2*48
 SFXDUR:    .res 1
 LOADREQ:   .res 1
 dispD:     .res 1
-OLDIRQ:    .res 2
 NEXTBUF:   .res 1
     .endif
         .segment "MNUBSS"           ; bank 6's menu overlay: the tune's player lives there
@@ -350,7 +349,7 @@ NEXTSECT:  .res 1
 .macro ringmod                      ; A = a map char row -> its ring slot
 .if (RINGROWS & (RINGROWS - 1)) = 0
         and #(RINGROWS-1)
-.elseif ::BHW
+.else
         .local n1, n2               ; a row is 0..255 and the table RINGROWS*5 long
         cmp #RINGROWS*5             ; (bank 6's): two subtractions bring the row into
         bcc n1                      ; it, 141 bytes short of a 256-entry table
@@ -359,9 +358,6 @@ n1:     cmp #RINGROWS*5
         bcc n2
         sbc #RINGROWS*5
 n2:     tax
-        lda ringmodtab,x
-.else
-        tax
         lda ringmodtab,x
 .endif
 .endmacro
@@ -413,11 +409,7 @@ n2:     tax
         sta sp
         bcc :++                     ; past the fold's own anonymous label
         lda sp+1
-  .if ::BHW
         adc #0                      ; C = 1 (the bcc fell through): +1, 2 bytes not 6
-  .else
-        inca
-  .endif
         ringup sp
         sta sp+1
 :
@@ -522,11 +514,7 @@ drawrect:
         sta rc_ro0
         lda rc_sc0
         adc rc_w
-  .if BHW
         sbc #0                      ; C = 0 (<= 83, no carry): the -1
-  .else
-        deca
-  .endif
         lsr
         lsr
         sta rc_nt
@@ -1043,21 +1031,13 @@ scroll_validate:
         bcc @full
         ; dx negative: draw cols wcx .. wcx+(-dx)-1, rows wcy..wcy+BUFROWS-1
         eor #$FF                    ; (A still holds w16)
-  .if BHW
         adc #0                      ; C = 1 from the cmp: A = -w16, and C = 0 (w16 <> 0)
-  .else
-        inca
-  .endif
         sta rc_w
         lda wcx
         sta rc_x
         lda wcx+1
         sta rc_x+1
-  .if BHW
         bcc @docols                 ; C = 0 from the adc
-  .else
-        bra @docols
-  .endif
 @full:  ; (here, between two unconditional exits, in reach of every branch to it)
         lda wcy
         sta rc_y
@@ -1089,19 +1069,11 @@ scroll_validate:
         cmp #<-30
         bcc @full
         eor #$FF
-  .if BHW
         adc #0                      ; C = 1 from the cmp: A = -w16b, and C = 0
-  .else
-        inca
-  .endif
         sta rc_h
         lda wcy
         sta rc_y
-  .if BHW
         bcc @dorows                 ; C = 0 from the adc
-  .else
-        bra @dorows
-  .endif
 @dypos: cmp #BUFROWS
         bcs @full                   ; not taken: C = 0 for the adc
         sta rc_h
@@ -1491,11 +1463,7 @@ drawsprite:
         bcs @out0                   ; not taken: C = 0 for the adc below
         sta sp_c0
         adc sp_w
-  .if BHW
         sbc #0                      ; C = 0 still (c0 + W < 256): A - 1, as deca
-  .else
-        deca
-  .endif
         cmp #ROWCHARS
         bcc :+
         inc spclip                  ; and at the right
@@ -1626,11 +1594,7 @@ drawsprite:
         iny
         lda sp_r1
         sbc sp_r0                   ; C still set by the width sbc above (sp_c1 >= sp_c0)
-  .if BHW
         adc #0                      ; and set by this one (sp_r1 >= sp_r0): + 1
-  .else
-        inca
-  .endif
         ldx spclip
         beq :+                      ; may be visible next time and it has to be redrawn
         ora #$80
@@ -2099,21 +2063,15 @@ name:
         bne partial
         lda tmp                     ; even: 0,2,4,6 -> entry p0..p3
         beq p0
-  .if ::BHW
         cmp #4
         bcc p1
-    .if mirror
+  .if mirror
         beq p2j
         jmp p3
 p2j:    jmp p2
-    .else
+  .else
         beq p2
         jmp p3
-    .endif
-  .else
-        tax
-        jmpx et
-et:     .word p0, p1, p2, p3
   .endif
 p0:     MPAIR 0, mirror
 p1:     MPAIR 2, mirror
@@ -2399,11 +2357,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         sta ptr
         bcc @fjmp
         lda ptr+1
-  .if BHW
         adc #0                      ; C = 1: the bcc fell through; ringup's cmp resets it
-  .else
-        inca
-  .endif
         ringup ptr
         sta ptr+1
         bne @fjmp                   ; Z = 0: A is a ring high byte, never 0
@@ -2823,12 +2777,7 @@ wait_flip:
 ; bar's, in play) shows two ring rows below the window instead: the menus never draw
 ; there and clear_ring has made them black, so the menus look as they did but the bar
 ; is neither shown nor touched while they run -- it is laid once and left in place.
-  .if BHW
-MENURING = RING_A
-  .else
-MENURING = RINGBASE
-  .endif
-MENUBAR  = (MENURING + VISROWS*ROWBYTES) / 8
+MENUBAR  = (RING0 + VISROWS*ROWBYTES) / 8
         .assert VISROWS + BARROWS <= RINGROWS, error, "the menus' bar rows must be in the ring"
 menu_sections:
         jsr build_sections
@@ -2871,159 +2820,6 @@ load_end:                           ; (with interrupts off: disc.s)
         sta VIA_IFR                 ; stale.  A vsync flag raised meanwhile is stale too
         rts
 
-  .ifdef PARALLAX
-; ============================================================================
-; Parallax experiment (-D PARALLAX, Master): a 1:1 diagonal across the window, drawn
-; into the sky.  Window line L carries dot L: a dot right per scanline is 45 degrees
-; in game pixels (a game pixel is 2 dots by 2 lines).  Only a sky pixel takes the
-; line: the cell's map tile must be the solid sky fill and the pixel itself cyan --
-; the cyan holes in a sprite's box take it too, which puts the line behind the
-; sprite, and a sprite's own pixels stop it.  The line is in screen space and the
-; buffer in map space, so each buffer remembers the window the line was drawn at
-; and pl_erase walks that path first, turning its yellow back to cyan.  The buffer
-; is untouched between the two, so the old path is exact.
-; ============================================================================
-        .segment "TABLES"           ; the walker's cursor (zero page is full: the column
-pl_cx = w16                         ;  is ringaddr's own w16)
-pl_cy:    .res 1                  ; map char row of the cell under the cursor
-pl_ln:    .res 1                  ; scanline within the cell, 0..7
-pl_dot:   .res 1                  ; dot within the byte, 0..3
-pl_l:     .res 1                  ; window lines left
-pl_mode:  .res 1                  ; bit 7: 1 = draw, 0 = erase
-pl_tile:  .res 1                  ; the map tile under the cursor
-        .code
-pl_state:                           ; per buffer: valid, wcx lo, wcx hi, wcy, wfine
-pl_valid: .byte 0, 0
-pl_ocxl:  .byte 0, 0
-pl_ocxh:  .byte 0, 0
-pl_ocy:   .byte 0, 0
-pl_ofine: .byte 0, 0
-pl_hi:    .byte $80, $40, $20, $10 ; a dot's high bit (yellow = both, cyan = low only)
-pl_lo:    .byte $08, $04, $02, $01
-pl_both:  .byte $88, $44, $22, $11
-pl_nothi: .byte $7F, $BF, $DF, $EF
-
-pl_erase:
-        ldx curbuf
-        lda pl_valid,x
-        beq @no
-        lda pl_ocxl,x
-        sta pl_cx
-        lda pl_ocxh,x
-        sta pl_cx+1
-        lda pl_ocy,x
-        sta pl_cy
-        lda pl_ofine,x
-        sta pl_ln
-        stz pl_mode
-        jmp pl_walk
-@no:    rts
-
-pl_draw:
-        ldx curbuf
-        lda wcx
-        sta pl_cx
-        sta pl_ocxl,x
-        lda wcx+1
-        sta pl_cx+1
-        sta pl_ocxh,x
-        lda wcy
-        sta pl_cy
-        sta pl_ocy,x
-        lda wfine
-        sta pl_ln
-        sta pl_ofine,x
-        lda #1
-        sta pl_valid,x
-        lda #$80
-        sta pl_mode
-        ; fall through
-; walk the path from (pl_cx, pl_cy, line pl_ln) for VISLINES lines
-pl_walk:
-        lda ROMSEL_CPY              ; maprow/mapbyte leave bank 7 paged: put back
-        pha                         ; whatever the render had
-        lda #VISLINES
-        sta pl_l
-        stz pl_dot
-        jsr @cell
-@line:  lda pl_tile
-        cmp #SOLID_CYAN
-        bne @skip
-        ldx pl_dot
-        lda (sp)
-        and pl_both,x
-        bit pl_mode
-        bmi @draw
-        cmp pl_both,x               ; erase: yellow -> cyan
-        bne @skip
-        lda (sp)
-        and pl_nothi,x
-        sta (sp)
-        bra @skip
-@draw:  cmp pl_lo,x                 ; draw: cyan -> yellow
-        bne @skip
-        lda (sp)
-        ora pl_hi,x
-        sta (sp)
-@skip:  dec pl_l
-        beq @done
-        inc pl_dot
-        lda pl_dot
-        cmp #4
-        bne :+
-        stz pl_dot
-        inc pl_cx
-        bne :+
-        inc pl_cx+1
-:       inc pl_ln
-        lda pl_ln
-        cmp #8
-        beq @newrow
-        inc sp                      ; the next line of the same cell: 8 bytes from
-        bne :+                      ; a multiple of 8, so no fold inside a cell
-        inc sp+1
-:       lda pl_dot
-        bne @line
-        lda sp                      ; a new column: its cell is 8 bytes on
-        clc
-        adc #8
-        sta sp
-        lda sp+1
-        adc #0
-        ringup sp
-        sta sp+1
-        jsr @tile
-        bra @line
-@newrow:
-        stz pl_ln
-        inc pl_cy
-        jsr @cell
-        bra @line
-@done:  pla
-        sta ROMSEL_CPY
-        sta ROMSEL
-        rts
-@cell:  lda pl_cy                   ; sp = screen address of (cx, cy) line ln (cx is
-        jsr ringaddr                ; w16 already), and the map row of cy
-        lda sp
-        clc
-        adc pl_ln
-        sta sp
-        bcc :+
-        inc sp+1
-:       lda pl_cy
-        lsr
-        jsr maprow
-@tile:  lda pl_cx+1                 ; tile column = cx >> 2 (a tile is four chars)
-        lsr
-        lda pl_cx
-        ror
-        lsr
-        tay
-        jsr mapbyte
-        sta pl_tile
-        rts
-  .endif
         .segment "LGCCODE"          ; bank 7 drives the frame and keeps the records; bank
 render_core:                        ; 6 gets two fixed calls a frame (low RAM's selbb and
         jsr selbb                   ; validate) and the rects through callbank
@@ -3306,7 +3102,6 @@ calc_ring:
         sta wcxm                    ; where the window starts in its slot
         lda #RINGROWS-1             ; the window row that lives in the last slot, and
         sbc barq                    ; the map row it shows.  C = 1: the adc carried
-        sta rstar
         clc
         adc wcy
         sta mrow
@@ -3704,13 +3499,8 @@ sound_tick:
         sta VIA_ORB                 ; keyboard autoscan on so the keyboard does not pull PA7
         pla
         sta VIA_ORANH
-  .if .not BHW
-        nop                         ; = lda #0: the store lands on the same cycle
-        stz VIA_ORB
-  .else
         lda #0
         sta VIA_ORB
-  .endif
         nop
         nop
         nop
@@ -3861,12 +3651,6 @@ music_stop:
         .segment "BOOT"             ; start-up's, in main RAM (once only)
 take_over:
         sei
-  .if .not BHW
-        lda IRQ1V
-        sta OLDIRQ
-        lda IRQ1V+1
-        sta OLDIRQ+1
-  .endif
         lda #<irq_handler
         sta IRQ1V
         lda #>irq_handler
@@ -3907,12 +3691,6 @@ crtc_init:
         sta curR7
         rts
 crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
-.if (RINGROWS & (RINGROWS - 1)) <> 0
-ringmodtab:                         ; only a non-power-of-two ring needs the table; at
-.repeat 256, i                      ; RINGROWS = 32 ringmod is `and #31` and this is
-        .byte i .mod RINGROWS       ; not assembled
-.endrepeat
-.endif
   .endif
 
         .segment "LGCCODE"          ; bank 7 (the menus call it through xcall)

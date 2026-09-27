@@ -141,42 +141,25 @@ pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game
 ; ---------------------------------------------------------------- menu screen helpers
 ; clear the ring to black.  The bar is left alone: the menus' frame does not show it
 ; (menu_sections, engine.s)
-  .if BHW
-        .assert (<MIRR_A) = 0 && (<RINGEND_B) = 0, error, "the clear is whole pages"
+        .assert <CLEAR0 = 0, error, "the clear is whole pages"
 clear_ring:
-        lda #>MIRR_A                ; both mirrors and both rings: main RAM from $0800
-        sta w16+1                   ; to the top ($8000), whole pages
-        lda #0
+        lda #>CLEAR0                ; to the top ($8000), whole pages: the Model B's
+        sta w16+1                   ; mirrors and rings, the Master's buffer 0 ring
+        lda #0                      ; (the bar is below either)
         sta w16
         tay
 @l:     sta (w16),y
         iny
         bne @l
         inc w16+1
-        bpl @l                      ; RINGEND_B = $8000 (engine.s asserts it)
+        bpl @l                      ; to $8000 (engine.s asserts the ring ends)
         rts
-  .else
-clear_ring:
-        stz w16
-        lda #>RINGBASE              ; buffer 0's ring, $3000 to the top (the bar is
-        sta w16+1                   ; below it)
-        ldy #0
-        tya
-@l:     sta (w16),y
-        iny
-        bne @l
-        inc w16+1
-        bpl @l                      ; to $8000: RINGEND (asserted below)
-        .assert RINGEND = $8000, error, "clear_ring stops at $8000"
-        rts
-  .endif
 
 ; menu_begin: window at (0,0), buffer 0 as work buffer, cleared; screen blanked until
 ; menu_show has flipped the finished page in
 menu_begin:
         jsr m_blank_palette
         jsr m_wait_flip               ; the game may still have a flip pending
-  .if BHW
         sta wx                      ; A = 0: m_wait_flip spun until flipreq was 0
         sta wx+1
         sta wy
@@ -186,17 +169,6 @@ menu_begin:
         sta wcy
         sta wfine
         sta curbuf
-  .else
-        stza wx
-        stza wx+1
-        stza wy
-        stza wy+1
-        stza wcx
-        stza wcx+1
-        stza wcy
-        stza wfine
-        stza curbuf
-  .endif
         jsr m_select_backbuf
         jsr m_calc_ring
         jsr clear_ring
@@ -371,11 +343,8 @@ clear_items:
         dey
         bpl :-
         inx
-  .if BHW
-        cpx #RINGROWS               ; the ring is 23 slots here: the tables end there
-  .else
-        cpx #28
-  .endif
+        cpx #VISROWS                ; the window's last row (below: the menus' bar rows,
+                                    ; never drawn, black since clear_ring)
         bne @r
 @done:  rts
 
@@ -418,19 +387,11 @@ help_screen:
         sta ptr
         lda helptab+1,y
         sta ptr+1
-  .if BHW                        ; 84 px of window: i*10+16, the last line at 66
-        tya                         ; Y = 2i (C=0 from the asl above)
-        asl
-        adc tmp3                    ; i*5
+        tya                         ; y = i*10+16, the last line at 66: laid out for
+        asl                         ; the Model B's 84 px of window (Y = 2i, C = 0 from
+        adc tmp3                    ; the asl above): i*5
         adc #8
         asl                         ; (i*5+8)*2 = i*10+16
-  .else
-        tya                         ; Y = 2i = i*2 (C=0 from the asl above)
-        adc tmp3                    ; i*3
-        adc #5                      ; i*3+5
-        asl
-        asl                         ; (i*3+5)*4 = i*12+20
-  .endif
         tax
         jsr text_centred
         ldx tmp3
@@ -482,14 +443,9 @@ winlose:
         jsr m_music_stop              ; the win/lose screen is silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "winlose picks the piece as TP_LOSE - mtop"
-  .if BHW
         lda #0
         sta spx+1
         sta spy+1
-  .else
-        stz spx+1
-        stz spy+1
-  .endif
         lda #4
         sta spy
         lda mtop                    ; 1 win, 0 lose
@@ -510,13 +466,8 @@ winlose:
         sta ptr
         lda #>str_score
         sta ptr+1
-  .if BHW
 SCORE_Y = 64                        ; 84 px of window: under big Cleo (28..59)
 HISCORE_Y = 76                      ; (a glyph row is a multiple of 4)
-  .else
-SCORE_Y = 84
-HISCORE_Y = 96
-  .endif
         lda #12
         ldx #SCORE_Y
         jsr drawtext

@@ -236,32 +236,18 @@ w_trk:    .res 1                    ; the 1770's head, as far as this driver kno
 disc_init:
         lda drv_type
         beq @done
-  .if BHW
-        lda #$08                    ; reset held (bit 5 low), FM
+        lda #FDC_RESET              ; the latch: reset held
         sta FDC1770_CTL
-        lda #$29                    ; reset released, FM, drive 0
-        ldx drv_unit
-        beq :+
-        lda #$2A                    ; drive 1 (the old ora/bne path's 7 cycles)
-        bne :++
-:       nop                         ; drive 0 (the old ora #$01's 2 cycles)
-:       sta FDC1770_CTL
-  .else
-        lda #$20                    ; the Master's latch: reset held (bit 2 low)
-        sta FDC1770_CTL
-        ldx drv_unit                 ; then the drive (and side), FM, reset released
+        ldx drv_unit                ; then the drive (and side), FM, reset released
         lda @drvsel,x
         sta FDC1770_CTL
         nop
-  .endif
         lda #$00                    ; restore: track 0
         sta FDC1770_CMD
         jsr w_wait
         stx w_trk                   ; X = 0: w_wait's delay loop ends there
 @done:  rts
-  .if .not BHW
-@drvsel: .byte $25, $26, $35, $36   ; drive 0, 1, 0 side 1, 1 side 1
-  .endif
+@drvsel: .byte FDC_DRV0, FDC_DRV1, FDC_DRV0|FDC_SIDE1, FDC_DRV1|FDC_SIDE1
         .segment "LGCCODE"
 
 ; ---------------------------------------------------------------- the loader

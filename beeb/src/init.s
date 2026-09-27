@@ -72,9 +72,6 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
         bne :-
   .endif
         jsr crtc_init
-  .if .not BHW
-        jsr calc_ring               ; the Master's chain wants the ring's state (zeros here)
-  .endif
         ; both buffers' chains, for a blank window at the origin (ringS, barq, wfine
         ; are the zeros above), before the interrupt can walk one
         jsr build_sections
