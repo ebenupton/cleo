@@ -1,7 +1,8 @@
-// The Model B's two rings against the level's tiles (tools/tilecheck.mjs's check): at
+// The Model B's two rings against the level's tiles (tilecheck.mjs's check): at
 // every frame_top, each buffer's window, every char cell no sprite record comes near.
 // MIR=lo,hi counts the cells whose id is in [lo, hi): the mirrored ids, say.
 //   node test/btilecheck.mjs <disc> <labels> <level> <frames> [idsdir=build/tileids]
+// (the ids from python3 tools/tileids.py)
 import { openB } from "./bopen.mjs";
 import fs from "fs";
 const [disc, labels, lvS, nS, dir = "build/tileids"] = process.argv.slice(2);

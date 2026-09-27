@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Build an Acorn DFS single-sided disc image (.ssd) from a list of files.
+"""Build an Acorn DFS single-sided disc image (.ssd) from a list of files, or the
+sector table the game's loader reads them by (files.inc: F_<name>_SEC, F_<name>_N).
+Both lay the files out the same way, in the order given, from sector 2.
 
-usage: mkdfs.py out.ssd title  name:path[:load[:exec]] ...
+usage: python3 tools/mkdfs.py build out.ssd title name:path[:load[:exec]] ...
+       python3 tools/mkdfs.py table files.inc name:path ...
+(build.sh runs both, from beeb/.)
 """
 import sys, struct
 
@@ -58,6 +62,8 @@ def layout(files):
     return res
 
 if __name__ == '__main__':
+    if len(sys.argv) < 3 or sys.argv[1] not in ('table', 'build'):
+        sys.exit(__doc__)
     mode = sys.argv[1]
     if mode == 'table':
         out = sys.argv[2]

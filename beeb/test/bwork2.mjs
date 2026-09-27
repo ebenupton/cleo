@@ -1,18 +1,18 @@
-// Frame cost: cycles from one frame_top (bank 7) to the next, less the wait for the
-// vsync peg, over N frames of a key script; prints the distribution and the far-call
-// count per frame.  BDISC/BLABELS: another build's disc and labels; BDUMP=file writes
-// each frame's work, for comparing two builds frame by frame (the same seed gives the
-// same frames: medians of the differences, not differences of medians).
+// Frame cost on the Model B: cycles from one frame_top (bank 7) to render_done, less
+// the interrupts, over N frames of a key script; prints the distribution.  BDISC/BLABELS: another build's
+// disc and labels; BDUMP=file writes each frame's work, for comparing two builds frame
+// by frame (the same seed gives the same frames: medians of the differences, not
+// differences of medians).
+//   node test/bwork2.mjs [frames=300] [seed=1] [level=0]
 import { openB } from "./bopen.mjs";
 import { writeFileSync } from "node:fs";
 const frames = parseInt(process.argv[2] ?? "300"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "0");
 const { s, cpu, A, bank, cyc, runTo, PB } = await openB({ level: LEVEL, ...(process.env.BDISC ? { disc: process.env.BDISC, labels: process.env.BLABELS } : {}) }); const B7 = PB(7);
 // work = frame_top .. the flip request (render_frame's end): everything but the peg wait
-let t0 = -1, work = [], far = 0, fars = [], isr = 0, isrs = [], isrAt = -1;
+let t0 = -1, work = [], isr = 0, isrs = [], isrAt = -1;
 const meter = cpu.debugInstruction.add((pc, op) => {
-  if (pc === A.frame_top && cpu.readmem(0xf4) === B7) { if (t0 >= 0) {} t0 = cyc(); far = 0; isr = 0; }
-  else if (pc === A.render_done && cpu.readmem(0xf4) === B7 && t0 >= 0) { work.push(cyc() - t0 - isr); fars.push(far); isrs.push(isr); t0 = -1; }
-  else if (pc === A.farcall) far++;
+  if (pc === A.frame_top && cpu.readmem(0xf4) === B7) { t0 = cyc(); isr = 0; }
+  else if (pc === A.render_done && cpu.readmem(0xf4) === B7 && t0 >= 0) { work.push(cyc() - t0 - isr); isrs.push(isr); t0 = -1; }
   else if (pc === A.irq_handler) isrAt = cyc();
   else if (isrAt >= 0 && op === 0x40) { isr += cyc() - isrAt; isrAt = -1; }
   return false;
@@ -26,6 +26,6 @@ for (let f = 0; f < frames; f++) {
 meter.remove();
 if (process.env.BDUMP) writeFileSync(process.env.BDUMP, JSON.stringify(work));   // for a frame-by-frame comparison
 const so = [...work].sort((a, b) => a - b), q = (p) => so[Math.floor(p * (so.length - 1))];
-console.log(`${so.length} frames: work median ${q(0.5)} p90 ${q(0.9)} max ${so[so.length-1]} min ${so[0]} cycles (ISR excluded); far calls/frame median ${[...fars].sort((a,b)=>a-b)[fars.length>>1]} max ${Math.max(...fars)}; ISR/frame median ${[...isrs].sort((a,b)=>a-b)[isrs.length>>1]}`);
+console.log(`${so.length} frames: work median ${q(0.5)} p90 ${q(0.9)} max ${so[so.length-1]} min ${so[0]} cycles (ISR excluded); ISR/frame median ${[...isrs].sort((a,b)=>a-b)[isrs.length>>1]}`);
 console.log(`vsyncs a frame at 40000 cycles each: median ${(q(0.5)/40000).toFixed(2)}, p90 ${(q(0.9)/40000).toFixed(2)}, max ${(so[so.length-1]/40000).toFixed(2)}`);
 process.exit(0);

@@ -1,27 +1,32 @@
 #!/usr/bin/env python3
-"""Pack every level for the Model B target, in the Master's own formats.
+"""Pack every level, and the sprites, for both machines.
 
-   python3 tools/assets.py            (all sixteen levels; prints a fit report)
+   python3 tools/assets.py            (run from beeb/, as build.sh does, once per
+                                       machine: TARGET=modelb|master, BD=build/...)
 
-The Master's convert.py is imported for its tables.  The shared files (the tile set's,
-TITLE, MUSIC) go on the disc as convert.py wrote them, and the sprites as this packer
-writes them: SPRC, the sprites every level draws (Cleo, the boomerang, the stars, the
-trampoline), at fixed addresses loaded once, and SPRX, everything else, from which
-each level takes its subset.  The game's own loader (ldprog.s) stages one file at a
-time in display RAM and copies the pieces a level needs into the banks, where the
-packer here decided they go.  What
-this writes to build/:
+convert.py is imported for its tables (and writes the tile set's files, TITLE).  Those
+go on the disc as convert.py wrote them, and the sprites as this packer writes them:
+SPRC, the sprites every level draws (Cleo, the boomerang, the stars, the trampoline),
+at fixed addresses in banks 4 and 5, and SPRX, everything else, from which each level
+takes its subset.  The game's own loader (ldprog.s) stages one file at a time in
+display RAM and copies the pieces a level needs into the banks, where the packer here
+decided they go.  The level files are shared, so the two machines' runs must write
+them identically (build.sh checks).  What this writes to $BD:
 
-   L0..L15        per level: header, objects, attr/altcls, the level's tile lists
-                  (convert.py pack_tiles), the sprite placement list, the RLE map,
-                  the finished sprite directory and SPRMASK.  A small table of
-                  section offsets at the top.
+   L0..L15        per level: a table of section offsets, then the header, objects,
+                  attr/altcls, the level's tile lists (convert.py pack_tiles), the
+                  sprite placement list, the RLE map, the finished sprite directory
+                  and SPRMASK, and last the Master's LV_PAGE0 in two whole sectors
+   SPRC, SPRX     the sprites, as above
    imgtab.bin     per image, box and trampoline: which shared file holds it and
-                  where, and the same for its mask
-   digits.bin     the HUD's digits (bank 7); font.bin (the menu image); alt.bin
-   BAR            the bar template, 1280 bytes, loaded to $0300 at every level
-   assets.inc     the bounds every level fits: MAXSPR, BINMAX, the biggest map,
-                  the solid ids, the file sizes the bank images incbin
+                  where, and the same for its mask (ldprog.s)
+   digits.bin     the HUD's digits packed, digtab.bin their decode (bank 7, banks.s);
+                  font.bin (the menus' glyphs); alt.bin (the altitude classes);
+                  music.bin (build/MUSIC, midi2snd.py's: the menu overlay's tune)
+   BAR            the bar template, 1280 bytes, read to BARADDR on each return to
+                  the title
+   assets.inc     the bounds every level fits: MAXSPR, BINMAX, the solid ids, the
+                  sprite blocks' places and sizes, the banks' code ends
 """
 import os, sys, io, contextlib, importlib.util
 import numpy as np
@@ -33,7 +38,7 @@ spec = importlib.util.spec_from_file_location('conv', 'tools/convert.py')
 m = importlib.util.module_from_spec(spec)
 with contextlib.redirect_stdout(io.StringIO()):
     spec.loader.exec_module(m)
-TARGET = os.environ.get('TARGET', 'modelb')     # or 'master' (build.sh)
+TARGET = os.environ.get('TARGET', 'modelb')     # or 'master' (build.sh): where to write, VISLINES
 OUT = os.path.join(BEEB, os.environ.get('BD', 'build/' + TARGET))
 os.makedirs(OUT, exist_ok=True)
 
@@ -41,13 +46,13 @@ def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
 SOLID_CYAN, SOLID_BLACK = 254, 255
-VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 20 (engine.s)
+VISLINES = 240 if TARGET == 'master' else 168   # the window's lines: VISROWS 30 / 21 (engine.s)
 
 # ---------------------------------------------------------------- the banks' fixed shape
 # Code sits at the bottom of banks 4, 5 and 6 (each entered at $8000) and the mask
-# tables at the top of 4 and 6; bank 6's tiles run from its code's next page to the
+# tables at the top of 4 and 5; bank 6's tiles run from its code's next page to the
 # end; bank 5's map is a fixed 8K below its mask tables.  These are the bounds the
-# linker config (cleo_b.cfg) and defs.inc share.
+# linker configs (cfg/) and defs.inc share.
 # The sprites start exactly where the Model B's code ends in each bank: every byte its
 # code does not take is sprite room.  One disc serves both machines, so the level files
 # -- the sprites' addresses -- are one layout: the Master's code, a little shorter,
@@ -59,24 +64,24 @@ B4_CODE_END = 0x83AF                        # the row loop (SPR4CODE)
 B5_CODE_END = 0x82F8 if _MIR else 0x82C0    # the row loop, the gather and its shape (MAP5BSS)
 B4_DATA = (B4_CODE_END, 0xBB00)             # bank 4: images and masks, between the row loop
                                             #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
-B4_HOLE = (0xBB00, 0xBB00)                  #   (no hole now: one run)
+B4_HOLE = (0xBB00, 0xBB00)                  #   (empty: the placer's second region in bank 4)
 B5_DATA = (B5_CODE_END, 0x9C00)                  # bank 5: all its sprites, one run, between the row
                                             #   loop + gather and the map: the resident part
-                                            #   (SPRC6) at the bottom, the level's above it
-B5_HOLE = (0x9C00, 0x9C00)                  #   (no hole now)
+                                            #   (SPRC's bank-5 part) at the bottom, the level's above it
+B5_HOLE = (0x9C00, 0x9C00)                  #   (empty, as B4_HOLE)
 B5_SWAP = (0x9C00, 0x9C00)
 MAP5 = 0x9C00                               # the map: a fixed 8K below MASKTAB0-3 ($BC00)
 B5_TOP = MAP5                               #   (the end of bank 5's sprites)
 TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page aligned),
-                                            #   above the code (cleo_b.cfg B6X), to the end
+                                            #   above the code (the cfgs' B6X), to the end
 
 # ---------------------------------------------------------------- the shared files
-# The sprites every level draws -- Cleo, the boomerang, the stars (ids 0..42) -- are
-# one block at a fixed place in bank 4 (SPRC, from B4_DATA's start), loaded once and
-# never again.  Everything else -- the enemies, the box stars, the trampolines -- is
+# The sprites every level draws -- Cleo, the boomerang, the stars (ids 0..42), the
+# trampoline -- are one file (SPRC) at fixed places in banks 4 and 5, loaded once and
+# again only after the title.  Everything else -- the enemies, the box stars -- is
 # one file (SPRX), which a load stages and copies from: the level's subset, to the
-# addresses placed below.  (The converged Master keeps SPRX resident after its first
-# read: ldprog.s.)  imgtab says where in SPRX each item is.
+# addresses placed below.  (The Master keeps SPRX resident after its first read:
+# ldprog.s.)  imgtab says where in SPRX each item is.
 NIMG = len(m.images)
 # item keys: ('img', j) | ('box', k) | ('tramp', f) -> a small integer the placement
 # lists and the directory template use
@@ -87,9 +92,9 @@ def item_bytes(kind, j):
 COMMON = sorted(set(m.entry[i][0] for i in list(range(43)) + [43, 44, 45] if m.entry[i] is not None))
                                             # (and the trampoline, which 15 levels of 16 have)
 # The mirrored ones must be in bank 4 (its sprite loop has the dot-reversal table);
-# bank 4 cannot also hold the plain ones beside the biggest levels' mirrored enemies,
-# so those go to the top of bank 5, above any map and its directory.  The title pack
-# reaches that far, so the menus cost a reload of the block (ldprog.s title_load).
+# bank 4 cannot also hold all the plain ones beside the biggest levels' mirrored
+# enemies, so the rest go to the bottom of bank 5's sprite run.  The title pack
+# overlays that, so the menus cost a reload of the block (ldprog.s title_load).
 _mirrored_all = set(m.entry[i][0] for i in range(103) if m.entry[i] is not None and m.entry[i][1])
 common_addr, common_mask, common_bank = {}, {}, {}
 def _pack(js, base):
@@ -101,7 +106,7 @@ def _pack(js, base):
     return blk
 c4 = [j for j in COMMON if j in _mirrored_all]
 # the plain ones: bank 4 takes what it can spare beside the biggest level's mirrored
-# enemies (largest first), the top of bank 5 the rest
+# enemies (largest first), bank 5 the rest
 _sz = lambda j: len(m.img_bytes[j]) + len(m.img_mask[j])
 _maxmir = 0
 for (_lv, _sub), _L in m.levels.items():
@@ -149,8 +154,9 @@ out('imgtab.bin', imgtab)
 print('sprites: SPRC %d bytes (bank 4 $%04X-$%04X, bank 5 $%04X-$%04X), SPRX %d bytes'
       % (len(sprc), B4_DATA[0], COMMON_END, C5_BASE, B5_TOP, len(sprx)))
 
-# the directory template: the Master's entry less its pointer, which becomes the item
-# index and its kind; the loader writes the pointer and the bank-5 flag
+# the directory template: a directory entry less its pointer, which holds the item
+# index and its kind until the level's placement fills in the pointer and the bank-5
+# flag (pack_level)
 sprdir = bytearray()
 for i in range(103):
     e = m.entry[i]
@@ -243,7 +249,7 @@ def pack_level(lv, sub):
     cm = m.maps[(lv, sub)]
     assert cm.min() >= 0
     gset = m.tileset_of(lv, sub)
-    # the level's tiles: convert.py pack_tiles, the ids the Master's too
+    # the level's tiles: convert.py pack_tiles
     T = m.pack_tiles(lv, sub)
     local = T['local']
     lut = np.zeros(len(m.compact), dtype=np.uint8)
@@ -282,8 +288,8 @@ def pack_level(lv, sub):
         attr[t] = m.attr_of(c)
         acls[t] = 0 if c in m.tile_solid else m.alt_class[c]
 
-    # ---- the sprite list's bounds (see the old packer: the objects whose cells the
-    # walk rectangle can cover from any camera position)
+    # ---- the sprite list's bounds: the objects whose cells the walk rectangle can
+    # cover from any camera position
     boxes = []
     for (t, x, y, ex) in L['objs']:
         e = (list(ex) + [0, 0, 0])[:3]
@@ -314,6 +320,7 @@ def pack_level(lv, sub):
     bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
     tramps = []                             # (resident: SPRC)
     R5BASE = C5_BASE + C5_LEN               # above the resident part, up to the map
+                                            # (r6, h6, s6 and the report's b6 are bank 5's)
     regions = {'r4': [COMMON_END, B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
                'r6': [R5BASE, B5_DATA[1]], 's6': [B5_SWAP[0], B5_SWAP[1]], 'h6': [B5_HOLE[0], B5_HOLE[1]]}
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
@@ -461,7 +468,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('BOXID0 = 103\nBOXN = 15\n')
     f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC5_BASE = $%04X\nSPRC5_LEN = %d\nSPRX_LEN = %d\n'
             % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
-    f.write('TITLE_ADDR = $8900\n')         # bank 5, as the Master: over the map
+    f.write('TITLE_ADDR = $8900\n')         # bank 5, over the sprites and the map (convert.py)
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
     f.write('SPR5_MIRROR = 0\n')            # bank 5 holds no image that is drawn mirrored

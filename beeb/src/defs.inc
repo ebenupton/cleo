@@ -1,29 +1,25 @@
 ; ============================================================================
-; Cleo, Model B target: what differs from the Master is addresses -- this file --
-; and the 65C02 spellings (src/cpu.inc).  The engine, the logic, the game loop and
-; the menus are ../src/engine.s, logic.s, game.s and menu.s, assembled with MODELB=1.
-;
-; Main RAM is the display: $0300-$7BFF is the bar, two mirrors and two 22-slot rings
-; (engine.s, screen shape).  What is left is zero page, $0100-$02FF (the stack, the
-; far-call thunk, the interrupt stub, the map helpers, the sprite list), $7C00-$7FFF
-; (the code every bank calls: the tile blitter's head, ringaddr, the record scans,
-; select_backbuf, mark_dirty, and the small tables) and two holes below the mirrors
-; (the buffers' state, the dirty lists).  The code lives in four sideways banks, each
-; with the data its inner loops read:
-;   4  most of the sprite images and masks, the mask tables, the sprite row loop
-;   5  the level's tiles (the Master's own count, up to 233) with the tile blitter's
-;      row loop, scroll_validate, draw_dirty and blank_below above them; the menu
-;      overlay (the menus, the tune, the font) goes over the tiles for the menus
-;   6  the map and the rest of the sprites with their own copy
-;      of the row loop; the title pack sits over the map during the menus
-;   7  the logic, the game loop, the level's tables and sprite directory, the sprite prologue and its
-;      records, copy_partial, the display driver, the interrupt's work, the sound,
-;      the HUD, the disc driver
-; Every level is gathered from the disc into the banks by the loader (ldprog.s),
-; which runs in main RAM while the palette is black.  docs/PLAN_MODELB_FULL.md.
+; The addresses, for both machines (BHW, cpu.inc: the hardware).  The code lives in
+; four sideways banks, each with the data its inner loops read:
+;   4  the sprite row loop (with the mirrored blitter), most of the sprite images
+;      and masks, SWAPTAB and the mask tables
+;   5  the row loop again (no mirrored blitter), the gather and fetch8, the rest of
+;      the sprites, the map (a fixed 8K) and the mask tables; the title pack goes
+;      over them for the menus
+;   6  the tile blitter and the ring work, then the level's tiles from TILES; the
+;      menu overlay (the menus, the tune, the font) goes over the tiles for the menus
+;   7  the level's tables, then the logic, the game loop, the sprite prologue and
+;      its records, the HUD, the disc driver, the level's sprite directory; on the
+;      Model B the display driver, the interrupt's work and the sound too
+; Main RAM on the Model B is the display from $0300 -- the bar, two mirrors and two
+; 23-slot rings (engine.s, screen shape) -- leaving zero page and $0100-$02FF (the
+; stack, low.s).  On the Master the bar is at $2B00 and the ring at $3000 in main and
+; shadow RAM; below them its handler, chain and their state, and LV_PAGE0.  Every
+; level is gathered from the disc into the banks by the loader (ldprog.s), which runs
+; in main RAM while the palette is black.
 ; ============================================================================
   .if BHW
-VSPEG     = 3                       ; vsyncs a rendered frame, as the Master
+VSPEG     = 3                       ; vsyncs a rendered frame, as the Master's (engine.s)
   .endif
 
 SWAPTAB   = $BB00                   ; static in bank 4, below the mask tables: dot
@@ -47,16 +43,17 @@ LV_MAP    = MAP5                    ; bank 5, $9C00: row major, a fixed 8K below
 LV_OBJS   = $7C00                   ; the level's objects, 6 bytes each (894 at most): main RAM (the
                                     ; display, black while they are read: level_init
                                     ; reads them once, before the first render)
-  .else                             ; the converged Master: main RAM below the screen
+  .else                             ; the Master: main RAM below the screen
 LV_OBJS   = $1C00                   ; (the loader's program ends by $1BFF)
 LV_PAGE0  = $0400                   ; tile id -> the gather's pair: 256 lo, 256 hi (the
                                     ; level's, the loader's), page aligned
   .endif
 
 ; ---------------------------------------------------------------- zero page
-; The Master's zero page: engine.s's .zeropage ends at $A1, the logic's temps are
-; $A8-$DE.  These fill the gaps.  $F4 is the MOS's ROMSEL copy: nothing past $EF.
-NSPR     = $A3                      ; (main RAM tables on the Master: low RAM is short)
+; The ZEROPAGE segment ends below $A3 (the cfgs cap it) and the logic's temporaries
+; are $A8-$DE (logic.s): these fill the gaps.  $F0-$FF is the MOS's, and engine.s's
+; (ZPF0/ZPF5/ZPFD), all but $F4 (ROMSEL_CPY) and $FC (the interrupt entry's A).
+NSPR     = $A3
 BARDIRTY = $A4
 SFXREQ   = $A6
 mtmp     = $DF                      ; cpu.inc's scratch (inca/deca/bitimm/ldazy)
@@ -68,18 +65,18 @@ mrow     = $E4                      ; the map char row in the ring's last slot (
 wcxm     = $E5                      ; ringS mod 80: the mirror's first useful char
 rstar    = $E6                      ; the window row that lives in the last slot
 sp_disp  = $E7                      ; the sprite's blitter index, for the loop's bank
-sp_mpg0  = $E8                      ; (the Master keeps these four in main RAM)
+sp_mpg0  = $E8
 sp_mh    = $E9
 sp_mrp   = $EA                      ; 2
 sp_mbase = $EC                      ; 2
-BINI     = $A5                      ; the Model B's three hottest scalars outside zero page
-curR7    = $EE                      ;  (profiled: 44-64, ~41 and ~35 accesses a frame); the
-SECIDX   = $EF                      ;  menus' menuptr, which had $EE-$EF, went to MNUBSS
+BINI     = $A5                      ; three hot scalars (profiled: 44-64, ~41 and ~35
+curR7    = $EE                      ;  accesses a frame): the bin walk's index, and the
+SECIDX   = $EF                      ;  chain's R7 and step
 fcA      = $A7                      ; xcall's A across the bank switch (low.s)
 .assert SECIDX < $F0, error, "zero page runs into the MOS's"
 
 ; ---------------------------------------------------------------- display
-  .if BHW                           ; (the converged Master: the Master's own, engine.s)
+  .if BHW                           ; (the Master's are engine.s's)
 LINE      = 64                      ; T1 ticks in one scanline
 BARCRTC   = BARADDR / 8
 CRTCB_A   = RING_A / 8
@@ -87,10 +84,10 @@ CRTCB_B   = RING_B / 8
 ; CA1 fires at the end of the 2-line vsync pulse.  -35 would put each step ~5 us INTO
 ; its section; the further -36 puts it ~30 us BEFORE the restart, so the shape
 ; registers land early in the section's first scanline.  The interrupt stub's bank
-; switch (~30 cycles) replaces the hold the Master's handler had; since the switch went
-; through pagelogic (the write bank too) both the vsync's T1 restart and every step are
-; ~23 cycles later -- 46 in all, 23 ticks -- and the -23 takes that back: tools/bcrtc.mjs
-; shows R9 landing at char 41-53 of the section's first scanline, as before.
+; switch stands in for the hold the Master's handler has; it goes through pagelogic
+; (the write bank too), which makes both the vsync's T1 restart and every step ~23
+; cycles later -- 46 in all, 23 ticks -- and the -23 takes that back: R9 lands at
+; char 41-53 of the section's first scanline (measured).
 VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 23 - 12 + 2   ; -12: the step's LOADREQ test and the
                                     ; IER-masked entry; +2 (ticks): loaded as an immediate, 4 cycles sooner
   .endif
@@ -113,11 +110,11 @@ STAGE     = $1C00                   ; a shared file staged here, 16K at most ($5
 STAGE_LVL = $5C00                   ; the level's own file, 8K at most (tools/assets.py
                                     ; asserts it): the objects go to LV_OBJS ($7C00)
                                     ; while it is still being read
-  .else                             ; the converged Master: the screen, both of it --
+  .else                             ; the Master: the screen, both copies of it --
 STAGE     = $3000                   ; a shared file in SHADOW RAM (ACCCON X = 1 while it
 STAGE_LVL = $3000                   ; is read or copied), the level's in main RAM
   .endif
-FDC8271_CMD = $FE80                 ; the 8271: command/status, parameter/result, data
+FDC8271_CMD = $FE80                 ; the Model B's 8271: command/status, parameter/result, data
 FDC8271_PAR = $FE81
 FDC8271_DAT = $FE84
   .if BHW

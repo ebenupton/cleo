@@ -110,8 +110,7 @@
 :                                   ; placeholder - keeps the anonymous-label count
         bcs label
 .endmacro
-; branch if var < imm
-        ; branch if var < imm
+; branch if var < imm (signed 16)
 .macro blt16i var, imm, label
         lda var
         cmp #<(imm)
@@ -121,7 +120,7 @@
 :                                   ; placeholder - keeps the anonymous-label count
         bcc label
 .endmacro
-        ; branch if var >= imm
+; branch if var >= imm (signed 16)
 .macro bge16i var, imm, label
         lda var
         cmp #<(imm)
@@ -131,8 +130,7 @@
 :                                   ; placeholder - keeps the anonymous-label count
         bcs label
 .endmacro
-; branch if var <= imm
-        ; branch if var <= imm
+; branch if var <= imm (signed 16)
 .macro ble16i var, imm, label
         lda var                     ; var <= imm is var < imm+1, so this is blt16i's
         cmp #<((imm)+1)             ; bias form: one instruction and no V fixup
@@ -179,7 +177,6 @@
         bpl label
 .endmacro
 ; A = max(A - n, 0)  (unsigned)
-        ; A = max(A - n, 0)  (unsigned)
 .macro submin0 n
         sec
         sbc #n
@@ -202,7 +199,7 @@
 ; ---------------------------------------------------------------- object arrays (bank 7)
 NLEAN   = 2                        ; object types below this take the lean path in
                                    ; process_object: no zero-page staging at all
-OBJN    = 149                      ; the most objects a level has (L7B); both targets
+OBJN    = 149                      ; the most objects a level has (L7B)
 O_STAMP = LV_OBJST
 O_TYPE  = O_STAMP + OBJN
 O_XL    = O_TYPE + OBJN
@@ -300,17 +297,13 @@ rise    = $DC                     ; 2 bytes
         .segment "LGCCODE"      
 
 ; ============================================================================
-; Map queries.  The map is in bank 5 with the row tables and the row-page table,
-; so these select it and put bank 7 back; maptilew leaves bank 5 selected for a
-; caller that is about to write through mapptr.
+; Map queries.  The map is in bank 5 and this code in bank 7, so every touch goes
+; through low RAM's maprow/mapbyte/mapput (engine.s), which put bank 7 back.
 ; ============================================================================
-; get map byte at tile (X = tx, A = ty) -> A = byte, q1 = page (0/1).  The per-page
-; alt-class and attribute tables are 256 bytes apart (q1 used to be page*2, which sent
-; every page-1 row's altitude lookup into LV_MAPROWLO: no ground, Cleo fell through
-; the floor at the Vineyards spawn and wherever else those levels use page 1)
+; get map byte (the tile id) at tile (X = tx, A = ty) -> A; mapptr = the row, X kept
 maptile:
-        jsr maprow                  ; main RAM: the map is in bank 5 and this code is
-        txa                         ; in bank 7, so every touch goes through a helper
+        jsr maprow
+        txa
         tay
         jmp mapbyte
 
@@ -430,7 +423,7 @@ gettileattr:
         rts
 
 ; ============================================================================
-; Level initialisation (level pack already loaded in bank 7)
+; Level initialisation (the loader has gathered the level into the banks)
 ; ============================================================================
 level_init:
         ; header
@@ -502,7 +495,7 @@ level_init:
         rol t16+1                   ; = 4*seed + hi(6obj); C = 0
   .assert ((>LV_OBJS) & 3) < 2, error, "LV_OBJS: the seed needs a second inc"
   .if (>LV_OBJS) & 1
-        inc t16+1                   ; Master $81: the bit the seed's >> 2 dropped
+        inc t16+1                   ; an odd page: the bit the seed's >> 2 dropped
   .endif
   .if BHW
         ldx #0                      ; X is free until jsr @x8: (t16,x) is (t16), Y kept
@@ -1023,10 +1016,10 @@ game_frame:
         cmp O_STAMP,y
         beq @sk2                    ; already stamped: X is still bent, skip the reload
         sta O_STAMP,y
-        lda O_TYPE,y
-        bne @apo                    ; that, so a cached step and a rebuilt one take the
+        lda O_TYPE,y                ; the walk only lists: @runlist processes, on a
+        bne @apo                    ; rebuild as on a cached step, so the two take the
         ldx NSTARL                  ; same path through the handlers.  Stars go in their
-        cpx #BINMAX                 ; own list: the walk then reaches ob_star without
+        cpx #BINMAX                 ; own list: the run then reaches ob_star without
         bcs @full                   ; reading the type or going through the table.
         tya
         sta LV_BINSTAR,x
@@ -1059,10 +1052,10 @@ game_frame:
         bra @rows
 :
 @runlist:
-        ; The stamp is written exactly as the traversal wrote it.  It is only read when
+        ; The stamp is written exactly as the traversal writes it.  It is only read when
         ; a list is rebuilt, but 'cmp frame' tests the low byte alone: let a stamp go 256
-        ; steps stale and an object returning to range matches it and is skipped -- for
-        ; one step before, but for the whole life of a cached list now.
+        ; steps stale and an object returning to range matches it and is skipped for
+        ; the whole life of the cached list.
         stz BINI
 @rls:   ldx BINI
         cpx NSTARL
@@ -1768,7 +1761,7 @@ player_update:
         lda #22
         bne @sprf
 @j20:   lda #20
-        bne @sprf                   ; A = 14, Z = 0
+        bne @sprf                   ; always: Z = 0 from the load
 @j24:   lda #24
 @sprf:  ora facing
 @spr:   tax
@@ -1962,7 +1955,8 @@ player_update:
 
 
 ; ============================================================================
-; Object processing.  Y = object index (obj).  Loads fields into zp, dispatches, stores back.
+; Object processing.  Y = object index (obj).  Types below NLEAN work on the arrays in
+; place; the rest are staged through zero page, dispatched and stored back.
 ; ============================================================================
 process_object:
         lda O_TYPE,y
@@ -1974,8 +1968,8 @@ process_object:
 @lean:  ; Nothing staged.  Y is the object index throughout -- none of these handlers,
         ; nor anything they call, touches it -- so each reads and writes its own fields
         ; where they live: one cycle over a zero-page access, against seven to fetch a
-        ; field and eight to put it back.  Every object field is 8-bit (tools/objaudit.py
-        ; and tools/objfields.mjs are how that was established per handler).
+        ; field and eight to put it back.  Every field these handlers use is 8-bit
+        ; (audited per handler).
         lda O_XL,y                  ; rx/ry = object relative to the player
         sta spx                     ; spx/spy = where it draws: sta touches no flags,
         sec                         ; so the source byte can be banked on the way past
@@ -2168,9 +2162,9 @@ RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, eac
         .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
         .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
         ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
-        ; (These sat at 32/36 for a while, which pushed every quad after them along by
-        ; eight without moving their callers: the bat read Cleo's band, the vanishing
-        ; platforms never saw her feet, and the spike and powerup boxes were wrong.)
+        ; Append new quads, never insert: callers hold fixed offsets, and a quad put in
+        ; mid-table once shifted every later one under them (the bat read Cleo's band,
+        ; the vanishing platforms never saw her feet).
         .byte 105, 147, 113, 152        ; 64: Cleo      <-23, 19, <-15, 24
         .byte 111, 144, 118, 143        ; 68: boomerang <-17, 16, <-10, 15
         ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
@@ -2263,7 +2257,7 @@ ob_star:
         ldx #64                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
         bne box_safe                ; always: Z = 0 from the ldx
 @regc:  sec
-@reg:   adc #33                     ; +33 with C=1 is the old +34 with C=0
+@reg:   adc #33                     ; C = 1: +34
         jmp m_addsprite
 @done:  rts
 boxbase: .byte 103, 109
@@ -2284,9 +2278,9 @@ ob_tramp:
         clc                         ; the carry is dead: cmp #10 below sets it
         adc #1                      ; (inca would keep it, through mtmp, at 6 bytes)
   .else
-        inca                        ; there is no inc abs,y, and A holds it anyway --
+        inca                        ; there is no inc abs,y, and A holds it anyway
   .endif
-        sta O_AL,y                  ; which also saves the reload the old code did
+        sta O_AL,y
         cmp #10
         bne :+
         lda #0                      ; nor stz abs,y
@@ -2296,7 +2290,7 @@ ob_tramp:
         ldx #8
         jsr inrange
         bcc @draw
-        lda vy+1                    ; was bmi16 vy / beq16 vy: one load does both tests
+        lda vy+1                    ; bmi16 vy and beq16 vy from one load
         bmi @draw
         ora vy
         beq @draw
@@ -2395,8 +2389,8 @@ ob_snake:
         sta fc                      ; A = fb+1 = 0 (the bne above was not taken)
         beq @coll                   ; and Z = 1 from that load
 @c4:    ; if B < A + 128: B += 16
-                                    ; C = 1 here (cmp #4 / beq @c4). B - A against the immediate 128, the way @c5
-        lda fb                      ; tests its own limit -- no A + 128 built in t16
+                                    ; C = 1 here (cmp #4 / beq @c4): B - A against the
+        lda fb                      ; immediate 128, as @c5 tests its own limit
         sbc fa
         tax
         lda fb+1
@@ -2504,7 +2498,7 @@ ob_snake:
         ldx fe                      ; fe is 0..11 whenever fc < 2; the 0..63 ladder @s23
         ora @ftab,x                 ; runs only while fc >= 2, and that takes @f6.  A is
         jmp m_addsprite             ; fc & 1: cmp/and/bcs/ldx leave it
-@f6:    ora #46+6                   ; base is even, so ora == the old clc/adc
+@f6:    ora #46+6                   ; the base is even: ora is the add
         jmp m_addsprite
 @ftab:  .byte 46+0,46+0,46+0,46+2,46+2,46+2,46+4,46+4,46+4,46+2,46+2,46+2
 @done:  rts
@@ -2543,11 +2537,8 @@ ob_rsnake:
         adc #129                    ; 192-r: the byte form of -(r&63)-64
         sta fa
 @norst: ; rise = (A*A >> 3) - 28 while the snake is up.
-        ; NOTE: the reference skips when A <= -16 (CleoApp.run 2865: bipush -16,
-        ; if_icmple), so it is up for A >= -15.  This port has always used A >= -16 -- one
-        ; frame earlier.  Kept as it was, because a representation change should not carry
-        ; a behaviour change: threshold 113 below instead of 112 matches the reference,
-        ; and costs 18 frames of 300 on L7.
+        ; The reference skips when A <= -16 (CleoApp.run 2865: bipush -16, if_icmple),
+        ; so it is up for A >= -15.
                                     ; A = fa on both ways in (lda fa / cmp #17, or sta fa)
         eor #$80                    ; bias the signed byte so the compare can be unsigned
         cmp #113                    ; -15 -> 113: at -16 the rise is +4 and the tall
@@ -2601,10 +2592,10 @@ ob_rsnake:
         sta bcnt
         lda #SFX_KILL
         sta SFXREQ
-@hitp:  dif16 rx, ox, px            ; the boomerang test above left rx boomerang-
-        lda q6                      ; relative; on a miss it fell through here with
-        beq @draw                   ; that x, so a boomerang passing the snake while
-                                    ; Cleo stood at its height read as Cleo touching it
+@hitp:  dif16 rx, ox, px            ; afresh: the boomerang test above may leave rx
+        lda q6                      ; boomerang-relative, and a boomerang passing the
+        beq @draw                   ; snake while Cleo stood at its height would read
+                                    ; as Cleo touching it
         lda health
         beq @draw
         sec                         ; ry = oy - py + rise, in one pass: the
@@ -2641,7 +2632,7 @@ ob_rsnake:
         bge16 px, ox, :+
         inc q1
 :       mov16 spy, oy
-        add16 spy, rise             ; snake Y = oy + parabola (was t16b: wrong)
+        add16 spy, rise             ; snake Y = oy + parabola
         lda q1
         jsr m_addsprite
 @basket:
@@ -2663,8 +2654,8 @@ ob_rsnake:
 :       ldx #55
         bgt16 ox, px, :+
         ldx #54
-:       clc                         ; spy = oy + fc in one pass, the way the ox + fd
-        lda oy                      ; code twelve lines below already does it
+:       clc                         ; spy = oy + fc in one pass (as spx = ox + fd
+        lda oy                      ; below)
         adc fc
         sta spy
         lda oy+1
@@ -2811,9 +2802,9 @@ ob_bat:
         jsr inrange
         bcc @draw
         ble16i ry, 4, @nostomp
-        lda vy+1                    ; N from the high byte, exactly what bmi16's bit did
+        lda vy+1                    ; bmi16 vy, then beq16 vy, from one load
         bmi @nostomp
-        ora vy                      ; then Z from vy|vy+1, exactly what beq16 built
+        ora vy
         beq @nostomp
         lda #1                      ; bounce first: the kill does not read it
         sta bounce
@@ -3158,7 +3149,7 @@ ob_vanish:
         sbc fe                      ; carry is already set: bcc fell through
 @half:  lsr
 @set:   sta q1
-        ; tiles at (ox>>3, oy>>3) and +1 : codes from header per page
+        ; the tiles at (ox>>3, oy>>3) and one right: the frame's ids from the header
         mov16 qx, ox
         mov16 qy, oy
         jsr tilexy                  ; X = tile x, A = tile y
@@ -3238,17 +3229,17 @@ ob_switch:
         jmp m_addsprite
 
 ; ============================================================================
-; Status bar digits (drawn straight into the bar, from HUD_BANK's digit art)
+; Status bar digits (drawn straight into the bar, from bank 7's packed digits)
 ; ============================================================================
-        .segment "LGCCODE"          ; Model B: bank 7, with the digits and the bar art
-; draw digit A at bar pixel column X (even), digit slot Y (0..8): copies a 64-byte digit
-; tile into the bar image.
+        .segment "LGCCODE"          ; bank 7, with the digit art
+; draw digit A at bar pixel column X (even), digit slot Y (0..8): its 16 packed bytes
+; become 64 bytes of the bar.
 ;
-; Each buffer remembers the nine values its bar was last drawn with, because redraw_hud
-; redraws all nine whenever anything changes and a score tick usually moves only one of
-; them -- the other eight were 128 bytes of copy for no pixels (measured 5.0K cycles a
-; render on an L0 run, 3.2% of the frame).  The bank is BANK_LVL on entry and on exit, so
-; the skip path must not touch it.
+; The bar remembers the nine values it was last drawn with, because redraw_hud redraws
+; all nine whenever anything changes and a score tick usually moves only one of them --
+; the other eight were copies for no pixels (5.0K cycles a render on an L0 run, 3.2% of
+; the frame, when measured).  The bank is BANK_LVL on entry and on exit, so the skip
+; path must not touch it.
 draw_health:                        ; falls into bar_digit
         lda health
         ldx #46
@@ -3363,10 +3354,10 @@ div10_16:
         ldy #16                     ; Y, not X: draw_score keeps its slot in X
 @l:     asl t16
         rol t16+1
-        rol a                       ; was rol q1 / lda q1
+        rol a
         cmp #10
         bcc :+
-        sbc #10                     ; was sbc #10 / sta q1
+        sbc #10
         inc t16
 :       dey
         bne @l

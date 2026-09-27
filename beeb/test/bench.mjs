@@ -5,15 +5,14 @@
 // bench_locations.json, under a jump (vertical scroll) and under a full-speed run
 // (horizontal scroll).  Run all eight levels and combine to score.
 //
-// This is driven by tools/harness.mjs, which breaks exactly at the frame_top label
-// rather than polling cycles.  The previous version of this file advanced the machine
-// in 20000-cycle steps and checked a frame counter afterwards, so every wait overshot
-// by a variable amount and every key write landed at an arbitrary point inside a frame;
-// whether the logic saw a key this frame or the next then depended on sub-frame phase,
-// hence on absolute timing, hence on code size.  One frame of drift at the first
-// location moved the world for every location after it, and the tool reported
-// differences of up to 15000 cycles between builds differing only in an 18-byte cold
-// path.  See tools/benchrepro.sh for the demonstration that this version does not.
+// This is driven by test/harness.mjs, which breaks exactly at the frame_top label
+// rather than polling cycles.  Polling (20000-cycle steps, a frame counter checked
+// afterwards) lets every wait overshoot by a variable amount and every key write land
+// at an arbitrary point inside a frame; whether the logic sees a key this frame or the
+// next then depends on sub-frame phase, hence on absolute timing, hence on code size.
+// One frame of drift at the first location moves the world for every location after
+// it: a polling bench reported differences of up to 15000 cycles between builds
+// differing only in an 18-byte cold path.
 //
 // Three measurement traps it also avoids, each of which silently skewed earlier runs:
 //   1. wait_flip is a 6-23k idle spin that flips with buffer parity -- not work, so the
@@ -26,7 +25,7 @@
 //      Average an even number of frames.
 //
 // Each sample carries a fingerprint of every piece of state the renderer reads.  Two
-// builds are only comparable at the locations where those agree -- tools/benchcmp.mjs
+// builds are only comparable at the locations where those agree -- test/benchcmp.mjs
 // checks that rather than assuming it.  Cycle counts are NOT expected to be identical
 // across builds even so: a taken 6502 branch costs an extra cycle when its target is on
 // another page, so moving code genuinely changes the count by a tenth of a percent.

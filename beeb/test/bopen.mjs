@@ -1,8 +1,8 @@
-// Boot the full game under jsbeeb and bring it to a level's first frame_top, the way
-// the Master harness does (harness.mjs open): the title menu is patched out and the
-// level is chosen by rewriting level_loop's `ldx level`, so the game's own loader
-// gathers the level from the disc.  Returns the session, the CPU, the labels and the
-// helpers the tools share.
+// Boot the game on a jsbeeb Model B and bring it to a level's first frame_top, as
+// harness.mjs open does on the Master: the title menu is patched out and the level is
+// chosen by rewriting level_loop's `ldx level`, so the game's own loader gathers the
+// level from the disc.  Returns the session, the CPU, the labels and the helpers the
+// tools share.
 //   const B = await openB({ level: 0, model: "B-DFS1.2" | "B1770" })
 import { findJsbeeb, loadLabels } from "./harness.mjs";
 import { pathToFileURL } from "node:url";
@@ -12,15 +12,23 @@ import path from "node:path";
 // ROMSEL as ever, a store into $8000-$BFFF goes to the bank the board's register names
 // -- Watford: the last store to $FF30-$FF3F (its low nibble); Solidisk: user VIA port B
 // bits 0-3 (ORB & DDRB).  Both start at bank 0, as a fresh machine would, more or less.
+// cpu.boardMismatch counts, by PC, every store the game makes into a bank other than
+// the one paged for reading -- what a missing or wrong write-bank store does.  Code in
+// main RAM $0D00-$1FFF (the boot loader, the NMI stubs, LDPROG) is left out: it
+// copies between banks on purpose (test/boardcheck.mjs).
 export function boardEmu(cpu, kind) {
   if (kind !== "watford" && kind !== "solidisk") throw new Error(`BBOARD: ${kind}?`);
   const orig = cpu.writemem.bind(cpu);
   let wr = 0, orb = 0, ddrb = 0;
+  cpu.boardMismatch = new Map();
   cpu.writemem = function (addr, b) {
     addr &= 0xffff;
     if (addr >= 0x8000 && addr < 0xc000) {
       if (cpu._debugWrite) cpu._debugWrite(addr, b);
       const bank = kind === "solidisk" ? (orb & ddrb & 15) : wr;
+      const pc = cpu.pc;
+      if (bank !== (cpu.romsel & 15) && !(pc >= 0x0D00 && pc < 0x2000))
+        cpu.boardMismatch.set(pc, (cpu.boardMismatch.get(pc) ?? 0) + 1);
       if (cpu.model.swram[bank]) cpu.ramRomOs[cpu.romOffset + bank * 16384 + (addr - 0x8000)] = b;
       return;
     }

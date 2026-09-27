@@ -1,15 +1,17 @@
 ; ============================================================================
-; LOADER -- runs at $1900 from !BOOT under the MOS.  First the sideways RAM: the
-; game wants four 16K banks it can write through ROMSEL and takes them from whatever
-; sockets they are in (findram), then patches every bank number in the code it is
-; about to put there -- the code is assembled for banks 4..7, and the BANKFIX table
-; at the end of BANKS lists every byte that holds one (cpu.inc BANKREF).  Then the
-; fixed pieces of the four banks from BANKS (DFS will not load into a sideways bank,
-; so the file is read to $2000 and the pieces copied), which drive and which disc
-; controller the game's own driver is to use, and the game.  Everything else -- the
-; menu overlay, the title pack, every level -- the game loads itself (disc.s,
-; ldprog.s), reading the physical banks from PBANK, which start7 fills from the
-; four bytes this leaves in the start-up piece's header (init.s, $7000).
+; LOADER -- runs at $1900 from !BOOT under the MOS, one for both machines.  It asks
+; the MOS which machine this is and loads that one's bank images (BANKSB, BANKSM).
+; First the sideways RAM: the game wants four 16K banks it can write through ROMSEL
+; and takes them from whatever sockets they are in (findram), then patches every bank
+; number in the code it is about to put there -- the code is assembled for banks
+; 4..7, and the list at the end of BANKS names every byte that holds one (cpu.inc
+; BANKREF), then every write-bank store (cpu.inc wrsel).  Then the fixed pieces of the
+; four banks from BANKS (DFS will not load into a sideways bank, so the file is read
+; to $2000 and the pieces copied), which drive and which disc controller the game's
+; own driver is to use, and the game.  Everything else -- the menu overlay, the title
+; pack, every level -- the game loads itself (disc.s, ldprog.s), reading the physical
+; banks from PBANK, which `boot` fills from the bytes this leaves in the start-up
+; piece's header (init.s, $7000).
 ; ============================================================================
         .setcpu "6502"
         .include "defs_ld.inc"      ; boot, dsk_type, dsk_drv, dsk_banks, dsk_board,
@@ -115,8 +117,9 @@ start:
         dex
         bpl :-
         ; ---- the pieces: BANKS is a count, then (bank, address, length) x count, then
-        ; the pieces in that order, then the bank patches; bank 0 means main RAM (no
-        ; paging).  The whole file is loaded at once (OSFILE: a byte at a time through
+        ; the pieces in that order, then the bank patches.  A main-RAM piece is filed
+        ; under bank 7 (build.sh), which pages harmlessly; bank 0 would page nothing.
+        ; The whole file is loaded at once (OSFILE: a byte at a time through
         ; OSGBPB took the 1770 DFS twenty seconds) into what is now screen memory, and
         ; the pieces copied out.  From here on nothing calls the MOS again and the banks
         ; may hold ROMs it knows (findram's last resort), so interrupts stay off: a
@@ -267,7 +270,7 @@ start:
         bne @wfix                   ; (zsrc never wraps)
 @wfixdone:
         ; ---- the driver's configuration, the banks themselves and the board, into the
-        ; start-up piece's header ($7000, both machines' init.s; bank 7's socket stays
+        ; start-up piece's header ($7000 on both machines, init.s; bank 7's socket stays
         ; the one stores reach, as the start-up expects)
         ldx map+3
         jsr selwr
@@ -285,8 +288,6 @@ start:
         jmp boot                    ; the game's start-up, in main RAM (init.s)
 
 ; ---------------------------------------------------------------- the write bank
-; X = a socket: make it the one a store reaches, on a board that chooses that apart
-; from ROMSEL.  A is destroyed.
 ; A = a bank's code number (4..7): page its socket for reading and writing.
 ; X = the socket, A destroyed.
 selbank:
@@ -296,6 +297,8 @@ selbank:
 ; X = a socket: page it for reading, and writing (into wrx)
 selwr:  stx ROMSELC
         stx ROMSEL
+; X = a socket: make it the one a store reaches, on a board that chooses that apart
+; from ROMSEL.  A is destroyed.
 wrx:    lda board
         beq @r
         .assert BOARD_WATFORD = 1 && BOARD_SOLIDISK = 2, error, "wrx tells the boards by bit 0"

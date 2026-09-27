@@ -1,13 +1,13 @@
 ; ============================================================================
 ; CLEO - the game: level loading, the camera clamp, the level and frame loops,
-; the sound effects.  Shared by the Master (main.s) and the Model B
-; (modelb/src/main.s); what differs between them is under MODELB.
+; the sound effects.  Bank 7 on both machines; what differs between them is
+; under BHW (the Model B's hardware).
 ; ============================================================================
-        .segment "LGCCODE"          ; Model B: bank 7, with the logic it drives
+        .segment "LGCCODE"          ; bank 7, with the logic it drives
 ; ---------------------------------------------------------------- level loading
 ; X = level index 0..15 (even = main, odd = bonus)
 load_level:
-        jsr load_level_b            ; the disc: bank 7's loader (modelb/src/disc.s)
+        jsr load_level_b            ; the disc: everything into the banks (disc.s)
         lda #8                      ; mapw = 8 << lw ; maph = 8 << lh
         sta mapw
         sta maph
@@ -163,8 +163,8 @@ level_loop:
 frame_loop:
         ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes two
         ; steps for each one, so the player, every animation and every enemy move
-        ; twice as far per frame as they used to.  Two steps is a fixed pairing,
-        ; not catching up: time lost to a long frame is still dropped, so the
+        ; two of the original's steps per rendered frame.  Two steps is a fixed
+        ; pairing, not catching up: time lost to a long frame is dropped, so the
         ; window never moves more in a frame than these two steps ask for.
         lda vsyncs
         sec
@@ -176,7 +176,7 @@ frame_loop:
 frame_top:                          ; exactly once per rendered frame, before the two
                                     ; logic steps read 'keys': the test harness breaks
                                     ; here so every wait and every input it applies is
-                                    ; quantised to a frame boundary (tools/harness.mjs)
+                                    ; quantised to a frame boundary (test/harness.mjs)
         jsr t_game_frame            ; (NSPR is 0 here: render_frame and load_level clear it)
         lda exiting
         bne fl_over
@@ -193,7 +193,7 @@ fl_wait:  ; nothing to do yet: wait for the next vsync
         bne frame_loop              ; Z = 0: the vsync ticked
 fl_over:
         ; level over
-        ldx lives                   ; (X = lives: the Master's winlose flag below)
+        ldx lives
         beq game_over
         lda stars
         beq @next1
@@ -221,8 +221,8 @@ game_won:
         lda #1
         jsr t_winlose
         jmp title_loop
-; the menu overlay and the title pack, unless they are still in (menu.s's load_title
-; does the same from inside the overlay, for the screens reached from the title)
+; the menu overlay into bank 6 and the title pack into bank 5, unless they are still
+; in (a level load replaces both; menu.s's load_title makes the same test)
 ensure_menu:
         lda title_res
         bne :+
@@ -240,7 +240,7 @@ update_hiscore:
 :       rts
 
 ; ---------------------------------------------------------------- sound data
-        PLACEH "CODE", "LGCCODE"    ; with sound_tick: bank 7 on the Model B, main RAM on a Master
+        PLACEH "CODE", "LGCCODE"    ; with sound_tick: bank 7 on the Model B, main RAM on the Master
 ; sfx steps: byte0 = channel/period latch ($80 | ch<<5 | lo4), byte1 = period hi (data byte), byte2 = volume ($90|ch<<5|att), duration
 sfxtab: .word sfx_jump, sfx_star, sfx_throw, sfx_hit, sfx_kill, sfx_power, sfx_die
 sfx_jump:  .byte $C0|8, 12, $D0, 2,  $C0|4, 9, $D2, 2,  $C0|0, 7, $D4, 2,  $C0|8, 5, $D6, 3, $FF

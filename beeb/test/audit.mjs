@@ -1,5 +1,6 @@
 // Every store into sideways RAM ($8000-$BFFF) during play, by PC + selected bank.
 // These are the sites whose WRITE bank must be right on a Solidisk/Watford board.
+//   node test/audit.mjs [frames=300] [level=4]
 import { openB } from "./bopen.mjs";
 const B = await openB({ level: parseInt(process.argv[3] ?? "4") }); const { cpu, A } = B;
 const frames = parseInt(process.argv[2] ?? "300");

@@ -1,8 +1,8 @@
-// jsbeeb's half of the BeebEm lock-step: the same frames, the same key script, the same
-// per-frame line as the headless BeebEm harness (scratchpad hb/main.cpp) -- the logic
-// state as bdiff reads it, a hash of the display RAM, the CRTC registers -- and at one
-// frame the display RAM and a screenshot.
-//   node tools/bdump.mjs [frames] [seed] [level] [shotFrame] [outPrefix] [shotEvery]
+// jsbeeb's half of the BeebEm lock-step (test/hbeebem): the same frames, the same key
+// script, the same per-frame line as the headless BeebEm harness (hbeebem/main.cpp) --
+// the logic state (zero page and the object arrays), a hash of the display RAM, the
+// CRTC registers -- and at chosen frames the display RAM and a screenshot.  The Model B.
+//   node test/bdump.mjs [frames] [seed] [level] [shotFrame] [outPrefix] [shotEvery]
 import { openB } from "./bopen.mjs";
 import { writeFileSync } from "node:fs";
 const frames = parseInt(process.argv[2] ?? "100"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "0");

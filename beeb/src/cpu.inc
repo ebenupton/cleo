@@ -1,8 +1,8 @@
 ; ============================================================================
-; The Master is a 65C02; the Model B (MODELB) is a 6502.  Every 65C02 spelling the
-; engine and the logic use goes through a macro here, so one source assembles for
-; both.  The 6502 expansions have side effects the 65C02 forms do not, and every
-; site has been audited for them with tools/flagscan.py -- the contracts:
+; The Master is a 65C02; the Model B is a 6502.  Every 65C02 spelling the engine
+; and the logic use goes through a macro here, so one source assembles for both.
+; The 6502 expansions have side effects the 65C02 forms do not, and every site has
+; been audited for them -- the contracts:
 ;
 ;   stz m        A is DEAD at the site (the 6502 form is lda #0 / sta).  A site
 ;                where A must survive spells stza.  Both leave N,Z set from the
@@ -23,15 +23,15 @@
 ; the level gathered into the banks at load.  BHW is the Model B's HARDWARE: a 6502,
 ; one screen of main RAM (two software rings with mirror rows), the 8271 or Acorn
 ; 1770, the write-select boards.  BHW=0 is the Master's: 65C02, the hardware-wrapped
-; ring in main and shadow RAM, its interrupt handler in main RAM, its 1770
-; (modelb/build.sh TARGET=master).
+; ring in main and shadow RAM, its interrupt handler in main RAM, its 1770.
+; build.sh builds both.
         .ifndef BHW
 BHW = 1
         .endif
 ; TILEMIRROR: the tile blitter can draw a tile mirrored from another's bytes, and the
 ; packer (tools/convert.py) mirrors the least-used tiles while a level is short of room
 ; in the tile bank.  Off: no level needs it once the tiles start at $8600, and the code
-; and tables it takes are that room (modelb/build.sh: TILEMIRROR=1 to build it).
+; and tables it takes are that room (TILEMIRROR=1 sh build.sh to build it).
         .ifndef TILEMIRROR
 TILEMIRROR = 0
         .endif
@@ -45,20 +45,19 @@ TILEMIRROR = 0
 .endmacro
 
 ; ---------------------------------------------------------------- bank numbers
-; The Model B's four banks are whichever sockets the boot loader finds RAM in
-; (modelb/src/loader.s).  The code is assembled for banks 4..7 (BANK_SPR, BANK_TILES,
+; The four banks are whichever sockets the boot loader finds RAM in (loader.s), on
+; either machine.  The code is assembled for banks 4..7 (BANK_SPR, BANK_TILES,
 ; BANK_MAP, BANK_LVL) and every byte of it that holds a bank number is recorded here,
 ; with the bank whose image holds the byte, for the loader to patch before the game
-; starts (the BANKFIX table, at the end of BANKS).  Code that comes off the disc later
+; starts (the BANKFIX table, appended to BANKS).  Code that comes off the disc later
 ; -- the level loader, the menu overlay -- is not patched: it reads the physical
-; bank from PBANK (low BSS, four bytes indexed by bank - 4).  On the Master all of
-; this is the plain instruction.
+; bank from PBANK (low BSS, four bytes indexed by bank - 4).
 ;   bankimm op, n, b   op #n, the operand a bank number: in bank b's image (0 = the
-;                      low-RAM image, which is copied down from bank 5's); a fourth
-;                      argument tells two alike sites in one routine apart
+;                      low-RAM image, in the BOOT piece); a fourth argument tells two
+;                      alike sites in one routine apart
 ;   setbank n, b       page bank n in, from code in bank b (A destroyed); likewise
 ;   ldpbank op, n      op #n from code the loader cannot patch: PBANK's byte instead
-;   BANKREF name, b    the byte just emitted is a bank number (data: the far table)
+;   BANKREF name, b    the byte just emitted is a bank number
 ; The site is marked with a cheap label, @bf_<name>, because any other kind of symbol
 ; would end the enclosing routine's @ scope; so two sites in one routine need
 ; different names (bankimm's is the operation and the bank -- a clash is a duplicate
@@ -88,11 +87,11 @@ TILEMIRROR = 0
         BANKREF .sprintf("%s_%d_%d", .string(op), n, tag), b
   .endif
 .endmacro
-.macro setbank n, b, tag            ; ROMSEL_CPY is the MOS's own shadow of ROMSEL, which
-        bankimm lda, n, b, tag      ; the IRQ handler restores from -- nothing ever read
-        sta ROMSEL_CPY              ; the private copy this used to keep as well
+.macro setbank n, b, tag            ; ROMSEL_CPY first: the MOS's own shadow of ROMSEL,
+        bankimm lda, n, b, tag      ; which the interrupt restores from
+        sta ROMSEL_CPY
         sta ROMSEL
-        wrsel n, b, tag             ; (Model B: the write bank too)
+        wrsel n, b, tag             ; (the write bank too, on a board)
 .endmacro
 
 ; ---------------------------------------------------------------- the write bank
@@ -183,7 +182,7 @@ TILEMIRROR = 0
 
   .else                             ; ---------------------------------- 6502
         .setcpu "6502"
-.macro stz arg, ix                  ; A dead at the site (flagscan)
+.macro stz arg, ix                  ; A dead at the site (audited)
         lda #0
 .if .paramcount = 2
         sta arg,ix

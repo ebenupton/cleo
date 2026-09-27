@@ -11,7 +11,7 @@
 //
 // THE FIX.  jsbeeb's debugInstruction hook stops execution *before* the instruction
 // when a handler returns true, so an exact PC break is available at full speed.  Every
-// wait here is therefore "run to the next frame_top", a symbol placed in main.s at the
+// wait here is therefore "run to the next frame_top", a symbol placed in game.s at the
 // one point reached exactly once per rendered frame, before the two logic steps read
 // 'keys'.  Inputs are written while stopped there.  Nothing in the protocol can
 // observe a cycle count, so nothing in it can observe code size.
@@ -137,8 +137,7 @@ export class Harness {
       if (this.at(A.frame_top, pc)) { lt0 = this.cyc(); inLogic = true; li = 0; }
       else if (inLogic && this.at(A.render_frame, pc)) { m.logic = this.cyc() - lt0; m.logicI = li; inLogic = false; }
       // the window opens as render_frame's wait for the flip returns (its first
-      // instruction is that jsr): everything the frame does after, on either layout --
-      // a banked build selects the buffer through a far call, after the bar
+      // instruction is that jsr): everything the frame does after
       if (!inWin && this.atIn(A.render_frame + 3, "render_frame", pc)) { t0 = this.cyc(); inWin = true; m.isr = 0; m.isrCount = 0; n = 0; }
       else if (inWin && this.at(A.render_done, pc)) { m.work = this.cyc() - t0; m.instrs = n; inWin = false; m.frames++; }
       else if (this.at(A.irq_handler, pc)) { isrAt = this.cyc(); }
@@ -234,9 +233,9 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
   return H;
 }
 
-// A banked build (the converged Master: modelb/build.sh TARGET=master) boots through
-// the Model B's loader, and its game loop is bank 7's: the title and the level are
-// patched there, as modelb/tools/bopen.mjs does for the Model B.
+// A banked build (the Master's; the unbanked path above is for a retired build's
+// reference disc) boots through the loader, and its game loop is bank 7's: the title
+// and the level are patched there, as bopen.mjs does for the Model B.
 async function openBanked({ MachineSession, disc, A, banks, level, quiet, onSession }) {
   const s = new MachineSession("Master");
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));

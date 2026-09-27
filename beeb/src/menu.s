@@ -1,6 +1,8 @@
 ; ============================================================================
-; CLEO - menus, title, help, level select, win/lose, pause  (LOGIC segment: bank 7;
-; Model B: bank 6's menu overlay, MNUCODE, loaded over the tiles for the menus)
+; CLEO - the menus: title, help, level select, win/lose.  Bank 6's menu overlay
+; (MNUCODE/MNUBSS; the font and the tune in banks.s's MNUDATA), loaded from the disc
+; over the tiles with the title pack into bank 5; what it calls in bank 7 goes through
+; the XCALL stubs (engine.s)
 ; ============================================================================
         .segment "MNUCODE"      
 
@@ -62,8 +64,8 @@ glyph_index:
         rts
 
 ; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows.  The font is in the
-; menu code's own bank (Master: bank 7, font_art below; Model B: the overlay in bank 6,
-; banks.s), so the rows are read in place through w16b.
+; overlay beside this code (font_art, banks.s), so the rows are read in place
+; through w16b.
 draw_glyph:
         stza w16b+1
         asl
@@ -137,10 +139,9 @@ font_blank: .res 8, 0               ; the erase glyph ('_' in a string)
 pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game px
 
 ; ---------------------------------------------------------------- menu screen helpers
-; clear the current back buffer ring ($3000-$7FFF) to black
+; clear the ring to black.  The bar is left alone: the menus' frame does not show it
+; (menu_sections, engine.s)
   .if BHW
-; Model B: both mirrors and both rings: main RAM from mirror A, above the bar, to the
-; top.  The bar is left alone: the menus' frame does not show it (menu_sections)
         .assert (<MIRR_A) = 0 && (<RINGEND_B) = 0, error, "the clear is whole pages"
 clear_ring:
         lda #>MIRR_A                ; both mirrors and both rings: main RAM from $0800
@@ -157,8 +158,8 @@ clear_ring:
   .else
 clear_ring:
         stz w16
-        lda #>RINGBASE              ; the ring only: the bar below it is left alone (the
-        sta w16+1                   ; menus' frame does not show it: menu_sections)
+        lda #>RINGBASE              ; buffer 0's ring, $3000 to the top (the bar is
+        sta w16+1                   ; below it)
         ldy #0
         tya
 @l:     sta (w16),y
@@ -170,13 +171,14 @@ clear_ring:
         rts
   .endif
 
-; load the title pack into bank 5 unless it is still there (a level load replaces it);
-; the palette goes black first so neither the disc load nor the screen build-up shows
+; load the overlay and the title pack unless they are still in (a level load replaces
+; both); the palette goes black first so neither the load nor the screen build-up shows
 load_title:
         jsr m_blank_palette
         lda title_res
         bne :+
-        jsr m_loadfile              ; (Model B: the overlay and the pack, disc.s, which
+        jsr m_loadfile              ; (disc.s load_title_b; game.s's ensure_menu has
+                                    ;  always brought them in before a menu runs)
         inc title_res
 :       rts
 
@@ -218,9 +220,9 @@ menu_begin:
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stz curbuf                  ; (A is dead: build_sections loads it)
-        jsr m_build_sections        ; bank 7's menu_sections (the far table's F_BUILDSECT)
+        jsr m_build_sections        ; bank 7's menu_sections (engine.s)
     .if .not BHW
-        stz NEXTBUF                 ; (the converged Master: its handler's flip reads it)
+        stz NEXTBUF                 ; (the Master: its handler's flip reads it)
     .endif
         stz NEXTSECT
         inc flipreq                 ; 0 -> 1: every way in has waited for it to clear
@@ -243,9 +245,9 @@ menu_keys:
 
 ; draw a title piece: A = piece index, spx/spy = position (top-left)
 draw_piece:
-        ldpbank ldx, BANK_MAP       ; the title pack sits where the map goes (the
-        stx spbank                  ; overlay comes off the disc: the loader cannot
-                                    ; patch it, so the physical bank is read)
+        ldpbank ldx, BANK_MAP       ; the title pack is in the map's bank (the overlay
+        stx spbank                  ; comes off the disc after the boot loader's
+                                    ; patches, so the physical bank is read: PBANK)
         jsr m_drawsprite
         ldpbank lda, BANK_SPR
         sta spbank
@@ -265,12 +267,12 @@ text_centred:
         jmp drawtext
 
 ; ---------------------------------------------------------------- generic list menu
-; menu_list: menuptr -> table of string pointers (word), A = count, X = first y, tmp4 = row step
-; returns A = selected index
+; menu_list: menuptr -> table of string pointers (word), A = count, X = first y,
+; mstep = row step, mclear = clear the items' area first; returns A = selected index
 menu_list:
         ldy menuptr                 ; the table's address into the two loads below: the
-        sty @mt0+1                  ; menu code is in RAM on both targets, and so the
-        sty @mt1+1                  ; pointer needs no zero page
+        sty @mt0+1                  ; overlay is in sideways RAM, so the pointer needs
+        sty @mt1+1                  ; no zero page
         ldy menuptr+1
         sty @mt0+2
         sty @mt1+2
@@ -280,7 +282,6 @@ menu_list:
         lda #$FF
         sta lastkeys
         jsr clear_items
-        ; items
         ldx #0
 @it:    stx tmp3
         txa
@@ -353,11 +354,11 @@ item_y: lda mtop                    ; X = item index -> A = X = its y
 cursor_str: .byte ">                 <", 0
 blank_str:  .byte "_                 _", 0
 
-; clear the item area rows (below the logo): rows from mtop to bottom -> just clear everything below y=36
+; if mclear: clear the items' area below the logo, char row mtop/4 to the last (640
+; bytes each, buffer 0's rows)
 clear_items:
         lda mclear
         beq @done
-        ; clear ring rows (mtop/4) .. 27 : 640 bytes each
         lda mtop
         lsr
         lsr
@@ -472,7 +473,7 @@ level_select:
         tax
         inx
         stx tmp                     ; n
-        ; top y = (108 - (n-1)*12 - 8)/2 rounded to multiple of 4
+        ; top y = (VISLINES/2 - 8 - (n-1)*12)/2, down to a multiple of 4
         asl
         asl
         sta tmp2
@@ -486,13 +487,10 @@ level_select:
         lda tmp
         jmp menu_list
 
-; pause menu: returns 0 resume, 1 exit
-
-; win/lose: A = 1 win, 0 lose ; score/hiscore shown
+; win/lose: A = 1 win, 0 lose; score and hi-score shown
 winlose:
-        sta mtop                    ; the win/lose flag (tmp4 is the sprite prologue's
-        jsr load_title              ; mask page: after the first draw the lose screen
-                                    ; was cycling the WIN frames)
+        sta mtop                    ; the win/lose flag (not tmp4: the sprite prologue
+        jsr load_title              ; uses it, and the lose screen cycled the WIN frames)
         jsr m_music_stop              ; the win/lose screen is silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "winlose picks the piece as TP_LOSE - mtop"
@@ -551,15 +549,15 @@ HISCORE_Y = 96
         jsr draw_number
         lda #$FF
         sta lastkeys
-        sta mcount                  ; last drawn frame   (menu_list's variables: this
-        stz msel                    ; animation counter   screen never runs a list, and
+        sta mcount                  ; the frame last drawn  (menu_list's variables: this
+        stz msel                    ; animation counter      screen runs no list, and
+                                    ; tmp2/tmp3 do not survive menu_show's callees)
         lda #66                     ; big Cleo's place, once: nothing in the loop moves
         sta spx                     ; spx/spy (spx+1, spy+1 are 0 from the pieces above)
         lda #28
         sta spy
-@loop:  ; big cleo frame            ; tmp2/tmp3 are clobbered by menu_show's callees
-        lda msel                    ; every pass, which froze big Cleo on one frame)
-                                    ; the shift count is the same on both arms
+@loop:                              ; big Cleo's frame: the shift count is the same on
+        lda msel                    ; both arms
         and #30
         tax
         lda mtop

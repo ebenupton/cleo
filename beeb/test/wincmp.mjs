@@ -1,11 +1,10 @@
-// Two Master-hardware builds' DISPLAYABLE screen, frame by frame: the window's 30 rows
-// (and the partial rows above and below when the fine scroll is not 0) in the buffer
-// the CPU sees, and the bar -- plus the scene fingerprint.  pixdiff compares all 40K of
-// screen RAM; this ignores the ring's one hidden slot, which builds may fill
-// differently (the rows past a map's end are read there, and what lies past the map is
-// a layout's choice).  For the converged Master (modelb/build.sh TARGET=master) against
-// the Master:
-//   node test/wincmp.mjs <discA> <labelsA> <discB> <labelsB> <level> [frames]
+// Two Master builds' DISPLAYABLE screen, frame by frame: the window's 30 rows (and the
+// partial rows above and below when the fine scroll is not 0) in the buffer the CPU
+// sees, and the bar -- plus the scene fingerprint.  Not all 40K of screen RAM: the
+// ring's hidden rows may be filled differently by builds (the rows past a map's end
+// are read there, and what lies past the map is a layout's choice).  bwincmp.mjs is
+// the Model B's.
+//   node test/wincmp.mjs <discA> <labelsA> <discB> <labelsB> <level> [frames=300]
 import { open } from "./harness.mjs";
 const [dA, lA, dB, lB, lvS, nS] = process.argv.slice(2);
 const lv = +lvS, N = +(nS ?? 300);
@@ -13,8 +12,8 @@ const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjsslllllllllllllllll
 const KK = c => ({ s: 0, r: 2, l: 1, j: 4 })[c] ?? 0;
 const M = await open({ disc: dA, labels: lA, level: lv });
 const C = await open({ disc: dB, labels: lB, level: lv });
-// RELOAD=1: end the level once and compare after it loads again (the loaders' second
-// path: the converged Master's resident sprites, its main-RAM entry state)
+// RELOAD=1: end the level once and compare after it loads again (the loader's second
+// path: the resident SPRC and SPRX, the main-RAM entry state)
 if (process.env.RELOAD) for (const H of [M, C]) { H.wr(H.A.exiting, 1); await H.runTo(H.A.level_init, 400_000_000); await H.runTo(H.A.frame_top, 40_000_000); }
 let bad = 0, badf = 0, sceneBad = 0;
 for (let f = 0; f < N; f++) {

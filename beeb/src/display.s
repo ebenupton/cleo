@@ -1,8 +1,8 @@
 ; ============================================================================
-; The Model B's display driver: bank 7, with the logic.  The rupture chain the CRTC is driven by,
-; the mirror the straddling row is read from, and the interrupt's work.  The Master
-; needs none of this -- its ring is hardware wrapped -- so it is the one part of the
-; renderer that is this target's own (DESIGN.md, "the display").
+; The Model B's display driver (BHW=1 only): bank 7, with the logic.  The rupture
+; chain the CRTC is driven by, the mirror the straddling row is read from, and the
+; interrupt's work.  The Master's ring is hardware wrapped and its handler and chain
+; are in main RAM (engine.s), so none of this is assembled for it.
 ; ============================================================================
         .segment "LGCCODE"
 
@@ -85,7 +85,7 @@ isr_body:
 
 ; ---- vsync: restart T1 first (constant latency), counter = vsync -> the bar
 vsync_tick:
-        lda #<VS2T                  ; (immediate: 4 cycles sooner than the old RAM copy)
+        lda #<VS2T                  ; (an immediate: VS2T allows for its timing)
         sta VIA_T1LL
         lda #>VS2T
         sta VIA_T1CH                ; (clears T1's flag)
@@ -258,7 +258,7 @@ build_sections:
         lda barq
         sta tmp3
 @run:   ; w16 = the run's ring offset, tmp4 = its rows, X = the entry before it
-        ; rows of the run that end before the ring end (was @nfull): the run starts on
+        ; rows of the run that end before the ring end: the run starts on
         ; ring row tmp3; r = ringS mod 80 non-zero -> the last ring row straddles
         ldy barq
         lda ringS
@@ -423,7 +423,7 @@ build_sections:
 ; one displayed row that straddles the ring end can be read as a single run.  Only
 ; the chars that row takes from it -- wcxm..79 -- need to be right, and when the
 ; window is slot aligned no row straddles at all.  It is made only when its row
-; has been written: the blitters note the range (mirdirty, bank 6).
+; has been written: its writers note the range (banks.s mirdirty6, mirdirty).
 mirror_copy:
         ldx curbuf
         lda wcxm

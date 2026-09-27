@@ -1,8 +1,8 @@
 // Title and menus, build against build, FRAME-SYNCHRONISED: both machines boot through
 // the real title and are compared at the same arrival at menu_keys -- the menus' once-a-
 // frame wait, where the page is drawn and settled -- so a build that draws faster is not
-// a difference (titlediff.mjs samples at fixed cycle counts, which it would be).  DOWN
-// and RETURN are pressed at fixed arrivals to walk into a second page.
+// a difference, as it would be sampled at fixed cycle counts.  DOWN and RETURN are
+// pressed at fixed arrivals to walk into a second page.
 //   node test/menusync.mjs master <discA> <labelsA> <discB> <labelsB>
 //   node test/menusync.mjs modelb <discA> <labelsA> <discB> <labelsB>
 // Compared: the ring memory (not the bar: the menus leave it alone) and the painted frame.
@@ -17,7 +17,7 @@ async function boot(disc, labels) {
   const P = kind === "master" ? null : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   // the bank menu_keys is in (the build's own debug info; MENUBANK_A/B override it for a
-  // build from before the bank-5/6 swap, which the harness's segment table no longer names)
+  // reference build whose debug info the harness's segment table cannot place)
   const mb = +(process.env[labels === lA ? "MENUBANK_A" : "MENUBANK_B"] ?? loadBanks(path.join(path.dirname(labels), "cleo.dbg"))?.byName.get("menu_keys") ?? 5);
   const at = () => cpu.pc === A.menu_keys && (!P || cpu.readmem(0xf4) === P[mb - 4]);
   async function next() {

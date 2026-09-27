@@ -1,14 +1,16 @@
 #!/bin/sh
-# Cleo: one disc for the BBC Model B (64K of sideways RAM) and the Master 128.  The
-# sources (src/) are assembled twice: BHW=1 for the Model B's hardware into
-# build/modelb/, BHW=0 for the Master's into build/master/ -- the same structure, the
-# level gathered into the banks by the game's own loader -- against one sector table.  The boot loader
-# picks the machine's bank images (BANKSB, BANKSM); each machine's LDPROG and menu
-# overlay are its own; everything else, the levels included, is on the disc once.
+# Cleo: one disc (build/cleo.ssd) for the BBC Model B (64K of sideways RAM) and the
+# Master 128.  The sources (src/) are assembled twice against one sector table: BHW=1
+# for the Model B's hardware into build/modelb/, BHW=0 for the Master's into
+# build/master/ -- the same structure, each level gathered into the banks by the
+# game's own loader.  The boot loader picks the machine's bank images (BANKSB,
+# BANKSM); each machine's LDPROG and menu overlay are its own; everything else, the
+# levels included, is on the disc once.
 set -e
 cd "$(dirname "$0")"
-# TILEMIRROR=1 builds the tile blitter's mirrored tiles (src/cpu.inc), which move the
-# tiles up a page: the converter (tools/convert.py) and the linker areas follow it
+# TILEMIRROR=1 builds the tile blitter's mirrored tiles (src/cpu.inc; off by default,
+# no level needs them), which move the tiles up a page: the converter, the packer
+# (tools/convert.py, assets.py) and the linker areas follow it
 if [ "$TILEMIRROR" = 1 ]; then MIRDEF="-D TILEMIRROR=1"; else TILEMIRROR=0; MIRDEF=""; fi
 export TILEMIRROR
 settarget() {                       # $1: modelb or master
@@ -29,7 +31,7 @@ for t in modelb master; do
     [ "$TILEMIRROR" = 1 ] && sed -i.bak 's#start = \$8000, size = \$0600#start = $8000, size = $0700#; s#start = \$8600, size = \$3A00#start = $8700, size = $3900#; s#start = \$8000, size = \$02D0#start = $8000, size = $0310#' $BD/game.cfg
     for f in BANKS MENU LDPROG; do [ -f $BD/$f ] || : > $BD/$f; done
 done
-# what both machines read is packed once: the two packs must agree
+# what both machines read goes on the disc once (the Model B's copy): the packs agree
 for f in SPRX SPRC BAR L0 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15; do
     cmp -s build/modelb/$f build/master/$f || { echo "build/modelb/$f and build/master/$f differ: the level layout is not one"; exit 1; }
 done
@@ -99,11 +101,11 @@ import os
 BD = os.environ['BD']
 pieces = [(4, 0x8000, 'b4x.bin'), (4, 0xBB00, 'b4t.bin'),
           (5, 0x8000, 'b5x.bin'), (5, 0xBC00, 'b5t.bin'),
-          (6, 0x8000, 'b6x.bin'),                                 # (B6X in cleo_b.cfg)
+          (6, 0x8000, 'b6x.bin'),                                 # (B6X in the cfg)
           (7, 0x7000, 'boot.bin'),        # main RAM (BOOTRAM): start-up and the low-RAM image
           (7, 0x8220, 'b7.bin')]
 if os.environ.get('TARGET') == 'master':
-    pieces.append((7, 0x0600, 'mcode.bin'))         # main RAM: the Master's handler and chain
+    pieces.append((7, 0x0600, 'mcode.bin'))         # main RAM: the Master's handler, chain, keys, sound
 tab, body, img = bytearray([len(pieces)]), bytearray(), {}
 for bank, addr, fn in pieces:
     d = open(os.path.join(BD, fn), 'rb').read()

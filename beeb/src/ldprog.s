@@ -1,17 +1,19 @@
 ; ============================================================================
 ; The load-time program: read into LDPROG ($0E00) by disc.s at every level load and
 ; every return to the title, and run there, in main RAM, where it can page any bank
-; in.  The display is black; $1800-$7FFF is its scratch.  A level is gathered from
-; the shared files -- a tile set, SPR/SPRAND/BOX, the level's own file -- by the
-; lists the packer (tools/assets.py) put in the level file: which tiles, and where
-; every image goes.  Bank 7 is paged on entry and on return; read_sectors (disc.s)
-; is bank 7's and reads into main RAM.
+; in.  One per machine (LDPROGB, LDPROGM).  The display is black and the screen is
+; its scratch (defs.inc STAGE, STAGE_LVL: $1C00-$7FFF on the Model B; $3000-$7FFF of
+; main and shadow RAM on the Master).  A level is gathered from the shared files --
+; the tile set's, SPRC, SPRX, the level's own -- by the lists the packer
+; (tools/assets.py) put in the level file: which tiles, and where every image goes.
+; Bank 7 is paged on entry and on return; read_sectors (disc.s) is bank 7's and reads
+; into main RAM.
 ;
 ;   LDPROG+0  lv_load     X = level index 0..15
 ;   LDPROG+3  title_load  the menu overlay to bank 6, the title pack to bank 5
 ; ============================================================================
         .ifndef BHW                 ; (cpu.inc's flag: the Model B's hardware unless the
-BHW = 1                             ;  build says -D BHW=0, the converged Master)
+BHW = 1                             ;  build says -D BHW=0, the Master's)
         .endif
         .ifndef TILEMIRROR          ; (cpu.inc's flag: tile mirroring, off by default)
 TILEMIRROR = 0
@@ -20,7 +22,7 @@ TILEMIRROR = 0
         .include "files.inc"        ; the disc's sector table (mkdfs.py table)
 ROMSEL     = $FE30
 ROMSEL_CPY = $F4
-ACCCON     = $FE34                  ; (the converged Master: bit 2, X, puts the CPU's
+ACCCON     = $FE34                  ; (the Master: bit 2, X, puts the CPU's
                                     ;  $3000-$7FFF in shadow RAM -- where STAGE is)
 ; The banks are whichever sockets the boot loader found RAM in: it left their numbers
 ; in PBANK (low BSS, one byte per bank 4..7).  This program comes off the disc at
@@ -69,7 +71,7 @@ nt    = $B8
 .endmacro
 PAGE0_SECS = 2                      ; (512 bytes: 256 lo, 256 hi)
 ftab:   FILE "SPRX"                 ; 0: the sprites placed per level (imgtab's file 0)
-        FILE "SPRC"                 ; 1: the sprites every level draws: bank 4, once
+        FILE "SPRC"                 ; 1: the sprites every level draws: banks 4 and 5
         FILE "SPRC"                 ; 2: (unused)
         FILE "TILES0"               ; 3, 4: the tile set's outdoor and shared files
         FILE "TILES1"
@@ -126,14 +128,14 @@ readpage:                           ; file A -> page X (main RAM)
         jmp read_sectors            ;  changed -- every destination is a page)
 
 ; copy cnt bytes from src (main RAM) to dst in the bank the placement entry (lp) names
-; -- the packer's number, 4 or 6, for the socket that is that bank here
+; -- the packer's number, 4 or 5, for the socket that is that bank here
 plcopy: ldy #1
         lda (lp),y
         tay
         ldx PBANK-4,y               ; (Y: bcopy reloads it)
   .if .not BHW
         jmp scopy                   ; (a placed image comes from the stage)
-; the converged Master stages the shared files in shadow RAM: a copy out of the stage
+; the Master stages the shared files in shadow RAM: a copy out of the stage
 ; reads with ACCCON X set (X and Y kept, as bcopy leaves them)
 scopy:  lda ACCCON
         ora #4
@@ -205,7 +207,7 @@ lv_load:
         ldx #>STAGE_LVL
         stx dst+1
         jsr readfile
-        ; ---- the tables: the section table's seven offsets are from the file's start
+        ; ---- the tables: the section table's offsets are from the file's start
         lda #0
         jsr section                 ; the header
         lda #32
@@ -480,9 +482,10 @@ lv_load:
         ldx PB_MAP
         jsr bcopy
   .endif
-        ; ---- the sprites.  The common block (SPRC: Cleo, the boomerang, the stars) goes
-        ; to its fixed place in bank 4 once, and stays; the rest (SPRX) is staged and
-        ; the level's subset copied out by its placement list
+        ; ---- the sprites.  The resident block (SPRC: Cleo, the boomerang, the stars,
+        ; the trampoline) goes to its fixed places in banks 4 and 5 once, and stays until
+        ; the title pack overlays bank 5's part (title_load); the rest (SPRX) is staged
+        ; and the level's subset copied out by its placement list
         lda sprc_ok
         bne @sprx
         lda #FI_SPRC
@@ -500,7 +503,7 @@ lv_load:
         lda #>SPRC_LEN
         sta cnt+1
         ldx PB_SPR
-        jsr sccopy                  ; the mirrored ones: bank 4
+        jsr sccopy                  ; bank 4's part: the mirrored ones, and what fits
         lda #<(STAGE + SPRC_LEN)
         sta src
         lda #>(STAGE + SPRC_LEN)
@@ -514,15 +517,15 @@ lv_load:
         lda #>SPRC5_LEN
         sta cnt+1
         ldx PB_MAP
-        jsr sccopy                  ; the plain ones: the top of bank 5
+        jsr sccopy                  ; the rest: bank 5, from its code's end
         inc sprc_ok
 @sprx:  lda #FI_SPRX
         sta fnum
   .if BHW
         jsr stage
   .else
-        ; the converged Master reads SPRX once and keeps it: HAZEL (8K), ANDY (4K) and
-        ; a tail in main RAM; after, the stage is refilled from them, no disc read
+        ; the Master reads SPRX once and keeps it in HAZEL (8K) and ANDY (4K); after,
+        ; the stage is refilled from them, no disc read
         ldx sprx_ok
         bne @unkeep
         jsr stage
@@ -622,10 +625,10 @@ lv_load:
         sta cnt+1
         ldx PB_TILES
   .if BHW
-        jmp bcopy                   ; (the tile addresses are arithmetic: drawrect's gather)
+        jmp bcopy                   ; (the Model B's gather is arithmetic: no table)
   .else
         jsr bcopy
-        ; ---- the converged Master: the gather's table, to main RAM, and the screens
+        ; ---- the Master: the gather's table, to main RAM, and the screens
         ; (main and shadow) cleared of what the load staged there -- a ring row the
         ; window has not reached yet must not show it
         lda #13
@@ -667,7 +670,7 @@ sccopy:                             ; a copy out of the stage, on either machine
         jmp scopy
   .endif
   .if .not BHW
-; the converged Master: every load starts with the CPU on main RAM -- the game leaves
+; the Master: every load starts with the CPU on main RAM -- the game leaves
 ; ACCCON X on the buffer it drew last, and the level's file is main RAM's
 mainram:
         pha
@@ -676,7 +679,7 @@ mainram:
         sta ACCCON
         pla
         rts
-; SPRX's residency on the converged Master: the stage (shadow RAM, $3000) to HAZEL
+; SPRX's residency on the Master: the stage (shadow RAM, $3000) to HAZEL
 ; ($C000, ACCCON Y) and ANDY ($8000, ROMSEL bit 7) -- keep -- and back -- unkeep.  Only
 ; under a load: interrupts are off, and the MOS's interrupt entry is under HAZEL.
 SPRX_PAGES = (SPRX_LEN + 255) / 256
@@ -773,7 +776,7 @@ sv_halfsub: .res 1
 sv_mir0:    .res 1
    .endif
   .endif
-section:                            ; A = section 0..9 -> src = its start in the staged file
+section:                            ; A = section 0..13 -> src = its start in the staged file
         asl                         ; (C = 0: A < 128)
         tay
         lda STAGE_LVL,y
@@ -797,7 +800,7 @@ stage:                              ; file A -> STAGE
   .if BHW
         jmp readfile
   .else
-        pha                         ; the converged Master: into shadow RAM
+        pha                         ; the Master: into shadow RAM
         lda ACCCON
         ora #4
         sta ACCCON

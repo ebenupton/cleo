@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Convert the Cleo J2ME assets into BBC MODE 1 data files.
+"""Convert the Cleo J2ME assets (../v500) into BBC MODE 1 data.
 
-Outputs (in build/), for the game's packer (modelb/tools/assets.py, which imports this
-module for the rest: the sprites, the boxes, the maps, the levels' tables):
+Not run on its own: tools/assets.py imports it (build.sh runs that from beeb/), and
+takes from it the dithered sprites, masks, box stars and trampolines, the maps, the
+levels' objects and tables, pack_tiles (a level's tile ids and the lists that gather
+its tiles), the bar, the HUD digits and the font.  It writes, in build/:
   TILES0-2 the tile set: outdoor, shared and indoor files (pack_tiles lays out a level's)
-  TITLE    title pack (bank 5 @ &8900, over the map): logo, you/win/lose, big cleo
-  preview PNGs for eyeballing the dither
+  TITLE    the title pack (bank 5 @ &8900, over the sprites and the map during the
+           menus): logo, you/win/lose, big cleo
+  preview_*.png, meta.json   for eyeballing the dither
 """
 import struct, sys, os, json
 from PIL import Image
@@ -35,9 +38,9 @@ GAMMA = 1.35   # compromise: pure sRGB thresholding is too bright, linear too da
 # pixel is a 2x2 block of dots, each one of C, M, Y or K (logical 1, 2, 3, 0).  The 2x2
 # kernel IS the pixel: per pixel the ink counts nearest its colour are chosen, then laid
 # in kernel order.  A col entry is one game px on one scanline: (left dot << 2) | right
-# dot, so 0 is black -- and also transparent, which is why the sprites are opaque boxes
-# drawn by the copy blitters, and why no tile or sprite byte may carry a tag: every bit
-# is a pixel.
+# dot, so 0 is black -- and also transparent, which is why a sprite carries a mask
+# plane (mask_plane; the box stars and trampolines are opaque boxes, drawn by the copy
+# blitter), and why no tile or sprite byte may carry a tag: every bit is a pixel.
 _CMYK_RGB = np.array([[0, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 0]], np.float32)   # K C M Y
 def _cmyk_tables():
     res = {}
@@ -54,12 +57,12 @@ _CMYK = _cmyk_tables()
 def dither(rgb_img, alpha, x0=0, y0=0, full=True):
     h, w, _ = rgb_img.shape
     v = (rgb_img.astype(np.float32) / 255.0) ** GAMMA
-    crgb, seq = _CMYK[4]                               # always the 4-dot combinations:
-    d = ((v[:, :, None, :] - crgb[None, None, :, :]) ** 2).sum(axis=3)   # a 2-dot pick
-    dots = seq[d.argmin(axis=2)]                       # sent skin to M+Y (pink) on the
-    # kernel positions 0 (top left) 1 (bottom right) 2 (top right) 3 (bottom left):
-    # two inks of two make a checker, not stripes
-    l0 = (dots[:, :, 0] << 2) | dots[:, :, 2]          # bar's Cleo and the title pieces
+    crgb, seq = _CMYK[4]                               # always the 4-dot combinations: a
+    d = ((v[:, :, None, :] - crgb[None, None, :, :]) ** 2).sum(axis=3)   # 2-dot pick sent
+    dots = seq[d.argmin(axis=2)]                       # skin to M+Y (pink) on the bar's
+    # Cleo and the title pieces.  Kernel positions 0 (top left) 1 (bottom right)
+    # 2 (top right) 3 (bottom left): two inks of two make a checker, not stripes
+    l0 = (dots[:, :, 0] << 2) | dots[:, :, 2]
     l1 = (dots[:, :, 3] << 2) | dots[:, :, 1]
     if full:
         col = np.empty((2 * h, w), np.uint8)
@@ -135,7 +138,7 @@ def parse_level(lv, sub):
     return dict(lw=lw, lh=lh, w=w, h=h, map=m, start=(sx, sy), exit=(ex, ey), objs=objs)
 
 
-# PARALLAX=1: level 0's sand dunes become sky, for the parallax experiments (the engine
+# PARALLAX=1: level 0's sand dunes become sky, for the parallax experiment (engine.s
 # draws its own background into the sky under -D PARALLAX).  A dune is a region of
 # sand-only tiles (the two faces and the sky-edge silhouettes) that the sky can reach
 # in the rows above the ground band; the row bound keeps the flood out of the pits,
@@ -255,8 +258,8 @@ for cid, orig in enumerate(compact):
 # ----------------------------------------------------------------------------
 # Background blackening.  The dark dithery backdrops of the tombs (and a few
 # outdoor walls) become solid black: it looks better than the noise, it makes
-# most of those tiles constant-fill for drawrow, and it lets the star boxes be
-# composited on black.
+# most of those tiles the one solid black id (255: a fill, no bytes in the bank),
+# and it lets the star boxes be composited on black.
 #
 # What counts as background comes from the collision data, not from taste:
 # alt[tile*8+col] >> 4 is the surface row of that pixel column (8 = no ground),
@@ -360,8 +363,8 @@ for cid in range(len(compact)):
 # 'dark' (mostly black: noisy low-intensity indoor backgrounds count) is drawn as a
 # pre-composited box sprite that needs neither masking nor erasing (see the sprite section)
 tile_class = []
-# solid tiles (the sky, and pure black) are filled by drawrow with a constant instead of
-# being copied: flagged in the page-table entry (hi bit 6 = solid, lo bit 4 = cyan)
+# solid tiles (the sky, and pure black): 1 cyan, 2 black.  Each becomes id 254 or 255
+# in a level (pack_tiles), a fill from FLATTAB, never copied
 tile_solid = {}
 for cid, col in enumerate(tile_preview):
     if np.all(col == CYAN_COL):
@@ -477,11 +480,9 @@ def tramp_class(cm, x, y):           # 1 = its rectangle is all solid black (bak
     return 1
 
 # ---------------------------------------------------------------------------
-# Renumber so that every tile carrying pixel data comes first.  A solid tile is
-# filled by drawrow from a constant and its 64 bytes are never read, so it needs
-# no room in a tile bank: giving those tiles ids above 255 puts the whole game's
-# tile data in bank 6 alone, and bank 5 keeps only the box stars.  Sorting is
-# stable within each group, so runs like the vanish animation stay contiguous.
+# Renumber so that every tile carrying pixel data comes first: a solid tile is a
+# fill and its 64 bytes are never read.  Sorting is stable within each group, so
+# runs like the vanish animation stay contiguous.
 # ---------------------------------------------------------------------------
 # the vanish and flower animations must stay contiguous, so a solid frame inside
 # one of those runs keeps its place in the data group and wastes its 64 bytes
@@ -508,8 +509,6 @@ special = {name: orig2compact[t] for name, t in [('VANISH0', 366), ('FLOWER0', 4
 assert all(orig2compact[366 + i] == special['VANISH0'] + i for i in range(8))
 assert all(orig2compact[426 + i] == special['FLOWER0'] + i for i in range(4))
 
-# only the tiles with data are emitted: the solid ones sort above them and their
-# page-table entries address bytes that are never read
 # push-tiles (conveyor) and kill tiles: getPush / lava
 push_tiles = {}
 for t, v in [(412, -1), (413, -1), (414, 1), (415, 1), (423, -2), (424, 2), (439, 0), (440, 0), (441, 0), (442, 0)]:
@@ -526,14 +525,14 @@ for orig in compact:
         classes[row] = len(classes)
     alt_class.append(classes[row])
 print('alt classes:', len(classes))
-# the class table is global; alt_class itself is indexed by tile id, which is now
-# local to a level, so each level pack carries its own copy
+# the class table is global (alt.bin); a map's tile ids are the level's own, so each
+# level file carries its own id -> class table (assets.py altcls)
 altfile = b''.join(sorted(classes, key=lambda r: classes[r]))
 
 # ----------------------------------------------------------------------------
 # Level packs
 # ----------------------------------------------------------------------------
-BANK_TILES = 5                       # every tile is in this bank now
+BANK_TILES = 5                       # (unused; the game's tile bank is 6: defs.inc)
 rng = np.random.RandomState(1234)
 def name_of(lv, sub):
     return 'L%d%s' % (lv, 'B' if sub == 0 else 'A')
@@ -626,10 +625,10 @@ for (lv, sub), cm in maps.items():
         print('%s: filled %d isolated black cells (%d holes)' % (name_of(lv, sub), len(fills), len(set((x, y) for x, y, _ in fills))))
 
 # ----------------------------------------------------------------------------
-# The tiles of a level, for both targets (modelb/tools/assets.py calls pack_tiles
-# too).  A map byte is a LEVEL tile id; the level's tiles are gathered at load time
-# from the tile set's files into the tile bank, 64 bytes a slot, so a tile's address is
-# arithmetic (drawrect's gather).  Ids:
+# The tiles of a level, for both machines (tools/assets.py calls pack_tiles).  A map
+# byte is a LEVEL tile id; the level's tiles are gathered at load time from the tile
+# set's files into bank 6, 64 bytes a slot, so a tile's address is arithmetic (the
+# Model B's gather5) or a table of the same pairs (the Master's LV_PAGE0).  Ids:
 #   0 .. NTILES-1        full tiles, slot = id
 #   half0 .. mir0-1      half tiles: one char row stored (32 bytes, from HALFPAGE),
 #                        the other a fill or the same row again; three runs --
@@ -637,6 +636,7 @@ for (lv, sub), cm in maps.items():
 #                        rows the stored one
 #   mir0 .. mir0+NMIR-1  a full tile drawn mirrored left-right from the slot in
 #                        MIRTAB: only as many as the bank needs, the least used first
+#                        (TILEMIRROR builds only; none otherwise)
 #   FLAT0 .. 253         flat tiles: two bytes alternating down every char (FLATTAB)
 #   254, 255             the solids, cyan and black (FLATTAB's last two pairs)
 # The mirror is exact: the dither is per game pixel with no position term, so a
@@ -646,14 +646,14 @@ for (lv, sub), cm in maps.items():
 FLAT0 = 250
 NFLAT = SOLID_CYAN - FLAT0          # 4 flats a level at most, then the two solids
 MAXMIR = 24
-TILE_CHUNK = 256                    # tiles in a set file: 16K, what either target stages
+TILE_CHUNK = 256                    # tiles in a set file: 16K, what either machine stages
 def mirror_byte(b):
     return ((b & 0x33) << 2) | ((b & 0xCC) >> 2)
 def mirror_tile(t):
     t = bytes(t)
     return bytes(mirror_byte(t[cr * 32 + (3 - c) * 8 + l]) for cr in range(2) for c in range(4) for l in range(8))
 # ONE tile set: every distinct tile any level uses, once, in files of at most 256
-# (16K, what either target stages at a time) cut by who uses a tile -- outdoor levels
+# (16K, what either machine stages at a time) cut by who uses a tile -- outdoor levels
 # only, both, indoor levels only -- so a level stages only its side's file and the
 # shared one: TILES0 outdoor, TILES1 shared, TILES2 indoor.  Within a file the tiles
 # the most levels use come first.
@@ -720,15 +720,13 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
         return cs[0][:2]
     return None
 
-# The ids are the same on both targets, so the two run the same logic on the same
-# level: they are laid out for the Model B's tile bank, the smaller.  The Master's is
-# big enough for every level as it stands, so it stores a mirrored id's tile as a full
-# tile of its own, and its gather is a table (LV_PAGE0) the packer builds: per id, the
-# pair the Model B's gather computes -- the same encoding, so the one row loop reads
-# both.
+# One layout serves both machines (the level files are shared): bank 6's tiles above
+# its code, at the same slots on both.  The Model B's gather computes a tile's address
+# pair from its id; the Master's is a table (LV_PAGE0, B['page0'], the file's last two
+# sectors) of the same pairs, so the one row loop reads both.
 TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mirrored tiles)
-B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xC000   # the Model B's bank 6: tiles above its code and variables
-M_TILES, M_TILES_END = 0x8000, 0xC000       # the Master's: all of bank 6
+B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xC000   # bank 6: tiles above its code and variables (defs.inc TILES)
+M_TILES, M_TILES_END = 0x8000, 0xC000       # the M layout's (below): all of bank 6
 def _layout(stored, hlist, halfpair, base, end, loc):
     slot = {k: i for i, k in enumerate(stored)}
     NT, NHALF = len(stored), len(hlist)
@@ -744,7 +742,8 @@ def _tilelist(files, stored, loc):
             + bytes(loc(k)[1] for k in stored))
 
 def pack_tiles(lv, sub):
-    """The level's tile ids, and for each target the lists that gather its tiles."""
+    """The level's tile ids, and the lists that gather its tiles: B, the layout both
+    machines load (M, an alternative layout, is computed but nothing reads it)."""
     cm = maps[(lv, sub)]
     g = tileset_of(lv, sub)
     specials = [special['VANISH0'] + i for i in range(8)] + [special['FLOWER0'] + i for i in range(4)]
@@ -783,7 +782,7 @@ def pack_tiles(lv, sub):
     hlist = halves['top'] + halves['bot'] + halves['pair']
     halfpair = b''.join(h[2] for h in hlist)
     assert len(flats) <= NFLAT, (lv, sub, len(flats))
-    # mirrors: only while the Model B's bank is short, the least used first; a
+    # mirrors (TILEMIRROR only): only while the bank is short, the least used first; a
     # mirror's source stays a stored tile
     need = lambda nt: B_TILES + nt * 64 + len(hlist) * 32 + len(halfpair) > B_TILES_END
     bypat = {}
@@ -825,17 +824,17 @@ def pack_tiles(lv, sub):
     pos = lambda k: files.index(loc(k)[0])
     halflist = b''.join(bytes([loc(h[0])[1], h[1] | pos(h[0]) << 1]) for h in hlist)
     lw = 8 - levels[(lv, sub)]['lw']
-    # the Model B: the stored tiles at slot = id, a mirror by its source's slot
+    # the layout: the stored tiles at slot = id, a mirror by its source's slot
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc)
     assert all(B['slot'][k] == idof[k] for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
     B['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR, 0])
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
-    # and the converged Master's LV_PAGE0 for these slots: its gather is a table (the
-    # Master's) over the Model B's layout -- a mirror is kind 3 at its source's slot
-    # (an id no tile has -- the rows past the map's end are read too, whatever lies
-    # there -- is a black fill: a zero high byte would clear the row loop's carry and
-    # run a copy off through the screen)
+    # and the Master's LV_PAGE0 for these slots: per id, the pair the Model B's gather
+    # computes -- a mirror is kind 3 at its source's slot (an id no tile has -- the
+    # rows past the map's end are read too, whatever lies there -- is a black fill: a
+    # zero high byte would clear the row loop's carry and run a copy off through the
+    # screen)
     blo, bhi = bytearray(256), bytearray([0xC0] * 256)
     for k in stored:
         s_ = idof[k]
@@ -851,13 +850,13 @@ def pack_tiles(lv, sub):
         e, o = flattab[2 * j], flattab[2 * j + 1]
         blo[FLAT0 + j], bhi[FLAT0 + j] = (e, 0xC0) if e == o else (2 * j, 0xE0)
     B['page0'] = bytes(blo + bhi)
-    # the Master: the same slots, then a copy of each mirrored tile as a full tile of
-    # its own (by a list of its own: file index, file); load_tiles builds LV_PAGE0
+    # M: the same slots from $8000, then a copy of each mirrored tile as a full tile
+    # of its own (by a list of its own: file index, file) -- unused by the packer
     NS = NT + NMIR
     M = dict(NT=NS, HALFPAGE=M_TILES + ((NS * 64) & ~255), HALFOFF=((NS * 64) & 255) // 32)
     assert M['HALFPAGE'] + (M['HALFOFF'] + NHALF) * 32 + len(halfpair) <= M_TILES_END
     M['tiles'] = _tilelist(files, stored, loc)
-    # LV_PAGE0: per id, the pair the Model B's gather computes, for these slots
+    # its table, as LV_PAGE0 for these slots
     lo, hi = bytearray(256), bytearray([0xC0] * 256)   # (unused ids: a black fill, as above)
     for k in stored:
         s_ = idof[k]
@@ -1012,8 +1011,8 @@ for (im, full, src), shift in zip(images, img_shift):
 # box stars: each spin frame (34..39) composited over cyan and over black in a box just
 # wide enough to cover its own art AND the previous frame's, so drawing frame N erases
 # frame N-1 with no mask and no erase pass.  The frames are all 24 lines tall but the
-# spin narrows to a sliver, so the narrow ones carry a narrower box.  Stored after the
-# tiles in bank 5 (flag bit4), drawn with the copy blitter (flag bit3).
+# spin narrows to a sliver, so the narrow ones carry a narrower box.  Placed in bank 5
+# (flag bit4: the copy blitter is bank 5's alone), drawn with it (flag bit3).
 BOX_H = 12                      # game px (24 lines)
 FIELD = 14                      # px: the widest frame, hotspot at px 6
 box_art = []
@@ -1045,12 +1044,13 @@ def _span(f):                   # opaque pixel range of one frame, in field px
     return x0 + int(xs.min()), x0 + int(xs.max())
 
 # Every box has to be able to erase whatever the record holds, and the record is the
-# same buffer's previous draw, two renders back.  main.s runs exactly one logic step
-# per render, fa advances every second step and the spin frame is fa >> 1, so two
-# renders move the animation by at most one frame and a box need only cover its own
-# art and its predecessor's.  If logic catch-up ever comes back this has to go back to
-# the union of all six: catching up ran two or three steps per render, the animation
-# could skip a frame, and the narrow boxes then left the previous one on screen.
+# same buffer's previous draw, two renders back.  game.s runs exactly two logic steps
+# per render (a fixed pairing), ob_star steps the star's counter every second step and
+# the spin frame is the counter >> 1, so two renders move the animation by at most one
+# frame and a box need only cover its own art and its predecessor's.  If logic
+# catch-up ever comes in this has to go back to the union of all six: more steps per
+# render let the animation skip a frame, and the narrow boxes then leave the previous
+# one on screen.
 def _boxgeom(f):
     p = (f - 1) % 6
     lo = min(_span(f)[0], _span(p)[0]) // 2
@@ -1215,15 +1215,14 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     if opaque:
         src[im == tr] = 0          # transparent key -> black
     col = dither(src, alpha, full=full)
-    pk = encode_sprite(col, packcol(col), blanks=False)   # no blank-run tags: the
-                                                   # half-res blitter cannot decode them
+    pk = encode_sprite(col, packcol(col), blanks=False)   # (no tags: every bit is a pixel)
     data = bytearray()
     for c in range(W):
         data += pk[:, c].tobytes()
     mask = mask_plane(alpha) if not opaque else b''
     return W, (2 * h if full else h), h, data, col, mask
 
-TITLE_ADDR = 0x8900               # bank 5, where the map and the box stars go during a level
+TITLE_ADDR = 0x8900               # bank 5, where the sprites and the map go during a level
 title = bytearray()
 tdir = []
 pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38, 58, 39, 13, True), ('lose', 0, 71, 45, 13, True)]
@@ -1241,7 +1240,7 @@ for (name, x, y, w, h, full) in pieces:
     flags = (2 if full else 0) | (8 if opaque else 0)   # opaque pieces copy
     tdir.append((name, ptr, W, hpx, lines, flags, mptr))
     tpreview.append(col)
-# directory at &8000: 8 bytes per piece: ptr lo, hi, W, h, refx, refy (0: the prologue
+# directory at TITLE_ADDR: 8 bytes per piece: ptr lo, hi, W, h, refx, refy (0: the prologue
 # is the sprite one), flags, lines.  Mask addresses at +$80, two bytes a piece.
 tdirbytes = bytearray()
 for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
@@ -1250,8 +1249,8 @@ tdirbytes = tdirbytes.ljust(0x80, b'\0')
 for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
     tdirbytes += bytes([mptr & 255, mptr >> 8])
 titlefile = tdirbytes.ljust(TDIR, b'\0') + title
-TITLE_END = 0xB800                # the title pack may overwrite the box stars (reloaded at
-assert len(titlefile) <= TITLE_END - TITLE_ADDR, len(titlefile)   # level start), not the music
+TITLE_END = 0xB800                # the title pack may overwrite bank 5's sprites and map
+assert len(titlefile) <= TITLE_END - TITLE_ADDR, len(titlefile)   # (reloaded at level start)
 open(os.path.join(OUT, 'TITLE'), 'wb').write(titlefile)
 print('title pack', len(titlefile))
 print('sprite blank runs: %d tagged bytes of %d' % (encode_sprite.blank_runs, encode_sprite.cells))

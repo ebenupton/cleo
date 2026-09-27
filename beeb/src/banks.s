@@ -1,19 +1,13 @@
 ; ============================================================================
-; The banks' static tables and the few routines that exist only here.  Everything
-; a level brings -- tiles, map, sprites, directory, its tables -- is loaded into
-; the banks by ldprog.s; the menu overlay (bank 6 from MENU_BASE) is the menus with
-; the tune and the font, and is loaded the same way.
-;
-; $8000 of bank 7 is the far table: the thunk in low RAM pages bank 7 to read it,
-; whichever bank called (only bank 7 and the bank-6 menu overlay ever do).  Then the
-; small tables more than one bank's code indexes (sprmul5, the row multiples, the ring
-; modulus).  The Master builds these at start-up; here they are assembled.
+; The banks' static tables, the level's space in bank 7 and the few routines that
+; exist only here.  Everything a level brings -- tiles, map, sprites, directory, its
+; tables -- is loaded into the banks by ldprog.s; the menu overlay (bank 6 from
+; MENU_BASE) is the menus with the tune and the font, and is loaded the same way.
 ; ============================================================================
 
 ; ---------------------------------------------------------------- the small tables
-; The Master builds these at start-up; here they are assembled, each in the bank of
-; the code that indexes it: the sprite multiples and the row multiples are bank 7's
-; (the prologue, the records, the chain), the ring modulus bank 6's (ringaddr).
+; Assembled, each in the bank of the code that indexes it: the row multiples are
+; bank 7's (calc_ring, ringaddr7, the chain), the ring modulus bank 6's (ringaddr).
         .segment "LGCDATA"
 mulrowlo:
 .repeat RINGROWS, i
@@ -23,7 +17,7 @@ mulrowhi:
 .repeat RINGROWS, i
         .byte >(i*ROWCHARS)
 .endrepeat
-  .if BHW                           ; (the converged Master's ring is 32 rows: and #31)
+  .if BHW                           ; (the Master's ring is 32 rows: ringmod is and #31)
         .segment "TILCODE"
 ringmodtab:                         ; A = a map char row (brought under RINGROWS*5 by
 .repeat RINGROWS*5, i               ; the ringmod macro) -> its ring slot
@@ -33,9 +27,9 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
 
 ; ---------------------------------------------------------------- the sprite banks
 ; MASKTAB0..3 at the same address in both banks that hold sprite data, so the
-; prologue in bank 6 can name a mask page for either; SWAPTAB in bank 4 alone
+; prologue in bank 7 can name a mask page for either; SWAPTAB in bank 4 alone
 ; (bank 5 draws nothing mirrored: the packer keeps such images out, and that page
-; holds data instead).  The values are the Master's init_tables' (MODE 1).
+; holds the map instead).  MODE 1: four pixels a byte, two bits each.
 .macro MASK4 f                      ; AND mask by pair: keep what is NOT opaque
   .if f = 0
         .byte $FF
@@ -65,19 +59,21 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
         .segment "SPR5MASK"
         MASK_TABLES
 
-; ---------------------------------------------------------------- main RAM: the mirror's notes
+; ---------------------------------------------------------------- the menus' record
+        .segment "LGCBSS"           ; bank 7: the prologue, which writes it through rp, runs
+menurec:   .res 10                  ; there (the menus' one sprite record; the overlay in
+                                    ; bank 6 only sets rp to it).  Not in bank 6's TILBSS:
+                                    ; the prologue would write bank 7's byte at that address
+
+; ---------------------------------------------------------------- the mirror's notes
 ; the mirror's range: A = the first window column written of the row the mirror
 ; follows, X = the last (0..79).  Those chars sit in the last slot row at wcxm on;
 ; only the ones up to char 79 are in it (the rest wrapped to slot row 0), and only
-; those from wcxm are ever read (display.s).  Called by the tile blitter's head and
-; copy_partial (bank 6: mirdirty6) and the sprite prologue (bank 7: mirdirty): one
-; body, twice.
-        .segment "LGCBSS"           ; bank 7: the prologue, which writes it through rp, runs
-menurec:   .res 10                  ; there (the menus' one sprite record; the menus in bank
-                                    ; 5 only set rp to it).  It was in TILBSS, and so written
-                                    ; at bank 7's copy of that address, until 26 Sep 2026
+; those from wcxm are ever read (display.s).  Called by the tile blitter's head
+; (bank 6: mirdirty6) and the sprite prologue and copy_partial (bank 7: mirdirty):
+; one body, twice.
         .segment "TILBSS"
-  .if BHW                           ; (the converged Master has no mirror: the hardware folds)
+  .if BHW                           ; (the Master has no mirror: the hardware folds)
 .macro MIRDIRTY_BODY
         clc
         adc wcxm
@@ -138,13 +134,13 @@ digits_art:                         ; the HUD's ten digits, 16 bytes each: a nib
 DIGTOP:     .incbin "digtab.bin", 0, 16   ; a nibble's top scanline byte
 DIGBOT:     .incbin "digtab.bin", 16, 16  ; and its bottom one
         .segment "LGCBSS"
-; the object state arrays, laid out as the Master's (logic.s): O_STAMP + k*OBJN, then
+; the object state arrays, laid out as logic.s names them: O_STAMP + k*OBJN, then
 ; the grid heads and chains and the cached bin walk lists.  level_init's clear runs
 ; 2560 bytes from LV_OBJST, which stays inside these.
 LV_OBJST:   .res 16*OBJN
 LV_GRID:    .res 128
 LV_BOBJ:    .res 256                ; an entry per object per grid cell it covers: up
-LV_BNEXT:   .res 256                ; to 255 of them, as the Master's tables
+LV_BNEXT:   .res 256                ; to 255 of them
 LV_BINSTAR: .res BINMAX
 LV_BINOTH:  .res BINMAX
         .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"

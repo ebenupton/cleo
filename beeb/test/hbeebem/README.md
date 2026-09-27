@@ -2,10 +2,10 @@
 
 BeebEm is Windows-only, but its emulation core is plain C++: this directory builds
 just that core on macOS (or Linux) with a stub front end, and a harness that drives
-the Model B disc exactly as `tools/bopen.mjs` drives jsbeeb -- SHIFT-BREAK, the title
-skipped, `scan_keys` stubbed, the same key script -- and prints the game's state at
-every `frame_top`: the zero-page logic, the object arrays, a hash of the display RAM,
-the CRTC registers.  `tools/bdump.mjs` prints the same line from jsbeeb, and
+the disc on a Model B exactly as `test/bopen.mjs` drives jsbeeb -- SHIFT-BREAK, the
+title skipped, `scan_keys` stubbed, the same key script -- and prints the game's state
+at every `frame_top`: the zero-page logic, the object arrays, a hash of the display
+RAM, the CRTC registers.  `test/bdump.mjs` prints the same line from jsbeeb, and
 `cmpdump.py` finds the first frame that differs.
 
 At chosen frames (`--shot F`, `--shotevery K`) both sides also save, at the game's
@@ -18,9 +18,9 @@ the mismatching cells by row.
 
 ## Build and run
 
-    test/hbeebem/build.sh               # clones stardot/beebem-windows, builds build/hbeebem
+    test/hbeebem/build.sh               # clones stardot/beebem-windows, builds test/hbeebem/build/hbeebem
 
-then from the top directory, with a disc built (`sh build.sh`):
+then from beeb/, with a disc built (`sh build.sh`):
 
     test/hbeebem/build/hbeebem --userdata test/hbeebem/build/userdata --disc build/cleo.ssd \
         --labels build/modelb/labels.txt --frames 240 --seed 3 --level 1 --shotevery 20 --out /tmp/hb > /tmp/hb.txt
@@ -34,13 +34,13 @@ jsbeeb's to its sockets.  `DebugEnabled` is set true in `stubs.cpp` so that
 `Exec6502Instruction` runs one instruction per call (the harness's breakpoints need
 that); the debugger itself is stubbed out.
 
-## What it found (23-24 Sep 2026)
+## What it shows
 
-With the disc as committed (R8 = 0), BeebEm's picture is identical to jsbeeb's, cell
-for cell, in 47 of 48 samples over four levels; the 48th differs in the sprites and
-one redrawn band only -- the two emulators flipped buffers one field apart -- and the
-logic state and CRTC registers agree at every one of 960 frames.  With the disc from
-before the R8 fix, BeebEm's sections come out the wrong length (81 scanlines for 80, 4
-for 2: its interlace-frame stretch), its chain is out of phase from the second frame,
-and 10 of 24 pictures differ wholesale.  So a BeebEm that still glitches is running a
-disc without that fix, or a BeebEm whose settings differ from the defaults built here.
+With R8 = 0 (the game never sets interlace), BeebEm's picture is identical to
+jsbeeb's, cell for cell, in 47 of 48 samples over four levels; the 48th differs in the
+sprites and one redrawn band only -- the two emulators flipped buffers one field apart
+-- and the logic state and CRTC registers agree at every one of 960 frames.  With
+R8 = 1, BeebEm's sections come out the wrong length (81 scanlines for 80, 4 for 2: its
+interlace-frame stretch), its chain is out of phase from the second frame, and 10 of
+24 pictures differ wholesale.  So a BeebEm that glitches is running a disc that sets
+R8 = 1, or has settings that differ from the defaults built here.

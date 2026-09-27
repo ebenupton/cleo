@@ -1,6 +1,7 @@
 ; ============================================================================
 ; CLEO - BBC Micro port : display engine
-;   - main + shadow RAM double buffered 20K ring framebuffers
+;   - double buffered ring framebuffers: main and shadow RAM, 20K each, on the
+;     Master; two rings in main RAM on the Model B
 ;   - vertical rupture: fixed status bar section + hardware scrolled playfield
 ;     with 2-scanline fine vertical scroll, 1-character horizontal scroll
 ;   - tiles are 8x8 game pixels = 4 chars x 2 char rows (64 bytes) in SWR
@@ -32,35 +33,27 @@ UVIA_IER  = $FE6E
 IRQ1V     = $0204
 ROMSEL_CPY= $F4
 
+; The banks, the same numbers on both machines (the sockets are patched at boot):
+;   4  the sprite row loop (with the mirrored blitter), sprites, SWAPTAB, MASKTAB0-3
+;   5  the sprite row loop (with the copy blitter), gather5, sprites, the map at
+;      $9C00, MASKTAB0-3; the title pack during the menus
+;   6  bank6_entry/drawrect_clip, the tile blitter and the ring work, the level's
+;      tiles from $8600; the menu overlay during the menus
+;   7  the level's tables, then the logic, the game loop and the rest of the renderer
 BANK_SPR  = 4
-BANK_TIL1 = 5
-BANK_TILES= 6                     ; every level's tile data now fits one bank
+BANK_TIL1 = 5                     ; the second sprite bank
+BANK_TILES= 6                     ; every level's tile data fits one bank
 BANK_LVL  = 7
-BANK_MAP  = 5                     ; the map and the tables read alongside it
-
-; bank 5: the tile-address table, then the map and everything the renderer or the
-; logic reads in the same breath as the map; the box stars and the HUD art above.  It is here rather than in bank 7
-; because the game logic took that bank: the Model B it was written for had no
-; HAZEL, and the map was the only thing big enough to make the room.  A Master
-; does have HAZEL, so that placement is now a free choice rather than a forced
-; one -- moving the logic there would hand bank 7 back.
-;         $8300  LV_MAPROWLO, LV_MAPROWHI (the level's map piece, with LV_PAGE0 and
-;                the tile lists: convert.py)
-;         $B000  box stars, $B800 music
-
-; bank 7
+BANK_MAP  = 5                     ; the map, and the gather that reads it in place
 
 ; ---------------------------------------------------------------- screen shape
-; Each buffer gets its own 20K screen, main and shadow, so both are an 80-char
-; ring at $3000 with 27 rows visible and the status bar above.
+; An 80-char ring per buffer, with the 2-row status bar displayed above it.
 ROWCHARS  = 80
   .if BHW
 ; Model B: 32K of main RAM, and all but 768 bytes of it is the display.  Two rings of
 ; 23 slots, each with a mirror row below it (the rupture chain reads the row that
-; straddles the ring end from there: see modelb/DESIGN.md), and the 2-row bar:
+; straddles the ring end from there: see docs/DESIGN.md), and the 2-row bar:
 ;   $0300 bar  $0800 mirror A  $0A80 ring A  $4400 mirror B  $4680 ring B  $8000
-; 23 x 640 is not a whole number of pages, so the fold is 16 bit -- but both ring
-; ENDS are page aligned, which keeps the fold TEST a byte compare (ringup).
 RINGROWS  = 23
 VISROWS   = 21                    ; 168 lines = 84 game px
 BUFROWS   = VISROWS + 1
@@ -70,12 +63,12 @@ VSPEG     = 3                     ; vsyncs a rendered frame (game.s): 16.7 Hz of
 RINGROWS  = 32                    ; the whole 20K: the hardware fold IS the ring wrap
   .ifdef VISROWSDEF
 VISROWS   = VISROWSDEF            ; a test build: the Model B's window on the Master, so
-  .else                           ; the two can be run in lock step (modelb/tools)
-VISROWS   = 30                    ; visible char rows: 240 lines = 120 game px.  The
+  .else                           ; the two can be run in lock step (-D VISROWSDEF=21)
+VISROWS   = 30                    ; visible char rows: 240 lines = 120 game px (the
   .endif
-                                  ; original is 108 (a 128-line phone screen less a
-                                  ; 20-line HUD); the ring at $3000 has room for more.
-                                  ; 30 fills the ring exactly: 31 held + the composed row.
+                                  ; original is 108: a 128-line phone screen less a
+                                  ; 20-line HUD).  30 fills the ring exactly: 31 held
+                                  ; + the composed row.
 BUFROWS   = VISROWS + 1           ; rows held: the visible ones plus the bottom partial's
 ; The camera follows Cleo one for one, so her fall speed is also how far the window
 ; moves in a frame.  A char row is four map pixels.  Main and shadow are separate,
@@ -90,7 +83,7 @@ RINGBYTES = RINGCHARS*8
 ; ring ENDS are page aligned, which keeps the fold TEST a byte compare (ringup), and
 ; both bases are at xx80, which makes the low byte's fold a subtraction of $80.
 ; Main RAM is display from the bar's $0300 to $8000: nothing else lives in it
-; (the code every bank calls is bank 6's now: modelb/DESIGN.md).
+; (the code every bank calls is the low RAM below it: low.s).
 RING_A    = $0A80
 RING_B    = $4680
 MIRR_A    = RING_A - ROWBYTES
@@ -105,10 +98,11 @@ BARADDR   = $0300
 BUF0      = $3000
 .assert (RINGCHARS & $FF) = 0, error, "the ring folds on a high-byte compare"
 ; The layout: the bar at $2B00 (below the screen, main RAM, single buffered), then each
-; buffer's ring at $3000-$7FFF, main and shadow.  The ring is the entire screen and the CRTC folds it for free: an address that runs
-; off $8000 comes back to $3000, which is the ring base, so a displayed row may straddle
-; the end and no mirror copy is needed.  That is the whole reason RINGROWS is 32 -- it
-; is not a choice, it is the size of the region the hardware wraps.
+; buffer's ring at $3000-$7FFF, main and shadow.  The ring is the entire screen and
+; the CRTC folds it for free: an address that runs off $8000 comes back to $3000, the
+; ring base, so a displayed row may straddle the end and no mirror copy is needed.
+; That is the whole reason RINGROWS is 32 -- it is not a choice, it is the size of the
+; region the hardware wraps.
 RINGBASE  = BUF0
 RINGEND   = RINGBASE + RINGBYTES
 ; The composed top row has to be INSIDE the screen: it is per buffer, and anything below
@@ -117,13 +111,11 @@ RINGEND   = RINGBASE + RINGBYTES
 ; row ABOVE it, ring chars [ringS + BUFROWS*80, ringS + RINGCHARS) = [ringS - 80, ringS).
 ; The window start is char granular (ringS = wcy*80 + wcx), so that row is not a slot in
 ; the row tables: its column c is ring char (ringS + c + RINGCHARS - 80) mod RINGCHARS,
-; a constant offset from its source, which makes it a ring row like any other -- a
-; horizontal scroll leaves it valid and only the newly drawn columns need recomposing.
-; (It was a row-aligned slot once, partq = barq + 31, which overlapped the window's last
-; row by ringS mod 80 chars whenever BUFROWS was 31: that is why VISROWS sat at 29.)
-; 30 would need the composed row at ring char ringS + 2480 exactly -- window aligned,
-; not slot aligned -- and a copy that folds at $8000 mid-run.
-; The bar is BELOW the screen, in main RAM, and there is only one of it.  The CRTC's
+; a constant offset from its source, which makes it a ring row like any other.  It is
+; window aligned, not slot aligned -- a row-aligned slot (barq + 31) would overlap the
+; window's last row by ringS mod 80 chars with BUFROWS at 31 -- so its copy may fold
+; at $8000 mid-run (copy_partial).
+; The bar is BELOW the screen in memory, in main RAM, and there is only one of it.  The CRTC's
 ; start address is just RAM/8, so it can scan from anywhere under $8000 -- but with
 ; shadow selected for display (ACCCON D = 1) everything under $3000 reads HAZEL/ANDY
 ; instead of main RAM, so the bar's section runs with D = 0 and the playfield's with
@@ -138,10 +130,10 @@ BINMAX    = BINMAXDEF             ; from the objects' grid cells and the walk re
 MAXREC    = MAXSPRDEF             ; (assets.inc)
 MAXSPR    = MAXSPRDEF
 
-; key bits
 DIRTYMAX = 20                     ; dirty tiles a buffer can queue: a switch marks 2 x its
                                   ; height at once, 18 for the tallest (level 7's main map);
                                   ; past this the buffer is redrawn whole (mark_dirty)
+; key bits
 K_LEFT  = 1
 K_RIGHT = 2
 K_UP    = 4
@@ -184,7 +176,7 @@ rc_gi:    .res 1
 rc_subc:  .res 1
 rowoff:   .res 1                  ; rc_sub | rc_subc*8 : byte offset into the tile for this run
 rc_n:     .res 1
-rc_wrap:  .res 1                  ; row may cross $8000 (needs per-run wrap check)
+rc_wrap:  .res 1                  ; row may cross the ring end (needs per-run wrap check)
 rc_tx0:   .res 1                  ; per-rect invariants: first tile column,
 rc_nt:    .res 1                  ;   tiles-1 per row,
 rc_sc0:   .res 1                  ;   rc_x & 3 (chars into the first tile),
@@ -219,17 +211,17 @@ sp_row:   .res 1
 sp_c:     .res 1
 sp_lim:   .res 1
 sp_cnt:   .res 1                  ; sprite column countdown
-                                  ; full past $A5 -- the MOS's disc code scribbles on
-                                  ; $A8-$BF during a load -- so these alias zp the blit
-                                  ; no longer needs, and the rest sit in main RAM (mrest)
-mptr    = w16                     ; this column group's mask bytes, one per pixel row
+                                  ; the segment stops at $A3 (the cfgs), so the mask
+                                  ; walk aliases zp the blit no longer needs; the rest
+                                  ; of it is fixed zp (defs.inc: sp_mh, sp_mrp...)
+mptr    = w16                    ; this column group's mask bytes, one per pixel row
 mtab    = tmp3                    ; MASKTAB page for this column's phase (tmp3 = 0, tmp4 = page)
 sp_msk  = tmp4c8                  ; the AND mask of the pair being drawn
 sp_id   = sp_ext                  ; the sprite id, until sp_ext is set a few lines later
 spi:      .res 1
 lcnt:     .res 1
 lidx:     .res 1
-ringS:    .res 2                  ; window start char S (0..2559)
+ringS:    .res 2                  ; window start char S (0..RINGCHARS-1)
 barq:     .res 1                  ; row slot q = S/80
 
 ; level geometry
@@ -237,11 +229,11 @@ maplw:    .res 1                  ; log2 map width in tiles
 maplh:    .res 1
 mapw:     .res 2                  ; map width in px
 maph:     .res 2
-maxwx:    .res 2                  ; mapw - 160
-maxwy:    .res 2                  ; maph - 120
+maxwx:    .res 2                  ; mapw - WINPX
+maxwy:    .res 2                  ; maph - VISLINES/2
 
 ; misc
-vsyncs:   .res 1                  ; incremented by vsync ISR
+vsyncs:   .res 1                  ; counted by the vsync interrupt
 flipreq:  .res 1                  ; 1 = flip pending
 flipvs:   .res 1
 keys:     .res 1                  ; current key bits
@@ -281,14 +273,13 @@ crtcb:     .res 2                   ; build_sections: the buffer's CRTC base (di
   .endif
         .zeropage
 
-; ---------------------------------------------------------------- tables (uninitialised RAM $0400-$0CFF)
-; Model B: main RAM is the screen, so each table lives in the bank of the code that
-; reads it, and only what more than one bank touches is in the 512 bytes of low RAM.
-; The mask tables are static data at a fixed address in both sprite banks (MASKTAB0,
-; SWAPTAB in modelb/src/defs.inc); sprmul5 and the row tables are static too.
-        .segment "TILBSS"           ; bank 6: the tile blitter's (the gather's arrays are
-                                    ; low RAM's, its shape bank 5's: gather5)
-        ; bank 6, with the ring work that keeps it (init5 zeroes the segment)
+; ---------------------------------------------------------------- tables (uninitialised)
+; Each table lives in the bank of the code that reads it, and only what more than one
+; bank touches is in low RAM.  The mask tables are static data at a fixed address in
+; both sprite banks (MASKTAB0, SWAPTAB in src/defs.inc); sprmul5 and the row tables
+; are static too.
+        .segment "TILBSS"           ; bank 6: the tile blitter's and the ring work's (the
+                                    ; gather's arrays are low RAM's); boot zeroes it
 BUF_CY:    .res 2
 FLATTAB:   .res 2*(NFLAT+2)         ; the level's flat tiles: (even line, odd line) by
                                     ; id - FLAT0, the loader's; the solids are the last two
@@ -302,7 +293,7 @@ DIRTYCNT:  .res 2                   ; (the game loop)
 PBANK:     .res 4                   ; the physical bank of each of banks 4..7 (the loader's:
                                     ; cpu.inc -- read by what the loader cannot patch)
 PBOARD:    .res 1                   ; and the board: BOARD_STD / WATFORD / SOLIDISK (defs.inc),
-                                    ; right after PBANK (start7 copies the five together)
+                                    ; right after PBANK (boot copies the five together)
         .segment "LGCBSS"           ; bank 7: the sprite prologue's records
 SPRREC:    .res 2*MAXREC*10
 RECCNT:    .res 2
@@ -317,9 +308,9 @@ SECTAB:    .res 2*48
 SFXDUR:    .res 1
 LOADREQ:   .res 1                 ; 0 running, 1 stop asked, 2 stopped, 3 resume asked (load_begin)
     .else
-        .segment "TABLES"           ; the converged Master: the interrupt handler and its
-BUF_SEC0:  .res 4                   ; chain are the Master's, in main RAM, and so is
-BUF_SEC0T1: .res 4                  ; what they keep
+        .segment "TABLES"           ; the Master: the interrupt handler and its chain
+BUF_SEC0:  .res 4                   ; are in main RAM, and so is what they keep
+BUF_SEC0T1: .res 4
 SECTAB:    .res 2*48
 SFXDUR:    .res 1
 LOADREQ:   .res 1
@@ -328,11 +319,11 @@ OLDIRQ:    .res 2
 NEXTBUF:   .res 1
     .endif
         .segment "MNUBSS"           ; bank 6's menu overlay: the tune's player lives there
-MUSDUR:    .res 1                   ; (MUSON is in low RAM: the interrupt stub reads it)
+MUSDUR:    .res 1                   ; (MUSON is in zero page: the interrupt reads it)
 MUSNOTE:   .res 3
 ISRT1:     .res 1
 ISRT2:     .res 1
-        .segment "LOWBSS"           ; main RAM: what more than one bank touches (the
+        .segment "LOWBSS"           ; main RAM: what more than one bank touches
 SPRLIST:                          ; (a label, not an equate: the tools read labels.txt)
 SPR_ID:    .res MAXSPR            ; the sprite draw list, one array per field (index =
 SPR_XL:    .res MAXSPR            ;  the sprite's number, so no stride to multiply by):
@@ -353,10 +344,10 @@ NEXTSECT:  .res 1
         sta CRTC_DAT
 .endmacro
 
-; advance sp (screen pointer) by one char (8 bytes) with ring wrap
 ; ---------------------------------------------------------------- ring wrapping
-; A screen address that runs off the end of the buffer folds back to its start.
-; The buffer is the whole 20K and the test is the sign bit.
+; A screen address that runs off the end of the ring folds back to its start.  On the
+; Master the ring runs to $8000 and the test is the sign bit; on the Model B it is a
+; compare with the buffer's ring end (ringehi).
 ; These spell their skip with an anonymous label, so a caller that wants to branch
 ; over one has to count it: see spnext, which says :++ for that reason.  A named
 ; label here would end the enclosing routine's cheap-local scope.
@@ -364,9 +355,9 @@ NEXTSECT:  .res 1
 .if (RINGROWS & (RINGROWS - 1)) = 0
         and #(RINGROWS-1)
 .elseif ::BHW
-        .local n1, n2               ; a row is 0..255 and the table RINGROWS*5 long:
-        cmp #RINGROWS*5             ; two subtractions bring the row into it (main RAM
-        bcc n1                      ; is short of a 256-entry table)
+        .local n1, n2               ; a row is 0..255 and the table RINGROWS*5 long
+        cmp #RINGROWS*5             ; (bank 6's): two subtractions bring the row into
+        bcc n1                      ; it, 141 bytes short of a 256-entry table
         sbc #RINGROWS*5
 n1:     cmp #RINGROWS*5
         bcc n2
@@ -379,7 +370,7 @@ n2:     tax
 .endif
 .endmacro
 .macro ringmod7                     ; the same, by subtraction: for bank 7 (calc_ring,
-  .if ::BHW                        ; once a frame), which has no copy of the table
+  .if ::BHW                        ; ringaddr7), which has no copy of the table
 :       cmp #RINGROWS
         bcc :+
         sbc #RINGROWS
@@ -389,7 +380,7 @@ n2:     tax
         ringmod
   .endif
 .endmacro
-; Both ends of the ring are page boundaries, so the fold is a compare on the high
+; The ring's end is a page boundary, so the fold test is a compare on the high
 ; byte alone.  A = high byte after moving forward, folded back into the ring.
 ; The cmp leaves the carry set on the path that reaches the sbc, so the fold needs
 ; no sec of its own whatever the caller was holding.
@@ -419,7 +410,7 @@ n2:     tax
 :
 .endmacro
 
-.macro spnext
+.macro spnext                      ; sp on one char (8 bytes), folding at the ring end
         lda sp
         clc
         adc #8
@@ -439,7 +430,7 @@ n2:     tax
 ; ============================================================================
 ; ringaddr: screen address of map char (w16 = cx 16 bit, A = cy) -> sp
 ; ============================================================================
-        .segment "TILCODE"          ; Model B: bank 6 (bank 7's sprite prologue: ringaddr7)
+        .segment "TILCODE"          ; bank 6 (the sprite prologue has its own: ringaddr7)
 ringaddr:
         ringmod
         tax
@@ -459,9 +450,9 @@ ringaddr:
         ringup sp
         sta sp+1
         rts
-  .if .not BHW                      ; the converged Master: the Master's rows, with the
-RINGLO:                             ; code that reads them (both buffers alike: main
-  .repeat RINGROWS, r               ; and shadow share the addresses)
+  .if .not BHW                      ; the Master's rows, one table for both buffers:
+RINGLO:                             ; main and shadow share the addresses
+  .repeat RINGROWS, r
         .byte <(RINGBASE + r*ROWBYTES)
   .endrepeat
 RINGHI:
@@ -491,7 +482,7 @@ RINGHI_B:
 ; drawrect: draw map tiles into the current back buffer.
 ;   rc_x (map chars, 16 bit), rc_y (map char rows), rc_w (chars 1..80), rc_h (rows)
 ; ============================================================================
-        .segment "TILCODE"          ; Model B: bank 6, with the tiles (the whole of it)
+        .segment "TILCODE"          ; bank 6, with the tiles
 drawrect:
         lda rc_h
         bne :+
@@ -548,13 +539,11 @@ drawrect:
         sta rc_sp+1                 ; ringaddr returns A = sp+1 (its last store)
         lda sp
         sta rc_sp
-        ; ---- map row pointer: the row tables only ever step it on by one map row, so
-        ; build it once here and add the stride per tile row (see @nextrow) rather than
-        ; index LV_MAPROW* and re-add rc_tx0 every time round.  The tables live in the
-        ; map bank, so this needs the bank selected too.
-        lda rc_y                    ; the row tables are in the map's bank, which this
-        lsr                         ; code cannot page in over itself: main RAM does it
-        jsr maprow6                 ; (the same instructions, between two bank switches)
+        ; ---- map row pointer: built once here (arithmetic, in low RAM: maprow6) and
+        ; stepped on by the stride per tile row (@nextrow)
+        lda rc_y
+        lsr
+        jsr maprow6
 @rowy:
         jsr mapstrip                ; the row's gather, run in bank 5 beside the map
         wrsel BANK_TILES, BANK_TILES ; (gather5, below): GATHERL/H in low RAM; mapstrip
@@ -616,10 +605,10 @@ drawrect:
         ; it set on the loop back), so the sbc below needs no sec
 @run:
         ldx rc_gi
-        lda GATHERH,x               ; bit 6: solid cyan/black tile, filled not copied
+        lda GATHERH,x               ; bit 6: a flat tile or a solid, filled not copied
         sta tp+1                    ; it is also the tile pointer's high byte, so keep it
         asl                         ; bit 6 to N; C = bit 7, set for every entry (a
-        bpl :+                      ; tile page is $80-$BF, a fill $C0): the sec holds
+        bpl :+                      ; tile page is $80-$BF, a fill $C0 up): the sec holds
         jmp @solid
 :       lda GATHERL,x               ; every tile is in bank 6, selected once per tile row
         and #7                      ; the kind: 0 a full tile, 4..6 a half, 3 a mirror
@@ -655,7 +644,7 @@ drawrect:
   .if BHW
         adc ringneg                 ; 256 - >RINGEND for the buffer being drawn
   .else
-        adc #(256 - (>RINGEND))     ; = adc #$85 ; C set iff sp+1+C >= >RINGEND
+        adc #(256 - (>RINGEND))     ; = adc #$80: C set iff sp+1+C >= >RINGEND
   .endif
         bcs @slow
 :
@@ -756,7 +745,8 @@ drawrect:
         ; the Master's LV_PAGE0 splits them: high byte $C0, one byte down every line
         ; (the low byte: a solid, or a flat whose pair is one byte) on a cascade that
         ; stores A alone; $E0, a pair (the low byte indexes FLATTAB) on the pair's
-@sp2:   jmp @spair                  ; (out of bmi's reach below the cascade)
+        ; cascade (@spair)
+@sp2:   jmp @spair                 ; (out of bmi's reach below the cascade)
 @solid: asl                         ; (A = the high byte << 1: $C0 -> $80, $E0 -> $C0)
         bmi @sp2
         lda GATHERL,x
@@ -989,11 +979,12 @@ HPAIR0  := @hp0 + 1                 ; (the first := ends the @ scope: HPAIR1 goe
 HPAIR1  := HPAIR0 + 5
 
 ; ============================================================================
-; scroll_validate: make current buffer hold window (wcx, wcy) x 80 x 31
-        .segment "TILCODE"          ; Model B: bank 6, with the row loop (F_RENDER6)
+; scroll_validate: make the current buffer hold the window (wcx, wcy), ROWCHARS x
+; BUFROWS, drawing only the strips it lacks
+        .segment "TILCODE"          ; bank 6, with the row loop
 scroll_validate:
         ldx curbuf                  ; (an invalid buffer holds BUF_CX = $80xx, which the
-:       txa                         ;  |dx| >= 80 test below sends to @full)                         ; (anonymous label kept: it holds the label count)
+:       txa                         ;  |dx| >= 80 test below sends to @full; the ':' is kept for the label count)
         asl
         tay
         ; dy = wcy - BUF_CY
@@ -1107,10 +1098,9 @@ scroll_validate:
         rts
 
 ; ============================================================================
-; ============================================================================
 ; Persistent sprite records.  match_sprites: KEEP[i] = new sprite i identical to record i
 ; ============================================================================
-        .segment "LGCCODE"          ; Model B: bank 7, with the records
+        .segment "LGCCODE"          ; bank 7, with the records
 match_sprites:
         ldx curbuf
         txa                         ; an invalid buffer (BUF_CX high byte $80: a level
@@ -1187,8 +1177,8 @@ match_sprites:
 @done:  rts
 
 ; erase_old: redraw tiles under old records that are not kept
-        .segment "LGCCODE"          ; Model B: bank 7, with the records (the rects it
-erase_old:                          ; redraws are bank 6's tile blitter: a far call each)
+        .segment "LGCCODE"          ; bank 7, with the records (the rects it redraws
+erase_old:                          ; go to bank 6's drawrect_clip through callbank)
         ldx curbuf
         lda RECCNT,x
         beq @done
@@ -1220,8 +1210,8 @@ erase_old:                          ; redraws are bank 6's tile blitter: a far c
         iny
         lda (rp),y
         sta rc_y
-        bankimm lda, BANK_TILES, BANK_LVL   ; bank 6's, by low RAM's direct switch (its
-        jsr callbank                ; BANKENTRY is drawrect_clip)
+        bankimm lda, BANK_TILES, BANK_LVL   ; bank 6's BANKENTRY is drawrect_clip
+        jsr callbank
 @next:  lda rp
         clc
         adc #10
@@ -1237,7 +1227,7 @@ erase_old:                          ; redraws are bank 6's tile blitter: a far c
 ; Sprites
 ; ============================================================================
 ; add sprite to draw list: A = id, spx/spy = map px
-        .segment "LGCCODE"          ; banked: bank 7, with the logic that calls it
+        .segment "LGCCODE"          ; bank 7, with the logic that calls it
 addsprite:
         ldx NSPR
         cpx #MAXSPR
@@ -1255,7 +1245,7 @@ addsprite:
 @full:  rts
 
 ; draw all listed sprites into current buffer (skipping unchanged kept ones)
-        .segment "LGCCODE"          ; Model B: bank 7, with the prologue and the records
+        .segment "LGCCODE"          ; bank 7, with the prologue and the records
 draw_sprites:
         ; Two passes.  A box star is an opaque rectangle with its background baked in,
         ; so it has to go down before anything that shares its space -- drawn in list
@@ -1316,18 +1306,19 @@ draw_sprites:
         bne @l                      ; spi <= NSPR: never wraps to 0
 @endpass:
         dec dpass
-        bpl @pass                   ; (in range on both builds)
+        bpl @pass                   ; (in range on both machines)
 :       ldx curbuf
         lda NSPR
         sta RECCNT,x
         rts
 
 ; draw one sprite: A = id ; spx, spy = map px (ref point)
-; A = sprite id. Game sprites (spbank = BANK_SPR): directory is in bank 7 at
-; SPR_TABLE (both targets: the Model B's is the level's, loaded by ldprog.s); sprite data is in bank 4, or in ANDY ($8000, ROMSEL bit7) when the
-; entry's flag bit2 is set. Title pieces (spbank != BANK_SPR): directory and data
-; both live at TITLE_ADDR of that bank.
-        .segment "LGCCODE"          ; Model B: bank 7, with the records and SPRMASK
+; Game sprites (spbank = BANK_SPR): the directory is the level's, in bank 7 at
+; SPR_TABLE (ldprog.s); the data is in bank 4, or bank 5 when the entry's flag bit 4
+; is set (bit 2 would select ANDY, $8000 with ROMSEL bit 7: the packer never sets it).
+; Title pieces (spbank != BANK_SPR): directory and data both live at TITLE_ADDR of
+; that bank.
+        .segment "LGCCODE"          ; bank 7, with the records and SPRMASK
 drawsprite:
   .if BHW
         ldx #0                      ; X is dead on entry (ldx spbank below)
@@ -1397,8 +1388,9 @@ drawsprite:
         lda spbank              ; title pieces keep directory and data in one bank
         sta sp_dbank
         .assert <TITLE_ADDR = 0, error, "drawsprite: the title directory/mask arithmetic needs a page-aligned TITLE_ADDR"
-        lda sp_id                   ; address come across through low RAM, the mask
-        asl                         ; first (dirfetch reuses ptr and MAPBUF); C = 0
+        lda sp_id                   ; the entry and its mask's address come across
+        asl                         ; through low RAM (dirfetch), the mask's first:
+                                    ; dirfetch reuses ptr and MAPBUF.  C = 0
         adc #<(TITLE_ADDR+$80)
         sta ptr
         lda #>(TITLE_ADDR+$80)      ; no carry: 2*id < $80
@@ -1415,7 +1407,7 @@ drawsprite:
         jsr dirfetch
         lda MAPBUF+6                ; dirfetch left ptr = MAPBUF
         sta sp_flags
-@entry2:                            ; (Model B title pieces: ptr = MAPBUF, dirfetch's copy)
+@entry2:                            ; (title pieces: ptr = MAPBUF, dirfetch's copy)
         ldaz ptr
         sta sp_ptr
         ldy #1
@@ -1543,7 +1535,7 @@ drawsprite:
         lda sp_lb0+1
         adc #0
         sta w16+1                   ; w16 = lb1
-        ; clip lstart = max(lb0,0) ; lend = min(lb1, 247)
+        ; clip lstart = max(lb0,0) ; lend = min(lb1, BUFROWS*8-1)
         lda sp_lb0+1
         bmi @top
         bne @out0                   ; lb0 >= 256 -> below
@@ -1897,8 +1889,8 @@ name:
   .endif
         lda tmp
         beq l0                      ; the whole cell: the overwhelmingly common case, and
-        asl                         ; it needs no table at all (was lda/asl/tax/jmpx, 21
-        tax                         ; cycles of dispatch to reach the same place)
+        asl                         ; it needs no table at all (the table's dispatch is
+        tax                         ; 21 cycles to reach the same place)
   .if ::BHW
         lda et-2,x                  ; jmpx without its pha/pla: A is dead at l1..l7
         sta jv
@@ -1947,8 +1939,8 @@ pl:     lda (ptr),y
 pl:     lda (ptr),y
         bmi po                      ; bit 7: both pixels opaque.  Tested before the
         beq ps                      ; transparent case for the same reason SPRLINE does
-        ; it -- 45.7% opaque against 24.1% transparent, and
-        ; both read this load's flags ($00 is never negative)
+                                    ; it -- 45.7% opaque against 24.1% transparent, and
+                                    ; both read this load's flags ($00 is never negative)
         cmp #$41
         beq pd
         tax
@@ -2116,14 +2108,13 @@ p3:     MPAIR 6, mirror
         jmp sprretPk
   .endif
 .endmacro
-; The row loop and the inner blocks.  On the Master this is plain code after the
-; prologue; on the Model B it is assembled once into EACH sprite data bank (the loop
-; reads image bytes, so it must be resident with them) and reached by a far call
-; from the prologue, which lives with the directory in bank 6.
-.macro SPRITE_LOOPS withmirror, withcopy, bank   ; withmirror = 0: a copy for a bank
-                                    ; no SWAPTAB); withcopy = 0: none drawn by the copy
-                                    ; blitter (no sprFC); bank: the one this copy is in
-ds_entry:                           ; the far entry: the dispatch jump is patched here,
+; The row loop and the inner blocks, assembled once into EACH sprite data bank (the
+; loop reads image bytes, so it must be resident with them) and reached through
+; callbank from the prologue, which lives with the directory in bank 7.
+.macro SPRITE_LOOPS withmirror, withcopy, bank   ; withmirror = 0: no mirrored blitter
+                                    ; (the bank has no SWAPTAB); withcopy = 0: none drawn
+                                    ; by the copy blitter (no sprFC); bank: this copy's
+ds_entry:                           ; BANKENTRY: the dispatch jump is patched here,
         wrsel bank, bank            ; in the bank that owns it -- so the write bank is
         ldx sp_disp                 ; set here, not in low RAM's callbank (A = the bank)
         lda sprdisp_tab,x
@@ -2263,9 +2254,9 @@ ds_done: rts
         .endscope
         .assert spr4::ds_entry = BANKENTRY, error, "bank 4's row loop must start the bank"
   .if BHW                           ; (the Master's is shorter: its gap is the price of
-        .assert * = B4_CODE_END, error, "bank 4's code must end where its sprites start: set B4_CODE_END in modelb/tools/assets.py"
+        .assert * = B4_CODE_END, error, "bank 4's code must end where its sprites start: set B4_CODE_END in tools/assets.py"
   .else                             ;  level files both machines read)
-        .assert * <= B4_CODE_END, error, "bank 4's code runs into its sprites: B4_CODE_END in modelb/tools/assets.py"
+        .assert * <= B4_CODE_END, error, "bank 4's code runs into its sprites: B4_CODE_END in tools/assets.py"
   .endif
         .segment "SPR5CODE"
         .scope spr5
@@ -2275,18 +2266,17 @@ ds_done: rts
         .assert spr5::ds_entry = BANKENTRY, error, "bank 5's row loop must start the bank"
         .segment "TILCODE"     
 
-; (There were half-res blitters here -- one source byte to two screen lines -- for the
-; title's Cleo frames.  Every image is full-res now, so entries 0/1 of sprdisp_tab
-; alias the full blitters and the flag bit is vestigial.)
+; Every image is full-res, so entries 0/1 of sprdisp_tab (the half-res flag clear)
+; alias the full blitters: the flag bit is vestigial.
 
 ; ============================================================================
 ; copy_partial: copy lines wfine..7 of ring row wcy into lines 0..(7-wfine) of the
-; ring row above the window (the "A" section source), for the columns drawn since.
+; ring row above the window (the "A" section's source), all 80 columns.
 ; ============================================================================
-        .segment "LGCCODE"          ; banked: bank 7, beside render_core (no far call)
+        .segment "LGCCODE"          ; bank 7, beside render_core
 copy_partial:                       ; the whole row, every frame the fine scroll is not 0
-        lda wfine                   ; (it used to track the columns drawn since the last
-        bne :+                      ;  copy: measured, that saved under 0.3% of a frame)
+        lda wfine                   ; (tracking the columns drawn since the last copy
+        bne :+                      ;  saves under 0.3% of a frame: measured)
         rts
 :
 :
@@ -2312,7 +2302,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
 @nomir:
   .endif
         lda wcy
-        jsr ringaddr7               ; sp = source start (row wcy, first dirty column)
+        jsr ringaddr7               ; sp = source start (row wcy, column wcx)
         ; source: sp is the char, and the copy starts wfine lines into it.  Offsetting
         ; sp by wfine (under 8, and a char is 8-aligned) keeps its page crossings on
         ; the real char boundaries, so spnext's fold still lands where it should
@@ -2320,8 +2310,8 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         clc
         adc wfine
         sta sp
-        ; dest: the same column of the composed row, ring char (ringS + col + 2480)
-        ; mod 2560 -- the row above the window -- as a real address from RINGBASE
+        ; dest: the same column of the composed row, ring char (ringS + col - 80)
+        ; mod RINGCHARS -- the row above the window -- as a real address in the ring
         lda tmp4                    ; C = 0: sp was a char (8-aligned) + wfine (< 8)
         adc #<(-ROWCHARS)           ; ringS + tmp4 - 80: this low add cannot carry (tmp4 <= 79)
         adc ringS
@@ -2406,11 +2396,11 @@ copy_partial:                       ; the whole row, every frame the fine scroll
 ; ============================================================================
 ; blank_below: the 6845 always displays the first scanline of a frame, whatever R6
 ; says, so the blanking section's row 0 line 0 -- the ring slot below the playfield --
-; is a 241st line under the picture.  Everywhere it is the next map line; parked on
+; is one line more under the picture.  Elsewhere it is the next map line; parked on
 ; the map's bottom row it is whatever that never-drawn slot last held.  So when the
 ; window sits on the bottom row, blank the slot, once per buffer per arrival.
 ; ============================================================================
-        .segment "LGCCODE"          ; banked: bank 7, beside render_core
+        .segment "LGCCODE"          ; bank 7, beside render_core
 blank_below:
         lda wfine
         bne @no
@@ -2443,37 +2433,33 @@ blank_below:
 @no:    rts
 
 ; ============================================================================
-; calc_ring: ringS = ((wcy & 31) * 80 + wcx) mod 2560 ; barq = ringS / 80
+; bar_bg: the bar has a fixed home outside the ring, so it stays put however the
+; window scrolls and is only written when its contents change (in the ring it would
+; move with every vertical scroll: 1280 bytes to copy again, 13,310 cycles).  Its
+; template (icons, labels, blank digit slots) is the BAR file, which the
+; loader puts in place with the title (ldprog.s) and nothing redraws.  The template
+; buries the digits, so this resets the digit cache: its "already drawn" values are
+; no longer true.  One bar, one cache: not one per buffer.
 ; ============================================================================
-; copy_bar: if this buffer's bar rows are stale, write bar image into ring slots q-3, q-2
-; The bar has a fixed home outside the ring, so it stays put however the window
-; scrolls and is only written when its contents change.  It used to live in the two
-; ring rows above the window, which move every frame the view scrolls vertically;
-; re-copying 1280 bytes for that cost 13,310 cycles of an 80,000 cycle frame.
-; bar_bg: lay the static bar template (icons, labels, blank digit slots) from the span
-; list in bank 5 into the bar, once, at start-up (main.s).  Model B: the loader puts the
-; BAR file in place with the title (ldprog.s), and this only resets the digit cache.
-        .segment "LGCCODE"     
-bar_bg:                             ; and never redrawn: only the digit cache is reset
-        ldx #8                      ; level).  The template buries the digits, so the
-        lda #$FF                    ; cached "already drawn" values are no longer true.
-@bci:   sta BARCACHE,x              ; (One bar, one cache: this used to index it by
-        dex                         ; curbuf and, at a level start with curbuf = 1,
-        bpl @bci                    ; reset the wrong 16 bytes and left the digits stale)
+        .segment "LGCCODE"
+bar_bg:
+        ldx #8
+        lda #$FF
+@bci:   sta BARCACHE,x
+        dex
+        bpl @bci
         rts
 
 ; ============================================================================
-  .if .not BHW                   ; (Model B: its rupture chain is modelb/src/display.s)
+  .if .not BHW                   ; (Model B: its rupture chain is display.s)
         .segment "LGCCODE"          ; bank 7, with the logic: this touches nothing but
                                     ; main RAM and the CRTC
 ; build_sections: fill SECTAB for the current buffer from ringS and wfine.
 ; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi (T1 = duration of section i+1)
 ;
-; The bar and the partial row have fixed homes, so only the playfield walks the ring.
-; A row starting past RINGCHARS-80 straddles the ring end; it is read from the mirror
-; sitting immediately below the ring base, which makes its address c - RINGCHARS in
-; ring-offset terms, and every row after it follows on contiguously.  That costs one
-; extra section whenever the window straddles.
+; The bar has a fixed home; the composed row and the playfield walk the ring.  A row
+; that straddles the ring end is folded by the CRTC, so the playfield is always one
+; section however the window sits.
 ; ============================================================================
 LINE = 64
 BARLEAD = 10                        ; us the bar's T1 fires early, beyond the lead every
@@ -2554,8 +2540,8 @@ build_sections:
 @run:   ; w16 = the run's ring offset, tmp4 = its rows, X = the entry of the section
         ; before it.  Entry i carries section i+1's address and duration, and section
         ; i's own R4/R9/R6/R7, so each section is written across two entries.
-        ; The run is never split any more: a row that straddles the ring end is
-        ; folded by the CRTC, so the playfield is one section however the window sits.
+        ; The run is never split: a row that straddles the ring end is folded by
+        ; the CRTC.
         lda tmp4
         sta tmp2
         jsr @emit
@@ -2644,7 +2630,7 @@ build_sections:
         asl
         asl
         jmp @dur
-        ; --- A = rows: advance w16 by that many rows, folding into 0..RINGCHARS
+        ; --- A = rows: advance w16 by that many rows, folding into 0..RINGCHARS-1
 @advance:
         tay
         clc
@@ -2698,14 +2684,17 @@ QVSYNC = 8                         ; vsync at Q row 8 of 16: the picture starts 
 QVSYNC = 3                         ; vsync at Q row 3 of 7: four rows (32 lines) between the
                                    ; vsync and the bar, which is where the bar is drawn, and
                                    ; three below.  Measured against the Master MOS's own
-                                   ; a standard frame (R7 = 35): the picture sits exactly where it does.
+                                   ; standard frame (R7 = 35): the picture sits exactly
+                                   ; where it does.
   .endif
 
 ; ============================================================================
 ; Frame control
 ; ============================================================================
-; select CPU access to the current back buffer (ACCCON X bit)
-        .segment "TILCODE"          ; Model B: bank 6 (the menus are there too)
+; select_backbuf: point the blitters at the current back buffer -- on the Master CPU
+; access to its RAM (ACCCON X), on the Model B its ring's constants -- and the
+; sprite records at its half
+        .segment "TILCODE"          ; bank 6 (it patches ringaddr's operand)
 select_backbuf:
   .if BHW
         ldx curbuf                  ; the buffer's ring: its base and end, the two
@@ -2751,14 +2740,15 @@ select_backbuf:
 @rhi:   .byte >SPRREC, >(SPRREC+MAXREC*10)
 
 ; render everything queued for the current back buffer and request flip
-        .segment "LGCCODE"          ; Model B: bank 7, with the game loop; the ring work
-render_frame:                       ; is render_core in bank 6
-        jsr wait_flip               ; the previous frame's flip must land before we
+        .segment "LGCCODE"          ; bank 7, with the game loop
+render_frame:
+        jsr wait_flip               ; the previous frame's flip must land before this
+                                    ; buffer is touched
         ; ---- the bar first.  It is single buffered and drawn where it is displayed,
-        ; so it has to be finished before the CRTC reaches it: T starts 40 lines after
-        ; the vsync wait_flip just returned from, which is 2560 cycles.  Only digits:
-        ; the template is laid once (Master: main.s; Model B: with the title) and
-        ; nothing erases it -- the menus keep to the ring (menu_sections).
+        ; so it has to be finished before the CRTC reaches it: T starts QROWS-QVSYNC
+        ; rows after the vsync wait_flip just returned from (32 lines on the Master,
+        ; 64 on the Model B).  Only digits: the template comes with the title (the BAR
+        ; file) and nothing erases it -- the menus keep to the ring (menu_sections).
 :       lda BARDIRTY
         beq :+
         jsr t_redraw_hud
@@ -2779,10 +2769,10 @@ render_frame:                       ; is render_core in bank 6
         and #3
         asl
         sta wfine
-        lda wy+1                    ; wcy = wy >> 2, a full 16-bit shift: shifting the
-        lsr                         ; high byte once only was right below wy = 512 and
-        sta wcy                     ; lost 128 rows above it, which put the tall maps
-        lda wy                      ; 512 px out of place once the player got that deep
+        lda wy+1                    ; wcy = wy >> 2, a full 16-bit shift: the tall maps
+        lsr                         ; go past wy = 512, where shifting the high byte
+        sta wcy                     ; once only loses 128 rows
+        lda wy
         ror
         lsr wcy
         ror
@@ -2833,8 +2823,8 @@ menu_sections:
         rts
 
 ; ---------------------------------------------------------------- load mode
-; A disc load stops the chain: the Model B's loader runs with interrupts off, the
-; Master's pages banks under it.  Stopped mid-chain the CRTC repeats whatever section
+; A disc load stops the chain: the loader runs with interrupts off (disc.s).  Stopped
+; mid-chain the CRTC repeats whatever section
 ; it was in -- a few lines over and over, no vsync -- and monitors and capture cards
 ; drop out of sync and take seconds to come back, so a level's first moments are
 ; missed.  So a load first asks the chain to stop at a frame boundary: the next bar
@@ -2846,11 +2836,11 @@ menu_sections:
 ; bar step at that frame's end takes the display back as if it had never stopped.
 LDR4 = BARROWS + VISROWS + QROWS - 1      ; 38: a standard 312-line frame
 LDR7 = BARROWS + VISROWS + QVSYNC         ; the row the chain's vsync is on
-; Both targets: the switch is the interrupt handler's bar step (engine.s @ldsw, the
-; Model B's display.s @ldsw), so it happens at the frame boundary however long the
-; handler's other work runs.  (The Model B's first version waited for a vsync, turned
-; interrupts off and polled for the bar's T1: when the vsync's own work ran past that
-; T1, the switch landed one section late and made a short frame.)
+; On both machines the switch is the interrupt handler's bar step (@ldsw: below for
+; the Master, display.s for the Model B), so it happens at the frame boundary however
+; long the handler's other work runs.  (Polling for the bar's T1 with interrupts off
+; does not: when the vsync's own work runs past that T1, the switch lands one section
+; late and makes a short frame.)
 load_begin:
         lda #1
         sta LOADREQ
@@ -2858,7 +2848,7 @@ load_begin:
         cmp #2
         bne :-
         rts
-load_end:                           ; (with interrupts off on the Model B: disc.s)
+load_end:                           ; (with interrupts off: disc.s)
         lda #3                      ; resume asked: the next real vsync arms T1, turns
         sta LOADREQ                 ; its interrupt on and clears this (curR7 holds
         lda #$42                    ; LDR7 from the switch); until then a T1 flag is
@@ -2877,8 +2867,8 @@ load_end:                           ; (with interrupts off on the Model B: disc.
 ; and pl_erase walks that path first, turning its yellow back to cyan.  The buffer
 ; is untouched between the two, so the old path is exact.
 ; ============================================================================
-        .segment "TABLES"           ; the walker's cursor (zero page is full; only the
-pl_cx = w16                         ;  pointer needs it, and ringaddr's own w16 serves
+        .segment "TABLES"           ; the walker's cursor (zero page is full: the column
+pl_cx = w16                         ;  is ringaddr's own w16)
 pl_cy:    .res 1                  ; map char row of the cell under the cursor
 pl_ln:    .res 1                  ; scanline within the cell, 0..7
 pl_dot:   .res 1                  ; dot within the byte, 0..3
@@ -3018,9 +3008,9 @@ pl_walk:
         sta pl_tile
         rts
   .endif
-        .segment "LGCCODE"          ; the ring work: bank 7 drives it, and what reads the
-render_core:                        ; records stays here; bank 6 (the tiles, the ring
-        jsr selbb                   ;   work) gets two calls a frame (low RAM's thunks)
+        .segment "LGCCODE"          ; bank 7 drives the frame and keeps the records; bank
+render_core:                        ; 6 gets two fixed calls a frame (low RAM's selbb and
+        jsr selbb                   ; validate) and the rects through callbank
         jsr calc_ring
         jsr match_sprites
         jsr erase_old
@@ -3039,16 +3029,17 @@ render_core:                        ; records stays here; bank 6 (the tiles, the
 ; ---------------------------------------------------------------- the gather, in bank 5
 ; A tile row's ids, straight from the map (ptr, the row's first tile; rc_nt+1 of them),
 ; into GATHERL/GATHERH in low RAM, which the row loop in bank 6 reads: low RAM's
-; mapstrip pages this bank in around it.  The half and mirror shape it reads is the
-; loader's, here in bank 5 beside it.
+; mapstrip pages this bank in around it.  The Master's gather is a table (LV_PAGE0);
+; the Model B's is arithmetic, on the level's half shape (zero page) and mirror shape
+; (below), both the loader's.
         .segment "MAP5CODE"
 gather5:
         ldy rc_nt
 @gl:
   .if .not BHW
-        ; the converged Master: the map row read in place (this is bank 5), then the
-        ; Master's table -- LV_PAGE0 in main RAM, the level's (the loader's), the pair
-        ; the Model B's gather below computes
+        ; the Master: the map row read in place (this is bank 5), then the table --
+        ; LV_PAGE0 in main RAM, the level's (the loader's) -- gives the pair the Model
+        ; B's gather below computes
         lda (ptr),y
         tax
         lda LV_PAGE0,x
@@ -3147,8 +3138,8 @@ gather5:
   .endif
     .endif
 @gdone: rts
-; the title pack's directory entries and mask addresses (and nothing else now): the
-; eight bytes at (ptr) into MAPBUF, ptr left pointing at the copy (low.s dirfetch)
+; the title pack's directory entries and mask addresses: the eight bytes at (ptr)
+; into MAPBUF, ptr left pointing at the copy (low.s dirfetch)
 fetch8:
         ldy #7
 :       lda (ptr),y
@@ -3160,27 +3151,27 @@ fetch8:
         lda #>MAPBUF
         sta ptr+1
         rts
-        .segment "MAP5BSS"          ; the level's half and mirror shape (the loader's):
-  .if BHW                           ; the arithmetic gather's (the Master's is LV_PAGE0;
-   .if TILEMIRROR                   ; half0-halfsub are zero page's: engine.s)
+        .segment "MAP5BSS"          ; the level's mirror shape (the loader's), for the
+  .if BHW                           ; Model B's arithmetic gather (the half shape,
+   .if TILEMIRROR                   ; half0-halfsub, is in zero page)
 mir0:      .res 1                   ; the first mirrored tile's id (the loader's)
 MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
    .endif
   .endif
   .if BHW
-        .assert * = B5_CODE_END, error, "bank 5's code must end where its sprites start: set B5_CODE_END in modelb/tools/assets.py"
+        .assert * = B5_CODE_END, error, "bank 5's code must end where its sprites start: set B5_CODE_END in tools/assets.py"
   .else
-        .assert * <= B5_CODE_END, error, "bank 5's code runs into its sprites: B5_CODE_END in modelb/tools/assets.py"
+        .assert * <= B5_CODE_END, error, "bank 5's code runs into its sprites: B5_CODE_END in tools/assets.py"
   .endif
-        .segment "TIL6ENT"         ; render-time helpers in the NMI page ($0D03..),
-                                   ; copied there at init; banked: the start of bank 6
+        .segment "TIL6ENT"         ; the start of bank 6
 ; ============================================================================
 ; callbank's way into this bank (BANKENTRY): the write bank first -- A is the bank, as
-; callbank left it -- then drawrect_clip, which bank 6's own draw_dirty also calls
-; directly (with A something else, so the companion cannot be skipped into)
+; callbank left it -- then drawrect_clip
 bank6_entry:
         .assert * = BANKENTRY, error, "bank6_entry must start bank 6"
         wrsel BANK_TILES, BANK_TILES
+; drawrect_clip: drawrect, with the rect clipped to the current window
+; (rows wcy..wcy+BUFROWS-1, cols wcx..wcx+ROWCHARS-1)
 drawrect_clip:
         ; rows
         lda rc_y
@@ -3247,10 +3238,11 @@ drawrect_clip:
         sta rc_w
 :       jmp drawrect
 @none:  rts
+
 ; ============================================================================
-; drawrect_clip: like drawrect but clips the rect to the current window
-; (rows wcy..wcy+BUFROWS-1, cols wcx..wcx+ROWCHARS-1).
-        .segment "LGCCODE"          ; Model B: bank 7 (its tables are in main RAM)
+; calc_ring: ringS = ((wcy mod RINGROWS) * 80 + wcx) mod RINGCHARS ; barq = ringS / 80
+; ============================================================================
+        .segment "LGCCODE"          ; bank 7, with the row multiples
 calc_ring:
         lda wcy
         ringmod7
@@ -3305,7 +3297,7 @@ calc_ring:
 ; ============================================================================
 ; dirty tiles: redraw changed map tiles (both buffers keep their own list)
 ; ============================================================================
-        .segment "LGCCODE"          ; banked: bank 7, with the logic that calls it
+        .segment "LGCCODE"          ; bank 7, with the logic that calls it
 mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lists)
         sta tmp
         stx tmp2
@@ -3333,7 +3325,7 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
         sta BUF_CX+1,y
         bne @next                   ; (always)
 
-        .segment "LGCCODE"          ; banked: bank 7 (drawrect_clip through callbank)
+        .segment "LGCCODE"          ; bank 7 (drawrect_clip through callbank)
 draw_dirty:
         ldx curbuf
         lda DIRTYCNT,x
@@ -3362,15 +3354,15 @@ draw_dirty:
         sta rc_w
         lsr                         ; 4 >> 1 = 2
         sta rc_h
-        bankimm lda, BANK_TILES, BANK_LVL   ; bank 6's, by low RAM's direct switch
-        jsr callbank                ; (BANKENTRY is drawrect_clip)
+        bankimm lda, BANK_TILES, BANK_LVL   ; bank 6's BANKENTRY is drawrect_clip
+        jsr callbank
         dec lcnt
         bne @l
         ldx curbuf
         stz DIRTYCNT,x              ; A is dead: both callers reload it at once
 @done:  rts
 
-  .if .not BHW                   ; (Model B: modelb/src/display.s, in bank 5)
+  .if .not BHW                   ; (Model B: display.s, in bank 7)
         .segment "CODE"
 
 ; ============================================================================
@@ -3495,8 +3487,8 @@ irq_handler:
         inc vsyncs                  ; vsync and keep the keys and the sound alive
         jmp @sk
 @ldt1:  lda VIA_T1CL                ; stopped or ending: T1 runs on with its interrupt
-        bit irq_x                   ; 3-cycle pad for the jmp it replaces: off, so its flag
-                                    ; is stale: was this the vsync?
+                                    ; off, so its flag is stale: was this the vsync?
+        bit irq_x                   ; (a 3-cycle pad for the jmp it replaces)
 @notT1:
         lda VIA_IFR
         and #$02
@@ -3504,10 +3496,9 @@ irq_handler:
         beq @xit                    ; (Z = 1: the bne fell through)
 :       ; ---- vsync: restart T1 first (constant latency), counter = vsync->T.  The
         ; latch (how long section 0 lasts) is programmed further down, after the
-        ; flip, because with no status bar section 0's length depends on the fine
-        ; scroll and so belongs to the buffer that is about to be displayed.
-        lda #<VS2T                  ; (immediate: 4 cycles earlier than the old RAM copy,
-        sta VIA_T1LL                ;  which VS2T allows for)
+        ; flip: section 0 belongs to the buffer that is about to be displayed.
+        lda #<VS2T                  ; (an immediate: VS2T allows for its timing)
+        sta VIA_T1LL
         lda #>VS2T
         sta VIA_T1CH
         lda #$02
@@ -3520,9 +3511,10 @@ irq_handler:
         stz LOADREQ                 ; resume: T1's interrupt on again, below
 :       lda #$C0
         sta VIA_IER
-        ; re-phase: the vsync fired at row curR7, so end this frame at row curR7+5 with
-        ; 8-line rows -> T starts exactly 40 lines after the vsync even if the CRTC row
-        ; counter had run past its vertical total (which otherwise never recovers)
+        ; re-phase: the vsync fired at row curR7, so end this frame at row
+        ; curR7 + QROWS-1-QVSYNC with 8-line rows -> T starts exactly QROWS-QVSYNC rows
+        ; after the vsync even if the CRTC row counter had run past its vertical total
+        ; (which otherwise never recovers)
         lda #9
         sta CRTC_IDX
         lda #7
@@ -3555,7 +3547,7 @@ irq_handler:
         stz flipreq                 ; first playfield section -- the bar needs D = 0
 @noflip:
         ; everything section 0 needs comes from the buffer that is about to be
-        ; displayed -- its start address, and (with no status bar) its length
+        ; displayed -- its start address (menu_sections moves it) and its length
         ldx #0
         ldy DISPSECT                ; held in Y: SECIDX wants the same byte below
         beq :+
@@ -3584,7 +3576,7 @@ irq_handler:
         dec MUSTICK
         lda ROMSEL_CPY
         pha
-        lda #BANK_TILES             ; (the Master's banks are its own: no patch)
+        ldpbank lda, BANK_TILES     ; (the handler is in main RAM, loaded unpatched: PBANK)
         sta ROMSEL_CPY
         sta ROMSEL
         jsr music_tick
@@ -3597,11 +3589,12 @@ irq_handler:
         lda $FC
         rti
 
-; CA1 fires at the end of the 2-line vsync pulse.  -35 put every step ~5 us INTO its
+; CA1 fires at the end of the 2-line vsync pulse.  -35 would put each step ~5 us INTO its
 ; section; the further -36 puts it ~30 us before the restart, so that the shape
 ; registers land early in the first scanline -- see the chain step in irq_handler.
 VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 8 + 2   ; -8: the step's load-flag test; +2 (ticks): the
-                                    ; vsync handler loads it as an immediate, 4 cycles sooner
+                                    ; vsync handler loads it as immediates, 4 cycles sooner
+                                    ; than from memory
   .endif
 
 ; ---------------------------------------------------------------- keyboard
@@ -3673,9 +3666,10 @@ sound_tick:
         jsr sndwrite
         stz SFXPTR+1
 @music:
-        lda MUSON                   ; the tune is stepped by the interrupt stub (low.s):
-        sta MUSTICK                 ; its player is in bank 6's menu overlay.  Only from
-        rts                         ; here, the vsync: the chain's T1 steps share the stub
+        lda MUSON                   ; the tune is stepped at the interrupt's tail (the
+        sta MUSTICK                 ; Model B's stub in low.s, the Master's handler): its
+        rts                         ; player is in bank 6's menu overlay.  Only raised
+                                    ; here, at the vsync: the T1 steps share that tail
   .ifdef DBGSND
 @dbgsil: .byte $9F, $BF, $FF, 0
   .endif
@@ -3717,23 +3711,19 @@ sndwrite:
 
 ; ---------------------------------------------------------------- music
 ; 144-byte period table then the sequence (4-byte records: frames, note0..2;
-; frames = 0 -> loop).  It used to be hidden in bit 6 of the tile bytes, which only
-; worked while the whole tile set was resident; a level now loads just the tiles it
-; uses, so the music is its own file -- in bank 7 above the logic: bank 5 has no room
-; ($B000 + 2208 bytes of box stars runs past $B800, which is where it used to sit, and
-; the music load then took the tail off the last trampoline box).
+; frames = 0 -> loop), in the menu overlay beside its player (banks.s MUSIC_ADDR).
 MUSIC_SEQ  = MUSIC_ADDR + 144
 MUSIC_TAB  = MUSIC_ADDR             ; the player is in the data's bank: no copy needed
-        .segment "MNUCODE"          ; Model B: the menu overlay, with the tune
+        .segment "MNUCODE"          ; the menu overlay (bank 6), with the tune
 sndwrite_m:
         SNDWRITE_BODY
 music_tick:
   .if BHW                        ; the overlay comes off the disc, so the loader
         ldx PBOARD                  ; cannot patch a companion in: the write bank by hand
         beq @wr                     ; (A = this bank's socket, from the interrupt stub;
-        cpx #BOARD_SOLIDISK         ;  MUSDUR, MUSNOTE and MUSPTR below are this bank's)
+        cpx #BOARD_SOLIDISK         ;  MUSDUR and MUSNOTE below are this bank's)
         beq @sol
-        ldx PBANK+1                 ; Watford: a store to $FF30 + bank 6's socket
+        ldpbank ldx, BANK_TILES     ; Watford: a store to $FF30 + bank 6's socket
         sta WRSEL_WATFORD,x
         bcc @wr                     ; C = 0: PBOARD = 1 < BOARD_SOLIDISK
 @sol:   sta WRSEL_SOLIDISK          ; Solidisk: the socket on port B
@@ -3798,7 +3788,7 @@ music_tick:
         bne @v
 @done:  rts
 
-; A = next music byte; MUSPTR += 1.  Preserves X.  Z reflects A; Y = A.  Bank 5 selected.
+; A = next music byte; MUSPTR += 1.  Preserves X.  Z reflects A; Y = A.  Bank 6 selected.
 musbyte:
         ldaz MUSPTR
         inc MUSPTR
@@ -3846,7 +3836,7 @@ music_stop:
         jmp sndwrite
 
 ; ---------------------------------------------------------------- interrupt takeover
-        .segment "BOOT"             ; banked builds: start-up's, in main RAM (once only)
+        .segment "BOOT"             ; start-up's, in main RAM (once only)
 take_over:
         sei
   .if .not BHW
@@ -3881,8 +3871,8 @@ take_over:
 ; ============================================================================
 ; CRTC / palette setup
 ; ============================================================================
-  .if .not BHW                   ; (Model B: modelb/src/display.s)
-        .segment "BOOT"             ; (the converged Master: start-up's, in main RAM)
+  .if .not BHW                   ; (Model B: display.s)
+        .segment "BOOT"             ; start-up's, in main RAM
 crtc_init:
         ; standard 20K-mode timings, no interlace, cursor off
         ldx #13
@@ -3897,13 +3887,13 @@ crtc_init:
 crtctab: .byte 127,ROWCHARS,98,$28, 38,0,32,34, 0,7, $20,8, $06,$00
 .if (RINGROWS & (RINGROWS - 1)) <> 0
 ringmodtab:                         ; only a non-power-of-two ring needs the table; at
-.repeat 256, i                      ; RINGROWS = 32 ringmod is `and #31` and this is 256
-        .byte i .mod RINGROWS       ; bytes of main RAM that the bar now uses instead
+.repeat 256, i                      ; RINGROWS = 32 ringmod is `and #31` and this is
+        .byte i .mod RINGROWS       ; not assembled
 .endrepeat
 .endif
   .endif
 
-        .segment "LGCCODE"          ; Model B: bank 7 (the menus call it)
+        .segment "LGCCODE"          ; bank 7 (the menus call it through xcall)
 set_palette:
         ; MODE 1: a pixel's two bits land in bits 3 and 1 of the palette index, the other
         ; two bits are don't-cares, so all 16 entries are written: logical 0..3 = K C M Y
@@ -3934,14 +3924,14 @@ blank_palette:
         bcs :-
         rts
 
-        .segment "LOWCODE"          ; main RAM under the screen is full; the old MOS
+        .segment "LOWCODE"          ; low RAM
 ; ============================================================================
 ; Map access for the logic, which lives in bank 7 and so cannot select bank 5
 ; itself.  Each of these leaves bank 7 selected, so the logic calls them directly.
 ; ============================================================================
 ; A = tile row -> mapptr = address of that map row
 maprow:                             ; row * 2^lw = (row << 8) >> (8 - lw): mapshr is
-        ldy #0                      ; the loader's (low.s); no table to page in.  X
+        ldy #0                      ; the loader's; no table to page in.  X
         sty mapptr                  ; is kept (the logic calls this with it live);
         ldy mapshr                  ; Y comes back 0
         beq :++
@@ -3974,8 +3964,7 @@ mapput: pha
 
 
 
-; sign extend A -> tmp3 (0 or $FF).  In LOW2 (the old MOS vector page) because main
-; RAM below the screen is full: there is room to spare there.
+; sign extend A -> tmp3 (0 or $FF)
         .segment "LGCCODE"          ; (its one caller is the sprite prologue: bank 7)
 sext:   and #$80
         beq :+
@@ -3984,13 +3973,10 @@ sext:   and #$80
         rts
 
 ; ============================================================================
-; Bridges between main RAM and the game logic, which lives at $8900 in bank 7 --
-; a choice inherited from the Model B, which had no HAZEL to put it in.  t_ goes
-; in, m_ comes back out:
-; both leave bank 7 selected on return, so a tail jump through one is as good as
-; a call.  pagelogic is the whole of the bank switch and the return path of m_.
+; pagelogic: bank 7 back, for reading and (on the write-select boards) for writing --
+; the return path of every crossing from bank 7 (map access, callbank, the thunks)
 ; ============================================================================
-        .segment "LOWCODE"     
+        .segment "LOWCODE"
 pagelogic:                          ; A, X, Y and the carry all come through intact:
         pha                         ; these sit in the middle of calls that return values
         bankimm lda, BANK_LVL, 0
@@ -3999,20 +3985,20 @@ pagelogic:                          ; A, X, Y and the carry all come through int
         wrsel BANK_LVL, 0           ; (the write bank too: bank 7's code stores)
         pla
         rts
-; Model B: the logic and the game loop share bank 7, so a bridge to it is only a
-; name; what crosses a bank goes through the far table (modelb/src/defs.inc), and
-; the menus, which the one-level disc does without, are stubs.
+; The logic and the game loop share bank 7, so these t_ (in) and m_ (out) names are
+; plain aliases.
 t_game_frame = game_frame
 t_level_init = level_init
 t_redraw_hud = redraw_hud
 m_addsprite  = addsprite
 m_clamp_window = clamp_window
 m_rnd        = rnd
-m_mark_dirty = mark_dirty          ; (bank 7's own now: a plain call)
+m_mark_dirty = mark_dirty
         .segment "LGCCODE"
-; bank 7's own ringaddr, for the sprite prologue: the ring modulus by subtraction (no
-; table this side), the row multiple from the tables the chain keeps here, the
-; buffer's base from select_backbuf (both bases are xx80: ringbhi is the page)
+; bank 7's own ringaddr, for the sprite prologue, copy_partial and blank_below: the
+; ring modulus by subtraction (no table this side), the row multiple from bank 7's
+; mulrowlo/hi, and on the Model B the buffer's base from select_backbuf (both bases
+; are xx80: ringbhi is the page)
 ringaddr7:
         ringmod7
         tax

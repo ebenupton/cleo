@@ -2,13 +2,15 @@
 // wait for the menu, press RETURN to start the game, and time every CRTC frame until
 // play has run a while.  Reports each frame whose period is not a standard 312 lines
 // (39936 cycles, +-64 for the chain's re-phase) and any flyback forced for want of a
-// vsync.  Unlike tools/loadsync.mjs the picture is in sync when the load begins.
-//   node test/loadsync2.mjs master|modelb|converged <disc> <labels>
+// vsync.  The picture is in sync when the load begins.
+//   node test/loadsync2.mjs converged|modelb <disc> <labels>
+// `converged` is the Master (banked, bank 7 in socket 7); `master` is for a retired
+// unbanked build.  The Model B is the 8271 (B-DFS1.2), or BMODEL=B1770.
 import { findJsbeeb, loadLabels } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, disc, labels] = process.argv.slice(2);
-const s = new MachineSession(kind === "modelb" ? "B-DFS1.2" : "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));   // (converged: a Master)
+const s = new MachineSession(kind === "modelb" ? (process.env.BMODEL ?? "B-DFS1.2") : "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));   // (converged: a Master)
 const cpu = s._machine.processor, A = loadLabels(labels), v = s._video;
 const P = kind === "master" ? null : kind === "converged" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
 const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;

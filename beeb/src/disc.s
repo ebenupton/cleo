@@ -1,11 +1,11 @@
 ; ============================================================================
 ; The disc, from the game's side: bank 7.  The MOS is gone, so this is its own
-; driver -- for the 8271 the Model B was born with and for the Acorn 1770 board --
+; driver -- for the Model B's 8271 or Acorn 1770 board, and the Master's 1770 --
 ; and the loader that gathers a level into the banks runs in main RAM, where it can
-; page banks freely (ldprog.s).  Both controllers raise NMI for every byte, so the
-; transfer routine sits at NMIPAGE, which is display RAM during a level and free
-; while the palette is black.  The boot loader (loader.s) says which controller and
-; which drive (drv_type, drv_unit) before the game starts.
+; page banks freely (ldprog.s).  The controllers raise NMI for every byte, so the
+; transfer routine sits in main RAM at NMIPAGE, right whatever bank is paged (on the
+; Model B that is display RAM, free while the palette is black).  The boot loader
+; (loader.s) says which controller and which drive (drv_type, drv_unit).
 ; ============================================================================
         .include "files.inc"        ; the disc's sector table (one disc, both machines)
   .if BHW                           ; this machine's load-time program
@@ -17,7 +17,7 @@ F_LDPROG_N   = F_LDPROGM_N
   .endif
         .segment "LGCBSS"
 drv_type: .res 1                    ; 0 = 8271, 1 = 1770 (loader.s decides at boot: init.s
-drv_unit: .res 1                    ; copies them here) and the drive DFS had current, 0 or 1
+drv_unit: .res 1                    ; copies them here) and the drive DFS had current
 ld_sec:   .res 2                    ; read_sectors: first sector, count, destination
 ld_n:     .res 1
 ld_dst:   .res 2
@@ -92,7 +92,7 @@ LD_SECS   = NMIPAGE + (ld_secs - nmi_page)
         .segment "LGCCODE"
 ; ---------------------------------------------------------------- reading
 ; ld_sec (16 bit), ld_n sectors -> ld_dst in main RAM.  The disc is 80 tracks of 10
-; 256-byte sectors: the division is by repeated subtraction, as the Master's.
+; 256-byte sectors: the division is by repeated subtraction.
 read_sectors:
         ldx #$FF                    ; X = track, Y = high byte + 1: ld_sec / 10
         lda ld_sec
@@ -129,7 +129,7 @@ read_sectors:
         ; (DFS's specify), and a read on a stopped drive is "not ready" ($10) at once,
         ; without starting it.  And the 8271 LATCHES not ready: only a read drive
         ; status clears it, so the retry below would fail for ever without one
-        ; (it did: the title's idle stops the motor, and the level never loaded).
+        ; (the title's idle stops the motor).
         jsr i_idle
         lda #$40                    ; bits 7,6 select the drive: $40 = 0, $80 = 1
         ldx drv_unit
@@ -230,8 +230,8 @@ w_wait: ldx #20
 w_trk:    .res 1                    ; the 1770's head, as far as this driver knows
         .segment "LGCCODE"
 
-; the 1770 board is reset and its head found once, at start-up (init.s, main RAM):
-; the 8271 keeps DFS's state and needs nothing
+; a 1770 is reset and its head found once, at start-up (init.s, main RAM): the 8271
+; keeps DFS's state and needs nothing
         .segment "BOOT"
 disc_init:
         lda drv_type
@@ -260,7 +260,7 @@ disc_init:
         stx w_trk                   ; X = 0: w_wait's delay loop ends there
 @done:  rts
   .if .not BHW
-@drvsel: .byte $25, $26, $35, $36   ; drive 0, 1, 0 side 1, 1 side 1 (engine.s disc_drive)
+@drvsel: .byte $25, $26, $35, $36   ; drive 0, 1, 0 side 1, 1 side 1
   .endif
         .segment "LGCCODE"
 
@@ -271,7 +271,7 @@ disc_init:
 disc_boot:
         ldx #(nmi_end - nmi_page - 1)
 :       lda __NMISTUB_LOAD__,x      ; the stubs' bytes are in this bank; their labels
-        sta NMIPAGE,x               ; are their run addresses (cleo_b.cfg)
+        sta NMIPAGE,x               ; are their run addresses (the cfg's NMI region)
         dex
         bpl :-
         lda drv_type
@@ -297,7 +297,7 @@ load_level_b:
         stx ld_level
         jsr music_stop
         jsr load_begin              ; the chain parks the CRTC in a standard frame first
-        sei                         ; (engine.s load_begin, display.s @ldsw)
+        sei                         ; (engine.s load_begin)
         jsr disc_boot
         ldx ld_level
         jsr LDPROG                  ; lv_load

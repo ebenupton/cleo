@@ -1,4 +1,4 @@
-// Boot the Model B disc under jsbeeb and watch it: the title, then a game started with
+// Boot the disc on a jsbeeb Model B and watch it: the title, then a game started with
 // RETURN, screenshots along the way and the PC/bank sampled so a hang shows where.
 //   node test/bboot.mjs [model] [seconds] [outdir]     model: B-DFS1.2 (8271) or B1770
 import { readFileSync, writeFileSync } from "node:fs";

@@ -2,7 +2,8 @@
 // load itself with the palette black -- the level's FIRST load (the resident sets come
 // in with it) and a SECOND (the level ended and loaded again: the harness pins the level
 // number, so it is the same level, as it would stand after any other).
-//   node test/loadtime.mjs master|converged|modelb <disc> <labels> <level>
+//   node test/loadtime.mjs converged|modelb <disc> <labels> <level>
+// (`converged` is the Master; `master` is for a retired unbanked build)
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 const [kind, disc, labels, lvS] = process.argv.slice(2);

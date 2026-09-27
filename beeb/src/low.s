@@ -1,17 +1,17 @@
 ; ============================================================================
-; Main RAM, $0140-$02FF: what has to be visible whatever bank is paged in.  The
-; crossings between the banks, the interrupt stub (the handler itself is in bank 7), the two
-; map fetches the tile blitter makes from bank 6, and the sprite list.  The
-; Master's own main-RAM map helpers (maprow, mapbyte, mapput, pagelogic) land here
-; too, from engine.s: they page bank 5 in and bank 7 back exactly as they do there.
+; Low RAM, $0140-$02FF, both machines: what has to be visible whatever bank is paged
+; in.  The crossings between the banks, the Model B's interrupt stub (its body is in
+; bank 7: display.s) and the tile blitter's map row; engine.s's maprow, mapbyte,
+; mapput and pagelogic land here too, and its LOWBSS (the buffers' state, the sprite
+; list).  boot copies the code down from the BOOT piece.
 ; ============================================================================
         .segment "LOWCODE"
 
 ; ---------------------------------------------------------------- the crossings
 ; A bank cannot page another over itself, so every crossing is here: fixed thunks for
-; what bank 7 calls in the others every frame (callbank, selbb, validate, dirfetch)
-; and for the tile blitter's gather (mapstrip), and one routine for the menus.  No
-; table, no dispatch in any bank.  ROMSEL_CPY is written before ROMSEL every time, so
+; what bank 7 calls in the others (callbank, selbb, validate, dirfetch), for the tile
+; blitter's gather (mapstrip), and one routine for the menus (xcall).  No table, no
+; dispatch in any bank.  ROMSEL_CPY is written before ROMSEL every time, so
 ; an interrupt in between puts back the bank being entered: the handler restores from
 ; $F4, which is the MOS's own rule.
 
@@ -40,14 +40,14 @@ xcback: sta fcA                     ; (a label of its own: the write-bank record
 xcgo:   jmp (ctgt)
 
 ; ---------------------------------------------------------------- interrupts
-; The chain step and the vsync work are in bank 7 with their tables: this pages it
-; in around them.  The step's timing (VS2T) allows for the ~30 cycles that
+; The Model B's: the chain step and the vsync work are in bank 7 with their tables,
+; and this pages it in around them.  The step's timing (VS2T) allows for the ~30 cycles that
 ; takes, in place of the hold loop the Master's handler has.  The title tune's
 ; player is in the menu overlay (bank 6): the vsync work leaves MUSON set only
 ; while the overlay is there, and it is stepped from here, between the banks, once
 ; a frame -- the vsync's sound_tick raises MUSTICK; the T1 steps are this same stub.
-  .if BHW                           ; (the converged Master: the Master's handler, in
-irq_handler:                        ;  main RAM with its chain -- engine.s)
+  .if BHW                           ; (the Master's handler is in main RAM with its
+irq_handler:                        ;  chain: engine.s)
         stx irq_x
         sty irq_y
         lda ROMSEL_CPY
@@ -135,8 +135,9 @@ MAPBUF = GATHERH                    ; and dirfetch's eight bytes, drawsprite's, 
         .segment "LOWBSS2"          ; the rest of low RAM, above the code
 GATHERL:  .res 21
         .segment "LOWBSS"
-; the mirror's bookkeeping (display.s): the blitters in bank 6 note what they wrote
-; to the ring's last slot row, the copy in bank 7 reads it
+; the Model B's mirror bookkeeping (display.s): the tile blitter (bank 6), the sprite
+; prologue and copy_partial (bank 7) note what they wrote to the ring's last slot row,
+; mirror_copy (bank 7) reads it
   .if BHW
 mirdty:   .res 2                    ; per buffer: the row has been written since the copy
 mirlo:    .res 2                    ; and which chars of it (in slot chars, 0..79)
@@ -146,6 +147,6 @@ mirwcx:   .res 2                    ; the wcxm the copy was made for
 ; (the level's shape, mapshr and MAPSTRIDE, and the tune's MUSON and MUSTICK are
 ; zero page's: engine.s)
 sprc_ok:  .res 1                    ; the resident sprites (SPRC) are in bank 4, and (the
-sprx_ok:  .res 1                    ;  converged Master) SPRX in HAZEL/ANDY: ldprog.s
-title_res: .res 1                   ; the menu overlay and the title pack are in banks 5
-                                    ; and 6 (a level load replaces both; menu.s reads it)
+sprx_ok:  .res 1                    ;  Master) SPRX in HAZEL/ANDY: ldprog.s
+title_res: .res 1                   ; the menu overlay (bank 6) and the title pack (bank 5)
+                                    ; are in (a level load replaces both; menu.s reads it)

@@ -1,7 +1,8 @@
 // The Master's drawn window against the level's tiles: at every frame_top, every char
 // cell of the buffer the CPU sees (ACCCON X) that no sprite record comes near must hold
-// the bytes of the tile its map id names (tools/tileids.py).  Independent of the
-// packer's layout and the gather: it reads only the map and the screen.
+// the bytes of the tile its map id names (python3 tools/tileids.py writes them).
+// Independent of the packer's layout and the gather: it reads only the map and the
+// screen.  btilecheck.mjs is the Model B's.
 //   node test/tilecheck.mjs <disc> <labels> <level> <frames> [idsdir=build/tileids]
 import { open } from "./harness.mjs";
 import fs from "fs";
@@ -29,7 +30,7 @@ for (let f = 0; f < N; f++) {
     recs.push([H.rd(b + 5) | (H.rd(b + 6) << 8), H.rd(b + 7), H.rd(b + 8), H.rd(b + 9) & 0x7f]); } } });
   const near = (x, y) => recs.some(([rx, ry, w, h]) => x >= rx - 2 && x <= rx + w + 2 && y >= ry - 2 && y <= ry + h + 2);
   let fb = 0;
-  const MAP = H.banks ? 0x9C00 : 0x8900;   // (a banked build: the Model B's layout, MAP5)
+  const MAP = H.banks ? 0x9C00 : 0x8900;   // (a banked build: MAP5; $8900 a retired build's)
   const map = bank(5, () => { const m = []; for (let r = 0; r < 16; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(H.rd(MAP + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
   for (let r = 0; r < 27; r++) for (let c = 0; c < 80; c++) {
     const x = cx + c, y = cy + r;

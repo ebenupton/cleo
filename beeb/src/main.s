@@ -1,9 +1,9 @@
 ; ============================================================================
-; Cleo, Model B target: one assembly, four bank images.  The engine, the logic and
-; the game are the Master's sources (../src), assembled with MODELB=1;
-; what is this target's own is under modelb/src: the addresses (defs.inc), the low
-; RAM (low.s), the rupture chain (display.s), the banks' tables and data (banks.s)
-; and the start-up (init.s).  See DESIGN.md.
+; Cleo: one assembly, four bank images, for either machine -- BHW=1 the Model B's
+; hardware, BHW=0 the Master's (cpu.inc); build.sh builds both onto one disc.  The
+; engine, the logic, the game loop and the menus; the addresses (defs.inc), the low
+; RAM (low.s), the disc driver (disc.s), the Model B's rupture chain (display.s), the
+; banks' tables and data (banks.s) and the start-up (init.s).  See docs/DESIGN.md.
 ; ============================================================================
         .include "cpu.inc"          ; (-D BHW=0: the Master)
         .include "defs.inc"
@@ -13,10 +13,10 @@
         .include "menu.s"
         .include "low.s"
         .include "disc.s"
-  .if BHW                           ; (the converged Master: the Master's chain, engine.s)
+  .if BHW                           ; (the Master's handler and chain are engine.s's)
         .include "display.s"
   .endif
         .include "banks.s"
         .include "init.s"
 
-.assert camoff < NSPR, error, "logic zp grew into the Model B engine equates: raise NSPR/BARDIRTY/BARBG/SFXREQ in defs.inc"
+.assert camoff < NSPR, error, "the zero page segment grew into defs.inc's fixed equates: raise NSPR/BARDIRTY/BINI/SFXREQ/fcA there"

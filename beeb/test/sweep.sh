@@ -7,6 +7,8 @@
 #     and the bar, 300 frames (bwincmp.mjs), and on Watford and Solidisk boards
 #   the menus, frame-synchronised (menusync.mjs), on both machines
 #   the frame period through a load from the menu (loadsync2.mjs): Master, 8271, 1770
+#   on Watford and Solidisk boards, a whole session's stores into sideways RAM, each
+#     to the bank paged (boardcheck.mjs)
 set -e
 cd "$(dirname "$0")/.."
 REF=$1; JOBS=${2:-7}
@@ -27,14 +29,17 @@ jobs() {
     echo "node test/loadsync2.mjs converged $NEW/cleo.ssd $NEW/master/labels.txt > $OUT/load_master.txt"
     echo "node test/loadsync2.mjs modelb $NEW/cleo.ssd $NEW/modelb/labels.txt > $OUT/load_8271.txt"
     echo "BMODEL=B1770 node test/loadsync2.mjs modelb $NEW/cleo.ssd $NEW/modelb/labels.txt > $OUT/load_1770.txt"
+    for b in watford solidisk; do
+        echo "node test/boardcheck.mjs $b $NEW/cleo.ssd $NEW/modelb/labels.txt > $OUT/boardstores_$b.txt"
+    done
 }
 jobs | tr '\n' '\0' | xargs -0 -P "$JOBS" -n 1 sh -c 'eval "$0" 2>/dev/null || true'
 fail=0; n=0
 for f in "$OUT"/*.txt; do
     n=$((n + 1))
-    r=$(grep -hE '^L[0-9]|^B L|menus:|frames from|Error' "$f" | tail -1)
+    r=$(grep -hE '^L[0-9]|^B L|menus:|frames from|^board |Error' "$f" | tail -1)
     case "$r" in
-        *"window identical; scene identical"*|*"windows identical"*|*"menus: identical"*|*" 0 irregular"*) ;;
+        *"window identical; scene identical"*|*"windows identical"*|*"menus: identical"*|*" 0 irregular"*|*"every store to the bank paged"*) ;;
         *) echo "$(basename "$f" .txt): ${r:-no result}"; fail=1;;
     esac
 done

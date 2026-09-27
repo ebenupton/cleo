@@ -69,8 +69,9 @@ lock-stepped with jsbeeb.
   packed per level (`tools/assets.py`): its tiles, its sprites and where they go, its
   map and tables.
 - **Logic.** A direct port of `CleoApp.run()`: all 13 object types, the player's
-  physics and the boomerang. It runs fixed at 25 Hz with frame skipping, and drawing
-  runs as fast as the 2 MHz 6502 allows. Sprites that have not changed since a buffer
+  physics and the boomerang. A frame is pegged at three vsyncs (16.7 Hz) and takes two
+  of the original's logic steps; a frame that runs long drops the time rather than
+  catching up. Sprites that have not changed since a buffer
   was last drawn are kept, not erased and redrawn.
 - **Sound.** The sound effects and the title tune (from `thm.mid`,
   `tools/midi2snd.py`) play on the SN76489 from the vsync interrupt.

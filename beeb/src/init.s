@@ -1,9 +1,9 @@
 ; ============================================================================
-; Start-up, in main RAM: the BOOT piece (BANKS puts it at BOOTRAM, display RAM
+; Start-up, both machines, in main RAM: the BOOT piece at BOOTRAM ($7000, display RAM
 ; nothing has drawn in yet) with the low-RAM image behind it.  The loader jumps to
 ; `boot` with bank 7 paged.  Code in main RAM pages any bank it likes and carries
 ; on, so none of this needs a place in a bank: once play starts the display
-; overwrites it.  The tables it builds on the Master are static here (banks.s).
+; overwrites it.  It runs once.
 ; ============================================================================
         .segment "BOOTHDR"          ; (first in BOOTRAM: before the routines the rest of
                                     ;  the sources put in BOOT)
@@ -56,14 +56,13 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
         lda dsk_drv
         sta drv_unit
         jsr lvreset                 ; the records, the buffers' state
-        ; MUSON and SFXREQ: the zeros above (low BSS, zero page)
-        ; (music_init: an rts on the Model B, whose period table is static)
+        ; MUSON and SFXREQ: the zeros above (both zero page)
         lda #$34
         sta seed
         lda #$12
         sta seed+1
         jsr blank_palette           ; nothing on the screen is a picture until the title
-  .if .not BHW                      ; the converged Master: its handler's state in main RAM
+  .if .not BHW                      ; the Master: its handler's state, in main RAM
         .import __TABLES_RUN__: absolute, __TABLES_SIZE__: absolute
         .assert __TABLES_SIZE__ < 256, error, "boot zeroes TABLES with an 8-bit index"
         ldx #<__TABLES_SIZE__       ; (LOADREQ above all: a load is not under way)
@@ -82,7 +81,7 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
         inc curbuf
         jsr build_sections
         dec curbuf                  ; (1 -> 0: build_sections only reads it)
-        ; bank 6's state: the ring work's, zero as the Master's tables; spbank
+        ; bank 6's variables (TILBSS: the ring work's) zeroed; then spbank
         bankimm lda, BANK_TILES, BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
@@ -97,5 +96,5 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
         sta spbank
         jsr take_over               ; the interrupt: bank 6 still paged, as it was
         jsr pagelogic               ; bank 7 (low RAM's, the image copied above)
-        jsr disc_init               ; a 1770 board: reset, and the head found
+        jsr disc_init               ; a 1770: reset, and the head found
         jmp game_main               ; the title menu loads its overlay and starts the tune

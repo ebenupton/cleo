@@ -1,6 +1,6 @@
-"""What each tile id of each level should draw, for tools/tilecheck.mjs and
-modelb/tools/btilecheck.mjs: per level (harness index 0..15), 256 ids x 64 bytes, the
-unfolded tile (solids as their fill).   python3 tools/tileids.py [outdir=build/tileids]"""
+"""What each tile id of each level should draw, for test/tilecheck.mjs and
+test/btilecheck.mjs: per level (harness index 0..15), 256 ids x 64 bytes, the tile
+(solids as their fill).   python3 tools/tileids.py [outdir=build/tileids]"""
 import os, sys, io, contextlib, importlib.util
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 spec = importlib.util.spec_from_file_location('conv', 'tools/convert.py')
