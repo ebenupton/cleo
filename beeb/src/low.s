@@ -1,7 +1,7 @@
 ; ============================================================================
 ; Low RAM, $0140-$02FF, both machines: what has to be visible whatever bank is paged
 ; in.  The crossings between the banks, the Model B's interrupt stub (its body is in
-; bank 7: display.s) and the tile blitter's map row; engine.s's maprow, mapbyte,
+; bank 7: engine.s isr_body) and the tile blitter's map row; engine.s's maprow, mapbyte,
 ; mapput and pagelogic land here too, and its LOWBSS (the buffers' state, the sprite
 ; list).  boot copies the code down from the BOOT piece.
 ; ============================================================================
@@ -136,7 +136,7 @@ MAPBUF = GATHERH                    ; and dirfetch's eight bytes, drawsprite's, 
         .segment "LOWBSS2"          ; the rest of low RAM, above the code
 GATHERL:  .res 21
         .segment "LOWBSS"
-; the Model B's mirror bookkeeping (display.s): the tile blitter (bank 6), the sprite
+; the Model B's mirror bookkeeping (mirror.s): the tile blitter (bank 6), the sprite
 ; prologue and copy_partial (bank 7) note what they wrote to the ring's last slot row,
 ; mirror_copy (bank 7) reads it
   .if BHW

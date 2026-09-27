@@ -2,7 +2,7 @@
 ; Cleo: one assembly, four bank images, for either machine -- BHW=1 the Model B's
 ; hardware, BHW=0 the Master's (cpu.inc); build.sh builds both onto one disc.  The
 ; engine, the logic, the game loop and the menus; the addresses (defs.inc), the low
-; RAM (low.s), the disc driver (disc.s), the Model B's rupture chain (display.s), the
+; RAM (low.s), the disc driver (disc.s), the Model B's mirror (mirror.s), the
 ; banks' tables and data (banks.s) and the start-up (init.s).  See docs/DESIGN.md.
 ; ============================================================================
         .include "cpu.inc"          ; (-D BHW=0: the Master)
@@ -13,8 +13,8 @@
         .include "menu.s"
         .include "low.s"
         .include "disc.s"
-  .if BHW                           ; (the Master's handler and chain are engine.s's)
-        .include "display.s"
+  .if BHW                           ; (the Master's CRTC folds its ring itself)
+        .include "mirror.s"
   .endif
         .include "banks.s"
         .include "init.s"

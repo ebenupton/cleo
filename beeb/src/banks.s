@@ -69,7 +69,7 @@ menurec:   .res 10                  ; there (the menus' one sprite record; the o
 ; the mirror's range: A = the first window column written of the row the mirror
 ; follows, X = the last (0..79).  Those chars sit in the last slot row at wcxm on;
 ; only the ones up to char 79 are in it (the rest wrapped to slot row 0), and only
-; those from wcxm are ever read (display.s).  Called by the tile blitter's head
+; those from wcxm are ever read (mirror.s).  Called by the tile blitter's head
 ; (bank 6: mirdirty6) and the sprite prologue and copy_partial (bank 7: mirdirty):
 ; one body, twice.
         .segment "TILBSS"

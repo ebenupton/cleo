@@ -2825,8 +2825,7 @@ menu_sections:
 ; bar step at that frame's end takes the display back as if it had never stopped.
 LDR4 = BARROWS + VISROWS + QROWS - 1      ; 38: a standard 312-line frame
 LDR7 = BARROWS + VISROWS + QVSYNC         ; the row the chain's vsync is on
-; On both machines the switch is the interrupt handler's bar step (@ldsw: below for
-; the Master, display.s for the Model B), so it happens at the frame boundary however
+; On both machines the switch is the interrupt's bar step (@ldsw), so it happens at the frame boundary however
 ; long the handler's other work runs.  (Polling for the bar's T1 with interrupts off
 ; does not: when the vsync's own work runs past that T1, the switch lands one section
 ; late and makes a short frame.)
@@ -2856,7 +2855,7 @@ render_core:                        ; 6 gets two fixed calls a frame (low RAM's 
         jsr draw_sprites
         jsr copy_partial
     .if BHW
-        jmp mirror_copy             ; the straddling row's copy (display.s)
+        jmp mirror_copy             ; the straddling row's copy (mirror.s)
     .else
         rts                         ; (the hardware folds the straddling row)
     .endif

@@ -1,13 +1,9 @@
 ; ============================================================================
-; The Model B's display driver (BHW=1 only): bank 7, with the logic.  The rupture
-; chain the CRTC is driven by, the mirror the straddling row is read from, and the
-; interrupt's work.  The Master's ring is hardware wrapped and its handler and chain
-; are in main RAM (engine.s), so none of this is assembled for it.
+; The Model B's mirror (BHW=1 only): bank 7, render_core's last step.  Its rings are
+; software, so the one displayed row that straddles a ring's end is read from a copy
+; below the ring's base; the Master's CRTC folds its ring itself.
 ; ============================================================================
         .segment "LGCCODE"
-
-; ---------------------------------------------------------------- the mirror
-        .segment "LGCCODE"          ; bank 7: render_core's last step
 ; A copy of the ring's last slot row sits immediately below the ring base, so the
 ; one displayed row that straddles the ring end can be read as a single run.  Only
 ; the chars that row takes from it -- wcxm..79 -- need to be right, and when the

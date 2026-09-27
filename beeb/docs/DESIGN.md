@@ -197,7 +197,8 @@ LGCCODE is the logic, the game loop, `render_frame` and `render_core`, the sprit
 prologue (`drawsprite`), `draw_sprites`, `match_sprites`, `erase_old`, `calc_ring`,
 `copy_partial`, `blank_below`, `mark_dirty`, `draw_dirty`, `build_sections`, the HUD,
 the palette, the disc driver, and on the Model B the interrupt's work (`isr_body`,
-`vsync_tick`, `scan_keys`, `sound_tick`) and `mirror_copy`.  LGCBSS is the object state
+`scan_keys`, `sound_tick`: the Master's handler has them in main RAM) and
+`mirror_copy`.  LGCBSS is the object state
 (16 arrays of OBJN = 149, the collision grid, its chains and the bin walk lists),
 SPRMASK and SPR_TABLE (the level's sprite directory, 118 entries of 8 bytes), the
 sprite records (SPRREC, RECCNT, KEEP), the dirty lists, the disc driver's variables,
@@ -344,7 +345,7 @@ characters straddles the ring end.  The CRTC cannot fold a 23-row ring, so a cop
 the ring's last slot row sits immediately below the ring base, where the address
 `c - RINGCHARS` names the straddling row, and every row after it follows on
 contiguously: the chain reads P1 up to the ring's end and M from the mirror
-(`build_sections`, `display.s`).  Only the characters that row takes from the mirror --
+(`build_sections`, `mirror.s`).  Only the characters that row takes from the mirror --
 `wcxm`..79, where `wcxm` is ringS mod 80 -- need to be right, and when the window is
 slot aligned no row straddles at all.  The blitters note the columns they write to the
 row the mirror follows (`mirdirty`, `mirdirty6`, from `drawrect`, the sprite prologue

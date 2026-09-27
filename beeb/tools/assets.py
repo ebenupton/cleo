@@ -38,7 +38,7 @@ spec = importlib.util.spec_from_file_location('conv', 'tools/convert.py')
 m = importlib.util.module_from_spec(spec)
 with contextlib.redirect_stdout(io.StringIO()):
     spec.loader.exec_module(m)
-TARGET = os.environ.get('TARGET', 'modelb')     # or 'master' (build.sh): where to write, VISLINES
+TARGET = os.environ.get('TARGET', 'modelb')     # or 'master' (build.sh): where to write
 OUT = os.path.join(BEEB, os.environ.get('BD', 'build/' + TARGET))
 os.makedirs(OUT, exist_ok=True)
 
@@ -46,7 +46,7 @@ def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
 SOLID_CYAN, SOLID_BLACK = 254, 255
-VISLINES = 240 if TARGET == 'master' else 168   # the window's lines: VISROWS 30 / 21 (engine.s)
+VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the Model B's: VISROWS 30 / 21 (engine.s)
 
 # ---------------------------------------------------------------- the banks' fixed shape
 # Code sits at the bottom of banks 4, 5 and 6 (each entered at $8000) and the mask
@@ -294,11 +294,13 @@ def pack_level(lv, sub):
     for (t, x, y, ex) in L['objs']:
         e = (list(ex) + [0, 0, 0])[:3]
         boxes.append((t, cellbox(t, x, y, e)))
-    maxwx, maxwy = w * 8 - 160, h * 8 - VISLINES // 2
+    # (both machines' windows: one bound, so the tables it sizes lie alike on both)
     rects = set()
-    for wx in range(0, maxwx + 1, 2):
-        for wy in range(0, maxwy + 1):
-            rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + VISLINES // 2 - 1) >> 6))
+    for vl in VISLINES_ALL:
+        maxwx, maxwy = w * 8 - 160, h * 8 - vl // 2
+        for wx in range(0, maxwx + 1, 2):
+            for wy in range(0, maxwy + 1):
+                rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + vl // 2 - 1) >> 6))
     MAXSPR, BINMAX = 0, 0
     for (rx0, rx1, ry0, ry1) in rects:
         hit = [t for (t, (gx0, gx1, gy, gy1)) in boxes if gx0 <= rx1 and gx1 >= rx0 and gy <= ry1 and gy1 >= ry0]
