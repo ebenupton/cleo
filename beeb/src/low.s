@@ -140,10 +140,12 @@ GATHERL:  .res 21
 ; prologue and copy_partial (bank 7) note what they wrote to the ring's last slot row,
 ; mirror_copy (bank 7) reads it
   .if BHW
+        .segment "LOWHW"            ; (after the shared)
 mirdty:   .res 2                    ; per buffer: the row has been written since the copy
 mirlo:    .res 2                    ; and which chars of it (in slot chars, 0..79)
 mirhi:    .res 2
 mirwcx:   .res 2                    ; the wcxm the copy was made for
+        .segment "LOWBSS"
   .endif
 ; (the level's shape, mapshr and MAPSTRIDE, and the tune's MUSON and MUSTICK are
 ; zero page's: engine.s)

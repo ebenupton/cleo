@@ -32,6 +32,25 @@ What `BHW` changes is the hardware underneath:
   handler and chain step in main RAM ($0600); its own 1770; the tile gather through a
   per-level table in main RAM (LV_PAGE0).
 
+Nothing else differs.  The rule: the two builds may differ only where the CPU does
+(a 65C02 instruction for a 6502 sequence, the same algorithm and data), where the
+hardware does (the display memory, shadow RAM and ACCCON, the disc controllers, the
+write-select boards), and in three placements on the Master -- its interrupt handler
+and state in main RAM, its tile gather's table in main RAM, and its HAZEL/ANDY copy
+of SPRX.  Where a 6502 spelling costs the Master no cycle it is used on both.  One of
+everything else: one fill path, one `build_sections`, one `crtc_init`, one interrupt
+body (`engine.s`; the Model B's stub pages it in, the Master's handler is it).
+
+The data lies alike too.  `build.sh` links the Model B first and then the Master with
+every shared segment pinned at the Model B's address (`tools/pincfg.py`): the
+Master's shorter code leaves gaps, and every table and variable -- zero page, low RAM,
+each bank -- is at the same address on both.  What one machine alone has goes in
+segments after the shared ones (ZPHW, LOWHW, LGCHW: the Model B's `jmp (abs,x)`
+vector, its gather's shape, its mirror bookkeeping, its handler's state).
+`test/layoutcheck.py` compares the two builds' debug info and fails the build on any
+difference; only code labels (a CMOS instruction is shorter) and the start-up pieces
+may differ.
+
 The level files, the sprites, the tile set, the title pack and the bar template are on
 the disc once and read by both.  Each machine has its own bank images (BANKSB,
 BANKSM), load-time program (LDPROGB, LDPROGM) and menu overlay (MENUB, MENUM).  Because

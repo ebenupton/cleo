@@ -9,12 +9,13 @@
 ; Assembled, each in the bank of the code that indexes it: the row multiples are
 ; bank 7's (calc_ring, ringaddr7, the chain), the ring modulus bank 6's (ringaddr).
         .segment "LGCDATA"
-mulrowlo:
-.repeat RINGROWS, i
+        .assert RINGROWS <= 32, error, "the row multiples are sized for 32"
+mulrowlo:                           ; (32 rows on both machines, the Master's ring, so
+.repeat 32, i                       ; bank 7's data lies alike: the Model B reads 23)
         .byte <(i*ROWCHARS)
 .endrepeat
 mulrowhi:
-.repeat RINGROWS, i
+.repeat 32, i
         .byte >(i*ROWCHARS)
 .endrepeat
   .if BHW                           ; (the Master's ring is 32 rows: ringmod is and #31)

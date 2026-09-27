@@ -86,6 +86,6 @@ mirror_copy:
         rts
 
 ; ---------------------------------------------------------------- the CRTC
-        .segment "LGCBSS"
+        .segment "LGCHW"            ; (after the shared)
 crtcbm:   .res 2                    ; the buffer being built: its mirror redirect (base -
                                     ; RINGCHARS; its CRTC base, crtcb, is zero page's)

@@ -59,7 +59,11 @@ for pass in 1 2 3; do
         settarget $t
         ca65 -g --cpu $CPU $DEFS -I $BD -I src --bin-include-dir $BD \
              -o $BD/main.o src/main.s -l $BD/main.lst
-        ld65 -C $BD/game.cfg -o $BD/unused.bin $BD/main.o -m $BD/map.txt -Ln $BD/labels.txt --dbgfile $BD/cleo.dbg
+        # the Master's segments at the Model B's addresses (linked just before): its
+        # shorter 65C02 code leaves gaps, and the data lies alike on both
+        LCFG=$BD/game.cfg
+        [ $TARGET = master ] && { python3 tools/pincfg.py $BD/game.cfg $B/cleo.dbg > $BD/pinned.cfg; LCFG=$BD/pinned.cfg; }
+        ld65 -C $LCFG -o $BD/unused.bin $BD/main.o -m $BD/map.txt -Ln $BD/labels.txt --dbgfile $BD/cleo.dbg
         # what the loaders need from the game: its addresses
         python3 - <<'EOF'
 import re
@@ -153,4 +157,6 @@ done
 python3 tools/mkdfs.py build build/cleo.ssd CLEO \
     "!BOOT:build/BOOT:0000:FFFF" "LOADER:build/LOADER:1900:1900" \
     $(echo $DISC | tr ' ' '\n' | grep -v '^!BOOT\|^LOADER' | tr '\n' ' ')
+cmp -s $B/assets.inc $M/assets.inc || { echo "the machines' assets.inc differ"; exit 1; }
+python3 test/layoutcheck.py $B $M
 ls -l $B/BANKS $M/BANKS build/cleo.ssd

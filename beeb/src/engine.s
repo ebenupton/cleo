@@ -139,10 +139,11 @@ K_DOWN  = 8
 K_FIRE  = 16
 
 ; ---------------------------------------------------------------- zero page
-        .zeropage
   .if BHW
+        .segment "ZPHW": zeropage   ; (one machine's own zero page, after the shared)
 jv:       .res 2                  ; jmp (abs,x) has no 6502 form: it goes through here
   .endif
+        .zeropage
 ptr:      .res 2                  ; general pointer
 tp:       .res 2                  ; tile/source pointer
 sp:       .res 2                  ; screen pointer
@@ -239,11 +240,13 @@ seed:     .res 2
 SFXPTR:   .res 2
 MUSPTR:   .res 2
   .if BHW                           ; the arithmetic gather's shape (gather5; the loader's,
+        .segment "ZPHW": zeropage
 half0:     .res 1                   ; per level): the Model B's hottest scalars (the Master's
 half1:     .res 1                   ; gather is its table, LV_PAGE0).  The level's half
 half2:     .res 1                   ; tiles: first id, the two range boundaries (bottom
 halfhi5:   .res 1                   ; fills from half1, rowpairs from half2), the halves'
 halfsub:   .res 1                   ; page, and half0 less the first half's slot in it
+        .zeropage
   .endif
 
 ; ---------------------------------------------------------------- the MOS's zero page
@@ -298,6 +301,7 @@ KEEP:      .res MAXREC
 BINR:      .res 4                   ; the interrupt's
 BINOK:     .res 1
     .if BHW
+        .segment "LGCHW"            ; (after the shared: on the Master these are TABLES')
 BUF_SEC0:  .res 4
 BUF_SEC0T1: .res 4
 SECTAB:    .res 2*48
