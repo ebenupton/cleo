@@ -15,8 +15,9 @@ start = {m.group(1): int(m.group(2), 16)
 
 def pin(m):
     lead, name, rest = m.groups()
-    if name in FREE or name not in start or re.search(r"\b(start|align|offset)\s*=", rest):
+    if name in FREE or name not in start or re.search(r"\b(start|offset)\s*=", rest):
         return m.group(0)
+    rest = re.sub(r',\s*align\s*=\s*\$?\w+', '', rest)   # (the Model B's start is aligned)
     return '%s%s: start = $%04X, %s' % (lead, name, start[name], rest)
 
 

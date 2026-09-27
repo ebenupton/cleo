@@ -63,14 +63,23 @@ mirror_copy:
         adc ringbhi                 ; C = 0 in and out
         sbc #1                      ; C = 0: -2, the mirror's page
         sta w16b+1
+        ; both pointers page aligned in the reads' favour: the source's low byte goes
+        ; to Y (Y0, a multiple of 8, so the page step still falls between chars), w16
+        ; keeps the page, and the mirror's pointer comes down by Y0 -- its low byte is
+        ; then $80 (L - (L ^ $80) = +-$80), a page lower when L < $80.  No read crosses
+        ; a page (a store's cycles do not care)
         lda tmp4
         asl
         asl
-        asl
-        sta w16b
-        eor #<(RING_A + (RINGROWS-1)*ROWBYTES)   ; +$80, its carry taken above
+        asl                         ; L, the char's offset in the row's page
+        eor #<(RING_A + (RINGROWS-1)*ROWBYTES)   ; +$80, its carry taken above: Y0
+        tay
+        bpl :+
+        dec w16b+1                  ; L < $80
+:       lda #0
         sta w16
-        ldy #0
+        lda #$80
+        sta w16b
 @c:     .repeat 8
         lda (w16),y
         sta (w16b),y

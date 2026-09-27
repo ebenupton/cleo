@@ -139,6 +139,16 @@ TILEMIRROR = 0
         WRREC $FE, b, "x"
   .endif
 .endmacro
+.macro SAMEPAGE from, to            ; after a hot branch: it and its target in one page
+        .assert >(from) = >(to), warning, "a hot branch crosses a page (+1 cycle when taken)"
+.endmacro                           ; (checked at link time; a PAD before it fixes it)
+.macro PAD b, m                     ; bytes of padding, the Model B's and the Master's, to
+  .if ::BHW                        ; move the code after it off a page boundary (the code
+        .res b                      ; differs in length, so the pads do; the data after
+  .else                             ; lies alike whatever they are: pinned)
+        .res m
+  .endif
+.endmacro
 .macro ldpbank op, n
         op PBANK + (n - 4)
 .endmacro

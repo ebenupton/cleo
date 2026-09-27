@@ -51,6 +51,16 @@ vector, its gather's shape, its mirror bookkeeping, its handler's state).
 difference; only code labels (a CMOS instruction is shorter) and the start-up pieces
 may differ.
 
+Page crossings are placed, not left to chance.  In banks 4-6 the Model B's code is
+ordered so that its hot branches stay in their page (the sprite loops' rarer paths and
+dispatch table sit after the blitters); the Master spends its shorter code's room on
+pads (`src/pads.inc`, the `PAD` macro) before the blitters, found with
+`test/pagecheck.py`, which lists every branch that crosses a page.  In bank 7 a `PAD`
+keeps `copy_partial`'s and `blank_below`'s loops each in a page.  LGCBSS is page
+aligned, so the crossings of its tables' indexed reads do not move with the code in
+front of it.  `SAMEPAGE` asserts the hot loops' branches at link time;
+`test/cycprof.mjs` measures what the branches and crossings cost a frame.
+
 The level files, the sprites, the tile set, the title pack and the bar template are on
 the disc once and read by both.  Each machine has its own bank images (BANKSB,
 BANKSM), load-time program (LDPROGB, LDPROGM) and menu overlay (MENUB, MENUM).  Because

@@ -7,6 +7,7 @@
 ;   - tiles are 8x8 game pixels = 4 chars x 2 char rows (64 bytes) in SWR
 ; ============================================================================
         .include "assets.inc"
+        .include "pads.inc"
 
 ; ---------------------------------------------------------------- hardware
 CRTC_IDX  = $FE00
@@ -639,6 +640,7 @@ drawrect:
         ldx rc_gi
         lda GATHERH,x               ; bit 7 set: a tile page ($80-$BF), copied; clear, a
         bmi @tile                   ; fill: 0 the level's solid, on through (the commonest
+        SAMEPAGE *, @tile
         bne @fx                     ; run), $40 up a flat tile or the other solid
         ; ---- id 0, the level's solid, the commonest run: one byte, the loader's
         ; (SOLIDF), stored down every line of it
@@ -2102,16 +2104,6 @@ ds_colloop:
 ds_dispatch:
         jmp sprFN                   ; operand patched per sprite
   .if withmirror
-sprdisp_tab: .word sprFN, sprFM, sprFN, sprFM
-  .else
-sprdisp_tab: .word sprFN, sprFN, sprFN, sprFN
-  .endif
-  .if withcopy
-        .word sprFC
-  .else
-        .word sprFN
-  .endif
-  .if withmirror
 sprretMk:                           ; mask blitter, mirrored: the image column descends,
         dec mtab+1                  ; so the phase (= page & 3) does too; below phase 0
         lda mtab+1                  ; it is the previous group's phase 3
@@ -2158,6 +2150,7 @@ sprnext:                            ;  common case falls through)
 sprsback:
         dec sp_cnt
         bpl ds_colloop
+        SAMEPAGE *, ds_colloop
 ds_rowdone:
         lda sp_row
         cmp sp_r1
@@ -2186,16 +2179,36 @@ ds_rowdone:
         sta sp_rb+1
         jmp ds_rowloop
 ds_done: rts
+        ; the pointers' carries are here; the page fold (1 column in 32) is a way out, in
+        ; its branch's reach, with the fold itself and the dispatch table after the
+        ; blitters, so that the hot blitters sit where their branches cross no page
+        ; boundary (test/pagecheck.py)
 sprpinc: inc ptr+1
         jmp sprnext
 sprmpc: inc mptr+1
         jmp sprretP
-sprscold:
-        spcold sprsback
-
+sprscold: jmp sprscold2
+  .if bank = ::BANK_SPR
+        PAD 0, ::PADM_FN4
+  .else
+        PAD 0, ::PADM_FN5
+  .endif
         SPRMSK sprFN, 0
   .if withmirror
+        PAD 0, ::PADM_FM4
         SPRMSK sprFM, 1
+  .endif
+sprscold2:
+        spcold sprsback
+  .if withmirror
+sprdisp_tab: .word sprFN, sprFM, sprFN, sprFM
+  .else
+sprdisp_tab: .word sprFN, sprFN, sprFN, sprFN
+  .endif
+  .if withcopy
+        .word sprFC
+  .else
+        .word sprFN
   .endif
 .endmacro
         .segment "SPR4CODE"
@@ -2214,6 +2227,7 @@ sprscold:
         .segment "SPR5CODE"
         .scope spr5
         SPRITE_LOOPS ::SPR5_MIRROR, 1, ::BANK_TIL1
+        PAD 0, ::PADM_FC5
         SPRFULL sprFC, 0, 1
         .endscope
         .assert spr5::ds_entry = BANKENTRY, error, "bank 5's row loop must start the bank"
@@ -2227,6 +2241,7 @@ sprscold:
 ; ring row above the window (the "A" section's source), all 80 columns.
 ; ============================================================================
         .segment "LGCCODE"          ; bank 7, beside render_core
+        PAD 52, 10                  ; (copy_partial's loop, blank_below's: each in a page)
 copy_partial:                       ; the whole row, every frame the fine scroll is not 0
         lda wfine                   ; (tracking the columns drawn since the last copy
         bne :+                      ;  saves under 0.3% of a frame: measured)
@@ -2336,6 +2351,8 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         sta ptr
         bcs @pfold
 @back:  bcc @g4                     ; patched (@ftab): C = 0 at every arrival
+        SAMEPAGE *, @g4
+        SAMEPAGE *, @g0
 @done:  rts
 @sfold: spcold @sback
 @pfold: lda ptr+1
@@ -2384,6 +2401,7 @@ blank_below:
         spnext @fold                ; 8 on, folding at the ring end (out of line)
 @fback: dex
         bne @char
+        SAMEPAGE *, @char
 @no:    rts
 @fold:  spcold @fback
 
