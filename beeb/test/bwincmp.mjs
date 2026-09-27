@@ -2,14 +2,14 @@
 // (BUF_CX/BUF_CY) in its ring, and the bar -- what the player can see.  The same key
 // script as wincmp.mjs (the Master's), with the player held unhurt.
 //   node test/bwincmp.mjs <discA> <labelsA> <discB> <labelsB> <level> [frames=300]
-// Each build's cleo.dbg (beside its labels) says which bank BUF_CY is in.
+// Each build's debug file (beside its labels) says which bank BUF_CY is in.
 import { openB } from "./bopen.mjs";
-import { loadBanks } from "./harness.mjs";
+import { loadBanks, dbgPath } from "./harness.mjs";
 import path from "node:path";
 const [dA, lA, dB, lB, lvS, nS = "300"] = process.argv.slice(2);
 const builds = [[dA, lA], [dB, lB]];
 const M = await Promise.all(builds.map(([disc, labels]) => openB({ level: +lvS, disc, labels })));
-M.forEach((m, i) => { m.cyBank = loadBanks(path.join(path.dirname(builds[i][1]), "cleo.dbg"))?.byName.get("BUF_CY") ?? 6; });
+M.forEach((m, i) => { m.cyBank = loadBanks(dbgPath(builds[i][1]))?.byName.get("BUF_CY") ?? 6; });
 const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjssllllllllllllllllllllllllllllljljljljljss";
 const KK = (c) => ({ s: 0, r: 2, l: 1, j: 4 })[c] ?? 0;
 const RING = [0x0A80, 0x4680], RINGBYTES = 23 * 640, BAR = [0x0300, 0x0800];

@@ -23,6 +23,7 @@ Keys: `Z`/`X` or cursor left/right run, `RETURN` (or `SPACE`, cursor up, `:`) ju
 Needs Python 3 with Pillow and numpy, and cc65 (`ca65`/`ld65`). The original JAR
 contents are expected in `../v500/` (unzipped `CleoV500.jar`).
 
+    git submodule update --init # the engine, beebgame, in beebgame/
     sh build.sh                 # the tune, the assets, both machines, one disc: build/cleo.ssd
     TILEMIRROR=1 sh build.sh    # the same with the tile blitter's mirrored tiles (unused)
 
@@ -42,7 +43,9 @@ lock-stepped with jsbeeb.
 
 ## How it works
 
-`docs/DESIGN.md` has the detail.
+The engine is [beebgame](https://github.com/ebenupton/beebgame), a submodule in
+`beebgame/`: its `docs/DESIGN.md` has the detail of the machine side, and
+`docs/DESIGN.md` here the game's.
 
 - **One structure, two machines.** The sources are assembled twice: `BHW=1` for the
   Model B's hardware, `BHW=0` for the Master's. Both keep their code in the four
@@ -64,7 +67,7 @@ lock-stepped with jsbeeb.
   - **Model B:** two software rings of 23 rows in its 32K, each with a mirror of
     the row that straddles the ring's end.
 - **Loading.** After boot the MOS is abandoned. The game's own disc driver reads by
-  sector under NMI, from a sector table built with the disc (`tools/mkdfs.py`), and a
+  sector under NMI, from a sector table built with the disc (beebgame's `mkdfs.py`), and a
   load-time program gathers each level into the banks. Everything a level needs is
   packed per level (`tools/assets.py`): its tiles, its sprites and where they go, its
   map and tables.
@@ -73,18 +76,19 @@ lock-stepped with jsbeeb.
   of the original's logic steps; a frame that runs long drops the time rather than
   catching up. Sprites that have not changed since a buffer
   was last drawn are kept, not erased and redrawn.
-- **Sound.** The sound effects and the title tune (from `thm.mid`,
-  `tools/midi2snd.py`) play on the SN76489 from the vsync interrupt.
+- **Sound.** The sound effects and the title tune (from `thm.mid`, beebgame's
+  `midi2snd.py`) play on the SN76489 from the vsync interrupt.
 
 Not ported: the level/hi-score persistence (kept in RAM only), the curtain "wipe"
 transitions and the "BONUS LEVEL" banner sprite.
 
 ## Layout
 
-    build.sh           the build: both machines, one disc
-    src/               the 6502 sources (main.s includes the rest)
-    cfg/               the linker configurations
-    tools/             the asset pipeline and the disc image builder
-    test/              the jsbeeb harness and the checks
-    docs/              DESIGN.md; history/ has the plans and records of earlier work
+    build.sh           the build: beebgame's driver with Cleo's sources, assets and tune
+    beebgame/          the engine (a git submodule): its sources, linker maps, build
+                       driver, tools and test library
+    src/               the game's 6502 sources (main.s includes the engine's and the rest)
+    tools/             the asset pipeline: the original's data converted, the levels packed
+    test/              the checks, on beebgame's jsbeeb harness
+    docs/              DESIGN.md (the game's side); history/ has earlier plans and records
     build/             generated: the shared assets, build/modelb/, build/master/, cleo.ssd

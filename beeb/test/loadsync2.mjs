@@ -5,13 +5,13 @@
 // vsync.  The picture is in sync when the load begins.
 //   node test/loadsync2.mjs master|modelb <disc> <labels>
 // The Model B is the 8271 (B-DFS1.2), or BMODEL=B1770.
-import { findJsbeeb, loadLabels, loadBanks, imgOk } from "./harness.mjs";
+import { findJsbeeb, loadLabels, loadBanks, imgOk, dbgPath } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, disc, labels] = process.argv.slice(2);
 const s = new MachineSession(kind === "modelb" ? (process.env.BMODEL ?? "B-DFS1.2") : "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
 const cpu = s._machine.processor, A = loadLabels(labels), v = s._video;
-const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));
+const banks = loadBanks(dbgPath(labels));
 const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
 const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
 const HV = []; let forced = 0; { const opc = v.paintAndClear.bind(v); v.paintAndClear = function () { if (v.bitmapY >= 768) forced++; HV.push([cyc(), v.bitmapY >= 768]); return opc(); }; }

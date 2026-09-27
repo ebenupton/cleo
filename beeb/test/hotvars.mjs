@@ -1,7 +1,7 @@
 // Which variables the code touches, and how often: every executed instruction is
 // counted (by address and the bank paged at the time), then its opcode decoded for the
 // data address it names -- absolute, zero page, indexed, indirect -- and the count
-// credited to the variable there (the build's cleo.dbg names it, bank by bank).  Run
+// credited to the variable there (the build's game.dbg names it, bank by bank).  Run
 // over the usual key script with the player held unhurt; reported per frame.
 //
 //   node test/hotvars.mjs master|modelb <disc> <labels> [levels=0,4,8] [frames=200] [rows=40]
@@ -9,7 +9,7 @@
 // An absolute access costs a cycle and a byte more than a zero-page one.  The report
 // has the non-indexed absolute accesses, hottest first -- the scalars zero page would
 // speed up -- and zero page's own traffic, coldest first: the candidates to trade.
-import { open, loadBanks } from "./harness.mjs";
+import { open, loadBanks, dbgPath } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -36,7 +36,7 @@ const modes = {
 for (const [mode, ops] of Object.entries(modes)) for (const o of ops.split(" ")) MODE[parseInt(o, 16)] = mode;
 
 // ---- the build's names: labels (with their banks) and zero page's equates
-const dbgFile = path.join(path.dirname(labels), "cleo.dbg");
+const dbgFile = dbgPath(labels);
 const dbg = readFileSync(dbgFile, "utf8"), banks = loadBanks(dbgFile);
 const segName = new Map([...dbg.matchAll(/^seg\tid=(\d+),name="(\w+)"/gm)].map((m) => [m[1], m[2]]));
 const syms = [];

@@ -7,14 +7,14 @@
 // digit: draw_number lost its index to div10_16 -- those stops differ from such a build.)
 //   node test/roundtrip.mjs master|modelb <discA> <labelsA> <discB> <labelsB> [pngdir]
 // BBOARD=watford|solidisk emulates a write-select board on the Model B (bopen.mjs).
-import { findJsbeeb, loadLabels, loadBanks, imgOk } from "./harness.mjs";
+import { findJsbeeb, loadLabels, loadBanks, imgOk, dbgPath } from "./harness.mjs";
 import { boardEmu } from "./bopen.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path"; import { writeFileSync } from "node:fs";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, dA, lA, dB, lB, png] = process.argv.slice(2);
 async function boot(disc, labels) {
   const s = new MachineSession(kind === "master" ? "Master" : (process.env.BMODEL ?? "B-DFS1.2")); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
-  const cpu = s._machine.processor, A = loadLabels(labels), banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));
+  const cpu = s._machine.processor, A = loadLabels(labels), banks = loadBanks(dbgPath(labels));
   if (kind !== "master" && process.env.BBOARD) boardEmu(cpu, process.env.BBOARD);
   const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);

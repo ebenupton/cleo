@@ -1,0 +1,3 @@
+[submodule "beeb/beebgame"]
+	path = beeb/beebgame
+	url = https://github.com/ebenupton/beebgame.git

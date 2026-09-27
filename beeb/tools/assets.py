@@ -184,7 +184,7 @@ assert len(sprdir) == 118 * 8
 # (tools/drawfreq.json, test/drawfreq.mjs's: draws a frame by sprite id, both
 # machines averaged), for the placement that costs the sprite loops least (sprpack.py)
 import json
-sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(BEEB, 'beebgame', 'tools'))   # (the engine's sprite placer)
 import sprpack
 GEOM = {}                                   # item index -> (columns, lines)
 for i in range(118):
@@ -274,7 +274,7 @@ out('alt.bin', m.altfile)
 out('BAR', m.barbytes)
 MUS = os.path.join(BEEB, 'build', 'MUSIC')
 if not os.path.exists(MUS):
-    os.system('python3 ' + os.path.join(BEEB, 'tools', 'midi2snd.py'))
+    os.system('python3 %s %s %s' % (os.path.join(BEEB, 'beebgame', 'tools', 'midi2snd.py'), os.path.join(BEEB, '..', 'v500', 'thm.mid'), MUS))
 out('music.bin', open(MUS, 'rb').read())
 # the title pieces (convert.py: run-length streams of screen-order bytes) for the
 # menus' image: the streams, and their directory with the stream addresses as symbols

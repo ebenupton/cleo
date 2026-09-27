@@ -2,12 +2,12 @@
 // counted by its bank and address, and for each one the extra cycles it cost --
 //   a taken branch: +1, and +1 more when it lands in another page;
 //   an indexed or indirect read (abs,X  abs,Y  (zp),Y) that crosses a page: +1.
-// Then per source line (the build's cleo.dbg): the executions a frame, the branches
+// Then per source line (the build's game.dbg): the executions a frame, the branches
 // taken and not, the cycles a frame a taken branch spends over falling through (what
 // turning it round could save, before whatever the turning costs), and the page
 // crossings' cycles a frame.  Run over the usual key script with the player unhurt.
 //   node test/cycprof.mjs master|modelb <disc> <labels> [levels=0,2,4,6] [frames=150] [rows=40] [cross|taken|line=file:line,...]
-import { open, loadBanks } from "./harness.mjs";
+import { open, loadBanks, dbgPath } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -26,7 +26,7 @@ const RD_ABSY = new Set([0x19, 0x39, 0x59, 0x79, 0xb9, 0xd9, 0xf9, 0xbe]);
 const RD_IZY = new Set([0x11, 0x31, 0x51, 0x71, 0xb1, 0xd1, 0xf1]);
 
 // ---- the build's lines: address -> "file:line" per segment (so per bank), from the spans
-const dbgFile = path.join(path.dirname(labels), "cleo.dbg");
+const dbgFile = dbgPath(labels);
 const dbg = readFileSync(dbgFile, "utf8");
 const files = new Map(), segs = new Map(), spans = new Map();
 for (const m of dbg.matchAll(/^file\tid=(\d+),name="([^"]+)"/gm)) files.set(m[1], m[2].replace(/^src\//, ""));

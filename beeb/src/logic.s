@@ -215,6 +215,7 @@ O_EH    = O_EL + OBJN
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)
         .segment "ZPGAME": zeropage  ; (after the engine's: defs.inc)
+BINI:     .res 1                  ; the bin walk's index (44-64 accesses a frame)
 frame:    .res 2
 px:       .res 2                  ; player x, y (px)
 py:       .res 2
@@ -286,7 +287,6 @@ t16:      .res 2
 t16b:     .res 2
 dpx:      .res 2                  ; player step count etc
 hx:       .res 2                  ; rx used for hit direction
-mapptr:   .res 2
 q1x:      .res 1
 rise:     .res 2
 grow:     .res 1                  ; bucket walk: gy << gridsh
@@ -610,7 +610,7 @@ level_init:
         sta O_EL,y                  ; e0 = box class from the converter (0 none/1 cyan/2 black)
         lda q4
         sta O_EH,y                  ; e1 = an enemy's range covers this one
-        jsr m_rnd
+        jsr rnd
         jsr mod12
         sta O_AL,y
         inc stars
@@ -695,9 +695,9 @@ level_init:
         sta O_AH,y
         sta t16b+1
         ; C = rnd % (A+1) ; D = rnd % (B+1)  (A,B < 4096) -> use rnd16 & mask then reduce
-        jsr m_rnd
+        jsr rnd
         sta t16
-        jsr m_rnd
+        jsr rnd
         and #$0F
         sta t16+1
         jsr mod16
@@ -720,9 +720,9 @@ level_init:
         lsr
         sta O_BH,y
         sta t16b+1
-        jsr m_rnd
+        jsr rnd
         sta t16
-        jsr m_rnd
+        jsr rnd
         and #$0F
         sta t16+1
         jsr mod16
@@ -902,7 +902,7 @@ game_frame:
         lda py+1
         sbc #0
         sta wy+1
-        jsr m_clamp_window
+        jsr clamp_window
 @cam:
         setbank BANK_LVL, BANK_LVL
         ; ---- bucket range (16-bit >> 6)
@@ -1242,7 +1242,7 @@ player_dead:
 @draw:  mov16 spx, px
         mov16 spy, py
         lda #26
-        jmp m_addsprite
+        jmp addsprite
 
 ; vy = (vy + 80) * 31 >> 5
 gravity:
@@ -1759,7 +1759,7 @@ player_update:
 @drawp: mov16 spx, px
         mov16 spy, py
         txa
-        jsr m_addsprite
+        jsr addsprite
 @boom:  ; ---- boomerang
         lda bactive
         bne :+
@@ -1914,7 +1914,7 @@ player_update:
         lsr
         clc
         adc #27
-        jsr m_addsprite
+        jsr addsprite
 @bdone:
         ; ---- exit reached?
         lda px                      ; inside the exit box is 0 <= px-exitx < 16 and
@@ -2220,7 +2220,7 @@ ob_star:
         bne box_safe                ; always: Z = 0 from the ldx
 @regc:  sec
 @reg:   adc #33                     ; C = 1: +34
-        jmp m_addsprite
+        jmp addsprite
 @done:  rts
 boxbase: .byte 103, 109
 
@@ -2270,13 +2270,13 @@ ob_tramp:
         ldx O_EL,y
         bne @box
         adc #43
-        jmp m_addsprite
+        jmp addsprite
 @box:   adc #115
         ldx #72                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
         ; fall through
 ; A = frame, X = the RNGTAB quad for Cleo (64 star, 72 trampoline; the boomerang's is
 ; X+4 -- inrange and boomrel leave X alone), C = 0.  Adds BOXN if nothing can draw
-; through the box, then tail-calls m_addsprite.  (For the trampoline rx/ry are still
+; through the box, then tail-calls addsprite.  (For the trampoline rx/ry are still
 ; Cleo-relative: ob_tramp does not call boomrel.)
 box_safe:
         sta q1
@@ -2298,7 +2298,7 @@ box_safe:
         adc #BOXN                   ; taken, so C is already clear here
         sta q1
 @no:    lda q1
-        jmp m_addsprite
+        jmp addsprite
 
 ; ---------------------------------------------------------------- GREEN SNAKE (2)
 ob_snake:
@@ -2456,9 +2456,9 @@ ob_snake:
         bcs @f6
         ldx fe                      ; fe is 0..11 whenever fc < 2; the 0..63 ladder @s23
         ora @ftab,x                 ; runs only while fc >= 2, and that takes @f6.  A is
-        jmp m_addsprite             ; fc & 1: cmp/and/bcs/ldx leave it
+        jmp addsprite             ; fc & 1: cmp/and/bcs/ldx leave it
 @f6:    ora #46+6                   ; the base is even: ora is the add
-        jmp m_addsprite
+        jmp addsprite
 @ftab:  .byte 46+0,46+0,46+0,46+2,46+2,46+2,46+4,46+4,46+4,46+2,46+2,46+2
 @done:  rts
 ; carry set if anim counter is one of the pause frames 0,3,6,9
@@ -2489,7 +2489,7 @@ ob_rsnake:
         lda fa
         cmp #17
         bne @norst
-        jsr m_rnd
+        jsr rnd
         and #63
         eor #63
         clc
@@ -2589,12 +2589,12 @@ ob_rsnake:
 :       mov16 spy, oy
         add16 spy, rise             ; snake Y = oy + parabola
         lda q1
-        jsr m_addsprite
+        jsr addsprite
 @basket:
         mov16 spx, ox
         mov16 spy, oy
         lda #60
-        jmp m_addsprite
+        jmp addsprite
 @knocked:
         bgt16i fc, -256, :+
         rts
@@ -2617,7 +2617,7 @@ ob_rsnake:
         adc fc+1
         sta spy+1
         txa                         ; the frame is still in X
-        jsr m_addsprite
+        jsr addsprite
         clc
         lda ox
         adc fd
@@ -2627,7 +2627,7 @@ ob_rsnake:
         sta spx+1
         mov16 spy, oy
         lda #60
-        jmp m_addsprite
+        jmp addsprite
 
 
 ; t16 = A * A (A unsigned 0..128)
@@ -2824,7 +2824,7 @@ ob_bat:
         bcc @wy2
         inc spy+1
 @wy2:   lda q1
-        jmp m_addsprite
+        jmp addsprite
 @dead:  ; falling
         ldx fb+1                    ; t16+1 = fb+1 + 1; the low byte is fb's own
         inx
@@ -2882,7 +2882,7 @@ ob_bat:
         lda #65
         bne :++                     ; always: Z = 0 from the lda #65
 :       lda #66
-:       jmp m_addsprite
+:       jmp addsprite
 @done:  rts
 batoff: .byte 0,1,1,2,2,2,1,1,0,<-1,<-1,<-2,<-2,<-2,<-1,<-1
 
@@ -2971,7 +2971,7 @@ ob_walker:
         bne :+                      ; 5: C = 0 from the cpx
         adc #8                      ; 6: C = 1, so A + 9, and C = 0 again
 :       adc #67
-        jmp m_addsprite
+        jmp addsprite
 @f0:    lda fc                      ; C = 0: the bcc
         bcc @sp
 @f2:    lda #2                      ; C = 0: the bcc
@@ -2988,7 +2988,7 @@ ob_spike:
         lda fa
         cmp #24
         bne @nowrap
-        jsr m_rnd
+        jsr rnd
         and #63
         eor #63                     ; 63-r, then +129, is 192-r: the byte form of
         clc                         ; -(r&63)-64, i.e. -64 down to -127
@@ -3019,7 +3019,7 @@ ob_spike:
         lsr
         clc                         ; only the lsr can leave C set; bcc arrives with C=0
 :       adc #85
-        jmp m_addsprite
+        jmp addsprite
 @done:  rts
 
 ; ---------------------------------------------------------------- FLAME (9)
@@ -3034,7 +3034,7 @@ ob_flame:
 :       lda fe
         clc
         adc #93
-        jmp m_addsprite
+        jmp addsprite
 
 ; ---------------------------------------------------------------- POWERUP (10)
 ob_powerup:
@@ -3062,7 +3062,7 @@ ob_powerup:
         cmp #3
         bcs @done
         adc #97
-        jmp m_addsprite
+        jmp addsprite
 @done:  rts
 
 ; ---------------------------------------------------------------- VANISHING BLOCK (11)
@@ -3113,10 +3113,10 @@ ob_vanish:
         dey
         tya                         ; tile x
         ldx q5
-        jsr m_mark_dirty
+        jsr mark_dirty
         lda q4
         ldx q5
-        jsr m_mark_dirty
+        jsr mark_dirty
         lda fe
         eor #48                     ; A = 0 when fe = 48 (A and C dead on return)
         bne @done
@@ -3156,7 +3156,7 @@ ob_switch:
         jsr mapput                  ; -> (row),fa+1
         lda fa
         ldx q5
-        jsr m_mark_dirty
+        jsr mark_dirty
   .if BHW
         ldx fa                      ; inca is 6 bytes here
         inx
@@ -3166,7 +3166,7 @@ ob_switch:
         inca
   .endif
         ldx q5
-        jsr m_mark_dirty
+        jsr mark_dirty
         inc q5
         dec q4
         bne @rl
@@ -3174,7 +3174,7 @@ ob_switch:
 @draw:  lda fd
         clc
         adc #100
-        jmp m_addsprite
+        jmp addsprite
 
 ; ============================================================================
 ; Status bar digits (drawn straight into the bar, from bank 7's packed digits)
@@ -3343,6 +3343,8 @@ rnd:    lsr seed+1
 :       lda seed
         rts
 
+        .segment "LOWBSS"           ; (low RAM: the engine's segment, the game's bytes)
+BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
         .segment "LGCBSS"           ; the bin walk's
 BINR:      .res 4
 BINOK:     .res 1

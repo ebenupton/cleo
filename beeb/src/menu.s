@@ -14,6 +14,10 @@ MENU_HELP  = 1
 ; start-up comes here (disc.s go_title), and the game's image comes back to menu_over when a game ends (A = 0 lost, 1 won), with the stack
 ; reset: every way out of here is go_game.
 game_main:
+        lda #$34                    ; rnd's seed
+        sta seed
+        lda #$12
+        sta seed+1
   .if BHW
         lda #0
         sta hiscore

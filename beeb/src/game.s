@@ -4,6 +4,7 @@
 ; under BHW (the Model B's hardware).
 ; ============================================================================
         .segment "LGCCODE"          ; bank 7, with the logic it drives
+VSPEG     = 3                       ; vsyncs a rendered frame: 16.7 Hz of render
 ; ---------------------------------------------------------------- level loading
 ; X = level index 0..15 (even = main, odd = bonus)
 load_level:
@@ -111,14 +112,14 @@ level_loop:
         jsr blank_palette           ; hide the loading and the first-frame build-up
         ldx level
         jsr load_level
-        jsr t_level_init
+        jsr level_init
         lda #1                      ; the digits on the first render (the bar's template is
         sta BARDIRTY                ; in place already: bar_bg)
         ; initial camera; render both buffers before the palette comes back
-        jsr t_game_frame
+        jsr game_frame
         jsr render_frame
 
-        jsr t_game_frame
+        jsr game_frame
         jsr render_frame
         jsr set_palette
 
@@ -142,11 +143,11 @@ frame_top:                          ; exactly once per rendered frame, before th
                                     ; logic steps read 'keys': the test harness breaks
                                     ; here so every wait and every input it applies is
                                     ; quantised to a frame boundary (test/harness.mjs)
-        jsr t_game_frame            ; (NSPR is 0 here: render_frame and load_level clear it)
+        jsr game_frame            ; (NSPR is 0 here: render_frame and load_level clear it)
         lda exiting
         bne fl_over
         sta NSPR                    ; A = 0: exiting, just tested
-        jsr t_game_frame
+        jsr game_frame
         lda exiting
         bne fl_over
         jsr render_frame
