@@ -1028,7 +1028,7 @@ game_frame:
         setbank BANK_LVL, BANK_LVL, 2
 @skip:  ldx bent
 @sk2:   lda LV_BNEXT,x
-        bra @walk
+        jmp @walk
 @cellend:
         lda gx
         cmp gx1
@@ -1039,7 +1039,7 @@ game_frame:
         cmp gy1
         beq :+
         inc gy
-        bra @rows
+        jmp @rows
 :
 @runlist:
         ; The stamp is written exactly as the traversal writes it.  It is only read when
@@ -1470,7 +1470,7 @@ player_update:
         tya
         adc vx+1
         sta vx+1
-        bra @nofric
+        jmp @nofric
 @air:   ; vx = vx*5>>3 : vx + asr3(-3vx) == asr3(5vx), and 5vx still fits 16 bits
         lda vx+1
         sta t16+1
@@ -1528,7 +1528,7 @@ player_update:
         sta facing
         beq @right
         sub16 vx, t16
-        bra @run
+        jmp @run
 @right: add16 vx, t16
 @run:   lda #1
         sta running
@@ -1574,17 +1574,13 @@ player_update:
         bcc :+
         inc py+1
 :       stz alt                     ; A is dead: @hnext reloads it
-  .if ::BHW
-        beq @hnext                  ; the 6502 stz is lda #0 / sta: Z = 1
-  .else
-        bra @hnext
-  .endif
+        jmp @hnext
 @stepn: clc                         ; negative: high byte of the addend is $FF
         adc py
         sta py
         bcs :-                      ; no borrow (255 times in 256): py+1 is unchanged,
         dec py+1                    ; so join the 0/1 case's tail instead of adding $FF
-        bra :-
+        jmp :-
 @alt:   sta alt
 @hnext: ; steps -= dir
         lda dpx+1
@@ -1601,7 +1597,7 @@ player_update:
         adc #0
         sta qy+1
         lda dpx+1
-        bra @hstep
+        jmp @hstep
 @wall:
   .if BHW
         lda #0                      ; one zero for both (A is dead: @hdone reloads)
@@ -1703,7 +1699,7 @@ player_update:
         lda vx
         beq @spr2
         inx                         ; 23
-@spr2:  bra @spr+1                  ; past @spr's tax: the frame is in X already
+@spr2:  jmp @spr+1                  ; past @spr's tax: the frame is in X already
 @ctl:   lda firing
         beq @nofire
         lda anim
@@ -2606,7 +2602,7 @@ ob_rsnake:
         cmp #1
         bne :+
         add16i fd, 16
-        bra :++
+        jmp :++
 :       sub16i fd, 16
 :       ldx #55
         bgt16 ox, px, :+
@@ -2707,7 +2703,7 @@ ob_bat:
         inc fc
         bne @ydir
         inc fc+1
-        bra @ydir
+        jmp @ydir
 @rxpos: beq16 rx, @ydir
         beq16 fc, @ydir
         bmi16 fc, @ydir
@@ -2720,7 +2716,7 @@ ob_bat:
         inc fd
         bne @boom
         inc fd+1
-        bra @boom
+        jmp @boom
 @rypos: beq16 ry, @boom
         lda fd+1
         bmi @boom
@@ -2943,14 +2939,8 @@ ob_walker:
         bmi @bleft
         ; bvx > 0: if B < A: C = 0
         bge16 fb, fa, @bset
-  .if ::BHW
-        lda #0                      ; (stz's own expansion, spelled out for its Z)
-        sta fc
-        beq @bset                   ; always
-  .else
         stz fc
-        bra @bset
-  .endif
+        jmp @bset
 @bleft: ; bvx < 0: if B > 0: C = 1
         bmi16 fb, @bset
         lda fb

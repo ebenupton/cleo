@@ -1424,14 +1424,8 @@ drawsprite:
         inc spclip                  ; and at the right
         lda #(ROWCHARS-1)
 :       sta sp_c1
-  .if BHW
-        lda #0                      ; A is dead at @vert: no need to keep it
-        sta sp_c
-        beq @vert                   ; always (Z from the lda #0)
-  .else
-        stza sp_c
-        bra @vert
-  .endif
+        stz sp_c                    ; A is dead at @vert
+        jmp @vert
 @out0:  rts
 @vert:
         ; ---- vertical: sy = spy - refy - wy ; lb0 = 2*sy + wfine
@@ -1739,7 +1733,7 @@ masked: cmp #$41                    ; and the mirror image of that: this and the
         ora IDENT,x
   .endif
   .if mirror
-        bra skip                    ; only the mirrored form has anything at 'opaque' to
+        jmp skip                    ; only the mirrored form has anything at 'opaque' to
   .endif                            ; jump over; unmirrored, this branched to the next
 opaque:                             ; instruction, 3 cycles on every masked byte
   .if mirror
@@ -1890,7 +1884,7 @@ pl:     lda (ptr),y
         ora IDENT,x
 .endif
         sta (sp),y
-        bra ps
+        jmp ps
 po:
 .if mirror
         tax
@@ -1995,16 +1989,10 @@ pop:    ldy sp_lim
         iny
         CLINE mirror
 pnext:
-  .if ::BHW
-        inc sp_lim
-        inc sp_lim
         lda sp_lim
-  .else
-        lda sp_lim
-        inca
-        inca
+        clc                         ; (the carry is dead: the cmp follows)
+        adc #2
         sta sp_lim
-  .endif
         cmp tmp2
         bcc pl
   .if mirror

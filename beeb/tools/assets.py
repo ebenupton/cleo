@@ -60,8 +60,8 @@ VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the M
 # by hand because the packer runs before the assembler; engine.s asserts them (exactly
 # on the Model B, at most on the Master), so the build stops if they move.
 _MIR = os.environ.get('TILEMIRROR') == '1'
-B4_CODE_END = 0x83AF                        # the row loop (SPR4CODE)
-B5_CODE_END = 0x8302 if _MIR else 0x82CA    # the row loop, the gather and its shape (MAP5BSS)
+B4_CODE_END = 0x83B1                        # the row loop (SPR4CODE)
+B5_CODE_END = 0x8303 if _MIR else 0x82CB    # the row loop, the gather and its shape (MAP5BSS)
 B4_DATA = (B4_CODE_END, 0xBB00)             # bank 4: images and masks, between the row loop
                                             #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (empty: the placer's second region in bank 4)

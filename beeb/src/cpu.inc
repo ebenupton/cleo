@@ -200,9 +200,6 @@ TILEMIRROR = 0
 .endif
         pla
 .endmacro
-.macro bra arg
-        jmp arg
-.endmacro
 .macro inca                         ; the carry survives, as inc a's does
         sta mtmp
         inc mtmp

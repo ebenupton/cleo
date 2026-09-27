@@ -74,7 +74,7 @@ clamp_window:
         sta wx
         lda maxwx+1
         sta wx+1
-        bra @wxok
+        jmp @wxok
 @wx0:   stz wx
         stz wx+1
 @wxok:
@@ -123,7 +123,7 @@ title_loop:
         cmp #MENU_HELP
         bne new_game
         jsr t_help_screen
-        bra title_loop
+        jmp title_loop
 new_game:
         stz level
   .if BHW
@@ -185,7 +185,7 @@ frame_top:                          ; exactly once per rendered frame, before th
         lda exiting
         bne fl_over
         jsr render_frame
-        bra frame_loop
+        jmp frame_loop
 fl_wait:  ; nothing to do yet: wait for the next vsync
         lda vsyncs
 :       cmp vsyncs
