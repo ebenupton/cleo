@@ -26,6 +26,8 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
         dex                         ; stack above $0113 (nothing is on it yet)
         bne :-
         .import __ZPF0_RUN__, __ZPF5_RUN__, __ZPFD_RUN__   ; (ld65 exports them absolute)
+        .import __TILBSS_RUN__, __TILBSS_SIZE__
+        .assert __TILBSS_RUN__ + __TILBSS_SIZE__ <= TILES + (TOFF+1)*64, error, "bank 6's code and variables run into the first tile: raise TOFF (tools/convert.py)"
         .assert __ZPF0_RUN__ = $F0 && __ZPF5_RUN__ = $F5 && __ZPFD_RUN__ = $FD, error, "the MOS's zero page: $F0-$F3, $F5-$FB, $FD-$FF"
         ldy #$0F                    ; (A = 0, X = 0) and the MOS's zero page but $F4 and
 :       cpy #$04                    ; $FC: the hot scalars engine.s keeps there

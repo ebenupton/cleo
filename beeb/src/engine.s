@@ -569,76 +569,10 @@ drawrect:
         jmp @rowy
 @done:  rts
         ; ---- a fill, from @run's bpl (here, behind @drawrow, in its reach): the other
-        ; fills to @solid; id 0, the level's solid, to @sol0 at the top of the bank
+        ; fills to @solid; id 0, the level's solid, to @sol0
 @fill:  bne @fx                     ; (Z from @run's load: 0 is the level's solid)
         jmp @sol0
 @fx:    jmp @solid                  ; (C is set: set at every entry to @run)
-        ; ---- id 0, the level's solid: one byte, the loader's (SOLIDF), stored down every
-        ; line of the run.  It reads nothing from the bank, so it sits above the tiles
-        ; (TILHI), out of the full code area below TILES -- still in this scope, for its
-        ; jumps back into the loop.
-        .pushseg
-        .segment "TILHI"
-        .assert * = TILES_END, error, "TILHI must start at TILES_END (defs.inc, the cfgs' B6H)"
-@sol0:  lda #4                      ; (C is set at every entry to @run)
-        sbc rc_subc                 ; chars in this run, as @tpset
-        cmp cnt
-        bcc :+
-        lda cnt
-:       sta rc_n
-        asl
-        tax
-        asl
-        asl
-        sta tmp
-        ldy rc_wrap
-        beq :+
-        adc sp                      ; C is clear: the asl's above shifted out zeros
-        lda sp+1
-  .if BHW
-        adc ringneg
-  .else
-        adc #(256 - >RINGEND)
-  .endif
-        bcs @s0slow
-:
-  .if BHW
-        lda @mt-2,x                 ; jmpx less its pha/pla
-        sta jv
-        lda @mt-1,x
-        sta jv+1
-@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
-        jmp (jv)
-  .else
-@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
-        jmpx @mt-2
-  .endif
-@s0slow:                            ; a run across the ring end (once a row at most): the
-        lda @s0f+1                  ; pair cascade's char-at-a-time copy, as a pair
-        sta tp
-        sta tp+1
-        jmp @fslow
-@mt:    .word @m7, @m15, @m23, @m31
-.macro MFIL k
-        ldy #k
-        sta (sp),y
-        .repeat 7
-        dey
-        sta (sp),y
-        .endrepeat
-.endmacro
-@m31:   MFIL 31
-@m23:   MFIL 23
-@m15:   MFIL 15
-@m7:    ldy #7
-        .repeat 6
-        sta (sp),y
-        dey
-        .endrepeat
-        sta (sp),y
-        staz sp                     ; line 0 non-indexed
-        jmp @advsp
-        .popseg
 @drawrow:
         inc rc_y                    ; the row this draws: nothing in @drawrow reads rc_y
         ; ---- screen base (per-rect ringaddr, +640 per row)
@@ -944,6 +878,67 @@ drawrect:
 @f23:   PCHAR 2
 @f15:   PCHAR 1
 @f7:    PCHAR 0
+        jmp @advsp
+
+        ; ---- id 0, the level's solid: one byte, the loader's (SOLIDF), stored down every
+        ; line of the run
+@sol0:  lda #4                      ; (C is set at every entry to @run)
+        sbc rc_subc                 ; chars in this run, as @tpset
+        cmp cnt
+        bcc :+
+        lda cnt
+:       sta rc_n
+        asl
+        tax
+        asl
+        asl
+        sta tmp
+        ldy rc_wrap
+        beq :+
+        adc sp                      ; C is clear: the asl's above shifted out zeros
+        lda sp+1
+  .if BHW
+        adc ringneg
+  .else
+        adc #(256 - >RINGEND)
+  .endif
+        bcs @s0slow
+:
+  .if BHW
+        lda @mt-2,x                 ; jmpx less its pha/pla
+        sta jv
+        lda @mt-1,x
+        sta jv+1
+@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
+        jmp (jv)
+  .else
+@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
+        jmpx @mt-2
+  .endif
+@s0slow:                            ; a run across the ring end (once a row at most): the
+        lda @s0f+1                  ; pair cascade's char-at-a-time copy, as a pair
+        sta tp
+        sta tp+1
+        jmp @fslow
+@mt:    .word @m7, @m15, @m23, @m31
+.macro MFIL k
+        ldy #k
+        sta (sp),y
+        .repeat 7
+        dey
+        sta (sp),y
+        .endrepeat
+.endmacro
+@m31:   MFIL 31
+@m23:   MFIL 23
+@m15:   MFIL 15
+@m7:    ldy #7
+        .repeat 6
+        sta (sp),y
+        dey
+        .endrepeat
+        sta (sp),y
+        staz sp                     ; line 0 non-indexed
         jmp @advsp
 
 ; @hfill's two loads of a half tile's pair: the table sits above the halves, wherever
@@ -2893,7 +2888,8 @@ gather5:
         bcs @gflat
         cmp half0
         bcs @ghalf
-        tax
+        adc #TOFF                   ; (C = 0) its slot: the first tile is TOFF+1 slots up
+        tax                         ; from TILES, past the code (assets.inc)
         lsr
         lsr
         clc

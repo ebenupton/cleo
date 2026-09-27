@@ -295,9 +295,9 @@ lv_load:
         adc #0
         sta lp+1
         .assert <TILES = 0, error, "TILES page-aligned"
-        lda #$40                    ; the next full slot: 1 (slot 0 is id 0, the solid:
+        lda #<(TILES + (TOFF+1)*64) ; the next full slot: id 1's (id 0 is the solid,
         sta tbase                   ; filled, never stored)
-        lda #>TILES
+        lda #>(TILES + (TOFF+1)*64)
         sta tbase+1
         sty fnum
 @file:  lda #4

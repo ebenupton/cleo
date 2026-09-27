@@ -631,8 +631,8 @@ for (lv, sub), cm in maps.items():
 #   0                    the level's solid (the colour it uses more: cyan outdoors,
 #                        black indoors), a one-byte fill the row loop tests for by
 #                        the zero (its fill byte is the header's +31, which the loader
-#                        patches in); slot 0 is no tile's
-#   1 .. NTILES          full tiles, slot = id
+#                        patches in); it has no slot
+#   1 .. NTILES          full tiles, slot = id + TOFF (the first slot clear of the code)
 #   half0 .. mir0-1      half tiles: one char row stored (32 bytes, from HALFPAGE),
 #                        the other a fill or the same row again; three runs --
 #                        top row fills (to half1), bottom row fills (to half2), both
@@ -729,10 +729,12 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # pair from its id; the Master's is a table (LV_PAGE0, B['page0'], the file's last two
 # sectors) of the same pairs, so the one row loop reads both.
 TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mirrored tiles)
-B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xBF58   # bank 6: tiles above its code and variables, below the solid's fill (defs.inc TILES, TILES_END)
+B_TILES, B_TILES_END = 0x8600, 0xC000       # bank 6: the tiles' page origin (defs.inc TILES), to the end
+TOFF = 4 if TILEMIRROR else 2               # id k's slot: k + TOFF, the first tile clear of the
+                                            # code and its variables (engine.s asserts it; assets.inc)
 def _layout(stored, hlist, halfpair, base, end, loc):
-    slot = {k: i + 1 for i, k in enumerate(stored)}     # (slot 0: the solid, id 0)
-    NT, NHALF = len(stored) + 1, len(hlist)
+    slot = {k: i + 1 + TOFF for i, k in enumerate(stored)}     # (id 0, the solid, has none)
+    NT, NHALF = len(stored) + 1 + TOFF, len(hlist)
     HALFPAGE = base + ((NT * 64) & ~255)
     HALFOFF = ((NT * 64) & 255) // 32
     assert HALFPAGE + (HALFOFF + NHALF) * 32 + len(halfpair) <= end, ('tiles do not fit', NT, NHALF)
@@ -790,7 +792,7 @@ def pack_tiles(lv, sub):
     assert len(flats) <= NFLAT, (lv, sub, len(flats))
     # mirrors (TILEMIRROR only): only while the bank is short, the least used first; a
     # mirror's source stays a stored tile
-    need = lambda nt: B_TILES + (nt + 1) * 64 + len(hlist) * 32 + len(halfpair) > B_TILES_END
+    need = lambda nt: B_TILES + (nt + 1 + TOFF) * 64 + len(hlist) * 32 + len(halfpair) > B_TILES_END
     bypat = {}
     for k in fulls:
         bypat.setdefault(k[0], []).append(k)
@@ -832,7 +834,7 @@ def pack_tiles(lv, sub):
     lw = 8 - levels[(lv, sub)]['lw']
     # the layout: the stored tiles at slot = id, a mirror by its source's slot
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc)
-    assert all(B['slot'][k] == idof[k] for k in stored)
+    assert all(B['slot'][k] == idof[k] + TOFF for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
     B['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR,
                       0x0F if sol0 == 1 else 0x00])    # +31: the solid's fill byte (ldprog.s)
@@ -844,8 +846,8 @@ def pack_tiles(lv, sub):
     blo, bhi = bytearray([2 * (NFLAT + 1)] * 256), bytearray([0x40] * 256)
     bhi[0] = 0                      # id 0: the solid, a zero high byte (the row loop's beq)
     for k in stored:
-        s_ = idof[k]
-        blo[s_], bhi[s_] = (s_ & 3) << 6, (B_TILES >> 8) + (s_ >> 2)
+        s_, a_ = idof[k], B['slot'][k]
+        blo[s_], bhi[s_] = (a_ & 3) << 6, (B_TILES >> 8) + (a_ >> 2)
     for i, k in enumerate(mirs):
         s_ = B['slot'][mirrored[k]]
         blo[mir0 + i], bhi[mir0 + i] = ((s_ & 3) << 6) | 3, (B_TILES >> 8) + (s_ >> 2)

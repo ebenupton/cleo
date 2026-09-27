@@ -9,7 +9,7 @@ on any difference.
     python3 test/layoutcheck.py [modelb_dir=build/modelb] [master_dir=build/master]"""
 import re, sys
 
-CODE = {'CODE', 'TILCODE', 'TILHI', 'LGCCODE', 'SPR4CODE', 'SPR5CODE', 'MAP5CODE',
+CODE = {'CODE', 'TILCODE', 'LGCCODE', 'SPR4CODE', 'SPR5CODE', 'MAP5CODE',
         'TIL6ENT', 'MNUCODE', 'LOWCODE', 'NMISTUB'}
 STARTUP = {'BOOT', 'BOOTHDR', 'BANKFIX', 'WRFIX'}      # run once, then overwritten
 OWN = {'ZPHW', 'LOWHW', 'LGCHW', 'TABLES'}              # one machine's own, after the shared

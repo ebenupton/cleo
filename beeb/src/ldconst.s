@@ -11,6 +11,7 @@
 .endmacro
         OUTC MENU_BASE
         OUTC TILES
+        OUTC TOFF
         OUTC NFLAT
         OUTC BOXID0
         OUTC NMIPAGE

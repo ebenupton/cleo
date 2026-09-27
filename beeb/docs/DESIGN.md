@@ -195,11 +195,11 @@ sprites and the map.  It reaches SPRC's bank-5 part, so returning to the title c
 
 | Range | Model B | Master |
 |---|---|---|
-| TIL6ENT: `bank6_entry`, `drawrect_clip` | $8000-$806F | $8000-$806C |
-| TILCODE: `drawrect` and its row loop, `ringaddr` and its row tables, `select_backbuf`, `scroll_validate`, `mirdirty6` and the ring modulus table (Model B) | $8070-$85E6 | $806D-$8586 |
-| TILBSS: BUF_CY, FLATTAB | $85E7-$85F4 | $8587-$8594 |
-| the level's tiles (TILES), 64 bytes each | $8600-$BFFF | same |
-| or, during the menus, the menu overlay (MNUCODE, MNUDATA, MNUBSS) | $8600-$95EB | $8600-$95AC |
+| TIL6ENT: `bank6_entry`, `drawrect_clip` | $8000-$806F | same (padded) |
+| TILCODE: `drawrect` and its row loop, its fills (the solid's one-byte cascade too), `ringaddr` and its row tables, `select_backbuf`, `scroll_validate`, `mirdirty6` and the ring modulus table (Model B) | $8070-$8691 | $8070-$8559, padded |
+| TILBSS: BUF_CY, FLATTAB | $8692-$869F | same |
+| the level's tiles, 64 bytes a slot from TILES = $8600: id k in slot k + TOFF (2), so id 1 is at $86C0, the first 64 bytes clear of the code | $86C0-$BFFF | same |
+| or, during the menus, the menu overlay (MNUCODE, MNUDATA, MNUBSS) | from $8700 (MENU_BASE, page aligned) | same |
 
 ### Bank 7: logic
 
@@ -474,7 +474,7 @@ is a level tile id:
 | Ids | Kind |
 |---|---|
 | 0 | the level's solid: the colour it uses more (cyan outdoors, black indoors), one byte down every line |
-| 1 .. half0-1 | full tiles, stored at TILES + 64 x id (slot 0 is unused) |
+| 1 .. half0-1 | full tiles, stored at TILES + 64 x (id + TOFF) |
 | half0 .. half1-1 | half tiles whose top row is a fill |
 | half1 .. half2-1 | half tiles whose bottom row is a fill |
 | half2 .. mir0-1 | half tiles whose two rows are the same |
@@ -491,7 +491,10 @@ the loader (HPAIR0, HPAIR1).  The solid's fill byte is the header's +31; the loa
 patches it into the row loop's `lda #` (SOLIDF: a cheap label, which `build.sh` reads
 from `cleo.dbg`, because any symbol defined there would end the loop's `@` scope).  The ids and the lists that gather a level's tiles come
 from one packer (`convert.py pack_tiles`) laid out for the Model B's bank, the smaller:
-the tiles from $8600 to the end of bank 6 on both machines.
+the tiles from the first slot clear of the code to the end of bank 6, on both machines.
+The slots count from the page TILES ($8600), so the address stays arithmetic: the
+Model B's gather adds TOFF to an id (the packer's constant, in assets.inc; init.s
+asserts the code ends below slot TOFF+1).
 
 `gather5` turns a tile row's ids into (GATHERL, GATHERH) pairs, which `drawrect`'s row
 loop reads:
@@ -525,8 +528,8 @@ alternating loads down a `dey` chain was 88).
 character at a time right to left with `((b & $33) << 2) | ((b & $CC) >> 2)`.  The
 packer mirrors only what the bank cannot hold, the least used first; on the Model B
 MIRTAB (each mirrored id's source slot) is in bank 5 beside the gather, on the Master
-LV_PAGE0 names the source's slot.  With the tiles at $8600 no level needs it,
-and the code and tables it takes are that room: building it moves TILES to $8700.
+LV_PAGE0 names the source's slot.  No level needs it, and the code and tables it
+takes are the room: building it raises TOFF to 4.
 
 **The tile set.**  One set, every distinct tile any level uses, in three files cut by
 who uses a tile: TILES0 the outdoor levels' alone (223 tiles), TILES1 both kinds'
@@ -663,7 +666,7 @@ Back in bank 7, `load_end`, interrupts on, and `load_level` goes on from the hea
 (the map's size, the window's limits, the records reset).
 
 The title's load (`title_load`, LDPROG+3) is the same machinery: the machine's menu
-overlay to bank 6 at MENU_BASE ($8600), the title pack to bank 5 at $8900, the bar
+overlay to bank 6 at MENU_BASE ($8700), the title pack to bank 5 at $8900, the bar
 template to its place.  `title_res` says whether they are still there; starting a level
 clears it, and `ensure_menu` puts them back before the title or the win/lose screen.
 

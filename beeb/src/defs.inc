@@ -28,16 +28,13 @@ MASKTAB3  = MASKTAB0 + $300
 BANKENTRY = $8000                   ; banks 4, 5 and 6: the routine bank 7 calls once a
                                     ; sprite or rect starts the bank (low.s callbank):
                                     ; the sprite row loop's ds_entry, bank6_entry
-  .if TILEMIRROR                    ; (cpu.inc) the mirror's code takes the page below
-TILES     = $8700                   ; bank 6: this level's tiles, 64 bytes each, by id,
-  .else
-TILES     = $8600                   ; bank 6: this level's tiles, 64 bytes each, by id,
-  .endif
-                                    ; page aligned (drawrect's gather is arithmetic);
-                                    ; slot 0 is id 0, the solid: filled, never stored
-TILES_END = $BF58                   ; and to here: above, the solid's fill (TILHI, the
-                                    ; Model B's size on both; convert.py B_TILES_END)
-MENU_BASE = TILES                   ; or the menu overlay, over them
+TILES     = $8600                   ; bank 6: this level's tiles, 64 bytes a slot from this
+                                    ; page (drawrect's gather is arithmetic): id k's slot
+                                    ; is k + TOFF (assets.inc), so the first tile (id 1;
+                                    ; id 0 is the solid, filled) sits at the first 64 bytes
+                                    ; clear of the code and its variables
+MENU_BASE = TILES + (((TOFF+1)*64 + 255) & $FF00)   ; or the menu overlay, over them
+                                    ; (page aligned, above the code)
 LV_MAP    = MAP5                    ; bank 5, $9C00: row major, a fixed 8K below the
                                     ; mask tables; the level's sprites below it
   .if BHW

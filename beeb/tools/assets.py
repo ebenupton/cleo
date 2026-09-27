@@ -61,7 +61,7 @@ VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the M
 # on the Model B, at most on the Master), so the build stops if they move.
 _MIR = os.environ.get('TILEMIRROR') == '1'
 B4_CODE_END = 0x83B1                        # the row loop (SPR4CODE)
-B5_CODE_END = 0x8303 if _MIR else 0x82CB    # the row loop, the gather and its shape (MAP5BSS)
+B5_CODE_END = 0x8305 if _MIR else 0x82CD    # the row loop, the gather and its shape (MAP5BSS)
 B4_DATA = (B4_CODE_END, 0xBB00)             # bank 4: images and masks, between the row loop
                                             #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (empty: the placer's second region in bank 4)
@@ -470,6 +470,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('BOXID0 = 103\nBOXN = 15\n')
     f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC5_BASE = $%04X\nSPRC5_LEN = %d\nSPRX_LEN = %d\n'
             % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
+    f.write('TOFF = %d\n' % m.TOFF)          # id k's tile slot is k + TOFF (convert.py)
     f.write('TITLE_ADDR = $8900\n')         # bank 5, over the sprites and the map (convert.py)
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
