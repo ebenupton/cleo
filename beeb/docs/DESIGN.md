@@ -453,20 +453,23 @@ is a level tile id:
 
 | Ids | Kind |
 |---|---|
-| 0 .. half0-1 | full tiles, stored at TILES + 64 x id |
+| 0 | the level's solid: the colour it uses more (cyan outdoors, black indoors), one byte down every line |
+| 1 .. half0-1 | full tiles, stored at TILES + 64 x id (slot 0 is unused) |
 | half0 .. half1-1 | half tiles whose top row is a fill |
 | half1 .. half2-1 | half tiles whose bottom row is a fill |
 | half2 .. mir0-1 | half tiles whose two rows are the same |
 | mir0 .. (TILEMIRROR only) | full tiles drawn mirrored from another's slot |
 | FLAT0 = 250 .. 253 | flat tiles: one colour's dither, two bytes alternating down every character |
-| 254, 255 | the solids, cyan and black |
+| 254, 255 | the solids, cyan and black: a level's other solid, where it has both |
 
 Tiles identical in bytes, attribute and altitude class share an id (the logic reads
 attribute and altitude class by id).  A flat tile is not stored: its two bytes are in
 FLATTAB (bank 6), the solids last.  A half tile stores its one distinct character row,
 32 bytes, from HALFPAGE + HALFOFF x 32 (the page after the full tiles), with its fill's
 pair in a table after the halves; the row loop's two loads of that pair are patched by
-the loader (HPAIR0, HPAIR1).  The ids and the lists that gather a level's tiles come
+the loader (HPAIR0, HPAIR1).  The solid's fill byte is the header's +31; the loader
+patches it into the row loop's `lda #` (SOLIDF: a cheap label, which `build.sh` reads
+from `cleo.dbg`, because any symbol defined there would end the loop's `@` scope).  The ids and the lists that gather a level's tiles come
 from one packer (`convert.py pack_tiles`) laid out for the Model B's bank, the smaller:
 the tiles from $8600 to the end of bank 6 on both machines.
 
@@ -477,17 +480,20 @@ loop reads:
 - a half tile: GATHERH = its stored row's page, GATHERL = its offset | bit 2 | which
   row fills (bit 0 the top, bit 1 the bottom, neither: both rows are the stored one);
   the row loop tests against `rowbit` (1 for the top character row, 2 for the bottom);
-- a fill: GATHERH bit 6 set.  On the Model B GATHERH = $C0 and GATHERL indexes the
-  pair in FLATTAB.  On the Master, LV_PAGE0 splits them: $C0 with GATHERL the byte
-  itself for a solid or a flat whose two bytes are equal (a cascade that stores A
-  alone), $E0 with GATHERL indexing the pair.
+- a fill: GATHERH bit 7 clear, so the row loop's one `bpl` after the load finds every
+  fill and a tile run pays nothing more.  GATHERH = 0 is the level's solid (id 0): on
+  the Master the store-only cascade with the patched byte, on the Model B the patched
+  byte as a pair into its one fill cascade.  Otherwise, on the Model B GATHERH = $40
+  and GATHERL indexes the pair in FLATTAB; on the Master LV_PAGE0 splits them: $40 with
+  GATHERL the byte itself (the other solid, or a flat whose two bytes are equal), $60
+  with GATHERL indexing the pair.
 
 On the Model B `gather5` computes the pair from the id with the level's shape (half0,
 half1, half2, halfhi5, halfsub, in zero page), since main RAM has no room for a table.
 On the Master it is two indexed loads from LV_PAGE0 in main RAM, a table the packer
-builds per level; unused ids in it are a black fill, because the rows past a map's end
-are read too, and a zero high byte would clear the row loop's carry and run a copy off
-through the screen.
+builds per level; unused ids in it are a black fill ($40, 0), because the rows past a
+map's end are read too.  The Model B's gather tests for id 0 first (`beq`, 2 cycles a
+tile): a solid costs it one store.
 
 `drawrect` (bank 6) draws a rectangle of map characters into the back buffer: per-rect
 invariants once, one `ringaddr` for the first row, then per tile row one `mapstrip` and

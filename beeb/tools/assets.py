@@ -61,7 +61,7 @@ VISLINES = 240 if TARGET == 'master' else 168   # the window's lines: VISROWS 30
 # on the Model B, at most on the Master), so the build stops if they move.
 _MIR = os.environ.get('TILEMIRROR') == '1'
 B4_CODE_END = 0x83AF                        # the row loop (SPR4CODE)
-B5_CODE_END = 0x82F8 if _MIR else 0x82C0    # the row loop, the gather and its shape (MAP5BSS)
+B5_CODE_END = 0x8302 if _MIR else 0x82CA    # the row loop, the gather and its shape (MAP5BSS)
 B4_DATA = (B4_CODE_END, 0xBB00)             # bank 4: images and masks, between the row loop
                                             #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (empty: the placer's second region in bank 4)

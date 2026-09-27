@@ -295,7 +295,8 @@ lv_load:
         adc #0
         sta lp+1
         .assert <TILES = 0, error, "TILES page-aligned"
-        sty tbase                   ; the next full slot (Y = 0)
+        lda #$40                    ; the next full slot: 1 (slot 0 is id 0, the solid:
+        sta tbase                   ; filled, never stored)
         lda #>TILES
         sta tbase+1
         sty fnum
@@ -417,6 +418,8 @@ lv_load:
         ; ---- the tile shape, into banks 5 and 6 (read here, with bank 7 in)
         lda LV_HDR+27
         sta sv_halfhi
+        lda LV_HDR+31               ; the solid's fill byte (id 0)
+        sta sv_solid
   .if BHW                           ; the arithmetic gather's (bank 5): the Master's
         lda LV_HDR+24               ; gather is its table, LV_PAGE0
         sta sv_half0
@@ -447,6 +450,8 @@ lv_load:
 :       sty HPAIR1+1
         lda sv_halfhi
         sta halfhi                  ; (bank 6's: the row loop's @hfill)
+        lda sv_solid
+        sta SOLIDF                  ; the row loop's lda #fill for id 0
   .if BHW
         lda PB_MAP                  ; the gather's shape: bank 5, beside it (gather5)
         jsr pgbank
@@ -766,6 +771,7 @@ tcopy:                              ; tile A of the staged file, its row C (or a
 nfiles: .res 1                      ; (lv_load's: the set's file count,
 hdst:   .res 2                      ;  the next half's slot,
 sv_halfhi:  .res 1                  ;  the tile shape on its way to banks 5 and 6)
+sv_solid:   .res 1
 mapend:     .res 1                  ; the page after the level's map (unrle)
   .if BHW
 sv_half0:   .res 1

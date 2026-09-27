@@ -628,7 +628,11 @@ for (lv, sub), cm in maps.items():
 # byte is a LEVEL tile id; the level's tiles are gathered at load time from the tile
 # set's files into bank 6, 64 bytes a slot, so a tile's address is arithmetic (the
 # Model B's gather5) or a table of the same pairs (the Master's LV_PAGE0).  Ids:
-#   0 .. NTILES-1        full tiles, slot = id
+#   0                    the level's solid (the colour it uses more: cyan outdoors,
+#                        black indoors), a one-byte fill the row loop tests for by
+#                        the zero (its fill byte is the header's +31, which the loader
+#                        patches in); slot 0 is no tile's
+#   1 .. NTILES          full tiles, slot = id
 #   half0 .. mir0-1      half tiles: one char row stored (32 bytes, from HALFPAGE),
 #                        the other a fill or the same row again; three runs --
 #                        top row fills (to half1), bottom row fills (to half2), both
@@ -637,7 +641,8 @@ for (lv, sub), cm in maps.items():
 #                        MIRTAB: only as many as the bank needs, the least used first
 #                        (TILEMIRROR builds only; none otherwise)
 #   FLAT0 .. 253         flat tiles: two bytes alternating down every char (FLATTAB)
-#   254, 255             the solids, cyan and black (FLATTAB's last two pairs)
+#   254, 255             the solids, cyan and black (FLATTAB's last two pairs): the
+#                        level's other solid, where it has both
 # The mirror is exact: the dither is per game pixel with no position term, so a
 # game pixel's 2x2 dots move as a unit -- reverse the chars and swap the byte's
 # two pixels, ((b & $33) << 2) | ((b & $CC) >> 2).
@@ -726,8 +731,8 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mirrored tiles)
 B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xC000   # bank 6: tiles above its code and variables (defs.inc TILES)
 def _layout(stored, hlist, halfpair, base, end, loc):
-    slot = {k: i for i, k in enumerate(stored)}
-    NT, NHALF = len(stored), len(hlist)
+    slot = {k: i + 1 for i, k in enumerate(stored)}     # (slot 0: the solid, id 0)
+    NT, NHALF = len(stored) + 1, len(hlist)
     HALFPAGE = base + ((NT * 64) & ~255)
     HALFOFF = ((NT * 64) & 255) // 32
     assert HALFPAGE + (HALFOFF + NHALF) * 32 + len(halfpair) <= end, ('tiles do not fit', NT, NHALF)
@@ -749,9 +754,12 @@ def pack_tiles(lv, sub):
     usage = {int(v): int(n) for v, n in zip(vals, cnt)}
     live = set(usage) | (set(specials) & _want[g])
     local = {}
+    # the solid the level uses more is id 0 (ties: cyan); the other keeps its fill id
+    nsol = [sum(usage.get(c, 0) for c in live if tile_solid.get(c) == v) for v in (1, 2)]
+    sol0 = 1 if nsol[0] >= nsol[1] else 2
     for c in live:
         if c in tile_solid:
-            local[c] = SOLID_CYAN if tile_solid[c] == 1 else SOLID_BLACK
+            local[c] = 0 if tile_solid[c] == sol0 else SOLID_CYAN if tile_solid[c] == 1 else SOLID_BLACK
     # identical tiles share an id -- identical to the logic too, which reads a tile's
     # attribute and altitude class by id
     keyof = lambda c: (bytes(tiles_bytes[c]), attr_of(c), alt_class[c])
@@ -782,7 +790,7 @@ def pack_tiles(lv, sub):
     assert len(flats) <= NFLAT, (lv, sub, len(flats))
     # mirrors (TILEMIRROR only): only while the bank is short, the least used first; a
     # mirror's source stays a stored tile
-    need = lambda nt: B_TILES + nt * 64 + len(hlist) * 32 + len(halfpair) > B_TILES_END
+    need = lambda nt: B_TILES + (nt + 1) * 64 + len(hlist) * 32 + len(halfpair) > B_TILES_END
     bypat = {}
     for k in fulls:
         bypat.setdefault(k[0], []).append(k)
@@ -801,8 +809,8 @@ def pack_tiles(lv, sub):
     stored = sorted((k for k in fulls if k not in mirrored), key=loc)
     mirs = sorted(mirrored, key=lambda k: loc(mirrored[k]))
     NT, NHALF, NMIR = len(stored), len(hlist), len(mirs)
-    idof = {k: i for i, k in enumerate(stored)}
-    half0 = NT
+    idof = {k: i + 1 for i, k in enumerate(stored)}
+    half0 = NT + 1
     half1 = half0 + len(halves['top'])
     half2 = half1 + len(halves['bot'])
     for i, h in enumerate(hlist):
@@ -826,14 +834,15 @@ def pack_tiles(lv, sub):
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc)
     assert all(B['slot'][k] == idof[k] for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
-    B['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR, 0])
+    B['hdr'] = bytes([0, NT, lw, NHALF, half0, half1, half2, B['HALFPAGE'] >> 8, B['HALFOFF'], mir0, NMIR,
+                      0x0F if sol0 == 1 else 0x00])    # +31: the solid's fill byte (ldprog.s)
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
     # and the Master's LV_PAGE0 for these slots: per id, the pair the Model B's gather
     # computes -- a mirror is kind 3 at its source's slot (an id no tile has -- the
-    # rows past the map's end are read too, whatever lies there -- is a black fill: a
-    # zero high byte would clear the row loop's carry and run a copy off through the
-    # screen)
-    blo, bhi = bytearray(256), bytearray([0xC0] * 256)
+    # rows past the map's end are read too, whatever lies there -- is a black fill, $40
+    # low 0: a high byte with bit 7 clear is a fill, the row loop's bpl)
+    blo, bhi = bytearray(256), bytearray([0x40] * 256)
+    bhi[0] = 0                      # id 0: the solid, a zero high byte (the row loop's beq)
     for k in stored:
         s_ = idof[k]
         blo[s_], bhi[s_] = (s_ & 3) << 6, (B_TILES >> 8) + (s_ >> 2)
@@ -846,7 +855,7 @@ def pack_tiles(lv, sub):
         blo[t] = ((kk & 7) << 5) | (5 if t < half1 else 6 if t < half2 else 4)
     for j in range(NFLAT + 2):
         e, o = flattab[2 * j], flattab[2 * j + 1]
-        blo[FLAT0 + j], bhi[FLAT0 + j] = (e, 0xC0) if e == o else (2 * j, 0xE0)
+        blo[FLAT0 + j], bhi[FLAT0 + j] = (e, 0x40) if e == o else (2 * j, 0x60)
     B['page0'] = bytes(blo + bhi)
     return dict(local=local, B=B, flat=flattab, halves=halflist, hpair=halfpair,
                 ntiles=NT, nhalf=NHALF, nmir=NMIR, nflat=len(flats), usage=usage)

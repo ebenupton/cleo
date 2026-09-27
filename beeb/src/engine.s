@@ -576,6 +576,47 @@ drawrect:
         sta ptr+1
         jmp @rowy
 @done:  rts
+        ; ---- a fill, from @run's bpl (here, behind @drawrow, in its reach): the other
+        ; fills to @solid; id 0, the level's solid -- one byte, the loader's (SOLIDF),
+        ; down every line -- here
+@fx:
+  .if .not BHW
+        asl                         ; $40 -> $80, $60 -> $C0: the A @solid takes
+  .endif
+        jmp @solid                  ; (C is set: set at every entry to @run)
+@fill:  bne @fx                     ; (Z from @run's load: 0 is the level's solid)
+  .if BHW
+@sol0:
+@s0f:   lda #0                      ; SOLIDF: the fill -- as a pair for the Model B's
+        sta tp                      ; one fill cascade
+        sta tp+1
+        jmp @fillgo
+  .else
+@sol0:  lda #4                      ; (C is set at every entry to @run)
+        sbc rc_subc                 ; chars in this run, as @tpset
+        cmp cnt
+        bcc :+
+        lda cnt
+:       sta rc_n
+        asl
+        tax
+        asl
+        asl
+        sta tmp
+        ldy rc_wrap
+        beq :+
+        adc sp                      ; C is clear: the asl's above shifted out zeros
+        lda sp+1
+        adc #(256 - >RINGEND)
+        bcs @s0slow
+:
+@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
+        jmpx @mt-2
+@s0slow:
+        lda @s0f+1
+        sta tp                      ; (@mslow's fill)
+        jmp @mslow
+  .endif
 @drawrow:
         inc rc_y                    ; the row this draws: nothing in @drawrow reads rc_y
         ; ---- screen base (per-rect ringaddr, +640 per row)
@@ -601,12 +642,10 @@ drawrect:
         ; it set on the loop back), so the sbc below needs no sec
 @run:
         ldx rc_gi
-        lda GATHERH,x               ; bit 6: a flat tile or a solid, filled not copied
-        sta tp+1                    ; it is also the tile pointer's high byte, so keep it
-        asl                         ; bit 6 to N; C = bit 7, set for every entry (a
-        bpl :+                      ; tile page is $80-$BF, a fill $C0 up): the sec holds
-        jmp @solid
-:       lda GATHERL,x               ; every tile is in bank 6, selected once per tile row
+        lda GATHERH,x               ; bit 7 clear: filled, not copied -- 0 the level's
+        bpl @fill                   ; solid (id 0), $40 up a flat tile or the other solid
+        sta tp+1                    ; a tile page, $80-$BF: the tile pointer's high byte
+        lda GATHERL,x               ; every tile is in bank 6, selected once per tile row
         and #7                      ; the kind: 0 a full tile, 4..6 a half, 3 a mirror
         beq @full
         and rowbit                  ; a half tile: is this row its fill?  (A mirror's 3
@@ -737,12 +776,12 @@ drawrect:
         rts
         ; ---- fills: a flat tile, a solid, a half tile's fill row -- no source bytes
   .if .not BHW
-        ; the Master's LV_PAGE0 splits them: high byte $C0, one byte down every line
-        ; (the low byte: a solid, or a flat whose pair is one byte) on a cascade that
-        ; stores A alone; $E0, a pair (the low byte indexes FLATTAB) on the pair's
+        ; the Master's LV_PAGE0 splits them: high byte $40, one byte down every line
+        ; (the low byte: the other solid, or a flat whose pair is one byte) on a cascade
+        ; that stores A alone; $60, a pair (the low byte indexes FLATTAB) on the pair's
         ; cascade (@spair)
 @sp2:   jmp @spair                 ; (out of bmi's reach below the cascade)
-@solid: asl                         ; (A = the high byte << 1: $C0 -> $80, $E0 -> $C0)
+@solid: asl                         ; (A = the high byte << 1, @fx's: $80 -> 0, $C0 -> $80)
         bmi @sp2
         lda GATHERL,x
         sta tp                      ; fill value (tp is otherwise unused on this path)
@@ -970,6 +1009,8 @@ drawrect:
         .assert @hp1 = @hp0 + 5, error, "HPAIR1 must be 5 bytes past HPAIR0"
 HPAIR0  := @hp0 + 1                 ; (the first := ends the @ scope: HPAIR1 goes by it)
 HPAIR1  := HPAIR0 + 5
+; (@s0f's operand, the solid's fill byte, is SOLIDF to the loader: build.sh finds the
+; label in cleo.dbg, which lists cheap labels -- a symbol here would end the scope)
 
 ; ============================================================================
 ; scroll_validate: make the current buffer hold the window (wcx, wcy), ROWCHARS x
@@ -3025,16 +3066,18 @@ gather5:
         bpl @gl
   .else
         ; the tiles are contiguous from TILES (page aligned, 64 bytes each), so the
-        ; address is arithmetic: no table beside them.  Ids from FLAT0 are fills -- a
-        ; flat tile is two bytes alternating down every char (FLATTAB, the loader's;
-        ; the two solids are the last two entries) -- flagged by bit 6 of the high
-        ; byte, the low byte indexing the pair.
+        ; address is arithmetic: no table beside them.  Id 0 (the level's solid) and
+        ; the ids from FLAT0 are fills, flagged by a high byte with bit 7 clear: 0 for
+        ; the solid, $40 for a flat tile -- two bytes alternating down every char, the
+        ; low byte indexing the pair in FLATTAB (the loader's; the two solids are its
+        ; last two entries, for a level's other solid).
         ; Between the full tiles and the flats are the HALF tiles (ids from half0,
         ; the loader's): one 32-byte char row stored at halfhi:00 + k*32, the other
         ; either a fill (its pair in HALFPAIR) or the same row again.  Their low byte
         ; carries the flags: bit 2 = a half, bit 0 = the top row is the fill, bit 1 the
         ; bottom (neither: both rows are the stored one).
         lda (ptr),y
+        beq @gsol                   ; id 0: the solid, a zero high byte (GATHERL unread)
         cmp #FLAT0
         bcs @gflat
         cmp half0
@@ -3054,10 +3097,14 @@ gather5:
         dey
         bpl @gl
         bmi @gdone
+@gsol:  sta GATHERH,y
+        dey
+        bpl @gl
+        bmi @gdone
 @gflat: sbc #FLAT0                  ; (C is set)
         asl
         sta GATHERL,y
-        lda #$C0
+        lda #$40                    ; a fill (the row loop's bpl), not the solid (0)
         sta GATHERH,y
         dey
         bpl @gl
