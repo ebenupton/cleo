@@ -180,6 +180,58 @@ for f in range(3):
     sprdir += bytes([item_index('tramp', f), 2, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255, (-8) & 255, 2 | 8, m.TRAMP_H * 2])
 assert len(sprdir) == 118 * 8
 
+# ---------------------------------------------------------------- placing for the loops
+# Each item's shape (columns, lines: the directory's), and how often a level draws it
+# (tools/drawfreq.json, test/drawfreq.mjs's: draws a frame by sprite id, both
+# machines averaged), for the placement that costs the sprite loops least (sprpack.py)
+import json
+sys.path.insert(0, HERE)
+import sprpack
+GEOM = {}                                   # item index -> (columns, lines)
+for i in range(118):
+    t = sprdir[i * 8:i * 8 + 8]
+    if t[0] != 0xFF:
+        GEOM[t[0]] = (t[2], t[7])
+try:
+    _freq = json.load(open(os.path.join(HERE, 'drawfreq.json')))
+except OSError:
+    _freq = {}
+ITEM_OF = {i: sprdir[i * 8] for i in range(118) if sprdir[i * 8] != 0xFF}
+MIRRORED_ID = {i for i in range(103) if m.entry[i] is not None and m.entry[i][1]}
+def weights(level):
+    """draws a frame by item index, forward and mirrored, for a level (None: the mean
+    over the levels)"""
+    ws = {}
+    for lk, per in _freq.items():
+        if level is not None and int(lk) != level:
+            continue
+        for sid, n in per.items():
+            sid = int(sid)
+            sid = sid - 15 if sid >= 118 else sid       # the "nothing disturbs it" aliases
+            it = ITEM_OF.get(sid)
+            if it is not None:
+                w = ws.setdefault(it, [0.0, 0.0])
+                w[1 if sid in MIRRORED_ID else 0] += n / (1 if level is not None else max(1, len(_freq)))
+    return ws
+SPRPACK_CACHE = os.path.join(BEEB, 'build', 'sprpack.cache')
+_cache = sprpack.load_cache(SPRPACK_CACHE)
+def chunk_items(keys_img, keys_mask, ws):
+    """sprpack items: each image, each mask, sized, weighted, costed"""
+    out_ = []
+    for key in keys_img:                    # (one table: the directions' tables, weighed)
+        W, Lh = GEOM[item_index(*key)]
+        f, r = ws.get(item_index(*key), (0.0, 0.0))
+        tf, tr = sprpack.image_table(W, Lh), sprpack.image_table(W, Lh, True)
+        tot = f + r
+        out_.append(dict(key=('i',) + key, size=len(item_bytes(*key)), w=tot or 0.001,
+                         table=[(f * a + r * b) / tot for a, b in zip(tf, tr)] if tot else tf))
+    for key in keys_mask:
+        W, Lh = GEOM[item_index(*key)]
+        f, r = ws.get(item_index(*key), (0.0, 0.0))
+        out_.append(dict(key=('m',) + key, size=len(m.img_mask[key[1]]), w=(f + r) or 0.001,
+                         table=sprpack.mask_table(W, Lh)))
+    return out_
+
 # The HUD's digits, 8 x 8 game px each (16 lines of 4 bytes, convert.py), are drawn
 # from four game-pixel patterns (the dither's two lines of one colour): a byte column
 # at one game row is two game px, a nibble (left << 2 | right).  A digit is 32 nibbles,
@@ -242,72 +294,13 @@ def cellbox(t, x, y, e):                    # level_init's gx0, gx1, gy, gy1, in
     elif t == 11: gy1 = gy
     return gx0, gx1, gy, gy1
 
-# ---------------------------------------------------------------- one level
-def pack_level(lv, sub):
+def place_sprites(lv, sub):
+    """The level's sprites: which images and boxes, each one's bank and a first
+    placement that fits (greedy, in regions after the resident block) -- the fill of
+    each region, the addresses, the banks, the items."""
     L = m.levels[(lv, sub)]
     name = m.name_of(lv, sub)
     cm = m.maps[(lv, sub)]
-    assert cm.min() >= 0
-    gset = m.tileset_of(lv, sub)
-    # the level's tiles: convert.py pack_tiles
-    T = m.pack_tiles(lv, sub)
-    local = T['local']
-    lut = np.zeros(len(m.compact), dtype=np.uint8)
-    for c, t in local.items():
-        lut[c] = t
-    mapb = lut[cm].tobytes()
-    h, w = cm.shape
-    specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
-
-    # ---- tables
-    hdr = bytearray([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1],
-                     len(L['objs']), 1])
-    for cid in specials:
-        hdr.append(local.get(cid, 255))
-    assert len(hdr) == 20
-    hdr += T['B']['hdr']                    # +20..+31: the tiles' shape (pack_tiles)
-    assert len(hdr) == 32
-    objs = bytearray()
-    reach = m.enemy_reach(L['objs'])
-    for (t, x, y, ex) in L['objs']:
-        e = (list(ex) + [0, 0, 0])[:3]
-        if t == 0:
-            e[0] = m.star_class(cm, x, y)
-            e[1] = 1 if m.star_reachable(x, y, reach) else 0
-        elif t == 1:
-            e[0] = m.tramp_class(cm, x, y)
-            b = m.TYPE_BOX[1]
-            selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
-            e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
-        objs += bytes([t, x, y] + e)
-    assert len(L['objs']) <= 149
-    attr = bytearray(256)
-    acls = bytearray(256)
-    for c in sorted(local):
-        t = local[c]
-        attr[t] = m.attr_of(c)
-        acls[t] = 0 if c in m.tile_solid else m.alt_class[c]
-
-    # ---- the sprite list's bounds: the objects whose cells the walk rectangle can
-    # cover from any camera position
-    boxes = []
-    for (t, x, y, ex) in L['objs']:
-        e = (list(ex) + [0, 0, 0])[:3]
-        boxes.append((t, cellbox(t, x, y, e)))
-    # (both machines' windows: one bound, so the tables it sizes lie alike on both)
-    rects = set()
-    for vl in VISLINES_ALL:
-        maxwx, maxwy = w * 8 - 160, h * 8 - vl // 2
-        for wx in range(0, maxwx + 1, 2):
-            for wy in range(0, maxwy + 1):
-                rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + vl // 2 - 1) >> 6))
-    MAXSPR, BINMAX = 0, 0
-    for (rx0, rx1, ry0, ry1) in rects:
-        hit = [t for (t, (gx0, gx1, gy, gy1)) in boxes if gx0 <= rx1 and gx1 >= rx0 and gy <= ry1 and gy1 >= ry0]
-        MAXSPR = max(MAXSPR, sum(SPRITES_OF[t] for t in hit) + 2)
-        BINMAX = max(BINMAX, sum(1 for t in hit if t == 0), sum(1 for t in hit if t != 0))
-
-    # ---- sprites: which images, and where each goes
     types = sorted(set(t for (t, x, y, e) in L['objs']))
     ids = set(range(43))                    # Cleo, the boomerang (27..33), the common ones:
                                             # through 42, the star's collect animation's end
@@ -392,6 +385,95 @@ def pack_level(lv, sub):
     if got is None:
         raise SystemExit('%s: sprites do not fit in any order tried' % name)
     fill, img_addr, mask_addr, img_bank = got
+    return fill, img_addr, mask_addr, img_bank, items0, regions, imgs
+
+def settle_level(level, img_addr, mask_addr, img_bank, regions):
+    """The placed items, reordered and padded within each region for the loops."""
+    ws = weights(level)
+    c0 = c1 = 0.0
+    for r, (lo, hi) in regions.items():
+        if hi <= lo:
+            continue
+        inr = lambda a: lo <= a < hi
+        keys_i = [k for k, a in img_addr.items() if inr(a) and (k[0], k[1]) not in RESIDENT]
+        keys_m = [k for k, a in mask_addr.items() if inr(a) and k not in RESIDENT]
+        if not keys_i and not keys_m:
+            continue
+        addr, b, a_, end = sprpack.optimise(chunk_items(keys_i, keys_m, ws), lo, hi, _cache)
+        c0 += b; c1 += a_
+        for k in keys_i: img_addr[k] = addr[('i',) + k]
+        for k in keys_m: mask_addr[k] = addr[('m',) + k]
+    return img_addr, mask_addr, c0, c1
+
+# ---------------------------------------------------------------- one level
+def pack_level(lv, sub):
+    L = m.levels[(lv, sub)]
+    name = m.name_of(lv, sub)
+    cm = m.maps[(lv, sub)]
+    assert cm.min() >= 0
+    gset = m.tileset_of(lv, sub)
+    # the level's tiles: convert.py pack_tiles
+    T = m.pack_tiles(lv, sub)
+    local = T['local']
+    lut = np.zeros(len(m.compact), dtype=np.uint8)
+    for c, t in local.items():
+        lut[c] = t
+    mapb = lut[cm].tobytes()
+    h, w = cm.shape
+    specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
+
+    # ---- tables
+    hdr = bytearray([L['lw'], L['lh'], L['start'][0], L['start'][1], L['exit'][0], L['exit'][1],
+                     len(L['objs']), 1])
+    for cid in specials:
+        hdr.append(local.get(cid, 255))
+    assert len(hdr) == 20
+    hdr += T['B']['hdr']                    # +20..+31: the tiles' shape (pack_tiles)
+    assert len(hdr) == 32
+    objs = bytearray()
+    reach = m.enemy_reach(L['objs'])
+    for (t, x, y, ex) in L['objs']:
+        e = (list(ex) + [0, 0, 0])[:3]
+        if t == 0:
+            e[0] = m.star_class(cm, x, y)
+            e[1] = 1 if m.star_reachable(x, y, reach) else 0
+        elif t == 1:
+            e[0] = m.tramp_class(cm, x, y)
+            b = m.TYPE_BOX[1]
+            selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
+            e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
+        objs += bytes([t, x, y] + e)
+    assert len(L['objs']) <= 149
+    attr = bytearray(256)
+    acls = bytearray(256)
+    for c in sorted(local):
+        t = local[c]
+        attr[t] = m.attr_of(c)
+        acls[t] = 0 if c in m.tile_solid else m.alt_class[c]
+
+    # ---- the sprite list's bounds: the objects whose cells the walk rectangle can
+    # cover from any camera position
+    boxes = []
+    for (t, x, y, ex) in L['objs']:
+        e = (list(ex) + [0, 0, 0])[:3]
+        boxes.append((t, cellbox(t, x, y, e)))
+    # (both machines' windows: one bound, so the tables it sizes lie alike on both)
+    rects = set()
+    for vl in VISLINES_ALL:
+        maxwx, maxwy = w * 8 - 160, h * 8 - vl // 2
+        for wx in range(0, maxwx + 1, 2):
+            for wy in range(0, maxwy + 1):
+                rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + vl // 2 - 1) >> 6))
+    MAXSPR, BINMAX = 0, 0
+    for (rx0, rx1, ry0, ry1) in rects:
+        hit = [t for (t, (gx0, gx1, gy, gy1)) in boxes if gx0 <= rx1 and gx1 >= rx0 and gy <= ry1 and gy1 >= ry0]
+        MAXSPR = max(MAXSPR, sum(SPRITES_OF[t] for t in hit) + 2)
+        BINMAX = max(BINMAX, sum(1 for t in hit if t == 0), sum(1 for t in hit if t != 0))
+
+    # ---- sprites: which images, and where each goes (place_sprites), then where in
+    # each region: the order and padding that cost the sprite loops least (sprpack)
+    fill, img_addr, mask_addr, img_bank, items0, regions, imgs = place_sprites(lv, sub)
+    img_addr, mask_addr, cost0, cost1 = settle_level(lv * 2 + sub, img_addr, mask_addr, img_bank, regions)
     placement = bytearray()
     for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0])):
         ma = mask_addr.get((kind, j), 0)
@@ -449,8 +531,48 @@ def pack_level(lv, sub):
     out('L%d' % (lv * 2 + sub), table + body)
     stats = dict(name=name, ntiles=T['ntiles'], nflat=T['nflat'], nhalf=T['nhalf'], nmir=T['nmir'], w=w, h=h, nobj=len(L['objs']),
                  nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],
-                 maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=off + len(body))
+                 maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=off + len(body), cost0=cost0, cost1=cost1)
     return stats
+
+# ---- the resident block, placed for the loops too: it may pad into the room the
+# fullest level leaves in each bank (the levels' first fit, before it moves)
+RESIDENT = set([('img', j) for j in COMMON] + [('tramp', f) for f in range(3)])
+_spare4 = _spare5 = 0x10000
+for lv in range(8):
+    for sub in (0, 1):
+        fill, *_rest, regions, _i = place_sprites(lv, sub)
+        _spare4 = min(_spare4, regions['r4'][1] - regions['r4'][0] - fill['r4'])
+        _spare5 = min(_spare5, regions['r6'][1] - regions['r6'][0] - fill['r6'])
+_wr = weights(None)
+def _resident(keys_i, keys_m, lo, budget):
+    size = sum(len(item_bytes(*k)) for k in keys_i) + sum(len(m.img_mask[k[1]]) for k in keys_m)
+    addr, b, a_, end = sprpack.optimise(chunk_items(keys_i, keys_m, _wr), lo, lo + size + budget, _cache)
+    blk = bytearray(end - lo)
+    for k in keys_i:
+        d = item_bytes(*k); blk[addr[('i',) + k] - lo:addr[('i',) + k] - lo + len(d)] = d
+    for k in keys_m:
+        d = m.img_mask[k[1]]; blk[addr[('m',) + k] - lo:addr[('m',) + k] - lo + len(d)] = d
+    return addr, blk, b, a_
+_a4, sprc4, _rb4, _ra4 = _resident([('img', j) for j in c4], [('img', j) for j in c4 if len(m.img_mask[j])],
+                                   B4_DATA[0], _spare4)
+_a5, sprc5, _rb5, _ra5 = _resident([('img', j) for j in c6] + [('tramp', f) for f in range(3)],
+                                   [('img', j) for j in c6 if len(m.img_mask[j])], C5_BASE, _spare5)
+for j in c4 + c6:
+    _a = _a4 if j in c4 else _a5
+    common_addr[j] = _a[('i', 'img', j)]
+    if len(m.img_mask[j]):
+        common_mask[j] = _a[('m', 'img', j)]
+for f in range(3):
+    tramp_addr[f] = _a5[('i', 'tramp', f)]
+COMMON_END = B4_DATA[0] + len(sprc4)
+C5_LEN = len(sprc5)
+assert COMMON_END <= B4_DATA[1] and C5_BASE + C5_LEN <= B5_DATA[1]
+sprc = sprc4 + sprc5
+out('SPRC', sprc)
+print('resident: bank 4 %d bytes (+%d padding), bank 5 %d (+%d); loops %.1f -> %.1f cycles a frame'
+      % (len(sprc4), len(sprc4) - sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c4),
+         len(sprc5), len(sprc5) - sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c6) - TRAMP_LEN,
+         _rb4 + _rb5, _ra4 + _ra5))
 
 allstats = []
 for lv in range(8):
@@ -458,9 +580,10 @@ for lv in range(8):
         s = pack_level(lv, sub)
         allstats.append(s)
         print('%-4s %3d tiles +%2d half +%2d mirror +%d flat map %3dx%2d rle %5d  %3d obj %2d img  '
-              'b4 %5d+%3d  b6 %5d+%3d+%3d  spr %2d bin %2d  file %5d'
+              'b4 %5d+%3d  b6 %5d+%3d+%3d  spr %2d bin %2d  file %5d  loops %.1f -> %.1f'
               % (s['name'], s['ntiles'], s['nhalf'], s['nmir'], s['nflat'], s['w'], s['h'], s['maprle'], s['nobj'], s['nimg'],
-                 s['r4'], s['h4'], s['r6'], s['h6'], s['s6'], s['maxspr'], s['binmax'], s['size']))
+                 s['r4'], s['h4'], s['r6'], s['h6'], s['s6'], s['maxspr'], s['binmax'], s['size'], s['cost0'], s['cost1']))
+sprpack.save_cache(_cache, SPRPACK_CACHE)
 
 MAXSPR = max(s['maxspr'] for s in allstats)
 BINMAX = max(s['binmax'] for s in allstats)

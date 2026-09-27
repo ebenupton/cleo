@@ -553,6 +553,21 @@ buffer is marked invalid (BUF_CX high byte $80) and redrawn whole.
 
 ## The sprites
 
+**Where they sit.**  A row of a sprite walks the column pointer across the image a
+column (`lines` bytes) at a time, and each page it crosses costs the carry path (9
+cycles; the mirrored walk's borrow, 7); the mask pointer does the same a group of four
+columns at a time.  So where each image and mask lies in its bank matters, and the
+packer places them for it (`tools/sprpack.py`): each level's images and masks, as
+separate items, are ordered and padded within their bank's run by a local search that
+minimises the expected carries (over the eight line phases a sprite can have), plus
+the reads that cross a page, weighted by how often the level draws each sprite forward
+and mirrored (`tools/drawfreq.json`, measured by `test/drawfreq.mjs` on both machines).
+The resident block is placed the same way, weighted by the mean over the levels, and
+may pad into the room the fullest level leaves.  The placement list tells the loader
+every item's image and mask address, so this needs nothing of the loader.  The search
+is deterministic and cached (`build/sprpack.cache`).  Cleo's images are 300-700 bytes,
+so their rows carry once whatever the placement: that is the floor.
+
 The sprite list (SPRLIST in low RAM: one array per field -- id, x and y in map pixels)
 is built by the logic, at most MAXSPR = 24.  Each buffer keeps a record per sprite
 drawn (10 bytes: id, position, the screen rectangle, whether it was clipped).
