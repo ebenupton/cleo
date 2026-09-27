@@ -76,10 +76,10 @@ fcA      = $A7                      ; xcall's A across the bank switch (low.s)
 .assert SECIDX < $F0, error, "zero page runs into the MOS's"
 
 ; ---------------------------------------------------------------- display
-  .if BHW                           ; (the Master's are engine.s's)
 LINE      = 64                      ; T1 ticks in one scanline
 BARCRTC   = BARADDR / 8
-CRTCB_A   = RING_A / 8
+  .if BHW
+CRTCB_A   = RING_A / 8              ; each buffer's ring base, as the CRTC counts
 CRTCB_B   = RING_B / 8
 ; CA1 fires at the end of the 2-line vsync pulse.  -35 would put each step ~5 us INTO
 ; its section; the further -36 puts it ~30 us BEFORE the restart, so the shape

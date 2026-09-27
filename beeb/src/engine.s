@@ -119,6 +119,8 @@ RINGEND   = RINGBASE + RINGBYTES
 ; inside the 40 lines between vsync and the first scanned bar line.
 BARADDR   = $2B00
 CRTCBASE  = RINGBASE / 8          ; the CRTC counts characters, so the ring starts here
+CRTCB_A   = CRTCBASE              ; each buffer's ring base, as the CRTC counts: one ring,
+CRTCB_B   = CRTCBASE              ; main and shadow (ACCCON D picks)
   .endif
 WINPX     = ROWCHARS*2            ; window width in pixels
 VISLINES  = VISROWS*8
@@ -264,9 +266,7 @@ spbank:    .res 1                   ; the bank drawsprite takes the images from
 halfhi:    .res 1                   ; the halves' page (the loader's), for @hfill
         .segment "ZPFD": zeropage   ; $FD-$FF
 MUSON:     .res 1                   ; the tune plays: the interrupt stub steps it
-  .if BHW
-crtcb:     .res 2                   ; build_sections: the buffer's CRTC base (display.s)
-  .endif
+crtcb:     .res 2                   ; build_sections: the buffer's CRTC base
         .zeropage
 
 ; ---------------------------------------------------------------- tables (uninitialised)
@@ -2372,161 +2372,217 @@ bar_bg:
         rts
 
 ; ============================================================================
-  .if .not BHW                   ; (Model B: its rupture chain is display.s)
-        .segment "LGCCODE"          ; bank 7, with the logic: this touches nothing but
-                                    ; main RAM and the CRTC
-; build_sections: fill SECTAB for the current buffer from ringS and wfine.
-; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi (T1 = duration of section i+1)
-;
-; The bar has a fixed home; the composed row and the playfield walk the ring.  A row
-; that straddles the ring end is folded by the CRTC, so the playfield is always one
-; section however the window sits.
 ; ============================================================================
-LINE = 64
-BARLEAD = 10                        ; us the bar's T1 fires early, beyond the lead every
-                                    ; step has, so ACCCON D can be switched in the
-                                    ; blanking of the bar's last line
-BARCRTC  = BARADDR / 8
-        .code
-        .segment "LGCCODE"          ; back to the bank
+; build_sections: fill SECTAB for the current buffer from ringS and wfine.
+; entry i: R12n, R13n, R4, R9, R6, R7, T1lo, T1hi.  The shape is section i's; the
+; address and duration are section i+1's, because R12/R13 latch at the next restart
+; and the T1 latch takes effect one interrupt later.
+;
+;   T   bar          2 rows, fixed home
+;   A   composed row 8-f lines, the fine scroll                (only when f > 0)
+;   P   playfield    VISROWS rows from the window's slot; the Model B's software
+;                    ring splits it at the ring's end (P1, then M from the mirror
+;                    below the ring base), the Master's CRTC folds its ring itself
+;   P2  bottom       f lines                                   (only when f > 0)
+;   Q   blanking     QROWS rows, vsync at row QVSYNC
+; ============================================================================
+  .if BHW
+BARLEAD = 0
+  .else
+BARLEAD = 10                        ; us the Master's bar step fires early, beyond the
+                                    ; lead every step has, so ACCCON D can be switched in
+                                    ; the blanking of the bar's last line (its handler)
+  .endif
+        .segment "LGCCODE"          ; bank 7, with the game loop
 build_sections:
-        lda curbuf
+        ldx curbuf                  ; the buffer's CRTC base (and the Model B's mirror
+        lda @cbl,x                  ; redirect: the same less the ring)
+        sta crtcb
+        lda @cbh,x
+        sta crtcb+1
+  .if BHW
+        lda @cml,x
+        sta crtcbm
+        lda @cmh,x
+        sta crtcbm+1
+  .endif
+        txa                         ; X = curbuf still (ldx curbuf above)
         asl
         tax
-        lda #>BARCRTC               ; section 0 is the bar: fixed address, fixed length
+        lda #>BARCRTC               ; section 0 is the bar: fixed address and length
         sta BUF_SEC0,x
         lda #<BARCRTC
         sta BUF_SEC0+1,x
-        lda #<(BARROWS*8*LINE-2-BARLEAD)   ; the bar's step fires early: see the ISR
+        lda #<(BARROWS*8*LINE-2-BARLEAD)
         sta BUF_SEC0T1,x
         lda #>(BARROWS*8*LINE-2-BARLEAD)
         sta BUF_SEC0T1+1,x
-        txa                         ; X = curbuf*2: Z iff curbuf = 0, and then X is 0
+        txa                         ; Z from X = curbuf*2
         beq :+
         ldx #48
-:       lda #1
+:       lda #BARROWS-1
         sta SECTAB+2,x
         lda #7
         sta SECTAB+3,x
-        lda #2
+        lda #BARROWS
         sta SECTAB+4,x
         lda #30
         sta SECTAB+5,x
         lda wfine
         beq @coarse
-        ; ---- f > 0 : T -> A (the partial row) -> P.. -> P2 -> Q
-        eor #7                      ; wfine is still in A from the test above
-        inca                        ; 8-f lines of it
-        jsr @dur
-        lda ringS                   ; section A shows the composed row: the ring row
-        sec                         ; above the window, ringS - 80 mod RINGCHARS
-        sbc #ROWCHARS
+        ; ---- f > 0: T -> A (the composed row) -> P.. -> P2 -> Q
+        lda ringS                   ; the composed row is the 80 chars above the window
+        sec
+        sbc #<ROWCHARS
         sta w16
         lda ringS+1
         sbc #0
-        bpl :+
-        adc #>RINGCHARS             ; went below 0: + RINGCHARS (whole pages; C clear)
+        bpl :+                      ; negative: C = 0 (the borrow), A = $FF
+        lda w16                     ; + RINGCHARS
+        adc #<RINGCHARS
+        sta w16
+        lda #>(RINGCHARS-$100)      ; $FF + >RINGCHARS + C
+        adc #0
 :       sta w16+1
         jsr @addr
-        txa
-        adc #8                      ; C = 0 out of @addr: its sum is under $1000
-        tax                         ; A's entry
-        stz SECTAB+2,x
         lda wfine
-        eor #7                      ; 7 - wfine, wfine in 0..7
-        sta SECTAB+3,x
+        eor #7                      ; 7 - f: A's R9
+        sta SECTAB+8+3,x
+        clc
+        adc #1                      ; 8-f lines of it
+        jsr @dur                    ; X = A's entry
+        stz SECTAB+2,x
         lda #2
         sta SECTAB+4,x
         lda #30
         sta SECTAB+5,x
-        lda ringS                   ; the run starts one row into the window
-        adc #ROWCHARS               ; C = 0 from the adc #8 above
+        lda ringS                   ; the run starts one row into the window (C = 0: @dur's adc #8)
+        adc #<ROWCHARS
         sta w16
         lda ringS+1
         adc #0
         sta w16+1
         jsr @wrap
+  .if BHW
+        ldy barq                    ; the ring row the run starts on
+        iny
+        cpy #RINGROWS
+        bcc :+
+        ldy #0
+:       sty tmp3
+  .endif
         lda #VISROWS-1
         sta tmp4                    ; rows in the run
-
-        bra @run
-@coarse:                            ; ---- f = 0 : T -> P.. -> Q
+        bne @run                    ; always: A = VISROWS-1
+@coarse:                            ; ---- f = 0: T -> P.. -> Q
         lda ringS
         sta w16
         lda ringS+1
         sta w16+1
         lda #VISROWS
         sta tmp4
-
-@run:   ; w16 = the run's ring offset, tmp4 = its rows, X = the entry of the section
-        ; before it.  Entry i carries section i+1's address and duration, and section
-        ; i's own R4/R9/R6/R7, so each section is written across two entries.
-        ; The run is never split: a row that straddles the ring end is folded by
-        ; the CRTC.
+  .if BHW
+        lda barq
+        sta tmp3
+  .endif
+@run:   ; w16 = the run's ring offset, tmp4 = its rows, X = the entry before it
+  .if BHW
+        ; rows of the run that end before the ring end: the run starts on
+        ; ring row tmp3; r = ringS mod 80 non-zero -> the last ring row straddles
+        ldy barq
+        lda ringS
+        sec
+        sbc mulrowlo,y              ; r
+        cmp #1                      ; C = 1 iff r > 0
+        lda #RINGROWS-1
+        bcs :+
+        adc #0                      ; r == 0: C is clear here, so this adds 1
+        adc #1
+:       sec
+        sbc tmp3
+        cmp tmp4
+        bcs @one                    ; the whole run fits
+        tay                         ; Z from A (Y is dead: @emit's @addr reloads it)
+        beq @one                    ; it starts inside the straddling row: all of it folds
+        sta tmp2
+        jsr @emit                   ; up to the ring end
+        lda tmp2
+        jsr @advance
         lda tmp4
+        sec
+        sbc tmp2
+        sta tmp4
+  .endif
+@one:   lda tmp4
         sta tmp2
         jsr @emit
-@past:  lda tmp4
+        lda tmp4
         jsr @advance                ; now the row below the playfield
-        jsr @addr                   ; P2, or else Q, starts on the row below the playfield
+        jsr @addr                   ; the row below the playfield: P2's start, or Q's
         lda wfine
         beq @sq2
-        ; --- P2 : the top f lines of that row
-        jsr @dur
-        txa
-        clc
-        adc #8
-        tax
-        stza SECTAB+2,x             ; stz abs,x
+        ; --- P2: the top f lines of that row
+        jsr @dur                    ; X = P2's entry
+        stz SECTAB+2,x              ; A dead: reloaded next
         lda wfine
-        deca
+        sbc #0                      ; C = 0 from @dur's adc #8: f - 1
         sta SECTAB+3,x
         lda #VISROWS
         sta SECTAB+4,x
         lda #30
         sta SECTAB+5,x
-        lda SECTAB-8,x              ; w16 has not moved since the P2 @addr above, so the
-        sta SECTAB,x                ; address it left in the previous entry is this one's
+        lda SECTAB-8,x              ; w16 has not moved: the address the P2 @addr left
+        sta SECTAB,x                ; in the previous entry is this one's too
         lda SECTAB-8+1,x
         sta SECTAB+1,x
-@sq2:   lda #<(40*LINE-2)
+@sq2:   txa
+        clc
+        adc #8
+        tax
+        lda #<(40*LINE-2)           ; the previous section's T1 and Q's
+        sta SECTAB-8+6,x
         sta SECTAB+6,x
-        sta SECTAB+8+6,x            ; Q's own entry (X+8) carries the same duration
         lda #>(40*LINE-2)
+        sta SECTAB-8+7,x
         sta SECTAB+7,x
-        sta SECTAB+8+7,x
-        lda #>BARCRTC               ; and hands the chain back to the bar
-        sta SECTAB+8,x
+        lda #>BARCRTC               ; Q hands the chain back to the bar
+        sta SECTAB,x
         lda #<BARCRTC
-        sta SECTAB+8+1,x
+        sta SECTAB+1,x
         lda #QROWS-1
-        sta SECTAB+8+2,x
+        sta SECTAB+2,x
         lda #7
-        sta SECTAB+8+3,x
-        stza SECTAB+8+4, x
+        sta SECTAB+3,x
+        lda #0
+        sta SECTAB+4,x
         lda #QVSYNC
-        sta SECTAB+8+5, x
+        sta SECTAB+5,x
+  .if BARLEAD
         ; the bar's step fired BARLEAD early, so the section after the bar -- whose
         ; duration entry 0 carries -- runs BARLEAD longer to end where it should
         ldx curbuf
         beq @e0
         ldx #48
 @e0:    lda SECTAB+6,x
-        adc #BARLEAD                ; C = 0: the last carry-writer was the adc #8 above
+        adc #BARLEAD                ; C = 0: the last carry-writer was @sq2's adc #8
         sta SECTAB+6,x
         bcc @e1
         inc SECTAB+7,x
-@e1:    rts
-; --- emit a run of tmp2 rows starting at w16 (a ring offset), following entry X
+@e1:
+  .endif
+        rts
+@cbl:   .byte <CRTCB_A, <CRTCB_B
+@cbh:   .byte >CRTCB_A, >CRTCB_B
+  .if BHW
+@cml:   .byte <(CRTCB_A-RINGCHARS), <(CRTCB_B-RINGCHARS)
+@cmh:   .byte >(CRTCB_A-RINGCHARS), >(CRTCB_B-RINGCHARS)
+  .endif
+; --- emit a run of tmp2 rows starting at ring offset w16, following entry X
 @emit:  jsr @addr
         lda tmp2
-        jsr @lines
-        txa
-        clc
-        adc #8
-        tax
+        jsr @lines                  ; X = the run's entry
         lda tmp2
-        deca
+        sbc #0                      ; C = 0 out of the adc: tmp2 - 1
         sta SECTAB+2,x
         lda #7
         sta SECTAB+3,x
@@ -2534,16 +2590,32 @@ build_sections:
         sta SECTAB+4,x
         sta SECTAB+5,x
         rts
-; --- SECTAB+0/1,x = the CRTC address for the row at ring offset w16.  Ring offsets are
-; 0..RINGCHARS-1 and CRTCBASE is $600, so the sum is always under $1000 and MA12 is
-; clear: a section's START address never needs folding.  The fold happens mid-scan, in
-; hardware, which is the whole reason the ring begins at $3000.
-        .assert <CRTCBASE = 0, error, "@addr adds the high byte only"
+; --- SECTAB+0/1,x = the CRTC address of the row at ring offset w16.  On the Model B a
+; row starting past RINGCHARS-80 straddles the ring end and is read from the mirror
+; below the base, which is exactly the address w16 - RINGCHARS names.
 @addr:  lda w16
+        ldy w16+1
+  .if BHW
+        cpy #>(RINGCHARS-ROWCHARS+1)
+        bcc :++
+        bne :+
+        cmp #<(RINGCHARS-ROWCHARS+1)
+        bcc :++
+:       clc
+        adc crtcbm
         sta SECTAB+1,x
-        lda w16+1
+        tya
+        adc crtcbm+1
+        sta SECTAB,x
+        rts
+:                                   ; (C = 0: both ways here are a bcc)
+  .else
         clc
-        adc #>CRTCBASE
+  .endif
+        adc crtcb
+        sta SECTAB+1,x
+        tya
+        adc crtcb+1
         sta SECTAB,x
         rts
         ; --- A = rows -> A/tmp3 = that many rows of lines, as a T1 count
@@ -2551,7 +2623,7 @@ build_sections:
         asl
         asl
         jmp @dur
-        ; --- A = rows: advance w16 by that many rows, folding into 0..RINGCHARS-1
+        ; --- A = rows: advance w16 by that many rows, folding into 0..RINGCHARS
 @advance:
         tay
         clc
@@ -2561,38 +2633,39 @@ build_sections:
         lda w16+1
         adc mulrowhi,y
         sta w16+1
-        ; fall through
-@wrap:  lda w16+1
+@wrap:                              ; A = w16+1: both ways in have just stored it
         cmp #>RINGCHARS
         bcc :++
         bne :+
         lda w16
         cmp #<RINGCHARS
         bcc :++
-:       lda w16
-        sec
+:       lda w16                     ; C = 1: both ways here
         sbc #<RINGCHARS
         sta w16
         lda w16+1
         sbc #>RINGCHARS
         sta w16+1
 :       rts
-; A = lines -> SECTAB+6/7,x = lines*64-2 (every caller stored it), A = tmp3 = hi
-@dur:   sta tmp3                    ; n*64 == (n*256)>>2: start from hi=n, lo=0 and
-        lda #0                      ; shift right twice instead of left six times
-        lsr tmp3
+        ; --- A = lines, X = an entry -> its T1lo/T1hi (SECTAB+6/7,x) = the T1 count
+        ; that lasts that long (tmp3 = the high byte); then X = the next entry (C = 0)
+@dur:   lsr                         ; n*64 == (n*256)>>2
+        sta tmp3
+        lda #0
         ror
         lsr tmp3
         ror
-        sbc #1                      ; C = 0 out of the ror pair, so this is A - 2
+        sbc #1                      ; C = 0 out of the ror pair: A - 2
         bcs :+
         dec tmp3
 :       sta SECTAB+6,x
         lda tmp3
         sta SECTAB+7,x
+        txa
+        clc
+        adc #8
+        tax
         rts
-
-  .endif
 
         .segment "TILCODE"     
 
