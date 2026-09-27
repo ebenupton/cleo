@@ -3203,15 +3203,20 @@ draw_dirty:
         stz DIRTYCNT,x              ; A is dead: both callers reload it at once
 @done:  rts
 
-  .if .not BHW                   ; (Model B: display.s, in bank 7)
-        .segment "CODE"
-
 ; ============================================================================
-; IRQ handling
+; The interrupt: the rupture chain's steps (T1) and the vsync.  One body, placed with
+; its state (PLACEH): the Master's handler itself, in main RAM (irq_handler, at
+; IRQ1V); the Model B's isr_body in bank 7, which the stub in low RAM (low.s
+; irq_handler) pages in around it, saving X and Y and stepping the title tune after.
 ; ============================================================================
+        PLACEH "CODE", "LGCCODE"
+  .if BHW
+isr_body:
+  .else
 irq_handler:
         stx irq_x
         sty irq_y
+  .endif
         bit VIA_IFR
         bvs @t1arm                  ; the T1 arm grew past bvc's reach: one cycle each way
         jmp @notT1
@@ -3224,7 +3229,8 @@ irq_handler:
         ; after the restart.  R6 is compared from scanline 1 on, so Q's R6 = 0 has
         ; the same deadline.  Everything else has a row or more to spare.  The chain is
         ; phased (VS2T) so the step fires ~50 cycles BEFORE the restart, the
-        ; hold below carries the first write past it, and the three deadline registers
+        ; hold below (the Master's; the Model B's stub takes as long) carries the first
+        ; write past it, and the three deadline registers
         ; then land about 40, 60 and 80 cycles in, with the rest behind them.  Writing
         ; R4 third put it at ~140 for a 2-line P2: that section never ended, Q's R6
         ; hit never came, and both borders lit up on every scroll frame.
@@ -3244,6 +3250,7 @@ irq_handler:
         beq @chain
         jmp @ldcheck                ; a load asked for, under way or ending: load_begin
 @chain: ldx SECIDX
+  .if .not BHW
         cpx DISPSECT                ; the first step is the start of the bar itself, which
         beq @noD                    ; is only main RAM to the CRTC while D = 0: leave it
         lda ACCCON
@@ -3253,6 +3260,7 @@ irq_handler:
 @noD:   ldy #5                      ; ~26 cycles: the first CRTC write must follow the
 @hold:  dey                         ; restart, and the step fires ahead of it
         bne @hold
+  .endif
         lda #9
         sta CRTC_IDX
         lda SECTAB+3,x
@@ -3292,10 +3300,15 @@ irq_handler:
         sta CRTC_IDX
         lda SECTAB+1,x
         sta CRTC_DAT
-@xit:   ldy irq_y                   ; @exit inlined: no jmp on the chain-step path
+@xit:
+  .if BHW
+        rts                         ; to the stub
+  .else
+        ldy irq_y                   ; @exit inlined: no jmp on the chain-step path
         ldx irq_x
         lda $FC
         rti
+  .endif
 @ldcheck:
         cmp #1
         bne @ldt1
@@ -3303,12 +3316,13 @@ irq_handler:
         cpx DISPSECT                ; makes the switch
         beq @ldsw
         jmp @chain
-@ldsw:  ; ---- this restart is a standard frame, not the bar: see load_begin.  The same
-        ; hold as the bar's, so R4 lands in the first scanline; R9 = 7 and R6 = BARROWS
-        ; are the vsync's pre-arm already, and R12/R13 hold the bar.
-        ldy #5
-@ldhold: dey
+@ldsw:  ; ---- this restart is a standard frame, not the bar: see load_begin.  R9 = 7
+        ; and R6 = BARROWS are the vsync's pre-arm already, and R12/R13 hold the bar.
+  .if .not BHW
+        ldy #5                      ; the same hold as the bar's, so R4 lands in the
+@ldhold: dey                        ; first scanline
         bne @ldhold
+  .endif
         lda #4
         sta CRTC_IDX
         lda #LDR4
@@ -3362,7 +3376,7 @@ irq_handler:
         sta CRTC_DAT
         lda #6                      ; pre-arm the bar's R6 now, in Q, where the display
         sta CRTC_IDX                ; is already off and a new R6 cannot show: the step
-        lda #BARROWS                ; ISR at the bar's start is too close to the second
+        lda #BARROWS                ; at the bar's start is too close to the second
         sta CRTC_DAT                ; scanline to be trusted with it
         lda #4
         sta CRTC_IDX
@@ -3383,9 +3397,11 @@ irq_handler:
         sta flipvs
         lda NEXTSECT
         sta DISPSECT
+  .if .not BHW
         lda NEXTBUF                 ; the flip is the section chain moving to the other
         sta dispD                   ; buffer's rows; D follows it, but only from the
-        stz flipreq                 ; first playfield section -- the bar needs D = 0
+  .endif                            ; first playfield section -- the bar needs D = 0
+        stz flipreq
 @noflip:
         ; everything section 0 needs comes from the buffer that is about to be
         ; displayed -- its start address (menu_sections moves it) and its length
@@ -3408,9 +3424,14 @@ irq_handler:
         lda #$40
         sta VIA_IFR
         sty SECIDX
+  .if .not BHW
         lda #1                      ; the bar is below $3000: it is only main RAM to the
         trb ACCCON                  ; CRTC while D = 0
+  .endif
 @sk:    jsr scan_keys
+  .if BHW
+        jmp sound_tick              ; (the stub steps the tune)
+  .else
         jsr sound_tick
         lda MUSTICK                 ; bank 6's menu overlay, stepped as the Model B's
         beq @exit                   ; interrupt stub does (low.s)
@@ -3429,14 +3450,21 @@ irq_handler:
         ldx irq_x
         lda $FC
         rti
+  .endif
 
 ; CA1 fires at the end of the 2-line vsync pulse.  -35 would put each step ~5 us INTO its
 ; section; the further -36 puts it ~30 us before the restart, so that the shape
-; registers land early in the first scanline -- see the chain step in irq_handler.
-VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 8 + 2   ; -8: the step's load-flag test; +2 (ticks): the
-                                    ; vsync handler loads it as immediates, 4 cycles sooner
-                                    ; than from memory
+; registers land early in the first scanline -- see the chain step above.  -8: the
+; step's load-flag test; +2 (ticks): the vsync loads it as immediates, 4 cycles sooner
+; than from memory.  The Model B's stub pages bank 7 in (through pagelogic, the write
+; bank too) before the body, which makes both the vsync's T1 restart and every step
+; later -- STUBLAT ticks in all -- where the Master's handler holds instead.
+  .if BHW
+STUBLAT = 18
+  .else
+STUBLAT = 0
   .endif
+VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - STUBLAT - 8 + 2
 
 ; ---------------------------------------------------------------- keyboard
         PLACEH "CODE", "LGCCODE"    ; the interrupt's own work: bank 7 with the Model B's

@@ -81,15 +81,6 @@ BARCRTC   = BARADDR / 8
   .if BHW
 CRTCB_A   = RING_A / 8              ; each buffer's ring base, as the CRTC counts
 CRTCB_B   = RING_B / 8
-; CA1 fires at the end of the 2-line vsync pulse.  -35 would put each step ~5 us INTO
-; its section; the further -36 puts it ~30 us BEFORE the restart, so the shape
-; registers land early in the section's first scanline.  The interrupt stub's bank
-; switch stands in for the hold the Master's handler has; it goes through pagelogic
-; (the write bank too), which makes both the vsync's T1 restart and every step ~23
-; cycles later -- 46 in all, 23 ticks -- and the -23 takes that back: R9 lands at
-; char 41-53 of the section's first scanline (measured).
-VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - 23 - 12 + 2   ; -12: the step's LOADREQ test and the
-                                    ; IER-masked entry; +2 (ticks): loaded as an immediate, 4 cycles sooner
   .endif
 
 ; ---------------------------------------------------------------- sideways RAM boards
