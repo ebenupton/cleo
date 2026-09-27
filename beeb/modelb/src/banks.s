@@ -128,7 +128,6 @@ lvreset:
         .segment "LGCLVL"           ; the level's tables, loaded by ldprog.s (the
 LV_ATTR0:   .res 256                ; objects go to main RAM: LV_OBJS, defs.inc)
 LV_ALTCLS:  .res 256                ; alt class by tile id
-LV_ATTR1 = LV_ALTCLS
 LV_HDR:     .res 32                 ; header: lw, lh, start, exit, nobj, the special
                                     ; tiles, gset, ntiles, maprow's shift
         .segment "LGCDATA"

@@ -463,12 +463,9 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
             % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
     f.write('TITLE_ADDR = $8900\n')         # bank 5, as the Master: over the map
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
-    f.write('HUD_BANK = 7\n')
-    f.write('SPR_BAR = 0\nSPR_FONT = font_art\n')
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
     f.write('SPR5_MIRROR = 0\n')            # bank 5 holds no image that is drawn mirrored
     f.write('SPR4_COPY = 0\n')              # and bank 4 nothing the copy blitter draws
     f.write('B4_DATA_END = $%04X\nB5_TOP = $%04X\nMAP5 = $%04X\n' % (B4_DATA[1], B5_TOP, MAP5))
     f.write('B4_CODE_END = $%04X\nB5_CODE_END = $%04X\n' % (B4_CODE_END, B5_CODE_END))
-    f.write('NIMGTAB = %d\n' % (NIMG + 15))
 print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))

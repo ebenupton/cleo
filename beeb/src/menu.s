@@ -4,9 +4,8 @@
 ; ============================================================================
         .segment "MNUCODE"      
 
-MENU_START = 0
+MENU_START = 0                      ; title_menu's result (game.s)
 MENU_HELP  = 1
-MENU_EXIT  = 2
 
 ; ---------------------------------------------------------------- text
 ; drawtext: ptr -> 0-terminated string, A = x (px, even), X = y (px, multiple of 4)

@@ -256,7 +256,6 @@ hiscore:  .res 2
 maxlevel: .res 1
 lastkeys: .res 1
 logicvs:  .res 1
-lsteps:   .res 1
 gridsh:   .res 1                  ; log2 of the collision grid width
 camoff:   .res 1                  ; window bias: px - camoff = window left (eased 40..120)
 

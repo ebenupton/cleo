@@ -413,24 +413,26 @@ lv_load:
         sbc #0
         tay
         ; ---- the tile shape, into banks 5 and 6 (read here, with bank 7 in)
-        lda LV_HDR+24
+        lda LV_HDR+27
+        sta sv_halfhi
+  .if BHW                           ; the arithmetic gather's (bank 5): the Master's
+        lda LV_HDR+24               ; gather is its table, LV_PAGE0
         sta sv_half0
-  .if TILEMIRROR
+   .if TILEMIRROR
         clc                         ; half0 - HALFOFF - 1: the gather's borrow (C clear
-  .else                             ; after its mirror test)
+   .else                            ; after its mirror test)
         sec                         ; half0 - HALFOFF (C set: no mirror test)
-  .endif
+   .endif
         sbc LV_HDR+28
         sta sv_halfsub
         lda LV_HDR+25
         sta sv_half1
         lda LV_HDR+26
         sta sv_half2
-        lda LV_HDR+27
-        sta sv_halfhi
-  .if TILEMIRROR
+   .if TILEMIRROR
         lda LV_HDR+29
         sta sv_mir0
+   .endif
   .endif
         lda PB_TILES
         jsr pgbank                  ; (X, Y kept)
@@ -443,6 +445,7 @@ lv_load:
 :       sty HPAIR1+1
         lda sv_halfhi
         sta halfhi                  ; (bank 6's: the row loop's @hfill)
+  .if BHW
         lda PB_MAP                  ; the gather's shape: bank 5, beside it (gather5)
         jsr pgbank
         lda sv_half0
@@ -455,13 +458,14 @@ lv_load:
         sta halfhi5
         lda sv_halfsub
         sta halfsub
-  .if TILEMIRROR
+   .if TILEMIRROR
         lda sv_mir0
         sta mir0
+   .endif
   .endif
         lda PB_LVL
         jsr pgbank
-  .if TILEMIRROR
+  .if BHW && TILEMIRROR
         ; ---- MIRTAB: each mirrored tile's source slot
         lda #10
         jsr section
@@ -758,14 +762,16 @@ tcopy:                              ; tile A of the staged file, its row C (or a
   .endif
 nfiles: .res 1                      ; (lv_load's: the set's file count,
 hdst:   .res 2                      ;  the next half's slot,
-sv_half0:   .res 1                  ;  the tile shape on its way to bank 6)
+sv_halfhi:  .res 1                  ;  the tile shape on its way to banks 5 and 6)
+mapend:     .res 1                  ; the page after the level's map (unrle)
+  .if BHW
+sv_half0:   .res 1
 sv_half1:   .res 1
 sv_half2:   .res 1
-sv_halfhi:  .res 1
 sv_halfsub: .res 1
-mapend:     .res 1                  ; the page after the level's map (unrle)
-  .if TILEMIRROR
+   .if TILEMIRROR
 sv_mir0:    .res 1
+   .endif
   .endif
 section:                            ; A = section 0..9 -> src = its start in the staged file
         asl                         ; (C = 0: A < 128)

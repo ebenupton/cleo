@@ -29,19 +29,10 @@ VIA_IER   = $FE4E
 VIA_ORANH = $FE4F
 UVIA_IER  = $FE6E
 
-OSWRCH    = $FFEE
-OSBYTE    = $FFF4
-OSFILE    = $FFDD
-OSGBPB    = $FFD1
-OSCLI     = $FFF7
 IRQ1V     = $0204
 ROMSEL_CPY= $F4
 
-SCREEN    = $3000
-BARBUF    = SPR_BAR               ; the bar template's span list: HUD_BANK (6), in the box-star file
-
 BANK_SPR  = 4
-BANK_TIL0 = 6
 BANK_TIL1 = 5
 BANK_TILES= 6                     ; every level's tile data now fits one bank
 BANK_LVL  = 7
@@ -159,7 +150,9 @@ K_FIRE  = 16
 
 ; ---------------------------------------------------------------- zero page
         .zeropage
+  .if BHW
 jv:       .res 2                  ; jmp (abs,x) has no 6502 form: it goes through here
+  .endif
 ptr:      .res 2                  ; general pointer
 tp:       .res 2                  ; tile/source pointer
 sp:       .res 2                  ; screen pointer
@@ -218,7 +211,6 @@ sp_r0:    .res 1
 sp_r1:    .res 1
 sp_ra0:   .res 1
 sp_ra1:   .res 1
-sp_col:   .res 2                  ; current column base pointer
 sp_rb:    .res 2                  ; screen address of the current row's first char
 sp_rp:    .res 2                  ; source pointer for the current row (col base + row offset)
 sp_rinc:  .res 1                  ; source bytes per row: 8 (full res) or 4 (half res)
@@ -299,7 +291,6 @@ BUF_SEC0T1: .res 4
 SECTAB:    .res 2*48
 SFXDUR:    .res 1
 LOADREQ:   .res 1                 ; 0 running, 1 stop asked, 2 stopped, 3 resume asked (load_begin)
-KEYSCAN:   .res 1
     .else
         .segment "TABLES"           ; the converged Master: the interrupt handler and its
 BUF_SEC0:  .res 4                   ; chain are the Master's, in main RAM, and so is
@@ -307,15 +298,12 @@ BUF_SEC0T1: .res 4                  ; what they keep
 SECTAB:    .res 2*48
 SFXDUR:    .res 1
 LOADREQ:   .res 1
-KEYSCAN:   .res 1
 dispD:     .res 1
 OLDIRQ:    .res 2
-OLDIER:    .res 1
 NEXTBUF:   .res 1
     .endif
         .segment "MNUBSS"           ; bank 6's menu overlay: the tune's player lives there
-MUSTMP:    .res 1                   ; (MUSON is in low RAM: the interrupt stub reads it)
-MUSDUR:    .res 1
+MUSDUR:    .res 1                   ; (MUSON is in low RAM: the interrupt stub reads it)
 MUSNOTE:   .res 3
 ISRT1:     .res 1
 ISRT2:     .res 1
@@ -3147,16 +3135,18 @@ fetch8:
         lda #>MAPBUF
         sta ptr+1
         rts
-        .segment "MAP5BSS"          ; the level's half and mirror shape (the loader's)
+        .segment "MAP5BSS"          ; the level's half and mirror shape (the loader's):
+  .if BHW                           ; the arithmetic gather's (the Master's is LV_PAGE0)
 half0:     .res 1                   ; the level's half tiles: first id, the two range
 half1:     .res 1                   ;   boundaries (bottom fills from half1, rowpairs
 half2:     .res 1                   ;   from half2), the halves' page (the loader's;
 halfhi5:   .res 1                   ;   bank 6 keeps its own halfhi for the row loop)
 halfsub:   .res 1                   ; half0 less the slot the first half takes in that
                                     ;   page: id - halfsub = the half's slot from the page
-  .if TILEMIRROR
+   .if TILEMIRROR
 mir0:      .res 1                   ; the first mirrored tile's id (the loader's)
 MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
+   .endif
   .endif
   .if BHW
         .assert * = B5_CODE_END, error, "bank 5's code must end where its sprites start: set B5_CODE_END in modelb/tools/assets.py"
@@ -3962,11 +3952,6 @@ mapput: pha
         pla
         sta (mapptr),y
         .assert * = pagelogic, error, "mapput falls into pagelogic"
-
-; the level's map row address table, from maplw (level_init's first job)
-        .segment "LGCCODE"
-init_maprows:                       ; the row address is arithmetic here (maprow,
-        rts                         ; maprow6): there is no table to build
 
 
 
