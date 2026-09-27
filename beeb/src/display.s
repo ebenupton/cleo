@@ -515,5 +515,5 @@ crtc_init:                          ; start the chain at the bar and let vsync r
 @val:   .byte <BARCRTC, >BARCRTC, 30, BARROWS, BARROWS-1, 7, $20, 0
 
         .segment "LGCBSS"
-crtcb:    .res 2                    ; the buffer being built: its CRTC base, and the
-crtcbm:   .res 2                    ; mirror redirect (base - RINGCHARS)
+crtcbm:   .res 2                    ; the buffer being built: its mirror redirect (base -
+                                    ; RINGCHARS; its CRTC base, crtcb, is zero page's)

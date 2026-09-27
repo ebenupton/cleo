@@ -36,8 +36,9 @@ reference, frame by frame:
     sh test/sweep.sh REF        # every level on both machines, the menus, the loads
 
 `test/bench.mjs` and `test/bwork2.mjs` measure frame cost on the Master and the
-Model B respectively, and `test/hbeebem/` runs the Model B in BeebEm, lock-stepped
-with jsbeeb.
+Model B respectively, `test/hotvars.mjs` counts every variable's accesses a frame
+(what zero page is worth), and `test/hbeebem/` runs the Model B in BeebEm,
+lock-stepped with jsbeeb.
 
 ## How it works
 

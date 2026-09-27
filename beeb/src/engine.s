@@ -248,6 +248,38 @@ keys:     .res 1                  ; current key bits
 seed:     .res 2
 SFXPTR:   .res 2
 MUSPTR:   .res 2
+  .if BHW                           ; the arithmetic gather's shape (gather5; the loader's,
+half0:     .res 1                   ; per level): the Model B's hottest scalars (the Master's
+half1:     .res 1                   ; gather is its table, LV_PAGE0).  The level's half
+half2:     .res 1                   ; tiles: first id, the two range boundaries (bottom
+halfhi5:   .res 1                   ; fills from half1, rowpairs from half2), the halves'
+halfsub:   .res 1                   ; page, and half0 less the first half's slot in it
+  .endif
+
+; ---------------------------------------------------------------- the MOS's zero page
+; $F0-$FF is the MOS's, but once the game has the machine only $F4 (ROMSEL's copy, which
+; the interrupt restores) and $FC (where the MOS's interrupt entry keeps A) are touched.
+; The rest holds the hottest scalars that were absolute (test/hotvars.mjs: a cycle and
+; a byte an access); start-up zeroes it (init.s).  Defined here, ahead of their uses,
+; so every access is assembled as zero page.
+        .segment "ZPF0": zeropage   ; $F0-$F3
+MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
+mapshr:    .res 1                   ; 8 - lw (maprow, maprow6): both the loader's
+MUSTICK:   .res 1                   ; a frame's tune step is due: the vsync's sound_tick
+        .segment "ZPF5": zeropage   ; $F5-$FB
+rowbit:    .res 1                   ; the char row being drawn, as a flag bit (1, 2)
+dpass:     .res 1                   ; draw_sprites' pass
+spclip:    .res 1                   ; set at every window edge a sprite is cut against
+NSTARL:    .res 1                   ; the cached bin walk's lengths: stars,
+NOTHL:     .res 1                   ;   everything else
+spbank:    .res 1                   ; the bank drawsprite takes the images from
+halfhi:    .res 1                   ; the halves' page (the loader's), for @hfill
+        .segment "ZPFD": zeropage   ; $FD-$FF
+MUSON:     .res 1                   ; the tune plays: the interrupt stub steps it
+  .if BHW
+crtcb:     .res 2                   ; build_sections: the buffer's CRTC base (display.s)
+  .endif
+        .zeropage
 
 ; ---------------------------------------------------------------- tables (uninitialised RAM $0400-$0CFF)
 ; Model B: main RAM is the screen, so each table lives in the bank of the code that
@@ -256,9 +288,7 @@ MUSPTR:   .res 2
 ; SWAPTAB in modelb/src/defs.inc); sprmul5 and the row tables are static too.
         .segment "TILBSS"           ; bank 6: the tile blitter's (the gather's arrays are
                                     ; low RAM's, its shape bank 5's: gather5)
-halfhi:    .res 1                   ; the halves' page (the loader's), for @hfill
-rowbit:    .res 1                   ; the char row being drawn, as a flag bit (1, 2)
-        ; bank 6 still, with the ring work that keeps it (init5 zeroes the segment)
+        ; bank 6, with the ring work that keeps it (init5 zeroes the segment)
 BUF_CY:    .res 2
 FLATTAB:   .res 2*(NFLAT+2)         ; the level's flat tiles: (even line, odd line) by
                                     ; id - FLAT0, the loader's; the solids are the last two
@@ -268,7 +298,6 @@ DIRTYLIST: .res 2*2*DIRTYMAX
 BUF_CX:    .res 4                   ; (bank 7 invalidates a buffer: high byte $80)
 BUF_BOTOK: .res 2                   ; the slot below the playfield is black: scroll_validate
                                     ; (bank 6) clears it, blank_below (bank 7) sets it
-spbank:    .res 1
 DIRTYCNT:  .res 2                   ; (the game loop)
 PBANK:     .res 4                   ; the physical bank of each of banks 4..7 (the loader's:
                                     ; cpu.inc -- read by what the loader cannot patch)
@@ -278,12 +307,8 @@ PBOARD:    .res 1                   ; and the board: BOARD_STD / WATFORD / SOLID
 SPRREC:    .res 2*MAXREC*10
 RECCNT:    .res 2
 KEEP:      .res MAXREC
-dpass:     .res 1
-spclip:    .res 1
         .segment "LGCBSS"           ; bank 7: the logic's, the display driver's and
 BINR:      .res 4                   ; the interrupt's
-NSTARL:    .res 1
-NOTHL:     .res 1
 BINOK:     .res 1
     .if BHW
 BUF_SEC0:  .res 4
@@ -3136,14 +3161,8 @@ fetch8:
         sta ptr+1
         rts
         .segment "MAP5BSS"          ; the level's half and mirror shape (the loader's):
-  .if BHW                           ; the arithmetic gather's (the Master's is LV_PAGE0)
-half0:     .res 1                   ; the level's half tiles: first id, the two range
-half1:     .res 1                   ;   boundaries (bottom fills from half1, rowpairs
-half2:     .res 1                   ;   from half2), the halves' page (the loader's;
-halfhi5:   .res 1                   ;   bank 6 keeps its own halfhi for the row loop)
-halfsub:   .res 1                   ; half0 less the slot the first half takes in that
-                                    ;   page: id - halfsub = the half's slot from the page
-   .if TILEMIRROR
+  .if BHW                           ; the arithmetic gather's (the Master's is LV_PAGE0;
+   .if TILEMIRROR                   ; half0-halfsub are zero page's: engine.s)
 mir0:      .res 1                   ; the first mirrored tile's id (the loader's)
 MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
    .endif

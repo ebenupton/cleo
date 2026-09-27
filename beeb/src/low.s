@@ -143,11 +143,8 @@ mirlo:    .res 2                    ; and which chars of it (in slot chars, 0..7
 mirhi:    .res 2
 mirwcx:   .res 2                    ; the wcxm the copy was made for
   .endif
-; the level's shape, set by the loader: read from banks 5 and 7
-mapshr:   .res 1                    ; 8 - lw (maprow, maprow6)
-MAPSTRIDE: .res 2                   ; bytes per map row (1 << lw): drawrect's row step
-MUSON:    .res 1                    ; the tune plays: the interrupt stub steps it
-MUSTICK:  .res 1                    ; a frame's step is due: the vsync's sound_tick says so
+; (the level's shape, mapshr and MAPSTRIDE, and the tune's MUSON and MUSTICK are
+; zero page's: engine.s)
 sprc_ok:  .res 1                    ; the resident sprites (SPRC) are in bank 4, and (the
 sprx_ok:  .res 1                    ;  converged Master) SPRX in HAZEL/ANDY: ldprog.s
 title_res: .res 1                   ; the menu overlay and the title pack are in banks 5
