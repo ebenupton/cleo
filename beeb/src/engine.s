@@ -380,6 +380,28 @@ n2:     tax
 ; byte alone.  A = high byte after moving forward, folded back into the ring.
 ; The cmp leaves the carry set on the path that reaches the sbc, so the fold needs
 ; no sec of its own whatever the caller was holding.
+.macro ringtest cold                ; A = a high byte just moved forward: to cold if it
+  .if ::BHW                        ; has run off the ring's end (ringfold there, out of
+        cmp ringehi                 ; line; the common case falls through)
+        bcs cold
+  .else
+        bmi cold                    ; RINGEND = $8000: N from A
+  .endif
+.endmacro
+.macro ringfold p                   ; ringup's fold, for ringtest's cold path: A back into
+  .if ::BHW                        ; the ring, p's low byte with it (the Model B)
+        sbc #>RINGBYTES             ; C = 1 from ringtest's compare
+        pha
+        lda p
+        sbc #<RINGBYTES
+        sta p
+        pla
+        sbc #0
+  .else
+        sec
+        sbc #>RINGBYTES
+  .endif
+.endmacro
 .macro ringup p                     ; p names the pointer whose high byte A holds;
   .if ::BHW                        ; the Master's fold never needs it
         cmp ringehi                 ; the buffer's ring end, high byte (select_backbuf)
@@ -579,11 +601,17 @@ drawrect:
         sta ptr+1
         jmp @rowy
 @done:  rts
-        ; ---- a fill, from @run's bpl (here, behind @drawrow, in its reach): the other
-        ; fills to @solid; id 0, the level's solid, to @sol0
-@fill:  bne @fx                     ; (Z from @run's load: 0 is the level's solid)
-        jmp @sol0
+        ; ---- @run's rarer ways, here behind @drawrow in its branches' reach: a fill
+        ; other than the solid (to @solid), a half tile
 @fx:    jmp @solid                  ; (C is set: set at every entry to @run)
+@half:  and rowbit                  ; a half tile: is this row its fill?  (A mirror's 3
+        beq @hcopy                  ; is: @hfill tells them apart)
+        jmp @hfill
+@hcopy: lda GATHERL,x               ; no: the stored row -- (k&7)<<5 with this run's
+        eor rowoff                  ; char offset less the row's 32: rowoff's bits
+        and #$E0                    ; outside $E0 through the two eors
+        eor rowoff
+        jmp @tpsta
 @drawrow:
         inc rc_y                    ; the row this draws: nothing in @drawrow reads rc_y
         ; ---- screen base (per-rect ringaddr, +640 per row)
@@ -609,20 +637,53 @@ drawrect:
         ; it set on the loop back), so the sbc below needs no sec
 @run:
         ldx rc_gi
-        lda GATHERH,x               ; bit 7 clear: filled, not copied -- 0 the level's
-        bpl @fill                   ; solid (id 0), $40 up a flat tile or the other solid
-        sta tp+1                    ; a tile page, $80-$BF: the tile pointer's high byte
+        lda GATHERH,x               ; bit 7 set: a tile page ($80-$BF), copied; clear, a
+        bmi @tile                   ; fill: 0 the level's solid, on through (the commonest
+        bne @fx                     ; run), $40 up a flat tile or the other solid
+        ; ---- id 0, the level's solid, the commonest run: one byte, the loader's
+        ; (SOLIDF), stored down every line of it
+@sol0:  lda #4                      ; (C is set at every entry to @run)
+        sbc rc_subc                 ; chars in this run, as @tpset
+        cmp cnt
+        bcc :+
+        lda cnt
+:       sta rc_n
+        asl
+        tax
+        asl
+        asl
+        sta tmp
+        ldy rc_wrap
+        bne @swrap                  ; the run may cross the ring end: checked out of line
+@sdisp:
+  .if BHW
+        lda @mt-2,x                 ; jmpx less its pha/pla
+        sta jv
+        lda @mt-1,x
+        sta jv+1
+@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
+        jmp (jv)
+  .else
+@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
+        jmpx @mt-2
+  .endif
+@swrap: adc sp                      ; C is clear: the asl's above shifted out zeros
+        lda sp+1
+  .if BHW
+        adc ringneg
+  .else
+        adc #(256 - >RINGEND)
+  .endif
+        bcc @sdisp
+@s0slow:                            ; a run across the ring end (once a row at most): the
+        lda @s0f+1                  ; pair cascade's char-at-a-time copy, as a pair
+        sta tp
+        sta tp+1
+        jmp @fslow
+@tile:  sta tp+1                    ; the tile pointer's high byte
         lda GATHERL,x               ; every tile is in bank 6, selected once per tile row
         and #7                      ; the kind: 0 a full tile, 4..6 a half, 3 a mirror
-        beq @full
-        and rowbit                  ; a half tile: is this row its fill?  (A mirror's 3
-        beq @hcopy                  ; is: @hfill tells them apart)
-        jmp @hfill
-@hcopy: lda GATHERL,x               ; no: the stored row -- (k&7)<<5 with this run's
-        eor rowoff                  ; char offset less the row's 32: rowoff's bits
-        and #$E0                    ; outside $E0 through the two eors
-        eor rowoff
-        bcs @tpsta                  ; (always: C is set at every entry to @run)
+        bne @half
 @full:  lda GATHERL,x
         ora rowoff                  ; (a full tile's lo byte is (id&3)<<6: bits 0-5 clear)
 @tpsta: sta tp
@@ -640,16 +701,8 @@ drawrect:
         asl
         sta tmp                     ; bytes
         ldy rc_wrap
-        beq :+                      ; row cannot cross the ring end: no per-run check
-        adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
-        lda sp+1
-  .if BHW
-        adc ringneg                 ; 256 - >RINGEND for the buffer being drawn
-  .else
-        adc #(256 - (>RINGEND))     ; = adc #$80: C set iff sp+1+C >= >RINGEND
-  .endif
-        bcs @slow
-:
+        bne @twrap                  ; the row may cross the ring end: checked out of line
+@tdisp:
   .if BHW
         lda @jt-2,x                 ; jmpx less its pha/pla: every @b entry
         sta jv                      ; loads A before it reads it
@@ -660,6 +713,14 @@ drawrect:
         jmpx @jt-2
   .endif
 @jt:    .word @b7, @b15, @b23, @b31
+@twrap: adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
+        lda sp+1
+  .if BHW
+        adc ringneg                 ; 256 - >RINGEND for the buffer being drawn
+  .else
+        adc #(256 - (>RINGEND))     ; = adc #$80: C set iff sp+1+C >= >RINGEND
+  .endif
+        bcc @tdisp                  ; (else on into @slow)
 @slow:  ; a run that crosses the ring end: copy a char at a time through the fold.  It
         ; sits beside its test so that a branch reaches it (at most once per row).
 @sc:    ldy #7                      ; X = 2*rc_n (@tpset's tax) counts the chars down
@@ -717,10 +778,7 @@ drawrect:
 @advsp: lda sp
         adc tmp                     ; C is already clear at every entry to @advsp
         sta sp
-        bcc :+
-        inc sp+1                    ; no ringup: both entries to @advsp have already
-                                    ; proved the run stays below RINGEND (rc_wrap).
-:
+        bcs @advc                   ; (the carry out of line, after @rowdone)
 @runend:
         lda cnt
         sec
@@ -738,9 +796,14 @@ drawrect:
         sta rc_sp
         lda rc_sp+1
         adc #>ROWBYTES
-        ringup rc_sp
+        ringtest @rfold             ; (the fold out of line)
         sta rc_sp+1
         rts
+@rfold: ringfold rc_sp
+        sta rc_sp+1
+        rts
+@advc:  inc sp+1                    ; no ringup: both entries to @advsp have already
+        jmp @runend                 ; proved the run stays below RINGEND (rc_wrap)
   .if TILEMIRROR                    ; (cpu.inc: off by default -- no level needs a mirror)
         ; ---- a mirrored full tile: its source's chars right to left, each byte's two
         ; game pixels swapped -- ((b & $33) << 2) | ((b & $CC) >> 2); the dither is per
@@ -836,23 +899,16 @@ drawrect:
         asl
         sta tmp
         ldy rc_wrap                 ; test without destroying A (= 8*rc_n)
-        beq :+
-        adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
-        lda sp+1
+        bne @fwrap                  ; the run may cross the ring end: checked out of line
+@fdisp:
   .if BHW
-        adc ringneg
-  .else
-        adc #(256 - >RINGEND)
-  .endif
-        bcs @fslow                  ; (@fslow sits before the cascade: in reach on both)
-  .if BHW
-:       lda @ft-2,x                 ; jmpx @ft-2 less its pha/pla, and no load: A is
+        lda @ft-2,x                 ; jmpx @ft-2 less its pha/pla, and no load: A is
         sta jv                      ; dead, every entry is a FIL1, which loads tp+1
         lda @ft-1,x
         sta jv+1
         jmp (jv)
   .else
-:       jmpx @ft-2
+        jmpx @ft-2
   .endif
 @ft:    .word @f7, @f15, @f23, @f31
 ; the pair: even lines tp, odd lines tp+1 -- each byte loaded once a char and stored
@@ -878,6 +934,14 @@ drawrect:
         ldy #8*c+1
         sta (sp),y
 .endmacro
+@fwrap: adc sp                      ; C is clear: the asl's above shifted out zeros (rc_n <= 4)
+        lda sp+1
+  .if BHW
+        adc ringneg
+  .else
+        adc #(256 - >RINGEND)
+  .endif
+        bcc @fdisp                  ; (else on into @fslow)
 @fslow: lda rc_n
         sta tmp2
 @fsc:   PCHAR 0
@@ -891,46 +955,6 @@ drawrect:
 @f7:    PCHAR 0
         jmp @advsp
 
-        ; ---- id 0, the level's solid: one byte, the loader's (SOLIDF), stored down every
-        ; line of the run
-@sol0:  lda #4                      ; (C is set at every entry to @run)
-        sbc rc_subc                 ; chars in this run, as @tpset
-        cmp cnt
-        bcc :+
-        lda cnt
-:       sta rc_n
-        asl
-        tax
-        asl
-        asl
-        sta tmp
-        ldy rc_wrap
-        beq :+
-        adc sp                      ; C is clear: the asl's above shifted out zeros
-        lda sp+1
-  .if BHW
-        adc ringneg
-  .else
-        adc #(256 - >RINGEND)
-  .endif
-        bcs @s0slow
-:
-  .if BHW
-        lda @mt-2,x                 ; jmpx less its pha/pla
-        sta jv
-        lda @mt-1,x
-        sta jv+1
-@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
-        jmp (jv)
-  .else
-@s0f:   lda #0                      ; SOLIDF: the fill, stored alone
-        jmpx @mt-2
-  .endif
-@s0slow:                            ; a run across the ring end (once a row at most): the
-        lda @s0f+1                  ; pair cascade's char-at-a-time copy, as a pair
-        sta tp
-        sta tp+1
-        jmp @fslow
 @mt:    .word @m7, @m15, @m23, @m31
 .macro MFIL k
         ldy #k
