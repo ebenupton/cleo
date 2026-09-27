@@ -2,7 +2,7 @@
 ; CLEO - menus, title, help, level select, win/lose, pause  (LOGIC segment: bank 7;
 ; Model B: bank 6's menu overlay, MNUCODE, loaded over the tiles for the menus)
 ; ============================================================================
-        PLACE "LOGIC", "MNUCODE"
+        .segment "MNUCODE"      
 
 MENU_START = 0
 MENU_HELP  = 1
@@ -134,9 +134,6 @@ draw_glyph_rows:
         beq :+
         jmp @row                    ; (the 6502 spellings put @row out of a branch's reach)
 :       rts
-  .if .not MODELB
-font_art:   .incbin "build/FONT"         ; the menus' 40 glyphs, 8 bytes each (tools/convert.py)
-  .endif
 font_blank: .res 8, 0               ; the erase glyph ('_' in a string)
 pairtab: .byte $00, $33, $CC, $FF    ; logical 3 (yellow) on both dots of a game px
 
@@ -180,14 +177,7 @@ load_title:
         jsr m_blank_palette
         lda title_res
         bne :+
-  .if .not MODELB
-        jsr load_begin              ; the chain stops at a frame boundary meanwhile
-        lda #FI_TITLE
-  .endif
         jsr m_loadfile              ; (Model B: the overlay and the pack, disc.s, which
-  .if .not MODELB                   ;  stops the chain itself)
-        jsr load_end
-  .endif
         inc title_res
 :       rts
 
@@ -229,15 +219,10 @@ menu_begin:
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stz curbuf                  ; (A is dead: build_sections loads it)
-  .if MODELB
         jsr m_build_sections        ; bank 7's menu_sections (the far table's F_BUILDSECT)
     .if .not BHW
         stz NEXTBUF                 ; (the converged Master: its handler's flip reads it)
     .endif
-  .else
-        jsr menu_sections           ; build_sections, the bar section pointed off the bar
-        stz NEXTBUF
-  .endif
         stz NEXTSECT
         inc flipreq                 ; 0 -> 1: every way in has waited for it to clear
 :       lda flipreq
@@ -638,11 +623,7 @@ draw_number:
         ; convert t16 to decimal (5 digits, leading zeros suppressed) into numbuf
         ldy #4
 @d:
-  .if MODELB
         jsr m_div10_16
-  .else
-        jsr div10_16
-  .endif
         ora #'0'                    ; A = the remainder (= q1); Y survives the call
         sta numbuf,y
         dey
@@ -689,14 +670,7 @@ l7:         .byte "NEFERTITI", 0
 str_score:  .byte "SCORE", 0
 str_hiscore:.byte "HISCORE", 0
 
-  .if .not MODELB                   ; (Model B: spbank in bank 6, menurec in bank 7 with the
-        .zeropage                   ;  prologue, title_res in low RAM)
-spbank:    .res 1
-        .segment "TABLES"
-menurec:   .res 10
-  .else
         .segment "MNUBSS"
-  .endif
 numbuf:    .res 8
 menuptr:   .res 2                  ; menu_list's table (read through its own operands)
 tchar:     .res 1                  ; drawtext's place in the string
@@ -706,8 +680,5 @@ mstep:     .res 1
 msel:      .res 1
 mclear:    .res 1
 mlast:     .res 1                  ; item index the cursor was last drawn at
-  .if .not MODELB
-title_res: .res 1                  ; title pack resident in bank 5
-  .endif
 tx:        .res 1
 ty:        .res 1

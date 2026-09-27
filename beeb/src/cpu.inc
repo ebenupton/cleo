@@ -19,16 +19,14 @@
 ; mtmp is zero page scratch the expansions own; nothing that runs in the interrupt
 ; may use inca/deca/bitimm/ldazy (the interrupt paths are audited free of them).
 ; ============================================================================
-        .ifndef MODELB
-MODELB = 0
-        .endif
-; MODELB is the Model B's STRUCTURE: code in the sideways banks with the data it reads,
-; far calls, the level gathered into the banks at load.  BHW is its HARDWARE: a 6502,
+; One structure, two machines: code in the sideways banks with the data it reads,
+; the level gathered into the banks at load.  BHW is the Model B's HARDWARE: a 6502,
 ; one screen of main RAM (two software rings with mirror rows), the 8271 or Acorn
-; 1770, the write-select boards.  A Master can take the structure alone: MODELB=1 with
-; BHW=0 (modelb/build.sh TARGET=master, "the converged Master").
+; 1770, the write-select boards.  BHW=0 is the Master's: 65C02, the hardware-wrapped
+; ring in main and shadow RAM, its interrupt handler in main RAM, its 1770
+; (modelb/build.sh TARGET=master).
         .ifndef BHW
-BHW = MODELB
+BHW = 1
         .endif
 ; TILEMIRROR: the tile blitter can draw a tile mirrored from another's bytes, and the
 ; packer (tools/convert.py) mirrors the least-used tiles while a level is short of room
@@ -38,17 +36,7 @@ BHW = MODELB
 TILEMIRROR = 0
         .endif
 
-; PLACE a, b: the segment a routine goes in -- a on the Master, b on the Model B,
-; whose code is split across four sideways banks by the data it reads.
-.macro PLACE mseg, bseg
-  .if ::MODELB
-        .segment bseg
-  .else
-        .segment mseg
-  .endif
-.endmacro
-
-.macro PLACEH mseg, bseg              ; the same by HARDWARE: the interrupt handler's own
+.macro PLACEH mseg, bseg              ; the segment by HARDWARE: the interrupt handler's own
   .if ::BHW                             ; work, which is in bank 7 with the Model B's
         .segment bseg                   ; handler and in main RAM with the Master's
   .else
@@ -75,11 +63,8 @@ TILEMIRROR = 0
 ; would end the enclosing routine's @ scope; so two sites in one routine need
 ; different names (bankimm's is the operation and the bank -- a clash is a duplicate
 ; symbol at assembly, not a silent miss).
-  .if ::MODELB
         .import __LOWCODE_LOAD__: absolute, __LOWCODE_RUN__: absolute
-  .endif
 .macro BANKREF name, b
-  .if ::MODELB
         .ident(.concat("@bf_", name)):
         .pushseg
         .segment "BANKFIX"
@@ -91,14 +76,11 @@ TILEMIRROR = 0
         .word .ident(.concat("@bf_", name)) - 1
     .endif
         .popseg
-  .endif
 .endmacro
 .macro bankimm op, n, b, tag
-  .if ::MODELB
     .if .blank(b)
         .error "bankimm: the Model B needs the bank the code is in"
     .endif
-  .endif
         op #n
   .if .blank(tag)
         BANKREF .sprintf("%s_%d", .string(op), n), b
@@ -159,11 +141,7 @@ TILEMIRROR = 0
   .endif
 .endmacro
 .macro ldpbank op, n
-  .if ::MODELB
         op PBANK + (n - 4)
-  .else
-        op #n
-  .endif
 .endmacro
 
   .if .not ::BHW

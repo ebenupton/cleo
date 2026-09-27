@@ -5,7 +5,7 @@
 ; RAM (low.s), the rupture chain (display.s), the banks' tables and data (banks.s)
 ; and the start-up (init.s).  See DESIGN.md.
 ; ============================================================================
-        .include "cpu.inc"          ; -D MODELB=1 on the command line
+        .include "cpu.inc"          ; (-D BHW=0: the Master)
         .include "defs.inc"
         .include "engine.s"
         .include "logic.s"

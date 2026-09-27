@@ -219,10 +219,6 @@ O_DL    = O_CH + OBJN
 O_DH    = O_DL + OBJN
 O_EL    = O_DH + OBJN
 O_EH    = O_EL + OBJN
-  .if .not MODELB                  ; (Model B: labels in bank 5, page aligned)
-LV_MAPROWLO = $8300               ; bank 5: 256 : tile row -> map row address (the
-LV_MAPROWHI = $8400               ;   level's map piece: convert.py)
-  .endif
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)
         .zeropage
@@ -302,7 +298,7 @@ mapptr  = $D9                     ; 2 bytes
 q1x     = $DB
 rise    = $DC                     ; 2 bytes
 
-        PLACE "LOGIC", "LGCCODE"
+        .segment "LGCCODE"      
 
 ; ============================================================================
 ; Map queries.  The map is in bank 5 with the row tables and the row-page table,
@@ -438,9 +434,6 @@ gettileattr:
 ; Level initialisation (level pack already loaded in bank 7)
 ; ============================================================================
 level_init:
-  .if .not MODELB
-        jsr init_maprows            ; main RAM: the row tables live with the map
-  .endif                            ; (Model B: none -- the row address is arithmetic)
         ; header
         lda LV_HDR+2
         jsr @x8
@@ -3248,7 +3241,7 @@ ob_switch:
 ; ============================================================================
 ; Status bar digits (drawn straight into the bar, from HUD_BANK's digit art)
 ; ============================================================================
-        PLACE "CODE", "LGCCODE"     ; Model B: bank 7, with the digits and the bar art
+        .segment "LGCCODE"          ; Model B: bank 7, with the digits and the bar art
 ; draw digit A at bar pixel column X (even), digit slot Y (0..8): copies a 64-byte digit
 ; tile into the bar image.
 ;
@@ -3267,9 +3260,6 @@ bar_digit:
         sta BARCACHE,y
         lsr                         ; C = d bit0, A = d >> 1
         sta w16+1
-  .if .not MODELB
-        setbank HUD_BANK            ; (lda #/sta/sta: C survives)
-  .endif
         lda #0
         sta ptr+1                   ; for the x * 4 below (sta keeps C)
         ror                         ; A = d0 << 7
@@ -3306,9 +3296,6 @@ bar_digit:
         sta (ptr),y
         dey
         bpl :-
-  .if .not MODELB
-        setbank BANK_LVL, BANK_LVL
-  .endif
 bd_same:
         rts
 
@@ -3379,7 +3366,7 @@ div10_16:
         sta q1
         rts
 
-        PLACE "LOGIC", "LGCCODE"
+        .segment "LGCCODE"      
 ; ============================================================================
 ; Sound effect ids
 ; ============================================================================

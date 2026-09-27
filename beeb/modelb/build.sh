@@ -9,16 +9,16 @@ cd "$(dirname "$0")"
 # and shadow RAM, the Master's interrupt handler and chain in main RAM, its 1770 --
 # into buildm/cleom.ssd (src/cpu.inc: MODELB=1, BHW=0).
 if [ "$TARGET" = master ]; then
-    BD=buildm; CPU=65C02; DEFS="-D MODELB=1 -D BHW=0"; CFG=cleo_m.cfg; SSD=cleom; BARADDR='$2B00'
+    BD=buildm; CPU=65C02; DEFS="-D BHW=0"; CFG=cleo_m.cfg; SSD=cleom; BARADDR='$2B00'
 else
-    BD=build; CPU=6502; DEFS="-D MODELB=1"; CFG=cleo_b.cfg; SSD=cleob; BARADDR='$0300'
+    BD=build; CPU=6502; DEFS=""; CFG=cleo_b.cfg; SSD=cleob; BARADDR='$0300'
 fi
 # TILEMIRROR=1 builds the tile blitter's mirrored tiles (src/cpu.inc), which move the
 # tiles up a page: the converter (tools/convert.py) and the linker areas follow it
 if [ "$TILEMIRROR" = 1 ]; then DEFS="$DEFS -D TILEMIRROR=1"; else TILEMIRROR=0; fi
 export BD TARGET TILEMIRROR
 mkdir -p $BD
-[ -n "$SKIP_ASSETS" ] || python3 tools/assets.py
+[ -n "$SKIP_ASSETS" ] || { python3 ../tools/midi2snd.py && python3 tools/assets.py; }   # (assets.py runs ../tools/convert.py)
 sed "s#\"build/#\"$BD/#g" $CFG > $BD/game.cfg
 [ "$TILEMIRROR" = 1 ] && sed -i.bak 's#start = \$8000, size = \$0600#start = $8000, size = $0700#; s#start = \$8600, size = \$3A00#start = $8700, size = $3900#; s#start = \$8000, size = \$02D0#start = $8000, size = $0310#' $BD/game.cfg
 
