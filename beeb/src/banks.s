@@ -99,12 +99,12 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
         .segment "TILCODE"
 mirdirty6:
         MIRDIRTY_BODY
-        .segment "LGCCODE"
+        .segment "ENGCODE"
 mirdirty:
         MIRDIRTY_BODY
   .endif
 
-        .segment "LGCCODE"          ; (bank 7's per-level clear: load_level's, and boot's)
+        .segment "ENGCODE"          ; (the engine's per-level clear: load_level's)
 lvreset:
         lda #$80                    ; both buffers invalid: an unreachable window x
         sta BUF_CX+1                ; (scroll_validate redraws them whole)
@@ -140,6 +140,7 @@ LV_BNEXT:   .res 256                ; to 255 of them
 LV_BINSTAR: .res BINMAX
 LV_BINOTH:  .res BINMAX
         .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"
+        .segment "ENGBSS"           ; the engine's: the sprite directory
 SPRMASK:    .res 2*BOXID0           ; mask plane address by sprite id (the boxes, from
                                     ; BOXID0, have none): the loader's, read by the
                                     ; prologue (this bank)

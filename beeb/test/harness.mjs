@@ -53,11 +53,11 @@ const WRAP = 2_000_000;        // cpu.currentCycles wraps at 2e6 (cycleSeconds t
 // debug file says which bank each label is in (by its segment), so a PC break waits
 // for that bank to be paged ($F4, ROMSEL's copy) and a state read pages it first.
 const SEGBANK = [[/^SPR4/, 4], [/^(SPR5|MAP5)/, 5], [/^TIL/, 6],
-                 [/^(COMMON7|LGC|MNU|KRN)/, 7]];
-// Bank 7 below its kernel holds one of two images, the game's (LGC*) or the menus'
+                 [/^(COMMON7|LGC|ENG|MNU|KRN)/, 7]];
+// Bank 7 below its kernel holds one of two images, the game's (LGC*, ENG*) or the menus'
 // (MNU*), and the kernel's ld_img says which (disc.s load_image): a break in either
 // waits for that image as well as the bank.
-const SEGIMG = [[/^LGC/, 0], [/^MNU/, 1]];
+const SEGIMG = [[/^(LGC|ENG)/, 0], [/^MNU/, 1]];
 export function loadBanks(dbgFile) {
   if (!existsSync(dbgFile)) return null;
   const segBank = new Map(), segImg = new Map(), byName = new Map(), byPc = new Map(), imgByName = new Map(), imgByPc = new Map();

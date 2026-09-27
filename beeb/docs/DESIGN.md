@@ -55,10 +55,12 @@ Page crossings are placed, not left to chance.  In banks 4-6 the Model B's code 
 ordered so that its hot branches stay in their page (the sprite loops' rarer paths and
 dispatch table sit after the blitters); the Master spends its shorter code's room on
 pads (`src/pads.inc`, the `PAD` macro) before the blitters, found with
-`test/pagecheck.py`, which lists every branch that crosses a page.  In bank 7 a `PAD`
-keeps `copy_partial`'s and `blank_below`'s loops each in a page.  LGCBSS is page
-aligned, so the crossings of its tables' indexed reads do not move with the code in
-front of it.  `SAMEPAGE` asserts the hot loops' branches at link time;
+`test/pagecheck.py`, which lists every branch that crosses a page.  In bank 7 two
+pads keep `copy_partial`'s and `blank_below`'s loops each in a page: the engine's
+code ends at the kernel on the Model B, so its pad (PADB_BB) is after them and places
+what is before it; the Master's runs on from the Model B's start, so its pad
+(PADM_CP) is before them.  LGCBSS and ENGBSS are page aligned, so the crossings of
+their tables' indexed reads do not move with anything in front of them.  `SAMEPAGE` asserts the hot loops' branches at link time;
 `test/cycprof.mjs` measures what the branches and crossings cost a frame.
 
 The level files, the sprites, the tile set and the bar template are on the disc once
@@ -79,18 +81,17 @@ It is off by default: no level needs it.
 
 | Range | Use |
 |---|---|
-| $00-$A2 | the ZEROPAGE segment (engine and logic scalars; the linker caps it at $A2): ends $A1 on the Model B, $9A on the Master |
-| $A3-$A6 | fixed (defs.inc): NSPR, BARDIRTY, BINI, SFXREQ ($A7 free) |
-| $A8-$DE | the logic's temporaries (logic.s); LDPROG reuses $A8-$B8 during a load |
-| $DF-$EF | fixed (defs.inc): mtmp (cpu.inc's scratch), the Model B's ring and mirror state (ringbhi, ringehi, ringe3, ringneg, mrow, wcxm, rstar), the sprite prologue's hand-over (sp_disp, sp_mpg0, sp_mh, sp_mrp, sp_mbase), curR7, SECIDX |
-| $F0-$FF | the MOS's zero page, but $F4 and $FC: the hottest scalars |
+| $00-$77 | the engine's (ZEROPAGE): defs.inc's (NSPR, BARDIRTY, SFXREQ, mtmp -- cpu.inc's scratch --, the ring and mirror state, the sprite prologue's hand-over, curR7, SECIDX), then engine.s's; LDPROG's 17 bytes (LDZP) are the sprite prologue's scratch, dead during a load |
+| $78-$7E | the Model B's own, the engine's (ZPHW: `jv`, the gather's shape); a gap on the Master |
+| $7F-$EC | the game's (ZPGAME): BINI (defs.inc), then logic.s's state, `seed` and its temporaries ($ED-$EF free) |
+| $F0-$FF | the MOS's zero page, but $F4 and $FC: the engine's hottest scalars |
 
 Once the game has the machine only two of the MOS's zero-page bytes are still touched:
 $F4, the MOS's copy of ROMSEL, which the interrupt restores from, and $FC, where the
 MOS's interrupt entry keeps A (every handler returns with `lda $FC / rti`).  The rest,
 in segments ZPF0 ($F0-$F3), ZPF5 ($F5-$FB) and ZPFD ($FD-$FF), holds scalars that were
 absolute and are among the most accessed (`test/hotvars.mjs` counts them): MAPSTRIDE,
-mapshr, MUSTICK, rowbit, dpass, spclip, NSTARL, NOTHL, spbank, halfhi, MUSON, and on
+mapshr, MUSTICK, rowbit, dpass, spclip, NSTARL, NOTHL, halfhi, MUSON, and on
 the Model B crtcb.  `boot` zeroes them.  On the Model B the arithmetic gather's shape
 (half0-2, halfhi5, halfsub) and `jv`, the vector the 6502's `jmp (abs,x)` goes
 through, are in the ZEROPAGE segment.
@@ -217,11 +218,14 @@ while the other is in: what both need is the kernel's.
 
 | Range | Model B | Master |
 |---|---|---|
-| **the game's image** (GAME) | | |
+| **the game's image** (GAME): the game's first, the engine's up against the kernel | | |
 | LGCLVL: LV_ATTR0, LV_ALTCLS (256 each), LV_HDR (32), loaded | $8000-$821F | same |
-| LGCDATA: LV_ALTTAB, the HUD digits | $8220-$8327 | same |
-| LGCCODE | $8328-$A23F | $8328-$A05F |
-| LGCBSS, page aligned (zeroed as the image comes in) | $A300-$B5C0 | same |
+| LGCBSS, page aligned: the game's variables | $8300-$8EF8 | same |
+| ENGBSS, page aligned: the engine's variables | $8F00-$95C7 | same |
+| free | $95C8-$9700 | same |
+| LGCDATA: LV_ALTTAB, the HUD digits (the file GAME starts here) | $9701-$9808 | same |
+| LGCCODE: the game's code | $9809-$B011 | $9809-$AFAC |
+| ENGCODE: the engine's bank 7 code, ending at the kernel | $B012-$B6FF | $B012-$B5AF |
 | **or the menus' image** (MENU) | | |
 | MNUCODE: the menus, the title's loop, the tune's player, the pieces' unpack and copy | $8000-$870C | $8000-$86E1 |
 | MNUDATA: the tune, the font, the title pieces (run-length) | $870D-$A57A | same |
@@ -233,13 +237,19 @@ while the other is in: what both need is the kernel's.
 | KRNBSS: the disc driver's and the swap's variables | $BEC4-$BED2 | same |
 | LGCHW (the Model B): SECTAB, BUF_SEC0, BUF_SEC0T1, LOADREQ, page aligned | $BF00-$BF6B | -- |
 
-LGCCODE is the logic, the game loop from `level_loop`, `render_frame` and
-`render_core`, the sprite prologue (`drawsprite`), `draw_sprites`, `match_sprites`,
-`erase_old`, `copy_partial`, `blank_below`, `mark_dirty`, `draw_dirty`, the HUD and
-on the Model B `mirror_copy`.  LGCBSS is the object state (16 arrays of OBJN = 149,
-the collision grid, its chains and the bin walk lists), SPRMASK and SPR_TABLE (the
-level's sprite directory, 118 entries of 8 bytes), the sprite records (SPRREC,
-RECCNT, KEEP) and the dirty lists.  KRNCODE is `build_sections`, `menu_sections`,
+The game's image is laid out for the engine to come apart from the game: the game's
+variables, then the engine's; the game's code and data, then the engine's code,
+which ends at the kernel -- `build.sh` sets the file's start from the Model B's
+segment sizes (`od65`, before any link), so the engine's code sits where its own
+size puts it, whatever the game's is (the Master's, pinned to the Model B's start,
+runs on from there and falls short).  LGCCODE is the game: the logic, the game loop
+from `level_loop`, the HUD (`bar_bg`, `bar_digit`), `rnd`.  ENGCODE is `render_frame`
+and `render_core`, the sprite prologue (`drawsprite`), `draw_sprites`,
+`match_sprites`, `erase_old`, `copy_partial`, `blank_below`, `mark_dirty`,
+`draw_dirty`, `lvreset`, and on the Model B `mirror_copy`.  LGCBSS is the object
+state (16 arrays of OBJN = 149, the collision grid, its chains and the bin walk
+lists); ENGBSS is SPRMASK and SPR_TABLE (the level's sprite directory, 118 entries of
+8 bytes), the sprite records (SPRREC, RECCNT, KEEP) and the dirty lists.  KRNCODE is `build_sections`, `menu_sections`,
 `calc_ring`, `ringaddr7`, `load_begin`/`load_end`, the palette, `music_stop`,
 `div10_16`, the disc driver and the swap, and on the Model B the interrupt's work
 (`isr_body`, `scan_keys`, `sound_tick`, the sound effects: the Master's handler has

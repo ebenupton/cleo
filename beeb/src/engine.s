@@ -190,7 +190,8 @@ irq_y:    .res 1
 ; sprite draw
 spx:      .res 2
 spy:      .res 2
-sp_ptr:   .res 2
+LDZP:                             ; (the loader's zero page, 17 bytes: ldprog.s -- the
+sp_ptr:   .res 2                  ;  prologue's scratch below is dead while a load runs)
 sp_w:     .res 1
 sp_lines: .res 1
 sp_ext:   .res 1                  ; height in scanlines (2*lines for half-res)
@@ -213,9 +214,9 @@ sp_row:   .res 1
 sp_c:     .res 1
 sp_lim:   .res 1
 sp_cnt:   .res 1                  ; sprite column countdown
-                                  ; the segment stops at $A3 (the cfgs), so the mask
-                                  ; walk aliases zp the blit no longer needs; the rest
-                                  ; of it is fixed zp (defs.inc: sp_mh, sp_mrp...)
+        .assert sp_rp - LDZP >= 17, error, "the loader's zero page runs past the prologue's scratch"
+                                  ; the mask walk aliases zp the blit no longer needs;
+                                  ; the rest of it is defs.inc's (sp_mh, sp_mrp...)
 mptr    = w16                    ; this column group's mask bytes, one per pixel row
 mtab    = tmp3                    ; MASKTAB page for this column's phase (tmp3 = 0, tmp4 = page)
 sp_msk  = tmp4c8                  ; the AND mask of the pair being drawn
@@ -239,7 +240,6 @@ vsyncs:   .res 1                  ; counted by the vsync interrupt
 flipreq:  .res 1                  ; 1 = flip pending
 flipvs:   .res 1
 keys:     .res 1                  ; current key bits
-seed:     .res 2
 SFXPTR:   .res 2
 MUSPTR:   .res 2
   .if BHW                           ; the arithmetic gather's shape (gather5; the loader's,
@@ -284,7 +284,7 @@ crtcb:     .res 2                   ; build_sections: the buffer's CRTC base
 BUF_CY:    .res 2
 FLATTAB:   .res 2*(NFLAT+2)         ; the level's flat tiles: (even line, odd line) by
                                     ; id - FLAT0, the loader's; the solids are the last two
-        .segment "LGCBSS"           ; bank 7: mark_dirty and draw_dirty are there
+        .segment "ENGBSS"           ; bank 7: mark_dirty and draw_dirty are there
 DIRTYLIST: .res 2*2*DIRTYMAX
         .segment "LOWBSS"           ; main RAM: the buffers' state bank 7 reads too
 BUF_CX:    .res 4                   ; (bank 7 invalidates a buffer: high byte $80)
@@ -295,13 +295,10 @@ PBANK:     .res 4                   ; the physical bank of each of banks 4..7 (t
                                     ; cpu.inc -- read by what the loader cannot patch)
 PBOARD:    .res 1                   ; and the board: BOARD_STD / WATFORD / SOLIDISK (defs.inc),
                                     ; right after PBANK (boot copies the five together)
-        .segment "LGCBSS"           ; bank 7: the sprite prologue's records
+        .segment "ENGBSS"           ; bank 7: the sprite prologue's records
 SPRREC:    .res 2*MAXREC*10
 RECCNT:    .res 2
 KEEP:      .res MAXREC
-        .segment "LGCBSS"           ; bank 7: the logic's, the display driver's and
-BINR:      .res 4                   ; the interrupt's
-BINOK:     .res 1
     .if BHW
         .segment "LGCHW"            ; (after the shared: on the Master these are TABLES')
 BUF_SEC0:  .res 4
@@ -1093,7 +1090,7 @@ scroll_validate:
 ; ============================================================================
 ; Persistent sprite records.  match_sprites: KEEP[i] = new sprite i identical to record i
 ; ============================================================================
-        .segment "LGCCODE"          ; bank 7, with the records
+        .segment "ENGCODE"          ; bank 7, with the records
 match_sprites:
         ldx curbuf
         txa                         ; an invalid buffer (BUF_CX high byte $80: a level
@@ -1170,7 +1167,7 @@ match_sprites:
 @done:  rts
 
 ; erase_old: redraw tiles under old records that are not kept
-        .segment "LGCCODE"          ; bank 7, with the records (the rects it redraws
+        .segment "ENGCODE"          ; bank 7, with the records (the rects it redraws
 erase_old:                          ; go to bank 6's drawrect_clip through callbank)
         ldx curbuf
         lda RECCNT,x
@@ -1220,7 +1217,7 @@ erase_old:                          ; go to bank 6's drawrect_clip through callb
 ; Sprites
 ; ============================================================================
 ; add sprite to draw list: A = id, spx/spy = map px
-        .segment "LGCCODE"          ; bank 7, with the logic that calls it
+        .segment "ENGCODE"          ; bank 7, with the logic that calls it
 addsprite:
         ldx NSPR
         cpx #MAXSPR
@@ -1238,7 +1235,7 @@ addsprite:
 @full:  rts
 
 ; draw all listed sprites into current buffer (skipping unchanged kept ones)
-        .segment "LGCCODE"          ; bank 7, with the prologue and the records
+        .segment "ENGCODE"          ; bank 7, with the prologue and the records
 draw_sprites:
         ; Two passes.  A box star is an opaque rectangle with its background baked in,
         ; so it has to go down before anything that shares its space -- drawn in list
@@ -1309,7 +1306,7 @@ draw_sprites:
 ; draw one sprite: A = id ; spx, spy = map px (ref point)
 ; The directory is the level's, in bank 7 at SPR_TABLE (ldprog.s); the data is in
 ; bank 4, or bank 5 when the entry's flag bit 4 is set.
-        .segment "LGCCODE"          ; bank 7, with the records and SPRMASK
+        .segment "ENGCODE"          ; bank 7, with the records and SPRMASK
 drawsprite:
   .if BHW
         ldx #0                      ; X is dead on entry
@@ -2208,8 +2205,9 @@ sprdisp_tab: .word sprFN, sprFN, sprFN, sprFN
 ; copy_partial: copy lines wfine..7 of ring row wcy into lines 0..(7-wfine) of the
 ; ring row above the window (the "A" section's source), all 80 columns.
 ; ============================================================================
-        .segment "LGCCODE"          ; bank 7, beside render_core
-        PAD 52, 10                  ; (copy_partial's loop, blank_below's: each in a page)
+        .segment "ENGCODE"          ; bank 7, beside render_core
+        PAD 0, ::PADM_CP            ; (copy_partial's loop, blank_below's: each in a page
+                                    ;  -- the Master's, whose code runs on from the start)
 copy_partial:                       ; the whole row, every frame the fine scroll is not 0
         lda wfine                   ; (tracking the columns drawn since the last copy
         bne :+                      ;  saves under 0.3% of a frame: measured)
@@ -2337,7 +2335,7 @@ copy_partial:                       ; the whole row, every frame the fine scroll
 ; the map's bottom row it is whatever that never-drawn slot last held.  So when the
 ; window sits on the bottom row, blank the slot, once per buffer per arrival.
 ; ============================================================================
-        .segment "LGCCODE"          ; bank 7, beside render_core
+        .segment "ENGCODE"          ; bank 7, beside render_core
 blank_below:
         lda wfine
         bne @no
@@ -2372,24 +2370,9 @@ blank_below:
         SAMEPAGE *, @char
 @no:    rts
 @fold:  spcold @fback
+        PAD ::PADB_BB, 0            ; (the Model B's bank 7 code ends at the kernel: what
+                                    ;  is above this pad places the two loops over it)
 
-; ============================================================================
-; bar_bg: the bar has a fixed home outside the ring, so it stays put however the
-; window scrolls and is only written when its contents change (in the ring it would
-; move with every vertical scroll: 1280 bytes to copy again, 13,310 cycles).  Its
-; template (icons, labels, blank digit slots) is the BAR file, which the
-; loader puts in place with the title (ldprog.s) and nothing redraws.  The template
-; buries the digits, so this resets the digit cache: its "already drawn" values are
-; no longer true.  One bar, one cache: not one per buffer.
-; ============================================================================
-        .segment "LGCCODE"
-bar_bg:
-        ldx #8
-        lda #$FF
-@bci:   sta BARCACHE,x
-        dex
-        bpl @bci
-        rts
 
 ; ============================================================================
 ; ============================================================================
@@ -2754,7 +2737,7 @@ select_backbuf:
 @rhi:   .byte >SPRREC, >(SPRREC+MAXREC*10)
 
 ; render everything queued for the current back buffer and request flip
-        .segment "LGCCODE"          ; bank 7, with the game loop
+        .segment "ENGCODE"          ; bank 7, with the game loop
 render_frame:
         jsr wait_flip               ; the previous frame's flip must land before this
                                     ; buffer is touched
@@ -2864,7 +2847,7 @@ load_end:                           ; (with interrupts off: disc.s)
         sta VIA_IFR                 ; stale.  A vsync flag raised meanwhile is stale too
         rts
 
-        .segment "LGCCODE"          ; bank 7 drives the frame and keeps the records; bank
+        .segment "ENGCODE"          ; bank 7 drives the frame and keeps the records; bank
 render_core:                        ; 6 gets two fixed calls a frame (low RAM's selbb and
         jsr selbb                   ; validate) and the rects through callbank
         jsr calc_ring
@@ -3146,7 +3129,7 @@ calc_ring:
 ; ============================================================================
 ; dirty tiles: redraw changed map tiles (both buffers keep their own list)
 ; ============================================================================
-        .segment "LGCCODE"          ; bank 7, with the logic that calls it
+        .segment "ENGCODE"          ; bank 7, with the logic that calls it
 mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lists)
         sta tmp
         stx tmp2
@@ -3174,7 +3157,7 @@ mark_dirty:                         ; A = tx, X = ty  (adds to both buffers' lis
         sta BUF_CX+1,y
         bne @next                   ; (always)
 
-        .segment "LGCCODE"          ; bank 7 (drawrect_clip through callbank)
+        .segment "ENGCODE"          ; bank 7 (drawrect_clip through callbank)
 draw_dirty:
         ldx curbuf
         lda DIRTYCNT,x
@@ -3812,7 +3795,7 @@ mapput: pha
 
 
 ; sign extend A -> tmp3 (0 or $FF)
-        .segment "LGCCODE"          ; (its one caller is the sprite prologue: bank 7)
+        .segment "ENGCODE"          ; (its one caller is the sprite prologue: bank 7)
 sext:   and #$80
         beq :+
         lda #$FF
@@ -3876,16 +3859,4 @@ ringaddr7:
   .endif
         ringup sp
         sta sp+1
-        rts
-; ============================================================================
-; Random
-; ============================================================================
-        .segment "LGCCODE"     
-rnd:    lsr seed+1
-        ror seed
-        bcc :+
-        lda seed+1
-        eor #$B4
-        sta seed+1
-:       lda seed
         rts

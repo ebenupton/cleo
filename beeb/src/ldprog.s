@@ -38,18 +38,19 @@ PB_LVL     = PBANK + 3
 ; (defs.inc BOARD_*): the game's code was patched for it at boot, this program reads
 ; PBOARD and does it by hand -- pgbank pages the bank in A (X, Y kept), wrx sets the
 ; write bank to the socket in X.  Not hot: a load makes a few dozen switches.
-; zero page: the logic's transient temps, which a load may clobber
-src   = $A8                         ; 2
-dst   = $AA                         ; 2
-cnt   = $AC                         ; 2
-tmp   = $AE
-tmp2  = $AF
-ent   = $B0                         ; 2: the directory entry / placement entry
-lp    = $B2                         ; 2: list pointer
-item  = $B4
-fnum  = $B5                         ; the shared file being walked
-tbase = $B6                         ; 2: the level file's section table
-nt    = $B8
+; zero page: the engine's LDZP, 17 bytes of the sprite prologue's scratch, which
+; nothing needs across a load (engine.s)
+src   = LDZP                        ; 2
+dst   = LDZP + 2                    ; 2
+cnt   = LDZP + 4                    ; 2
+tmp   = LDZP + 6
+tmp2  = LDZP + 7
+ent   = LDZP + 8                    ; 2: the directory entry / placement entry
+lp    = LDZP + 10                   ; 2: list pointer
+item  = LDZP + 12
+fnum  = LDZP + 13                   ; the shared file being walked
+tbase = LDZP + 14                   ; 2: the level file's section table
+nt    = LDZP + 16
 
         .segment "CODE"
         jmp lv_load

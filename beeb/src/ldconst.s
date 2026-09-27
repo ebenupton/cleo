@@ -32,21 +32,6 @@
         OUTC BOARD_SOLIDISK
         OUTC WRSEL_WATFORD
         OUTC WRSEL_SOLIDISK
-; and defs.inc's zero-page equates as labels, for the tools (build.sh appends them to
-; labels.txt: ld65 lists labels, not equates)
-.macro OUTL name
-  .ifdef name
-        .out .sprintf("al %06X .%s", name, .string(name))
-  .endif
-.endmacro
-        OUTL NSPR
-        OUTL BARDIRTY
-        OUTL SFXREQ
-        OUTL BINI
-        OUTL sp_mh
-        OUTL curR7
-        OUTL SECIDX
-
 ; what defs.inc and assets.inc borrow from the engine, which is not assembled here
 .macro STUB name
   .ifndef name

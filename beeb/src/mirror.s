@@ -3,7 +3,7 @@
 ; software, so the one displayed row that straddles a ring's end is read from a copy
 ; below the ring's base; the Master's CRTC folds its ring itself.
 ; ============================================================================
-        .segment "LGCCODE"
+        .segment "ENGCODE"
 ; A copy of the ring's last slot row sits immediately below the ring base, so the
 ; one displayed row that straddles the ring end can be read as a single run.  Only
 ; the chars that row takes from it -- wcxm..79 -- need to be right, and when the

@@ -49,28 +49,32 @@ LV_PAGE0  = $0400                   ; tile id -> the gather's pair: 256 lo, 256 
   .endif
 
 ; ---------------------------------------------------------------- zero page
-; The ZEROPAGE segment ends below $A3 (the cfgs cap it) and the logic's temporaries
-; are $A8-$DE (logic.s): these fill the gaps.  $F0-$FF is the MOS's, and engine.s's
-; (ZPF0/ZPF5/ZPFD), all but $F4 (ROMSEL_CPY) and $FC (the interrupt entry's A).
-NSPR     = $A3
-BARDIRTY = $A4
-SFXREQ   = $A6
-mtmp     = $DF                      ; cpu.inc's scratch (inca/deca/bitimm/ldazy)
-ringbhi  = $E0                      ; the buffer being drawn: ring base high byte,
-ringehi  = $E1                      ;   ring end high byte (ringup's fold test),
-ringe3   = $E2                      ;   >RINGEND-3 and 256->RINGEND (drawrect's wrap test)
-ringneg  = $E3
-mrow     = $E4                      ; the map char row in the ring's last slot (calc_ring)
-wcxm     = $E5                      ; ringS mod 80: the mirror's first useful char
-sp_disp  = $E7                      ; the sprite's blitter index, for the loop's bank
-sp_mpg0  = $E8
-sp_mh    = $E9
-sp_mrp   = $EA                      ; 2
-sp_mbase = $EC                      ; 2
-BINI     = $A5                      ; three hot scalars (profiled: 44-64, ~41 and ~35
-curR7    = $EE                      ;  accesses a frame): the bin walk's index, and the
-SECIDX   = $EF                      ;  chain's R7 and step
-.assert SECIDX < $F0, error, "zero page runs into the MOS's"
+; The engine's first (ZEROPAGE: these, then engine.s's; the Model B's own, ZPHW,
+; after them), then the game's (ZPGAME: BINI here, then logic.s's), $00-$EF (the
+; cfgs).  $F0-$FF is the MOS's, and the engine's (engine.s ZPF0/ZPF5/ZPFD), all but
+; $F4 (ROMSEL_CPY) and $FC (the interrupt entry's A).  Those used before engine.s
+; are here, so every access is assembled as zero page.
+        .zeropage
+NSPR:     .res 1                    ; the sprite list's length (the game's addsprite)
+BARDIRTY: .res 1                    ; the bar's digits to redraw (the game sets it)
+SFXREQ:   .res 1                    ; a sound effect asked for (the game; sound_tick)
+mtmp:     .res 1                    ; cpu.inc's scratch (inca/deca/bitimm/ldazy)
+ringbhi:  .res 1                    ; the buffer being drawn: ring base high byte,
+ringehi:  .res 1                    ;   ring end high byte (ringup's fold test),
+ringe3:   .res 1                    ;   >RINGEND-3 and 256->RINGEND (drawrect's wrap test)
+ringneg:  .res 1
+mrow:     .res 1                    ; the map char row in the ring's last slot (calc_ring)
+wcxm:     .res 1                    ; ringS mod 80: the mirror's first useful char
+sp_disp:  .res 1                    ; the sprite's blitter index, for the loop's bank
+sp_mpg0:  .res 1
+sp_mh:    .res 1
+sp_mrp:   .res 2
+sp_mbase: .res 2
+curR7:    .res 1                    ; two hot scalars (profiled: ~41 and ~35 accesses a
+SECIDX:   .res 1                    ;  frame): the chain's R7 and step
+        .segment "ZPGAME": zeropage
+BINI:     .res 1                    ; the bin walk's index (44-64 accesses a frame)
+        .zeropage
 
 ; ---------------------------------------------------------------- display
 LINE      = 64                      ; T1 ticks in one scanline

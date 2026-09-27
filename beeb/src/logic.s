@@ -214,7 +214,7 @@ O_EL    = O_DH + OBJN
 O_EH    = O_EL + OBJN
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)
-        .zeropage
+        .segment "ZPGAME": zeropage  ; (after the engine's: defs.inc)
 frame:    .res 2
 px:       .res 2                  ; player x, y (px)
 py:       .res 2
@@ -252,43 +252,45 @@ logicvs:  .res 1
 gridsh:   .res 1                  ; log2 of the collision grid width
 camoff:   .res 1                  ; window bias: px - camoff = window left (eased 40..120)
 
-; transient temps (not preserved across disc loads)
-ox      = $A8
-oy      = $AA
-fa      = $AC
-fb      = $AE
-fc      = $B0
-fd      = $B2
-fe      = $B4
-rx      = $B6
-ry      = $B8
-sx      = $BA
-sy      = $BC
-qx      = $BE
-qy      = $C0
-alt     = $C2
-q1      = $C3
-q2      = $C4
-q3      = $C5
-q4      = $C6
-q5      = $C7
-q6      = $C8
-obj     = $C9
-gx      = $CA
-gy      = $CB
-grow    = $DE                   ; bucket walk: gy << gridsh
-gx0     = $CC
-gx1     = $CD
-gy1     = $CE
-bent    = $CF
-otype   = $D0
-t16     = $D1                     ; 2 bytes
-t16b    = $D3                     ; 2 bytes
-dpx     = $D5                     ; 2 bytes: player step count etc
-hx      = $D7                     ; 2 bytes: rx used for hit direction
-mapptr  = $D9                     ; 2 bytes
-q1x     = $DB
-rise    = $DC                     ; 2 bytes
+seed:     .res 2                  ; rnd's
+; transient temps
+ox:       .res 2
+oy:       .res 2
+fa:       .res 2
+fb:       .res 2
+fc:       .res 2
+fd:       .res 2
+fe:       .res 2
+rx:       .res 2
+ry:       .res 2
+sx:       .res 2
+sy:       .res 2
+qx:       .res 2
+qy:       .res 2
+alt:      .res 1
+q1:       .res 1
+q2:       .res 1
+q3:       .res 1
+q4:       .res 1
+q5:       .res 1
+q6:       .res 1
+obj:      .res 1
+gx:       .res 1
+gy:       .res 1
+gx0:      .res 1
+gx1:      .res 1
+gy1:      .res 1
+bent:     .res 1
+otype:    .res 1
+t16:      .res 2
+t16b:     .res 2
+dpx:      .res 2                  ; player step count etc
+hx:       .res 2                  ; rx used for hit direction
+mapptr:   .res 2
+q1x:      .res 1
+rise:     .res 2
+grow:     .res 1                  ; bucket walk: gy << gridsh
+        .zeropage
 
         .segment "LGCCODE"      
 
@@ -3310,6 +3312,40 @@ div10_16:
         bne @l
         sta q1
         rts
+
+        .segment "LGCCODE"
+; ============================================================================
+; bar_bg: the bar has a fixed home outside the ring, so it stays put however the
+; window scrolls and is only written when its contents change (in the ring it would
+; move with every vertical scroll: 1280 bytes to copy again, 13,310 cycles).  Its
+; template (icons, labels, blank digit slots) is the BAR file, which the
+; loader puts in place with the game's image (ldprog.s) and nothing redraws.  The template
+; buries the digits, so this resets the digit cache: its "already drawn" values are
+; no longer true.  One bar, one cache: not one per buffer.
+; ============================================================================
+bar_bg:
+        ldx #8
+        lda #$FF
+@bci:   sta BARCACHE,x
+        dex
+        bpl @bci
+        rts
+
+; ============================================================================
+; Random
+; ============================================================================
+rnd:    lsr seed+1
+        ror seed
+        bcc :+
+        lda seed+1
+        eor #$B4
+        sta seed+1
+:       lda seed
+        rts
+
+        .segment "LGCBSS"           ; the bin walk's
+BINR:      .res 4
+BINOK:     .res 1
 
         .segment "LGCCODE"      
 ; ============================================================================

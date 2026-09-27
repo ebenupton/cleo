@@ -61,6 +61,15 @@ for pass in 1 2 3; do
         settarget $t
         ca65 -g --cpu $CPU $DEFS -I $BD -I src --bin-include-dir $BD \
              -o $BD/main.o src/main.s -l $BD/main.lst
+        # bank 7's game image ends at the kernel: the game's data and code, then the
+        # engine's, from the Model B's sizes (od65: the object's segments, before any
+        # link); the Master's, pinned to the Model B's, fall short of the kernel
+        if [ $TARGET = modelb ]; then
+            B7N=$(od65 --dump-segsize $BD/main.o | awk '/^ +(LGCDATA|LGCCODE|ENGCODE):/ {s += $2} END {print s}')
+            B7S=$(printf '%04X' $(( 0x$(grep -o 'B7K: *start = \$[0-9A-F]*' $CFG | sed 's/.*\$//') - B7N )))
+            B7N=$(printf '%04X' $B7N)
+        fi
+        sed -i.b7 "s#^\( *B7: *start = [$]\)[0-9A-F]*, size = [$][0-9A-F]*#\1$B7S, size = \$$B7N#" $BD/game.cfg
         # the Master's segments at the Model B's addresses (linked just before): its
         # shorter 65C02 code leaves gaps, and the data lies alike on both
         LCFG=$BD/game.cfg
@@ -72,7 +81,7 @@ import re
 want = ['boot','dsk_type','dsk_drv','read_sectors','ld_sec','ld_n','ld_dst',
         'LV_HDR','LV_OBJS','LV_ATTR0','LV_ALTCLS','TILES','SPRMASK','SPR_TABLE','mapshr','MAPSTRIDE','FLATTAB',
         'half0','half1','half2','halfhi','halfhi5','halfsub','mir0','MIRTAB','sprc_ok','sprx_ok','HPAIR0','HPAIR1',
-        'MAP5','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
+        'MAP5','LDZP','BARADDR','STAGE','STAGE_LVL','LDPROG','PBANK','PBOARD','dsk_banks','dsk_board']
 addr = {}
 import os
 BD = os.environ['BD']
@@ -107,9 +116,10 @@ with open(BD + '/defs_ld.inc', 'w') as f:
             f.write('; %s: not in labels.txt (a constant?)\n' % n)
     for k, (a, n) in img.items():
         f.write('%s_ADDR = $%04X\n%s_LEN = %d\n' % (k, a, k, n))
-    # the game's variables (LGCBSS, page aligned), zeroed as its image comes in
-    bss, bssn = addr['__LGCBSS_RUN__'], addr['__LGCBSS_SIZE__']
-    assert bss & 255 == 0 and bss + ((bssn + 255) & ~255) <= addr['__KRNDATA_RUN__']
+    # the image's variables (LGCBSS then ENGBSS, page aligned), zeroed as it comes in:
+    # below its code
+    bss, bssn = addr['__LGCBSS_RUN__'], addr['__ENGBSS_RUN__'] + addr['__ENGBSS_SIZE__'] - addr['__LGCBSS_RUN__']
+    assert bss & 255 == 0 and bss + ((bssn + 255) & ~255) <= addr['__LGCDATA_RUN__'], 'the game image\'s variables run into its code'
     f.write('GAME_BSS = $%04X\nGAME_BSS_PAGES = %d\n' % (bss, (bssn + 255) // 256))
 # each image's own patch lists (bank 7 entries of the linker's, cpu.inc BANKREF and
 # wrsel, that fall in it): image_load applies them after every read, as the boot
@@ -138,7 +148,6 @@ EOF
         # hardware conditionals in defs.inc resolve as they do in the game (src/ldconst.s)
         ca65 --cpu $CPU $DEFS -I $BD -I src -o /dev/null src/ldconst.s > $BD/ldconst.out
         grep ' = ' $BD/ldconst.out >> $BD/defs_ld.inc
-        grep '^al ' $BD/ldconst.out >> $BD/labels.txt
         echo "BARADDR = $BARADDR" >> $BD/defs_ld.inc
         ca65 --cpu 6502 $DEFS -I $BD -I src --bin-include-dir $BD -o $BD/ldprog.o src/ldprog.s -l $BD/ldprog.lst
         ld65 -C cfg/ldprog.cfg -o $BD/LDPROG $BD/ldprog.o
