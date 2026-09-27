@@ -28,7 +28,7 @@ for t in modelb master; do
     mkdir -p $BD
     [ -n "$SKIP_ASSETS" ] || python3 tools/assets.py      # (assets.py runs tools/convert.py)
     sed "s#\"build/#\"$BD/#g" $CFG > $BD/game.cfg
-    [ "$TILEMIRROR" = 1 ] && sed -i.bak 's#start = \$8000, size = \$0700#start = $8000, size = $0800#; s#start = \$8700, size = \$3900#start = $8800, size = $3800#; s#start = \$8000, size = \$02D0#start = $8000, size = $0310#' $BD/game.cfg
+    [ "$TILEMIRROR" = 1 ] && sed -i.bak 's#start = \$8000, size = \$0700#start = $8000, size = $0800#; s#start = \$8700, size = \$3900#start = $8800, size = $3800#; s#start = \$8000, size = \$0300#start = $8000, size = $0340#' $BD/game.cfg
     for f in BANKS MENU LDPROG; do [ -f $BD/$f ] || : > $BD/$f; done
 done
 # what both machines read goes on the disc once (the Model B's copy): the packs agree

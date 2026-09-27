@@ -71,19 +71,18 @@ mirror_copy:
         eor #<(RING_A + (RINGROWS-1)*ROWBYTES)   ; +$80, its carry taken above
         sta w16
         ldy #0
-@c:     ldx #8
-@b:     lda (w16),y
+@c:     .repeat 8
+        lda (w16),y
         sta (w16b),y
         iny
-        dex
-        bne @b
-        tya                         ; Z: Y = 0 (A is dead: reloaded at @b, and after the rts)
-        bne :+
-        inc w16+1
-        inc w16b+1
-:       dec tmp
+        .endrepeat
+        beq @pg                     ; Z: Y = 0, a page done (out of line: 1 char in 32)
+@cb:    dec tmp
         bne @c
         rts
+@pg:    inc w16+1
+        inc w16b+1
+        jmp @cb
 
 ; ---------------------------------------------------------------- the CRTC
         .segment "LGCHW"            ; (after the shared)

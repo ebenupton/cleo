@@ -406,17 +406,28 @@ n2:     tax
 :
 .endmacro
 
-.macro spnext                      ; sp on one char (8 bytes), folding at the ring end
-        lda sp
-        clc
-        adc #8
+.macro spnext cold                 ; sp on one char (8 bytes), folding at the ring end.
+        lda sp                      ; With cold: the page step is out of line there, in
+        clc                         ; branch reach (spcold, the caller's), and the
+        adc #8                      ; common case falls through
         sta sp
+  .if .blank(cold)
         bcc :++                     ; past the fold's own anonymous label
         lda sp+1
         adc #0                      ; C = 1 (the bcc fell through): +1, 2 bytes not 6
         ringup sp
         sta sp+1
 :
+  .else
+        bcs cold
+  .endif
+.endmacro
+.macro spcold back                  ; spnext's page step, out of line: back to `back`
+        lda sp+1
+        adc #0                      ; C = 1: spnext's bcs
+        ringup sp
+        sta sp+1
+        jmp back
 .endmacro
 
 ; ============================================================================
@@ -2118,10 +2129,10 @@ sprretP:                            ; next column: source pointer + lines
         clc
         adc sp_lines
         sta ptr
-        bcc sprnext
-        inc ptr+1
-sprnext:
-        spnext
+        bcs sprpinc                 ; (the carries out of line, after ds_done: the
+sprnext:                            ;  common case falls through)
+        spnext sprscold
+sprsback:
         dec sp_cnt
         bpl ds_colloop
 ds_rowdone:
@@ -2152,6 +2163,10 @@ ds_rowdone:
         sta sp_rb+1
         jmp ds_rowloop
 ds_done: rts
+sprpinc: inc ptr+1
+        jmp sprnext
+sprscold:
+        spcold sprsback
 
         SPRMSK sprFN, 0
   .if withmirror
@@ -2261,11 +2276,12 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         ; is 40 bytes smaller and ~1% of a frame slower: every frame with vertical
         ; movement recomposes all 80 columns.)
         ldx wfine
-        lda @ftab-2,x               ; the branch displacement for this wfine
-        sta @fjmp+1
+        lda @ftab-2,x               ; the loop's back branch, patched to this wfine's entry
+        sta @back+1
         ldx cnt                     ; char counter in X: dex/beq is 3 cycles cheaper
-@fjmp:  bne @g4                     ; patched; always taken: Z = 0 at every arrival
-@ftab:  .byte @g4-@ftab, 0, @g2-@ftab, 0, @g0-@ftab   ; wfine 2: six lines, 4: four, 6: two
+        clc
+        bcc @back                   ; in at the patched entry (C = 0)
+@ftab:  .byte <(@g4-(@back+2)), 0, <(@g2-(@back+2)), 0, <(@g0-(@back+2))   ; wfine 2: six lines, 4: four, 6: two
 @g4:    ldy #5
         lda (sp),y
         sta (ptr),y
@@ -2285,21 +2301,24 @@ copy_partial:                       ; the whole row, every frame the fine scroll
         lda (sp),y
         sta (ptr),y
         ; next char, both with the ring fold on the page crossing: the composed row
-        ; can straddle the ring end like any other row
-        spnext
-        dex
+        ; can straddle the ring end like any other row (the page steps out of line)
+        spnext @sfold
+@sback: dex
         beq @done
         lda ptr
         clc
         adc #8
         sta ptr
-        bcc @fjmp
-        lda ptr+1
-        adc #0                      ; C = 1: the bcc fell through; ringup's cmp resets it
+        bcs @pfold
+@back:  bcc @g4                     ; patched (@ftab): C = 0 at every arrival
+@done:  rts
+@sfold: spcold @sback
+@pfold: lda ptr+1
+        adc #0                      ; C = 1: the bcs; ringup's cmp resets it
         ringup ptr
         sta ptr+1
-        bne @fjmp                   ; Z = 0: A is a ring high byte, never 0
-@done:  rts
+        clc
+        bcc @back
 
 ; ============================================================================
 ; blank_below: the 6845 always displays the first scanline of a frame, whatever R6
@@ -2332,13 +2351,16 @@ blank_below:
         ldx #ROWCHARS
 @char:  lda #0
         ldy #7
-@b:     sta (sp),y
+        .repeat 7
+        sta (sp),y
         dey
-        bpl @b
-        spnext                      ; 8 on, folding at the ring end
-        dex
+        .endrepeat
+        sta (sp),y
+        spnext @fold                ; 8 on, folding at the ring end (out of line)
+@fback: dex
         bne @char
 @no:    rts
+@fold:  spcold @fback
 
 ; ============================================================================
 ; bar_bg: the bar has a fixed home outside the ring, so it stays put however the
