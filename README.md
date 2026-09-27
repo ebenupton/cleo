@@ -51,7 +51,7 @@ MODE=1 python3 beeb/tools/convert.py && MODE1=1 ./build.sh   # a MODE 1 build
 ```
 
 The MODE 1 build keeps the memory layout (a byte is still two game pixels, now as a
-2x2 block of C/M/Y/K dots chosen per pixel) but loses the spare bits the MODE 2 engine
+2x2 block of C/M/Y/K screen pixels chosen per game pixel) but loses the spare bits the MODE 2 engine
 signals with. Sprite transparency comes from a mask plane instead: one bit per game
 pixel, four columns' pairs packed into a byte, decoded by four page tables (`MASKTAB0..3`,
 one per column phase, no shifting) into the AND mask for a data byte. No periodic-cell
@@ -63,8 +63,9 @@ building.
 ## How it works, briefly
 
 * **Picture.** MODE 2, 160×256, 8 colours. Each square game pixel becomes one MODE 2
-  pixel wide and two scanlines tall, and the original's colours are approximated with a
-  2×4 ordered dither chosen to be stable under the 2-pixel horizontal scroll step.
+  screen pixel wide and two scanlines tall, and the original's colours are approximated
+  with a 2×4 ordered dither chosen to be stable under the 2-game-pixel horizontal scroll
+  step.
 * **Scrolling.** Each 20K screen buffer is a 32-row ring; horizontal scrolling moves the
   CRTC start address by whole characters, vertical scrolling is per scanline using a
   vertical rupture — the frame is split into short CRTC frames (status bar, partial top

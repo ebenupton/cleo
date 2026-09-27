@@ -45,7 +45,7 @@ them, so the build stops if the code moves.
 screens, the font, and the title tune with its player.  It draws into buffer 0 with
 the window at the origin, the palette black until a page is finished and flipped in,
 calling the kernel for the sections, the palette and `ringaddr7`.  On the Model B the
-screens are laid out for its 84-pixel window.
+screens are laid out for its window, 84 game pixels tall.
 
 Everything the menus draw is on black, so the title pieces (the logo, YOU, WIN, LOSE
 and big Cleo's eight frames) have no masks and no blitter of the game's: each is a

@@ -215,7 +215,11 @@ O_EH    = O_EL + OBJN
 
 ; ---------------------------------------------------------------- game state (zero page, persistent)
         .segment "ZPGAME": zeropage  ; (after the engine's: defs.inc)
+BINMAX = BINMAXDEF                ; the bin walk's lists (assets.py: the objects' grid
+                                  ; cells under the worst window)
 BINI:     .res 1                  ; the bin walk's index (44-64 accesses a frame)
+NSTARL:   .res 1                  ; the cached bin walk's lengths: stars,
+NOTHL:    .res 1                  ;   everything else
 frame:    .res 2
 px:       .res 2                  ; player x, y (px)
 py:       .res 2

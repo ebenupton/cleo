@@ -57,7 +57,7 @@ The engine is [beebgame](https://github.com/ebenupton/beebgame), a submodule in
   - bank 7: the game logic and the level's tables.
 
   Bank 7 calls into the others through fixed thunks in low RAM.
-- **Display.** MODE 1, each square game pixel a 2x2 block of MODE 1 pixels, coloured
+- **Display.** MODE 1, each square game pixel a 2x2 block of screen pixels, coloured
   by a cyan/magenta/yellow/black dither per game pixel (`tools/convert.py`).
   Horizontal scrolling is by whole characters through the CRTC start address.
   Vertical scrolling is smooth, by a rupture: the frame is several CRTC frames
