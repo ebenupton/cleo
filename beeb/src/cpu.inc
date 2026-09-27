@@ -30,6 +30,13 @@ MODELB = 0
         .ifndef BHW
 BHW = MODELB
         .endif
+; TILEMIRROR: the tile blitter can draw a tile mirrored from another's bytes, and the
+; packer (tools/convert.py) mirrors the least-used tiles while a level is short of room
+; in the tile bank.  Off: no level needs it once the tiles start at $8600, and the code
+; and tables it takes are that room (modelb/build.sh: TILEMIRROR=1 to build it).
+        .ifndef TILEMIRROR
+TILEMIRROR = 0
+        .endif
 
 ; XJSR name, idx: a call that stays in main RAM on the Master and crosses a bank on
 ; the Model B (idx names the far-table entry).

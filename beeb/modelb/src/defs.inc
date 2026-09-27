@@ -36,7 +36,11 @@ MASKTAB3  = MASKTAB0 + $300
 BANKENTRY = $8000                   ; banks 4, 5 and 6: the routine bank 7 calls once a
                                     ; sprite or rect starts the bank (low.s callbank):
                                     ; the sprite row loop's ds_entry, bank6_entry
+  .if TILEMIRROR                    ; (cpu.inc) the mirror's code takes the page below
 TILES     = $8700                   ; bank 6: this level's tiles, 64 bytes each, by id,
+  .else
+TILES     = $8600                   ; bank 6: this level's tiles, 64 bytes each, by id,
+  .endif
                                     ; page aligned (drawrect's gather is arithmetic)
 MENU_BASE = TILES                   ; or the menu overlay, over them
 LV_MAP    = MAP5                    ; bank 5, $9C00: row major, a fixed 8K below the

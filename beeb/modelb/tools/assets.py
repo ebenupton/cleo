@@ -51,7 +51,7 @@ VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 
 B4_DATA = (0x83C0, 0xBB00)                  # bank 4: images and masks, between the row loop
                                             #   ($8000) and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (no hole now: one run)
-B5_DATA = (0x8310, 0x9C00)                  # bank 5: all its sprites, one run, between the row
+B5_DATA = (0x8310 if os.environ.get('TILEMIRROR') == '1' else 0x82D0, 0x9C00)                  # bank 5: all its sprites, one run, between the row
                                             #   loop + gather and the map: the resident part
                                             #   (SPRC6) at the bottom, the level's above it
 B5_HOLE = (0x9C00, 0x9C00)                  #   (no hole now)

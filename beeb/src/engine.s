@@ -972,6 +972,7 @@ drawrect:
         staz sp                     ; line 0 non-indexed
         jmp @advsp
   .endif
+  .if TILEMIRROR                    ; (cpu.inc: off by default -- no level needs a mirror)
         ; ---- a mirrored full tile: its source's chars right to left, each byte's two
         ; game pixels swapped -- ((b & $33) << 2) | ((b & $CC) >> 2); the dither is per
         ; game pixel, so a pixel's dots move as one.  A char at a time through spnext,
@@ -1018,6 +1019,7 @@ drawrect:
         dec tmp2
         bne @mc
         jmp @runend
+  .endif
   .if BHW
 @solid: ldy GATHERL,x               ; the flat pair: even lines from tp, odd from tp+1
         lda FLATTAB,y               ; (tp is otherwise unused on this path)
@@ -1033,9 +1035,12 @@ drawrect:
         sta tp+1
         bcs @fillgo                 ; (always: the asl's carry is the high byte's bit 6)
   .endif
-@hfill: lda GATHERL,x               ; the kind: bit 2 clear is a mirror (3), set a half
+@hfill:
+  .if TILEMIRROR
+        lda GATHERL,x               ; the kind: bit 2 clear is a mirror (3), set a half
         and #4
         beq @mir
+  .endif
         lda GATHERH,x               ; the half's pair: k back out of its address
         sbc halfhi                  ; (C is set at every entry to @run)
         asl
@@ -3386,11 +3391,15 @@ gather5:
         dey
         bpl @gl
         bmi @gdone
-@ghalf: cmp mir0
+@ghalf:
+  .if TILEMIRROR
+        cmp mir0
         bcs @gmir
+  .endif
         tax                         ; X = the id, for the range tests
-        sbc halfsub                 ; k, the slot from the halves' page (C is clear:
-                                    ; halfsub is the loader's half0 - HALFOFF - 1)
+        sbc halfsub                 ; k, the slot from the halves' page: C is clear after
+                                    ; the mirror test (halfsub = half0 - HALFOFF - 1), set
+                                    ; without it (the loader's halfsub = half0 - HALFOFF)
         sta tmp
         lsr
         lsr
@@ -3413,6 +3422,7 @@ gather5:
         dey
         bpl @gl
         bmi @gdone
+  .if TILEMIRROR
 @gmir:  sbc mir0                    ; a mirrored tile: its source's slot (C is set),
         tax                         ; addressed as a full tile's, kind 3
         lda MIRTAB,x
@@ -3429,6 +3439,7 @@ gather5:
         ror                         ; (slot & 3) << 6
         ora #3
         bne @gh2                    ; (always)
+  .endif
     .endif
 @gdone: rts
 ; the title pack's directory entries and mask addresses (and nothing else now): the
@@ -3451,8 +3462,10 @@ half2:     .res 1                   ;   from half2), the halves' page (the loade
 halfhi5:   .res 1                   ;   bank 6 keeps its own halfhi for the row loop)
 halfsub:   .res 1                   ; half0 less the slot the first half takes in that
                                     ;   page: id - halfsub = the half's slot from the page
+  .if TILEMIRROR
 mir0:      .res 1                   ; the first mirrored tile's id (the loader's)
 MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
+  .endif
   .endif
         PLACE "LOW", "TIL6ENT"     ; render-time helpers in the NMI page ($0D03..),
                                    ; copied there at init; banked: the start of bank 6

@@ -13,6 +13,9 @@
         .ifndef BHW                 ; (cpu.inc's flag: the Model B's hardware unless the
 BHW = 1                             ;  build says -D BHW=0, the converged Master)
         .endif
+        .ifndef TILEMIRROR          ; (cpu.inc's flag: tile mirroring, off by default)
+TILEMIRROR = 0
+        .endif
         .include "defs_ld.inc"      ; the addresses the game exports (build.sh)
         .include "files.inc"        ; the disc's sector table (mkdfs.py table)
 ROMSEL     = $FE30
@@ -396,17 +399,23 @@ lv_load:
         ; ---- the tile shape, into banks 5 and 6 (read here, with bank 7 in)
         lda LV_HDR+24
         sta sv_half0
-        clc
+  .if TILEMIRROR
+        clc                         ; half0 - HALFOFF - 1: the gather's borrow (C clear
+  .else                             ; after its mirror test)
+        sec                         ; half0 - HALFOFF (C set: no mirror test)
+  .endif
         sbc LV_HDR+28
-        sta sv_halfsub              ; half0 - HALFOFF - 1: the gather's borrow
+        sta sv_halfsub
         lda LV_HDR+25
         sta sv_half1
         lda LV_HDR+26
         sta sv_half2
         lda LV_HDR+27
         sta sv_halfhi
+  .if TILEMIRROR
         lda LV_HDR+29
         sta sv_mir0
+  .endif
         lda PB_TILES
         jsr pgbank                  ; (X, Y kept)
         stx HPAIR0
@@ -430,10 +439,13 @@ lv_load:
         sta halfhi5
         lda sv_halfsub
         sta halfsub
+  .if TILEMIRROR
         lda sv_mir0
         sta mir0
+  .endif
         lda PB_LVL
         jsr pgbank
+  .if TILEMIRROR
         ; ---- MIRTAB: each mirrored tile's source slot
         lda #10
         jsr section
@@ -447,6 +459,7 @@ lv_load:
         sta cnt+1
         ldx PB_MAP
         jsr bcopy
+  .endif
         ; ---- the sprites.  The common block (SPRC: Cleo, the boomerang, the stars) goes
         ; to its fixed place in bank 4 once, and stays; the rest (SPRX) is staged and
         ; the level's subset copied out by its placement list
@@ -742,7 +755,9 @@ sv_half2:   .res 1
 sv_halfhi:  .res 1
 sv_halfsub: .res 1
 mapend:     .res 1                  ; the page after the level's map (unrle)
+  .if TILEMIRROR
 sv_mir0:    .res 1
+  .endif
 section:                            ; A = section 0..9 -> src = its start in the staged file
         asl                         ; (C = 0: A < 128)
         tay

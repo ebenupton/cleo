@@ -734,7 +734,8 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # tile of its own, and its gather is a table (LV_PAGE0) the packer builds: per id, the
 # pair the Model B's gather computes -- the same encoding, so the one row loop reads
 # both.
-B_TILES, B_TILES_END = 0x8700, 0xC000       # the Model B's bank 6: tiles above its code and variables
+TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mirrored tiles)
+B_TILES, B_TILES_END = (0x8700 if TILEMIRROR else 0x8600), 0xC000   # the Model B's bank 6: tiles above its code and variables
 M_TILES, M_TILES_END = 0x8000, 0xC000       # the Master's: all of bank 6
 def _layout(stored, hlist, halfpair, base, end, loc):
     slot = {k: i for i, k in enumerate(stored)}
@@ -799,7 +800,7 @@ def pack_tiles(lv, sub):
     mirrored = {}                   # key -> its source key
     cand = sorted((k for k in fulls if mirror_tile(k[0]) != k[0] and mirror_tile(k[0]) in bypat),
                   key=lambda k: (use[k], loc(k)))
-    for k in cand:
+    for k in (cand if TILEMIRROR else []):  # (without it a level must fit: asserted below)
         if not need(len(fulls) - len(mirrored)):
             break
         if k in mirrored.values():
