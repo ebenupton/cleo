@@ -3258,18 +3258,13 @@ bar_digit:
         cmp BARCACHE,y              ; one bar, so one cache: no curbuf in the index
         beq bd_same
         sta BARCACHE,y
-        lsr                         ; C = d bit0, A = d >> 1
-        sta w16+1
+        asl                         ; d * 16: the digit's packed bytes (assets.py:
+        asl                         ; a nibble per byte column and two game rows)
+        asl
+        asl
+        sta tmp4
         lda #0
-        sta ptr+1                   ; for the x * 4 below (sta keeps C)
-        ror                         ; A = d0 << 7
-        lsr w16+1                   ; C = d bit1, w16+1 = d >> 2
-        ror                         ; A = d1 << 7 | d0 << 6; C = 0 (A bit 0 was 0)
-        adc #<SPR_DIGITS
-        sta w16
-        lda w16+1
-        adc #>SPR_DIGITS
-        sta w16+1                   ; digit tile
+        sta ptr+1                   ; for the x * 4 below
         txa                         ; x is even at every call: x * 4 = char * 8
         asl
         rol ptr+1
@@ -3280,22 +3275,35 @@ bar_digit:
         lda ptr+1                   ; C is already clear: ptr+1 was 0 or 1 before the second
         adc #>BARADDR               ; rol, so that rol shifted a 0 out
         sta ptr+1
-        ldy #31
-:       lda (w16),y
+        jsr @row                    ; the top char row, then the one below it
+        add16i ptr, 640
+@row:   ldy #0                      ; 8 packed bytes -> 32: each byte column's four
+@b:     ldx tmp4                    ; line pairs, top line and bottom from DIGTOP/BOT
+        lda digits_art,x
+        inc tmp4
+        pha
+        lsr
+        lsr
+        lsr
+        lsr
+        tax
+        lda DIGTOP,x
         sta (ptr),y
-        dey
-        bpl :-
-        lda w16
-        adc #32                     ; C still clear: ptr+1 <= 3 and >BARADDR = $7B, so the
-        sta w16                     ; adc above cannot carry, and the copy loop leaves C
-        bcc @nc
-        inc w16+1
-@nc:    add16i ptr, 640
-        ldy #31
-:       lda (w16),y
+        iny
+        lda DIGBOT,x
         sta (ptr),y
-        dey
-        bpl :-
+        iny
+        pla
+        and #$0F
+        tax
+        lda DIGTOP,x
+        sta (ptr),y
+        iny
+        lda DIGBOT,x
+        sta (ptr),y
+        iny
+        cpy #32
+        bne @b
 bd_same:
         rts
 

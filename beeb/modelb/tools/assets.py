@@ -173,7 +173,44 @@ for f in range(3):
     sprdir += bytes([item_index('tramp', f), 2, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255, (-8) & 255, 2 | 8, m.TRAMP_H * 2])
 assert len(sprdir) == 118 * 8
 
-out('digits.bin', m.digits)
+# The HUD's digits, 8 x 8 game px each (16 lines of 4 bytes, convert.py), are drawn
+# from four game-pixel patterns (the dither's two lines of one colour): a byte column
+# at one game row is two game px, a nibble (left << 2 | right).  A digit is 32 nibbles,
+# 16 bytes: for each of its two char rows, each byte column, its game rows 0-1 then
+# 2-3, one byte (the first row's nibble high).  DIGTAB gives a nibble's top and
+# bottom scanline bytes (logic.s bar_digit).
+def _digits():
+    LM = 0xCC                               # the left game px's dots: bits 7, 6, 3, 2
+    pats, packed = [], bytearray()
+    def code(t, b, right):
+        key = (((t << 2) if right else t) & LM, ((b << 2) if right else b) & LM)
+        if key not in pats: pats.append(key)
+        return pats.index(key)
+    g = m.digits
+    for n in range(10):
+        for crow in range(2):
+            for cx in range(4):
+                for j in range(2):
+                    nib = []
+                    for k in (2 * j, 2 * j + 1):
+                        o = n * 64 + crow * 32 + cx * 8 + 2 * k
+                        t, b = g[o], g[o + 1]
+                        nib.append(code(t, b, False) << 2 | code(t, b, True))
+                    packed.append(nib[0] << 4 | nib[1])
+    assert len(pats) <= 4, pats
+    top = bytes(pats[a][0] | pats[b][0] >> 2 if a < len(pats) and b < len(pats) else 0 for a in range(4) for b in range(4))
+    bot = bytes(pats[a][1] | pats[b][1] >> 2 if a < len(pats) and b < len(pats) else 0 for a in range(4) for b in range(4))
+    # the decode, as bar_digit does it, must give back every byte
+    for n in range(10):
+        for crow in range(2):
+            for p in range(8):
+                v = packed[n * 16 + crow * 8 + p]
+                o = n * 64 + crow * 32 + 4 * p
+                assert bytes([top[v >> 4], bot[v >> 4], top[v & 15], bot[v & 15]]) == g[o:o + 4], (n, crow, p)
+    return bytes(packed), top + bot
+_dpk, _dtab = _digits()
+out('digits.bin', _dpk)
+out('digtab.bin', _dtab)
 out('font.bin', m.font)
 out('alt.bin', m.altfile)
 out('BAR', m.barbytes)
@@ -420,7 +457,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('TITLE_ADDR = $8900\n')         # bank 5, as the Master: over the map
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pack's pieces
     f.write('HUD_BANK = 7\n')
-    f.write('SPR_BAR = 0\nSPR_DIGITS = digits_art\nSPR_FONT = font_art\n')
+    f.write('SPR_BAR = 0\nSPR_FONT = font_art\n')
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
     f.write('SPR5_MIRROR = 0\n')            # bank 5 holds no image that is drawn mirrored
     f.write('SPR4_COPY = 0\n')              # and bank 4 nothing the copy blitter draws

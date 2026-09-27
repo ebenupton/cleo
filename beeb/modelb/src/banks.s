@@ -134,8 +134,10 @@ LV_HDR:     .res 32                 ; header: lw, lh, start, exit, nobj, the spe
         .segment "LGCDATA"
 LV_ALTTAB:                          ; alt class -> eight altitudes (global)
         .incbin "build/alt.bin"
-digits_art:                         ; the HUD's ten digits, 64 bytes each
-        .incbin "build/digits.bin"
+digits_art:                         ; the HUD's ten digits, 16 bytes each: a nibble per
+        .incbin "build/digits.bin"      ; byte column and two game rows (assets.py)
+DIGTOP:     .incbin "build/digtab.bin", 0, 16   ; a nibble's top scanline byte
+DIGBOT:     .incbin "build/digtab.bin", 16, 16  ; and its bottom one
         .segment "LGCBSS"
 ; the object state arrays, laid out as the Master's (logic.s): O_STAMP + k*OBJN, then
 ; the grid heads and chains and the cached bin walk lists.  level_init's clear runs
