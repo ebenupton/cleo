@@ -26,8 +26,6 @@
 VSPEG     = 3                       ; vsyncs a rendered frame, as the Master
   .endif
 
-FARTAB    = $8000                   ; bank 7: the far table (banks.s; farcall pages
-                                    ; bank 7 to read it)
 SWAPTAB   = $BB00                   ; static in bank 4, below the mask tables: dot
 MASKTAB0  = $BC00                   ; reversal (bank 5 draws nothing mirrored); the
 MASKTAB1  = MASKTAB0 + $100         ; four mask-phase pages end both sprite banks
@@ -78,7 +76,7 @@ sp_mbase = $EC                      ; 2
 BINI     = $A5                      ; the Model B's three hottest scalars outside zero page
 curR7    = $EE                      ;  (profiled: 44-64, ~41 and ~35 accesses a frame); the
 SECIDX   = $EF                      ;  menus' menuptr, which had $EE-$EF, went to MNUBSS
-fcA      = $A7                      ; fcret's A across the bank switch (low.s)
+fcA      = $A7                      ; xcall's A across the bank switch (low.s)
 .assert SECIDX < $F0, error, "zero page runs into the MOS's"
 
 ; ---------------------------------------------------------------- display
@@ -137,26 +135,3 @@ FDC1770_SEC = $FE2A
 FDC1770_DAT = $FE2B
   .endif
 
-; ---------------------------------------------------------------- far calls
-; The index of a (bank, address-1) entry in FARTAB (modelb/src/banks.s).  Everything
-; that crosses a bank boundary goes through one of these: two a frame for the ring
-; work in bank 6, one a sprite for its row loop, one a rect for the tile blitter's
-; rows, and the rare rest.  A goes in and comes back, Y survives, X does not.
-; (The sprite row loop, erase_old's rects and the prologue's ring address do not go
-; through the table: low.s callbank, engine.s ringaddr7.)
-F_RENDER6   = 0*3                   ; scroll_validate, bank 6 (draw_dirty, blank_below: bank 7)
-F_SELBB     = 1*3                   ; select_backbuf        bank 6
-F_TITLE     = 2*3                   ; the menus: bank 6's overlay, present only while
-F_HELP      = 3*3                   ;   title_res says so
-F_LEVELSEL  = 4*3
-F_WINLOSE   = 5*3
-F_BUILDSECT = 6*3                   ; build_sections, bank 7 (the menus call it)
-F_BLANKPAL  = 7*3                   ; blank_palette   bank 7
-F_SETPAL    = 8*3                   ; set_palette     bank 7
-F_LOADTITLE = 9*3                   ; load_title      bank 7: the overlay and the pack
-F_MUSSTOP   = 10*3                  ; music_stop      bank 7
-F_DIV10     = 11*3                  ; div10_16        bank 7
-F_DRAWSPR   = 12*3                  ; drawsprite      bank 7 (the menus' title pieces)
-F_CALCRING  = 13*3                  ; calc_ring       bank 7 (the menus)
-NFAR        = 14
-.assert 3*NFAR <= $40, error, "the far table has outgrown its $40 bytes"

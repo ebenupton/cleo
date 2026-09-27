@@ -21,7 +21,7 @@ $0140-$0203  low BSS        SPRLIST, the digit cache, the chain's state, the mir
                             the level's shape (sprtab, mapshr, MAPSTRIDE), MUSON,
                             title_res, and the buffers' state bank 7 reads too
                             (BUF_VALID, PART_LO/HI, BUF_BARQ, spbank, DIRTYCNT)
-$0206-$02FF  low code       farcall, the interrupt stub, maprow/mapbyte/mapput
+$0206-$02FF  low code       the crossings (callbank, selbb, validate, mapstrip, dirfetch, xcall), the interrupt stub, maprow/mapbyte/mapput
                             (the Master's own), maprow6/mapstrip/dirfetch
 $0300-$07FF  status bar     2 rows, loaded into place at every level, never redrawn
 $0800-$0A7F  mirror A       a copy of ring A's last slot row (below)
@@ -51,24 +51,25 @@ because they are copied while it is still being read).
 | 4 | the sprite row loop at $8000, entered there (`BANKENTRY`; `SPRITE_LOOPS 1, 0`), SWAPTAB at $BB00, MASKTAB0..3 $BC00-$BFFF | images and masks $83C0-$BAFF: the resident block (SPRC) first, the level's after | (untouched) |
 | 5 | the row loop without the mirrored blitter at $8000 (`BANKENTRY`; `SPRITE_LOOPS 0, 1`), the gather (`gather5`, `fetch8`) and its shape, MASKTAB0..3 $BC00-$BFFF | the sprites, one run $8310-$9BFF: the resident part (SPRC6) at its bottom, the level's above; the map, a fixed 8K at $9C00-$BBFF | the title pack at $8900, over sprites and map |
 | 6 | from $8000: bank6_entry and drawrect_clip (`BANKENTRY`), the tile blitter (drawrect and its row loop), ringaddr and its row tables, select_backbuf (it patches ringaddr), scroll_validate (it calls drawrect per strip), mirdirty6, then their variables (BUF_CY, FLATTAB, halfhi) -- all below $8700 | the tiles from $8700 (TILES) to the end of the bank: the full tiles by id, the half tiles' stored rows, their pair table | the menu overlay from $8700: menu.s, the tune and its player, the font |
-| 7 | the far table (the only copy: farcall pages bank 7 to read it), the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue, SPRMASK and the level's sprite directory (`SPR_TABLE`, loaded), draw_sprites, calc_ring, copy_partial and blank_below (through ringaddr7), mark_dirty and draw_dirty with the dirty lists (drawrect_clip through callbank), the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
+| 7 | the sprite records below $8300 with the disc driver's helpers, the logic, the game loop, `render_frame` and `render_core`, match_sprites and erase_old (they read the records), the sprite prologue, SPRMASK and the level's sprite directory (`SPR_TABLE`, loaded), draw_sprites, calc_ring, copy_partial and blank_below (through ringaddr7), mark_dirty and draw_dirty with the dirty lists (drawrect_clip through callbank), the display driver and the interrupt's work, the sound, the HUD, the disc driver, the object state, sprmul5 and the row multiples, sext and a second mirdirty | the level's tables at $8300: attr, altcls, the header | (untouched) |
 
-Every bank starts with the same far table at $8000 (banks.s `COMMON_TABLES`), so the
-thunk in low RAM reads it whatever bank is paged in (17 entries).  The small tables
+There is no far table and no dispatch in any bank (since 27 Sep 2026).  The small tables
 are assembled in the bank of the code that indexes them: sprmul5 and the row
 multiples in bank 7 (the prologue, the records, the chain), the ring modulus in
 bank 6 (ringaddr; RINGROWS x 5 entries, the `ringmod` macro brings a row under
 that with two subtractions).  Bank 7 has its own `ringaddr7` for the sprite
 prologue -- the modulus by subtraction (`ringmod7`, calc_ring's too), the row
 multiple from its own tables, the base from select_backbuf's `ringbhi` -- so a
-sprite's address never crosses.  What does cross each frame: render_core (bank 7)
-makes three far calls into bank 6 -- select_backbuf; scroll_validate, draw_dirty
-and blank_below; copy_partial -- and the logic one per tile it changes
-(m_mark_dirty, which parks X in `farx` because the thunk takes X).  The two
-crossings that happen once a sprite and once an erased rect skip the far table
-(~90 cycles) for low RAM's `callbank` (~30): page the bank, `jsr BANKENTRY` --
-$8000, the sprite row loop in banks 4 and 6 and bank6_entry + drawrect_clip in
-bank 6 -- and bank 7 back through `pagelogic`.  `mapstrip`, the row loop's, pages
+sprite's address never crosses.  What does cross, all through fixed thunks in low
+RAM (low.s): render_core (bank 7) calls `selbb` (select_backbuf: it patches
+ringaddr's operand) and `validate` (scroll_validate: it draws the new strips with
+drawrect) once a frame; once a sprite and once a rect `callbank` (~30 cycles) pages
+the bank and calls `BANKENTRY` -- $8000, the sprite row loop in banks 4 and 5,
+bank6_entry + drawrect_clip in bank 6 -- then bank 7 back through `pagelogic`; the
+row loop's `mapstrip` runs the gather in bank 5.  The menus are the one exception
+with more than a fixed target: their overlay (bank 6) calls a few routines in bank 7
+and the game loop its four entries, through `xcall` (X = the bank, `ctgt` = the
+address: a stub per routine, `XCALL` in engine.s).  `mapstrip`, the row loop's, pages
 bank 6 back directly (dirfetch, the prologue's, restores 7 itself).  The mask
 tables are assembled too.
 
@@ -110,9 +111,8 @@ bank 7 with the logic that queues the sprites; match_sprites and erase_old are m
 RAM's and run with bank 7 paged (the records).  A frame is one far call into bank
 5, one per tile rectangle, one per sprite.
 
-A far call (`farjsr`, low.s) pushes the caller's bank, a return into `fcret` and the
-target, and rts's into it: ~90 cycles, nesting and interrupt safe; A goes in and
-comes back, Y survives, X does not.  Two things the Master does inline go through
+`xcall` (low.s) pushes the caller's bank and jsr's the target through `ctgt`: nesting
+and interrupt safe; A goes in and comes back, Y survives, X does not.  Two things the Master does inline go through
 main RAM here because a bank cannot page another over itself: a tile row's gather
 runs in bank 5, beside the map it reads in place (`gather5`, engine.s, with the
 level's half and mirror shape in bank 5's MAP5BSS), and leaves GATHERL/GATHERH in
@@ -170,7 +170,7 @@ in banks 4 and 6, the `bank6_entry` stub (bank 6's low corner) that BANKENTRY ju
 to before drawrect_clip; drawrect sets it after `jsr mapstrip` brings bank 6 back;
 the tune's `music_tick`, disc-loaded and so unpatchable, reads PBOARD and does it by
 hand, as ldprog.s does for the level loads.  Low RAM keeps the ones that cannot move:
-pagelogic, farcall/fcret, the interrupt's exit, mapput.  The interrupt stub enters
+pagelogic, xcall, the interrupt's exit, mapput.  The interrupt stub enters
 bank 7 through pagelogic now (the write bank too), 23 cycles it and the vsync's T1
 restart each pay, which VS2T_DEFAULT takes back (tools/bcrtc.mjs: R9 still lands at
 char 41-53 of the section's first scanline).  Cost: about 135 switches a frame at 4
@@ -179,7 +179,7 @@ once are not handled.  jsbeeb models neither board: `BBOARD=watford|solidisk` ma
 the tools wrap the CPU's store (bopen.mjs `boardEmu`), and bdiff passes on both.
 
 The code is assembled for banks 4..7.  Every byte of it that holds a bank number --
-the immediates of the switches, the far table's bank bytes in all four copies -- is
+the immediates of the switches -- is
 recorded at assembly (cpu.inc `bankimm`/`setbank`/`BANKREF`, which take the bank the
 code sits in; the low-RAM image's entries point into bank 5's copy of it) into the
 BANKFIX segment, which build.sh appends to BANKS after the pieces and checks against
@@ -270,7 +270,7 @@ the bar up (the bar, both mirrors and both rings), `clear_items` stops at the ri
 comes from the overlay itself, and the screens are laid out for 80 px of window (the
 Master's 108): the help lines 10 px apart, the level list centred on the window, the
 scores under big Cleo.  What the menus call in bank 7 (the palette, the flip, the disc, the
-sections, `div10_16`) crosses through the far table (`FARSUB` in engine.s); what
+sections, `div10_16`) crosses through low RAM's `xcall` (`XCALL` in engine.s); what
 they call in bank 6 (the ring work, the prologue) is a plain name.  The tune's
 player lives in the overlay with its data and is stepped from the interrupt stub in
 low RAM while MUSON is set; MUSON is cleared by `music_stop` in bank 7, which the
@@ -292,8 +292,8 @@ There is no pause on either target (removed 26 Sep 2026).
 - the mirror's bookkeeping: three MODELB blocks (drawrect, drawsprite, copy_partial)
   call `mirdirty` with the window columns written to the row the mirror follows;
   `mirror_copy` copies only those.
-- `render_frame`'s ring work is `render_core`, bank 7's: one far call into bank 6
-  (`render6` = scroll_validate + draw_dirty), the rest main RAM's or its own; the chain and the mirror are built here; `bar_bg` only resets the
+- `render_frame`'s ring work is `render_core`, bank 7's: two thunks into bank 6
+  (`selbb`, `validate`), the rest main RAM's or its own; the chain and the mirror are built here; `bar_bg` only resets the
   digit cache.
 - `init_maprows`, `music_init` are nothing; the `t_`/`m_` bridges are names or
   `FARSUB`s.

@@ -9,31 +9,6 @@
 ; small tables more than one bank's code indexes (sprmul5, the row multiples, the ring
 ; modulus).  The Master builds these at start-up; here they are assembled.
 ; ============================================================================
-.macro FAR bank, target, in        ; (in: the bank this copy of the table is in --
-        .byte bank                  ;  the bank byte is patched by the loader, cpu.inc)
-        BANKREF .sprintf("far_%s_%d", .string(target), in), in
-        .byte <(target-1), >(target-1)
-.endmacro
-.macro COMMON_TABLES in             ; the far table, bank 7's alone
-        .assert * = FARTAB, error, "the far table must be at FARTAB"
-        FAR BANK_TILES, scroll_validate, in         ; F_RENDER6
-        FAR BANK_TILES, select_backbuf, in          ; F_SELBB
-        FAR BANK_TILES, title_menu, in              ; F_TITLE     (the menu overlay)
-        FAR BANK_TILES, help_screen, in             ; F_HELP
-        FAR BANK_TILES, level_select, in            ; F_LEVELSEL
-        FAR BANK_TILES, winlose, in                 ; F_WINLOSE
-        FAR BANK_LVL, menu_sections, in             ; F_BUILDSECT (the menus': engine.s)
-        FAR BANK_LVL, blank_palette, in             ; F_BLANKPAL
-        FAR BANK_LVL, set_palette, in               ; F_SETPAL
-        FAR BANK_LVL, load_title_b, in              ; F_LOADTITLE
-        FAR BANK_LVL, music_stop, in                ; F_MUSSTOP
-        FAR BANK_LVL, div10_16, in                  ; F_DIV10
-        FAR BANK_LVL, drawsprite, in                ; F_DRAWSPR
-        FAR BANK_LVL, calc_ring, in                 ; F_CALCRING
-        .assert * = FARTAB + 3*NFAR, error, "NFAR does not match the far table"
-.endmacro
-        .segment "COMMON7"
-        COMMON_TABLES BANK_LVL
 
 ; ---------------------------------------------------------------- the small tables
 ; The Master builds these at start-up; here they are assembled, each in the bank of

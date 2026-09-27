@@ -38,16 +38,6 @@ BHW = MODELB
 TILEMIRROR = 0
         .endif
 
-; XJSR name, idx: a call that stays in main RAM on the Master and crosses a bank on
-; the Model B (idx names the far-table entry).
-.macro XJSR name, idx
-  .if ::MODELB
-        farjsr idx
-  .else
-        jsr name
-  .endif
-.endmacro
-
 ; PLACE a, b: the segment a routine goes in -- a on the Master, b on the Model B,
 ; whose code is split across four sideways banks by the data it reads.
 .macro PLACE mseg, bseg
@@ -303,10 +293,3 @@ TILEMIRROR = 0
 .endmacro
   .endif
 
-; A far call: X = the index of a (bank, address-1) entry in FARTAB, which every
-; bank carries a copy of at the same address.  A goes in and comes back; Y is
-; untouched; X is destroyed.  farcall itself is in main RAM (modelb/src/low.s).
-.macro farjsr idx
-        ldx #idx
-        jsr farcall
-.endmacro

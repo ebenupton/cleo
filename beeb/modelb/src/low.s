@@ -1,55 +1,43 @@
 ; ============================================================================
 ; Main RAM, $0140-$02FF: what has to be visible whatever bank is paged in.  The
-; far-call thunk, the interrupt stub (the handler itself is in bank 7), the two
+; crossings between the banks, the interrupt stub (the handler itself is in bank 7), the two
 ; map fetches the tile blitter makes from bank 6, and the sprite list.  The
 ; Master's own main-RAM map helpers (maprow, mapbyte, mapput, pagelogic) land here
 ; too, from engine.s: they page bank 5 in and bank 7 back exactly as they do there.
 ; ============================================================================
         .segment "LOWCODE"
 
-; ---------------------------------------------------------------- far calls
-; X = the index of a (bank, address-1) entry in FARTAB, bank 7's: paged in to read
-; it (ROMSEL_CPY first, so an interrupt in between puts bank 7 back, not the caller's).
-; A goes in and comes back, Y is untouched, X is destroyed.
-; Everything is on the stack -- the caller's bank, the return into fcret, the target
-; -- so it nests and a step of the interrupt handler can land anywhere in it: the
-; handler reads the bank from $F4 and puts it back, which is the MOS's own rule.
-;
-;   caller's return
-;   caller's bank          <- fcret pulls this
-;   fcret-1                <- the target's rts lands here
-;   target-1               <- this rts goes there
-; (A crosses in fcA: nothing runs between its store and its load but this code)
-farcall:
-        sta fcA                     ; A as it came in
+; ---------------------------------------------------------------- the crossings
+; A bank cannot page another over itself, so every crossing is here: fixed thunks for
+; what bank 7 calls in the others every frame (callbank, selbb, validate, dirfetch)
+; and for the tile blitter's gather (mapstrip), and one routine for the menus.  No
+; table, no dispatch in any bank.  ROMSEL_CPY is written before ROMSEL every time, so
+; an interrupt in between puts back the bank being entered: the handler restores from
+; $F4, which is the MOS's own rule.
+
+; xcall: the menus' crossing -- their overlay (bank 6) calls a few routines in bank 7,
+; and the game loop its four entries.  X = the bank, ctgt = the address; A goes in
+; and comes back, Y is untouched, X is destroyed.  The caller's bank waits on the stack,
+; so it nests (a menu calls load_title, which reads the disc...).  Not hot: a handful a
+; menu frame.  (A crosses in fcA: nothing runs between its store and its load but this.)
+xcall:  sta fcA
         lda ROMSEL_CPY
         pha
-        lda #>(fcret-1)
-        pha
-        lda #<(fcret-1)
-        pha
-        bankimm lda, BANK_LVL, 0    ; the table's bank (for reading: the write bank is
-        sta ROMSEL_CPY              ; set below, for the target)
-        sta ROMSEL
-        lda FARTAB+2,x
-        pha
-        lda FARTAB+1,x
-        pha
-        lda FARTAB,x
+        txa                         ; (A = the bank: wrselx's store, on a board, is A)
         sta ROMSEL_CPY
         sta ROMSEL
-        tax                         ; (X is reloaded below)
         wrselx 0
         lda fcA
-        rts
-fcret:  sta fcA                     ; the target's A (Y must survive, X carries the bank)
-        pla                         ; the caller's bank
+        jsr xcgo
+xcback: sta fcA                     ; (a label of its own: the write-bank record's marker
+        pla                         ;  is a cheap label, one per scope)
         tax
         stx ROMSEL_CPY
         stx ROMSEL
         wrselx 0
         lda fcA
         rts
+xcgo:   jmp (ctgt)
 
 ; ---------------------------------------------------------------- interrupts
 ; The chain step and the vsync work are in bank 7 with their tables: this pages it
@@ -102,10 +90,23 @@ mapstrip:                           ; (ptr) = the row's first tile: its gather, 
         sta ROMSEL_CPY              ; GATHERL/GATHERH here; bank 6 back (the write bank:
         sta ROMSEL                  ; drawrect sets it after the call)
         jsr gather5
-        bankimm lda, BANK_TILES, 0
-        sta ROMSEL_CPY
+page6:  bankimm lda, BANK_TILES, 0  ; (selbb and validate: page6 first, then the write
+        sta ROMSEL_CPY              ; bank for what they store in bank 6)
         sta ROMSEL
         rts
+
+; bank 7's two calls a frame into bank 6 that are not the blitter's entry:
+; select_backbuf (it patches ringaddr's operand) and scroll_validate (it draws the
+; new strips with drawrect itself)
+selbb:  jsr page6
+        wrsel BANK_TILES, 0
+        jsr select_backbuf
+        jmp pagelogic
+validate:
+        jsr page6
+        wrsel BANK_TILES, 0
+        jsr scroll_validate
+        jmp pagelogic
 
 ; the title pack's directory is in bank 5 and the prologue in bank 7: an entry's
 ; eight bytes come across here (bank 5's fetch8), and ptr is left pointing at the copy
@@ -117,10 +118,9 @@ dirfetch:                           ; ptr -> the entry in bank 5
         jmp pagelogic               ; bank 7 back
 
 ; ---------------------------------------------------------------- the direct switch
-; The two crossings that happen once a sprite and once an erased rect skip the far
-; table: page the bank, call its entry -- BANKENTRY, the start of banks 4, 5 and 6:
-; the sprite row loop in 4 and 6, drawrect_clip (behind its write-bank store) in 5 -- and page
-; bank 7 back (pagelogic).  ~30 cycles against the thunk's ~90.
+; Once a sprite and once a rect: page the bank, call its entry -- BANKENTRY, the start
+; of banks 4, 5 and 6: the sprite row loop in 4 and 5, bank6_entry + drawrect_clip in 6
+; (each sets its own write bank) -- and page bank 7 back (pagelogic).
 callbank:                           ; A = the bank (the write bank is set by the
         sta ROMSEL_CPY              ; entry itself: ds_entry, drawrect_clip -- A still
         sta ROMSEL                  ; holds the bank there)
@@ -128,6 +128,7 @@ callbank:                           ; A = the bank (the write bank is set by the
         jmp pagelogic
 
         .segment "LOWBSS"
+ctgt:     .res 2                    ; xcall's target
 GATHERH:  .res 21                   ; a tile row's gather (gather5): 21 tiles at most --
 MAPBUF = GATHERH                    ; and dirfetch's eight bytes, drawsprite's, when no
                                     ; rect is being drawn

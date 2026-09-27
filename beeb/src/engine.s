@@ -3313,11 +3313,11 @@ pl_walk:
   .if MODELB
         .segment "LGCCODE"          ; the ring work: bank 7 drives it, and what reads the
 render_core:                        ; records stays here; bank 6 (the tiles, the ring
-        farjsr F_SELBB              ;   work) gets three far calls a frame
+        jsr selbb                   ;   work) gets two calls a frame (low RAM's thunks)
         jsr calc_ring
         jsr match_sprites
         jsr erase_old
-        farjsr F_RENDER6            ; scroll_validate (bank 6: it draws the new strips)
+        jsr validate                ; scroll_validate (bank 6: it draws the new strips)
         jsr draw_dirty              ; (bank 7 from here: the rects through callbank)
         jsr blank_below
         jsr draw_sprites
@@ -5019,31 +5019,42 @@ ringaddr7:
         sta sp+1
         rts
 ; The menus live in bank 6's overlay (menu.s under MNUCODE) and are called from bank
-; 7; what they call back in bank 7 crosses the same way.  What they call in main RAM
-; is a plain name.
-.macro FARSUB name, idx
+; 7; what they call back in bank 7 crosses the same way, through low RAM's xcall (X =
+; the bank, ctgt = the target; a tail call: xcall returns to the stub's caller).  The
+; overlay comes off the disc after the boot loader's bank patches, so its stubs read
+; bank 7's physical number from PBANK; bank 7's own are patched.  What the menus call
+; in main RAM or in bank 6 is a plain name.
+.macro XCALL name, target, tomenus
 .ident(name):
-        ldx #idx                    ; tail call: fcret returns to our caller
-        jmp farcall
+        ldx #<target
+        stx ctgt
+        ldx #>target
+        stx ctgt+1
+  .if tomenus
+        bankimm ldx, BANK_TILES, BANK_LVL   ; bank 7's stubs, into the overlay
+  .else
+        ldpbank ldx, BANK_LVL       ; the overlay's, into bank 7 (not patched: PBANK)
+  .endif
+        jmp xcall
 .endmacro
         .segment "LGCCODE"
-        FARSUB "t_title_menu", F_TITLE
-        FARSUB "t_help_screen", F_HELP
-        FARSUB "t_level_select", F_LEVELSEL
-        FARSUB "t_winlose", F_WINLOSE
+        XCALL "t_title_menu", title_menu, 1
+        XCALL "t_help_screen", help_screen, 1
+        XCALL "t_level_select", level_select, 1
+        XCALL "t_winlose", winlose, 1
         .segment "MNUCODE"
-        FARSUB "m_blank_palette", F_BLANKPAL
-        FARSUB "m_set_palette", F_SETPAL
-m_wait_flip:                        ; (its own copy: the far table is full)
+        XCALL "m_blank_palette", blank_palette, 0
+        XCALL "m_set_palette", set_palette, 0
+m_wait_flip:                        ; (its own copy: two instructions)
         lda flipreq
         bne m_wait_flip
         rts
-        FARSUB "m_loadfile", F_LOADTITLE
-        FARSUB "m_music_stop", F_MUSSTOP
-        FARSUB "m_build_sections", F_BUILDSECT
-        FARSUB "m_div10_16", F_DIV10
-        FARSUB "m_calc_ring", F_CALCRING
-        FARSUB "m_drawsprite", F_DRAWSPR
+        XCALL "m_loadfile", load_title_b, 0
+        XCALL "m_music_stop", music_stop, 0
+        XCALL "m_build_sections", menu_sections, 0
+        XCALL "m_div10_16", div10_16, 0
+        XCALL "m_calc_ring", calc_ring, 0
+        XCALL "m_drawsprite", drawsprite, 0
 m_music_start = music_start
 m_ringaddr = ringaddr
 m_select_backbuf = select_backbuf
