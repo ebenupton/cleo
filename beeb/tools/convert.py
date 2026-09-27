@@ -336,15 +336,75 @@ for (lv, sub), L in levels.items():
         hole_cells[(lv, sub)] = cells
         for o in set(cells.values()):
             twin_of.setdefault(o, None)
+
+# Isolated black cells read as holes punched in the foreground: blackening a tile's
+# backdrop can leave a small patch of all-black tiles inside a wall or a floor.  A
+# hole is a 4-connected patch of cells whose tiles blacken to all black, at most four
+# cells (1x1 up to 2x2), that touches neither the map's edge nor any other black, with
+# textured tiles beside it -- so a black cell under the black sky beside a doorway is
+# backdrop, not a hole.  Each of its cells gets back the tile that was there, as it
+# was before blackening (a texture-keeping twin, as for the ramps' feet above): nothing
+# is invented.  A cell whose tile was black to begin with stays as it was.
+def _after(cid):                    # a tile's image once the backdrops are blackened
+    return blackened.get(cid, tile_preview[cid])
+def _black(cid):
+    return bool(np.all(_after(cid) == 0))
+def _textured(cid):
+    a = _after(cid)
+    return not (np.all(a == 0) or np.all(a == CYAN_COL))
+restored = 0
+for (lv, sub), L in levels.items():
+    m = L['map']
+    h, w = m.shape
+    keep = hole_cells.get((lv, sub), {})          # (the ramps' feet keep their texture)
+    cid_at = lambda y, x: orig2compact[int(m[y, x])] if int(m[y, x]) >= 0 else None
+    black = np.zeros((h, w), bool)
+    for y in range(h):
+        for x in range(w):
+            c = cid_at(y, x)
+            black[y, x] = c is not None and (y, x) not in keep and _black(c)
+    seen = np.zeros_like(black)
+    cells = {}
+    for y in range(h):
+        for x in range(w):
+            if not black[y, x] or seen[y, x]:
+                continue
+            comp, stack, edge = [], [(y, x)], False
+            seen[y, x] = True
+            while stack:                            # the whole patch, however big
+                cy, cx = stack.pop(); comp.append((cy, cx))
+                for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                    ny, nx = cy + dy, cx + dx
+                    if not (0 <= ny < h and 0 <= nx < w):
+                        edge = True; continue
+                    if black[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True; stack.append((ny, nx))
+            if len(comp) > 4 or edge:
+                continue
+            textured = any((cy + dy, cx + dx) not in comp and 0 <= cy + dy < h and 0 <= cx + dx < w
+                           and (cid_at(cy + dy, cx + dx) is not None)
+                           and ((cy + dy, cx + dx) in keep or _textured(cid_at(cy + dy, cx + dx)))
+                           for cy, cx in comp for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)))
+            if not textured:
+                continue
+            for cy, cx in comp:
+                o = int(m[cy, cx])
+                if orig2compact[o] in blackened:      # blackened: its own art back
+                    cells[(cy, cx)] = o
+    if cells:
+        restored += len(cells)
+        hole_cells.setdefault((lv, sub), {}).update(cells)
+        for o in set(cells.values()):
+            twin_of.setdefault(o, None)
 for o in sorted(twin_of):
     twin_of[o] = len(compact)
     compact.append(o)                       # same original id: same alt class
     tile_preview.append(tile_preview[orig2compact[o]].copy())   # unblackened
 for cid, rep in blackened.items():
     tile_preview[cid] = rep
-print('blackened %d tiles; %d texture-keeping twins for %d filler cells'
+print('blackened %d tiles; %d texture-keeping twins for %d cells (%d of them holes given back their own tile)'
       % (len(blackened), len(twin_of),
-         sum(len(c) for c in hole_cells.values())))
+         sum(len(c) for c in hole_cells.values()), restored))
 
 tiles_bytes = []
 for cid in range(len(compact)):
@@ -550,7 +610,7 @@ for (lv, sub), L in levels.items():
     m[fl] = 426 + rng.randint(0, 4, size=int(fl.sum()))
     cm = np.vectorize(lambda t: orig2compact[t])(m)
     for (hy, hx), ho in hole_cells.get((lv, sub), {}).items():
-        cm[hy, hx] = twin_of[ho]     # keep the wall texture at ramp feet
+        cm[hy, hx] = twin_of[ho]     # keep the texture: ramps' feet, and holes (above)
     maps[(lv, sub)] = cm
 
 def tileset_of(lv, sub):
@@ -562,65 +622,6 @@ for (lv, sub), cm in maps.items():
     s.update(int(x) for x in np.unique(cm))
     if any(o[0] == 11 for o in levels[(lv, sub)]['objs']):
         s.update(special['VANISH0'] + i for i in range(8))
-
-# Isolated black cells read as holes punched in the foreground.  A hole is black
-# that is NOT part of the backdrop: a 4-connected component of solid-black cells of
-# at most four cells (1x1 up to 2x2) that touches neither the map edge nor any other
-# black -- so a black cell under the black sky beside a doorway is backdrop, not a
-# hole, however textured its floor neighbours are.  Each hole is filled with the
-# majority tile among the component's textured neighbours; on a tie, the neighbour
-# whose art is nearest the hole's own (so a doorframe never wins over a wall).  Keyed
-# on the solid-black set.
-def _tile_mean(c):
-    o = [oo for oo, cc in orig2compact.items() if cc == c]
-    return til_rgb0[til_idx[o[0] * 8:o[0] * 8 + 8, :]].reshape(-1, 3).mean(0) if o else np.zeros(3)
-for (lv, sub), cm in maps.items():
-    h, w = cm.shape
-    black = np.vectorize(lambda c: tile_solid.get(int(c)) == 2)(cm)
-    tex = lambda c: int(c) not in tile_solid
-    seen = np.zeros_like(black)
-    fills = []
-    for y in range(h):
-        for x in range(w):
-            if not black[y, x] or seen[y, x]:
-                continue
-            comp, stack, edge = [], [(y, x)], False
-            seen[y, x] = True
-            while stack and len(comp) <= 4:
-                cy, cx = stack.pop(); comp.append((cy, cx))
-                for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-                    ny, nx = cy + dy, cx + dx
-                    if not (0 <= ny < h and 0 <= nx < w):
-                        edge = True; continue
-                    if black[ny, nx] and not seen[ny, nx]:
-                        seen[ny, nx] = True; stack.append((ny, nx))
-            if stack or len(comp) > 4 or edge:
-                for cy, cx in stack: pass                  # (the rest is marked as visited on the way)
-                while stack:
-                    cy, cx = stack.pop()
-                    for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-                        ny, nx = cy + dy, cx + dx
-                        if 0 <= ny < h and 0 <= nx < w and black[ny, nx] and not seen[ny, nx]:
-                            seen[ny, nx] = True; stack.append((ny, nx))
-                continue
-            nb = []
-            for cy, cx in comp:
-                for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-                    ny, nx = cy + dy, cx + dx
-                    if (ny, nx) not in comp and tex(cm[ny, nx]):
-                        nb.append(int(cm[ny, nx]))
-            if not nb:
-                continue
-            top = max(nb.count(c) for c in set(nb))
-            cands = [c for c in set(nb) if nb.count(c) == top]
-            me = _tile_mean(int(cm[comp[0][0], comp[0][1]]))
-            pick = min(cands, key=lambda c: float(np.sum((_tile_mean(c) - me) ** 2)))
-            for cy, cx in comp:
-                fills.append((cx, cy, pick))
-    for (x, y, c) in fills:
-        cm[y, x] = c
-    if fills:
-        print('%s: filled %d isolated black cells (%d holes)' % (name_of(lv, sub), len(fills), len(set((x, y) for x, y, _ in fills))))
 
 # ----------------------------------------------------------------------------
 # The tiles of a level, for both machines (tools/assets.py calls pack_tiles).  A map
