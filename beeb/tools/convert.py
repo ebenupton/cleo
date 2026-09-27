@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert the Cleo J2ME assets (../v500) into BBC MODE 1 data.
+"""Convert the Cleo J2ME assets (assets/v500: CleoV500.jar's contents) into BBC MODE 1 data.
 
 Not run on its own: tools/assets.py imports it (build.sh runs that from beeb/), and
 takes from it the dithered sprites, masks, box stars and trampolines, the maps, the
@@ -13,7 +13,7 @@ import struct, sys, os, json
 from PIL import Image
 import numpy as np
 
-SRC = os.path.join(os.path.dirname(__file__), '..', '..', 'v500')
+SRC = os.path.join(os.path.dirname(__file__), '..', 'assets', 'v500')
 OUT = os.path.join(os.path.dirname(__file__), '..', 'build')
 os.makedirs(OUT, exist_ok=True)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Minimal Java class-file disassembler (no JVM needed): constant pool, fields, methods, bytecode.
-   python3 tools/javadis.py ../gx/CleoCanvas.class [method-name-substring]"""
+   python3 tools/javadis.py assets/gx/CleoCanvas.class [method-name-substring]"""
 import struct, sys
 
 OPS = {0:'nop',1:'aconst_null',2:'iconst_m1',3:'iconst_0',4:'iconst_1',5:'iconst_2',6:'iconst_3',7:'iconst_4',8:'iconst_5',

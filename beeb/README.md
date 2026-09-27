@@ -20,8 +20,9 @@ Keys: `Z`/`X` or cursor left/right run, `RETURN` (or `SPACE`, cursor up, `:`) ju
 
 ## Building
 
-Needs Python 3 with Pillow and numpy, and cc65 (`ca65`/`ld65`). The original JAR
-contents are expected in `../v500/` (unzipped `CleoV500.jar`).
+Needs Python 3 with Pillow and numpy, and cc65 (`ca65`/`ld65`/`od65`). The original
+game's data is in the repository: `assets/v500/` (unzipped `CleoV500.jar`, which the
+build reads) and `assets/gx/` (the GX edition's, for reference).
 
     git submodule update --init # the engine, beebgame, in beebgame/
     sh build.sh                 # the tune, the assets, both machines, one disc: build/cleo.ssd
@@ -88,6 +89,7 @@ transitions and the "BONUS LEVEL" banner sprite.
     beebgame/          the engine (a git submodule): its sources, linker maps, build
                        driver, tools and test library
     src/               the game's 6502 sources (main.s includes the engine's and the rest)
+    assets/            the original game's data: v500/ (CleoV500.jar, the build's input), gx/
     tools/             the asset pipeline: the original's data converted, the levels packed
     test/              the checks, on beebgame's jsbeeb harness
     docs/              DESIGN.md (the game's side); history/ has earlier plans and records

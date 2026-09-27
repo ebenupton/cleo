@@ -28,9 +28,10 @@ Collect every star in a level to open its bonus level. Menus use the cursor keys
 
 ## Building
 
-You need Python 3 with `Pillow` and `numpy`, [cc65](https://cc65.github.io) (`ca65`,
-`ld65`), and the original game's assets unzipped from `CleoV500.jar` into `v500/` (the
-JAR is not part of this repository).
+You need Python 3 with `Pillow` and `numpy` and [cc65](https://cc65.github.io) (`ca65`,
+`ld65`, `od65`).  The original game's data comes with the repository, unzipped from
+the JARs into `beeb/assets/` (`v500/` for the build, `gx/` for reference); the engine
+is a submodule (`git clone --recurse-submodules`, or `git submodule update --init`).
 
 ```sh
 cd beeb

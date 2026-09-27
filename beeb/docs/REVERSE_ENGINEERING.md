@@ -7,7 +7,8 @@ executable version of this memo and should be your starting point.
 
 ## 1. Anatomy of the JAR
 
-Two builds existed (`CleoV500.jar`, `Cleo_GX_EN.jar`); the V500 one was used. Unzipped:
+Two builds existed (`CleoV500.jar`, `Cleo_GX_EN.jar`); the V500 one was used.  Both are
+in the repository unzipped, `assets/v500/` and `assets/gx/`:
 
 | file | size | what it is |
 |---|---|---|
