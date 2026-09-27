@@ -49,9 +49,11 @@ TILEMIRROR = 0
 ; either machine.  The code is assembled for banks 4..7 (BANK_SPR, BANK_TILES,
 ; BANK_MAP, BANK_LVL) and every byte of it that holds a bank number is recorded here,
 ; with the bank whose image holds the byte, for the loader to patch before the game
-; starts (the BANKFIX table, appended to BANKS).  Code that comes off the disc later
-; -- the level loader, the menu overlay -- is not patched: it reads the physical
-; bank from PBANK (low BSS, four bytes indexed by bank - 4).
+; starts (the BANKFIX table, appended to BANKS).  Bank 7's game image comes off the
+; disc later and is patched as it comes in (ldprog.s image_load, from its own lists);
+; other code that comes off the disc -- the level loader, the menus' image -- is not
+; patched: it reads the physical bank from PBANK (low BSS, four bytes indexed by bank
+; - 4).
 ;   bankimm op, n, b   op #n, the operand a bank number: in bank b's image (0 = the
 ;                      low-RAM image, in the BOOT piece); a fourth argument tells two
 ;                      alike sites in one routine apart

@@ -3294,7 +3294,8 @@ draw_score:                         ; 5 digits at 108..140
         cpx #4
         bcs @d
         rts
-; t16 = t16 / 10 ; q1 = remainder
+; t16 = t16 / 10 ; q1 = remainder (X kept)
+        .segment "KRNCODE"          ; the kernel: the menus' too
 div10_16:
         lda #0                      ; remainder lives in A for the whole loop
         ldy #16                     ; Y, not X: draw_score keeps its slot in X

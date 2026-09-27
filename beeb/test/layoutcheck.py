@@ -10,7 +10,7 @@ on any difference.
 import re, sys
 
 CODE = {'CODE', 'TILCODE', 'LGCCODE', 'SPR4CODE', 'SPR5CODE', 'MAP5CODE',
-        'TIL6ENT', 'MNUCODE', 'LOWCODE', 'NMISTUB'}
+        'TIL6ENT', 'MNUCODE', 'LOWCODE', 'NMISTUB', 'KRNCODE'}
 STARTUP = {'BOOT', 'BOOTHDR', 'BANKFIX', 'WRFIX'}      # run once, then overwritten
 OWN = {'ZPHW', 'LOWHW', 'LGCHW', 'TABLES'}              # one machine's own, after the shared
 

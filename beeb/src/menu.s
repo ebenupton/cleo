@@ -1,13 +1,56 @@
 ; ============================================================================
-; CLEO - the menus: title, help, level select, win/lose.  Bank 6's menu overlay
-; (MNUCODE/MNUBSS; the font and the tune in banks.s's MNUDATA), loaded from the disc
-; over the tiles with the title pack into bank 5; what it calls in bank 7 goes through
-; the XCALL stubs (engine.s)
+; CLEO - the menus: title, help, level select, win/lose, and the top of the game
+; loop.  The menus' image of bank 7 (MNUCODE/MNUBSS; the font, the tune and the title
+; pieces in banks.s's MNUDATA), which the game's image replaces for play and which
+; replaces it again after (disc.s go_game, go_menu).  What they call in bank 7 is the
+; kernel's, which neither image covers: a plain call.
 ; ============================================================================
         .segment "MNUCODE"      
 
-MENU_START = 0                      ; title_menu's result (game.s)
+MENU_START = 0                      ; title_menu's result
 MENU_HELP  = 1
+
+; ---------------------------------------------------------------- the game loop's top
+; start-up comes here (disc.s go_title), and the game's image comes back to menu_over when a game ends (A = 0 lost, 1 won), with the stack
+; reset: every way out of here is go_game.
+game_main:
+  .if BHW
+        lda #0
+        sta hiscore
+        sta hiscore+1
+        sta maxlevel
+  .else
+        stza hiscore
+        stza hiscore+1
+        stza maxlevel
+  .endif
+title_loop:
+        jsr title_menu
+        cmp #MENU_HELP
+        bne new_game
+        jsr help_screen
+        jmp title_loop
+new_game:
+        stz level
+  .if BHW
+        sta score                   ; A = 0 (the stz)
+        sta score+1
+  .else
+        stz score
+        stz score+1
+  .endif
+        lda #3
+        sta lives
+        sta health
+        lda maxlevel
+        beq :+
+        jsr level_select
+        asl
+        sta level
+:       jmp go_game                 ; the game's image, and its level loop (disc.s)
+menu_over:
+        jsr winlose
+        jmp title_loop
 
 ; ---------------------------------------------------------------- text
 ; drawtext: ptr -> 0-terminated string, A = x (px, even), X = y (px, multiple of 4)
@@ -85,7 +128,8 @@ draw_glyph_rows:
         lda ty
         lsr
         lsr
-        jsr m_ringaddr                ; sp = first char (row 0)
+        clc                         ; (ringaddr7 adds the carry in: ty's bit 1 is out)
+        jsr ringaddr7               ; sp = first char (row 0)
         ldx #0                      ; glyph row 0..7
 @row:   cpx #4
         bne :++                     ; past the fold's own anonymous label
@@ -158,9 +202,10 @@ clear_ring:
 ; menu_begin: window at (0,0), buffer 0 as work buffer, cleared; screen blanked until
 ; menu_show has flipped the finished page in
 menu_begin:
-        jsr m_blank_palette
-        jsr m_wait_flip               ; the game may still have a flip pending
-        sta wx                      ; A = 0: m_wait_flip spun until flipreq was 0
+        jsr blank_palette
+:       lda flipreq                 ; the game may still have a flip pending
+        bne :-
+        sta wx                      ; A = 0: flipreq was
         sta wx+1
         sta wy
         sta wy+1
@@ -169,19 +214,14 @@ menu_begin:
         sta wcy
         sta wfine
         sta curbuf
-        jsr m_select_backbuf
-        jsr m_calc_ring
-        jsr clear_ring
-        lda #<menurec
-        sta rp
-        lda #>menurec
-        sta rp+1
-        rts
+        jsr selbb                   ; (bank 6's select_backbuf, through low RAM)
+        jsr calc_ring
+        jmp clear_ring
 
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stz curbuf                  ; (A is dead: build_sections loads it)
-        jsr m_build_sections        ; bank 7's menu_sections (engine.s)
+        jsr menu_sections           ; the kernel's (engine.s)
     .if .not BHW
         stz NEXTBUF                 ; (the Master: its handler's flip reads it)
     .endif
@@ -190,7 +230,7 @@ menu_show:
 :       lda flipreq
         bne :-
         inc curbuf                  ; 0 -> 1: next game frame renders into the other buffer
-        jmp m_set_palette             ; page is on display: colours back
+        jmp set_palette             ; page is on display: colours back
 
 ; wait one vsync and return new key edges in A (keys pressed now but not last time)
 menu_keys:
@@ -204,15 +244,142 @@ menu_keys:
         stx lastkeys
         rts
 
-; draw a title piece: A = piece index, spx/spy = position (top-left)
+; ---------------------------------------------------------------- the title pieces
+; Everything the menus show is on black, so a piece is drawn opaque: no mask.  A piece
+; is a run-length stream (title.bin, convert.py) of its screen bytes in the screen's
+; own order -- a char row at a time, each a column of eight lines after another -- so
+; it unpacks into TBUF as a straight run and goes to the screen a char row at a time.
+; Big Cleo's frames are unpacked a frame ahead (winlose), so what reaches the screen
+; after the vsync is the copy alone, which stays ahead of the beam.
+
+; draw a title piece: A = piece index, spx/spy = position (top-left: char aligned,
+; spx a multiple of 2, spy of 4)
 draw_piece:
-        ldpbank ldx, BANK_MAP       ; the title pack is in the map's bank (the overlay
-        stx spbank                  ; comes off the disc after the boot loader's
-                                    ; patches, so the physical bank is read: PBANK)
-        jsr m_drawsprite
-        ldpbank lda, BANK_SPR
-        sta spbank
+        jsr unpack                  ; (leaves spx, spy alone)
+; TBUF -> the screen: prows char rows of pspan bytes, from char column spx/2 of char
+; row spy/4 on
+blit:   lda #<TBUF
+        sta w16b
+        lda #>TBUF
+        sta w16b+1
+        lda spy
+        lsr
+        lsr
+        sta prow
+        lda prows
+        sta pleft
+@row:   lda spx
+        lsr
+        sta w16
+        lda #0
+        sta w16+1
+        lda prow                    ; (C = 0: spx is even -- ringaddr7 adds the carry in)
+        jsr ringaddr7               ; sp = the row's first byte (Y untouched)
+        lda pspan
+        sta tmp
+        lda pspan+1
+        sta tmp2
+@chunk: lda tmp2                    ; 128 bytes at most at a time: the copy counts Y
+        bne @full                   ; down to 0 with bpl
+        lda tmp
+        cmp #129
+        bcc @part
+@full:  lda #128
+@part:  sta tmp3
+        tay
+        dey
+@c:     lda (w16b),y
+        sta (sp),y
+        dey
+        bpl @c
+        lda w16b                    ; (C = 0: dey leaves the carry of the cmp or the
+        clc                         ;  lda, which is not known on the @full way)
+        adc tmp3
+        sta w16b
+        bcc :+
+        inc w16b+1
+:       lda sp                      ; within a row: the ring folds only between rows
+        clc
+        adc tmp3
+        sta sp
+        bcc :+
+        inc sp+1
+:       lda tmp
+        sec
+        sbc tmp3
+        sta tmp
+        bcs :+
+        dec tmp2
+:       ora tmp2
+        bne @chunk
+        inc prow
+        dec pleft
+        bne @row
         rts
+
+; piece A -> TBUF: its char rows in prows, a row's bytes in pspan.  The stream: a
+; byte n < $80 is n+1 literal bytes after it, $80..$FE a run of n-$7D copies of the
+; byte after it, $FF the end.
+unpack: tax
+        lda tp_lo,x
+        sta w16b
+        lda tp_hi,x
+        sta w16b+1
+        lda tp_rows,x
+        sta prows
+        lda #0
+        sta pspan+1
+        lda tp_cols,x
+        asl
+        asl
+        asl
+        rol pspan+1                 ; (C = 0 before: 8 * 40 columns at most)
+        sta pspan
+        lda #<TBUF
+        sta tp
+        lda #>TBUF
+        sta tp+1
+@ctl:   ldy #0
+        lda (w16b),y
+        cmp #$FF
+        beq @done
+        inc w16b
+        bne :+
+        inc w16b+1
+:       cmp #$80
+        bcs @run
+        tax                         ; n + 1 literals
+        inx
+@lit:   lda (w16b),y
+        sta (tp),y
+        iny
+        dex
+        bne @lit
+        tya                         ; the stream on by Y too
+        clc
+        adc w16b
+        sta w16b
+        bcc @adv
+        inc w16b+1
+        bcs @adv                    ; (always: inc leaves the carry)
+@run:   sbc #$7D                    ; C = 1: n - $7D copies
+        tax
+        lda (w16b),y
+        inc w16b
+        bne @r
+        inc w16b+1
+@r:     sta (tp),y
+        iny
+        dex
+        bne @r
+@adv:   tya                         ; the buffer on by Y
+        clc
+        adc tp
+        sta tp
+        bcc @ctl
+        inc tp+1
+        bcs @ctl                    ; (always)
+@done:  rts
 
 ; centred text: ptr -> string, X = y  (x = (160 - len*8)/2)
 text_centred:
@@ -324,10 +491,18 @@ clear_items:
         lsr
         lsr
         tax
-@r:     lda RINGLO,x
+@r:     stx tmp3
+        lda #0
         sta w16
-        lda RINGHI,x
         sta w16+1
+        txa
+        clc                         ; (ringaddr7 adds the carry in)
+        jsr ringaddr7               ; sp = the row's start
+        lda sp
+        sta w16
+        lda sp+1
+        sta w16+1
+        ldx tmp3
         lda #0
         tay
 :       sta (w16),y
@@ -353,7 +528,7 @@ clear_items:
 title_menu:
         lda MUSON
         bne :+
-        jsr m_music_start             ; only if not already playing (back from help)
+        jsr music_start             ; only if not already playing (back from help)
 :       jsr menu_begin
         lda #40
         sta spx
@@ -440,7 +615,7 @@ level_select:
 winlose:
         sta mtop                    ; the win/lose flag (not tmp4: the sprite prologue
                                     ; uses it, and the lose screen cycled the WIN frames)
-        jsr m_music_stop              ; the win/lose screen is silent
+        jsr music_stop              ; the win/lose screen is silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "winlose picks the piece as TP_LOSE - mtop"
         lda #0
@@ -489,14 +664,39 @@ HISCORE_Y = 76                      ; (a glyph row is a multiple of 4)
         lda #$FF
         sta lastkeys
         sta mcount                  ; the frame last drawn  (menu_list's variables: this
-        stz msel                    ; animation counter      screen runs no list, and
-                                    ; tmp2/tmp3 do not survive menu_show's callees)
+        sta mbuf                    ; the frame in TBUF      screen runs no list, and
+        stz msel                    ; animation counter      tmp2/tmp3 do not survive
+                                    ;                        menu_show's callees)
         lda #66                     ; big Cleo's place, once: nothing in the loop moves
         sta spx                     ; spx/spy (spx+1, spy+1 are 0 from the pieces above)
         lda #28
         sta spy
-@loop:                              ; big Cleo's frame: the shift count is the same on
-        lda msel                    ; both arms
+@loop:  jsr cleo_frame              ; the frame for msel: in TBUF already (unpacked a
+        cmp mcount                  ; frame ahead, below) but for the first
+        beq @same
+        sta mcount
+        cmp mbuf
+        beq :+
+        sta mbuf
+        jsr unpack
+:       jsr blit                    ; right after menu_keys' vsync, as the copy it is
+@same:  jsr menu_show
+        inc msel
+        jsr cleo_frame              ; the next one, unpacked now, while the page stands
+        cmp mcount
+        beq :+
+        cmp mbuf
+        beq :+
+        sta mbuf
+        jsr unpack
+:       jsr menu_keys
+        and #(K_FIRE|K_RIGHT)
+        beq @loop
+        rts
+
+; big Cleo's frame for msel -> A (the piece): the shift count is the same on both arms
+cleo_frame:
+        lda msel
         and #30
         tax
         lda mtop
@@ -523,15 +723,6 @@ HISCORE_Y = 76                      ; (a glyph row is a multiple of 4)
         and #3
 @drawc: clc
         adc #TP_CLEO0
-        cmp mcount
-        beq @same
-        sta mcount
-        jsr draw_piece
-@same:  jsr menu_show
-        inc msel
-        jsr menu_keys
-        and #(K_FIRE|K_RIGHT)
-        beq @loop
         rts
 
 ; w16 >>= X
@@ -557,15 +748,16 @@ draw_number:
         sta tx
         stx ty
         ; convert t16 to decimal (5 digits, leading zeros suppressed) into numbuf
-        ldy #4
+        ldx #4
 @d:
-        jsr m_div10_16
-        ora #'0'                    ; A = the remainder (= q1); Y survives the call
-        sta numbuf,y
-        dey
+        jsr div10_16                ; (X kept: Y is its count)
+        ora #'0'                    ; A = the remainder (= q1)
+        sta numbuf,x
+        dex
         bpl @d
         ; suppress leading zeros (keep at least one)
-:       iny                         ; (Y = $FF from the loop above)
+        ldy #$FF
+:       iny
         lda numbuf,y
         cmp #'0'
         bne :+
@@ -616,5 +808,11 @@ mstep:     .res 1
 msel:      .res 1
 mclear:    .res 1
 mlast:     .res 1                  ; item index the cursor was last drawn at
+mbuf:      .res 1                  ; the piece in TBUF (winlose: big Cleo a frame ahead)
+prow:      .res 1                  ; blit: the char row, and the rows left
+pleft:     .res 1
+prows:     .res 1                  ; unpack's piece: its char rows, a row's bytes
+pspan:     .res 2
+TBUF:      .res TBUF_LEN           ; the piece unpacked (title.inc: the largest)
 tx:        .res 1
 ty:        .res 1

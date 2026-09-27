@@ -9,7 +9,8 @@
         .out .sprintf("%s = $%04X", .string(name), name)
   .endif
 .endmacro
-        OUTC MENU_BASE
+        OUTC IMG_GAME
+        OUTC IMG_MENU
         OUTC TILES
         OUTC TOFF
         OUTC NFLAT
@@ -18,7 +19,6 @@
         OUTC LDPROG
         OUTC STAGE
         OUTC STAGE_LVL
-        OUTC TITLE_ADDR
         OUTC MAP5
         OUTC LV_OBJS
         OUTC LV_PAGE0

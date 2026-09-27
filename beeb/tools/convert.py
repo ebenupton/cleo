@@ -4,10 +4,9 @@
 Not run on its own: tools/assets.py imports it (build.sh runs that from beeb/), and
 takes from it the dithered sprites, masks, box stars and trampolines, the maps, the
 levels' objects and tables, pack_tiles (a level's tile ids and the lists that gather
-its tiles), the bar, the HUD digits and the font.  It writes, in build/:
+its tiles), the bar, the HUD digits, the font and the title pieces (title_pieces,
+title_streams: assets.py puts them in the menus' image).  It writes, in build/:
   TILES0-2 the tile set: outdoor, shared and indoor files (pack_tiles lays out a level's)
-  TITLE    the title pack (bank 5 @ &8900, over the sprites and the map during the
-           menus): logo, you/win/lose, big cleo
   preview_*.png, meta.json   for eyeballing the dither
 """
 import struct, sys, os, json
@@ -1206,37 +1205,69 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     mask = mask_plane(alpha) if not opaque else b''
     return W, (2 * h if full else h), h, data, col, mask
 
-TITLE_ADDR = 0x8900               # bank 5, where the sprites and the map go during a level
-title = bytearray()
-tdir = []
+title_pieces = []                 # (name, W, char rows, bytes in the screen's order)
 pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38, 58, 39, 13, True), ('lose', 0, 71, 45, 13, True)]
-for f in range(9):                  # full-res like everything else: a half-res image
+for f in range(8):                  # full-res like everything else: a half-res image
     pieces.append(('cleo%d' % f, (f % 3) * 26, 85 + (f // 3) * 32, 26, 31, True))   # dithers per line, and looked it
-tpreview = []
-TDIR = 0xA0                       # a mask-address table at +$80, 2 bytes a piece, then the directory
+tpreview = []                       # (the sheet's ninth frame is never shown: not built)
 for (name, x, y, w, h, full) in pieces:
-    opaque = name.startswith('cleo')
-    W, lines, hpx, data, col, mask = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=opaque)
-    ptr = TITLE_ADDR + TDIR + len(title)
-    title += data
-    mptr = TITLE_ADDR + TDIR + len(title) if mask else 0
-    title += mask
-    flags = (2 if full else 0) | (8 if opaque else 0)   # opaque pieces copy
-    tdir.append((name, ptr, W, hpx, lines, flags, mptr))
+    # every piece is drawn opaque: the menus draw on black, and a transparent pixel
+    # is black already (rect_image's col is 0 there), so no mask is built
+    W, lines, hpx, data, col, mask = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=True)
+    rows = (lines + 7) // 8         # char rows: the last one's lines past the piece are 0
+    scr = bytearray()
+    for r in range(rows):           # the screen's order: a char row, each column's eight
+        for c in range(W):          # lines in turn
+            for l in range(8):
+                ln = r * 8 + l
+                scr.append(data[c * lines + ln] if ln < lines else 0)
+    title_pieces.append((name, W, rows, bytes(scr)))
     tpreview.append(col)
-# directory at TITLE_ADDR: 8 bytes per piece: ptr lo, hi, W, h, refx, refy (0: the prologue
-# is the sprite one), flags, lines.  Mask addresses at +$80, two bytes a piece.
-tdirbytes = bytearray()
-for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
-    tdirbytes += bytes([ptr & 255, ptr >> 8, W, hpx, 0, 0, flags, lines])
-tdirbytes = tdirbytes.ljust(0x80, b'\0')
-for (name, ptr, W, hpx, lines, flags, mptr) in tdir:
-    tdirbytes += bytes([mptr & 255, mptr >> 8])
-titlefile = tdirbytes.ljust(TDIR, b'\0') + title
-TITLE_END = 0xB800                # the title pack may overwrite bank 5's sprites and map
-assert len(titlefile) <= TITLE_END - TITLE_ADDR, len(titlefile)   # (reloaded at level start)
-open(os.path.join(OUT, 'TITLE'), 'wb').write(titlefile)
-print('title pack', len(titlefile))
+
+
+def title_rle(b):
+    """the menus' run-length stream (menu.s unpack): n < $80, n+1 literals; $80..$FE,
+    n-$7D copies of the next byte (3..129); $FF, the end"""
+    out, lit, i = bytearray(), bytearray(), 0
+    def flush():
+        while lit:
+            k = lit[:128]
+            out.append(len(k) - 1)
+            out.extend(k)
+            del lit[:128]
+    while i < len(b):
+        j = i
+        while j < len(b) and b[j] == b[i] and j - i < 129:
+            j += 1
+        if j - i >= 3:
+            flush()
+            out += bytes([j - i + 0x7D, b[i]])
+            i = j
+        else:
+            lit.append(b[i])
+            i += 1
+    flush()
+    out.append(0xFF)
+    return bytes(out)
+
+
+def title_unrle(s):
+    out, i = bytearray(), 0
+    while s[i] != 0xFF:
+        n = s[i]
+        if n < 0x80:
+            out += s[i + 1:i + 2 + n]
+            i += n + 2
+        else:
+            out += bytes([s[i + 1]]) * (n - 0x7D)
+            i += 2
+    return bytes(out)
+
+
+title_streams = [title_rle(p[3]) for p in title_pieces]
+for p, t in zip(title_pieces, title_streams):
+    assert title_unrle(t) == p[3], p[0]
+print('title pieces: %d bytes as %d' % (sum(len(p[3]) for p in title_pieces), sum(len(t) for t in title_streams)))
 print('sprite blank runs: %d tagged bytes of %d' % (encode_sprite.blank_runs, encode_sprite.cells))
 
 # ----------------------------------------------------------------------------

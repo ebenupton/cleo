@@ -1,14 +1,15 @@
 ; ============================================================================
 ; The banks' static tables, the level's space in bank 7 and the few routines that
 ; exist only here.  Everything a level brings -- tiles, map, sprites, directory, its
-; tables -- is loaded into the banks by ldprog.s; the menu overlay (bank 6 from
-; MENU_BASE) is the menus with the tune and the font, and is loaded the same way.
+; tables -- is loaded into the banks by ldprog.s; the menus' image of bank 7 (MNUCODE
+; on) is the menus with the tune, the font and the title pieces, and is loaded the
+; same way, over the game's.
 ; ============================================================================
 
 ; ---------------------------------------------------------------- the small tables
 ; Assembled, each in the bank of the code that indexes it: the row multiples are
 ; bank 7's (calc_ring, ringaddr7, the chain), the ring modulus bank 6's (ringaddr).
-        .segment "LGCDATA"
+        .segment "KRNDATA"          ; (the kernel's: calc_ring and ringaddr7 are there)
         .assert RINGROWS <= 32, error, "the row multiples are sized for 32"
 mulrowlo:                           ; (32 rows on both machines, the Master's ring, so
 .repeat 32, i                       ; bank 7's data lies alike: the Model B reads 23)
@@ -59,12 +60,6 @@ ringmodtab:                         ; A = a map char row (brought under RINGROWS
         MASK_TABLES
         .segment "SPR5MASK"
         MASK_TABLES
-
-; ---------------------------------------------------------------- the menus' record
-        .segment "LGCBSS"           ; bank 7: the prologue, which writes it through rp, runs
-menurec:   .res 10                  ; there (the menus' one sprite record; the overlay in
-                                    ; bank 6 only sets rp to it).  Not in bank 6's TILBSS:
-                                    ; the prologue would write bank 7's byte at that address
 
 ; ---------------------------------------------------------------- the mirror's notes
 ; the mirror's range: A = the first window column written of the row the mirror
@@ -152,9 +147,12 @@ SPR_TABLE:  .res 118*8              ; the sprite directory as the packer finishe
                                     ; (the level's addresses): the loader's, read by
                                     ; the prologue in place
 
-; ---------------------------------------------------------------- bank 6: the menu overlay
+; ---------------------------------------------------------------- bank 7: the menus' image
         .segment "MNUDATA"
 MUSIC_ADDR:                         ; 144 bytes of periods (the table itself, here),
         .incbin "music.bin"   ; then the note stream
 font_art:                           ; the menus' 40 glyphs, 8 bytes each
         .incbin "font.bin"
+        .include "title.inc"        ; the title pieces' directory (assets.py): tp_lo,
+title_art:                          ; tp_hi, tp_cols, tp_rows; their streams (menu.s
+        .incbin "title.bin"         ; unpack)

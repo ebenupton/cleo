@@ -37,10 +37,12 @@ ROMSEL_CPY= $F4
 ; The banks, the same numbers on both machines (the sockets are patched at boot):
 ;   4  the sprite row loop (with the mirrored blitter), sprites, SWAPTAB, MASKTAB0-3
 ;   5  the sprite row loop (with the copy blitter), gather5, sprites, the map at
-;      $9C00, MASKTAB0-3; the title pack during the menus
+;      $9C00, MASKTAB0-3
 ;   6  bank6_entry/drawrect_clip, the tile blitter and the ring work, the level's
-;      tiles from $8600; the menu overlay during the menus
-;   7  the level's tables, then the logic, the game loop and the rest of the renderer
+;      tiles from $8600
+;   7  the kernel at the top (resident); below it the game's image -- the level's
+;      tables, then the logic, the game loop and the rest of the renderer -- or,
+;      during the menus, the menus' image
 BANK_SPR  = 4
 BANK_TIL1 = 5                     ; the second sprite bank
 BANK_TILES= 6                     ; every level's tile data fits one bank
@@ -266,7 +268,6 @@ dpass:     .res 1                   ; draw_sprites' pass
 spclip:    .res 1                   ; set at every window edge a sprite is cut against
 NSTARL:    .res 1                   ; the cached bin walk's lengths: stars,
 NOTHL:     .res 1                   ;   everything else
-spbank:    .res 1                   ; the bank drawsprite takes the images from
 halfhi:    .res 1                   ; the halves' page (the loader's), for @hfill
         .segment "ZPFD": zeropage   ; $FD-$FF
 MUSON:     .res 1                   ; the tune plays: the interrupt stub steps it
@@ -318,7 +319,7 @@ LOADREQ:   .res 1
 dispD:     .res 1
 NEXTBUF:   .res 1
     .endif
-        .segment "MNUBSS"           ; bank 6's menu overlay: the tune's player lives there
+        .segment "MNUBSS"           ; the menus' image: the tune's player lives there
 MUSDUR:    .res 1                   ; (MUSON is in zero page: the interrupt reads it)
 MUSNOTE:   .res 3
 ISRT1:     .res 1
@@ -1306,15 +1307,12 @@ draw_sprites:
         jmp @rpb
 
 ; draw one sprite: A = id ; spx, spy = map px (ref point)
-; Game sprites (spbank = BANK_SPR): the directory is the level's, in bank 7 at
-; SPR_TABLE (ldprog.s); the data is in bank 4, or bank 5 when the entry's flag bit 4
-; is set.
-; Title pieces (spbank != BANK_SPR): directory and data both live at TITLE_ADDR of
-; that bank.
+; The directory is the level's, in bank 7 at SPR_TABLE (ldprog.s); the data is in
+; bank 4, or bank 5 when the entry's flag bit 4 is set.
         .segment "LGCCODE"          ; bank 7, with the records and SPRMASK
 drawsprite:
   .if BHW
-        ldx #0                      ; X is dead on entry (ldx spbank below)
+        ldx #0                      ; X is dead on entry
         stx spclip                  ; set at every window edge the sprite is cut against
   .else
         stza spclip                 ; set at every window edge the sprite is cut against
@@ -1334,12 +1332,8 @@ drawsprite:
         asl
         rol ptr+1
         asl
-        rol ptr+1
-        ldx spbank
-        bankimm cpx, BANK_SPR, BANK_LVL
-        bne @titledir
-        adc #<(SPR_TABLE-1)         ; C = 1 from the cpx (X = BANK_SPR): the -1 takes it back
-        .assert <SPR_TABLE <> 0, error, "drawsprite: adc #<(SPR_TABLE-1) needs <SPR_TABLE nonzero"
+        rol ptr+1                   ; C = 0: id < 128
+        adc #<SPR_TABLE
         sta ptr
         lda ptr+1
         adc #>SPR_TABLE
@@ -1359,33 +1353,7 @@ drawsprite:
         sta sp_mbase
         lda SPRMASK+1,x
         sta sp_mbase+1
-        bcc @entry2                 ; C = 0 from the asl: sp_id < 128
-@titledir:
-        ; ---- title piece: directory + data at TITLE_ADDR of bank(spbank)
-        pha                         ; the entry's low byte, kept across the mask fetch
-        lda spbank              ; title pieces keep directory and data in one bank
-        sta sp_dbank
-        .assert <TITLE_ADDR = 0, error, "drawsprite: the title directory/mask arithmetic needs a page-aligned TITLE_ADDR"
-        lda sp_id                   ; the entry and its mask's address come across
-        asl                         ; through low RAM (dirfetch), the mask's first:
-                                    ; dirfetch reuses ptr and MAPBUF.  C = 0
-        adc #<(TITLE_ADDR+$80)
-        sta ptr
-        lda #>(TITLE_ADDR+$80)      ; no carry: 2*id < $80
-        sta ptr+1
-        jsr dirfetch
-        lda MAPBUF
-        sta sp_mbase
-        lda MAPBUF+1
-        sta sp_mbase+1
-        pla
-        sta ptr
-        lda #>TITLE_ADDR
-        sta ptr+1
-        jsr dirfetch
-        lda MAPBUF+6                ; dirfetch left ptr = MAPBUF
-        sta sp_flags
-@entry2:                            ; (title pieces: ptr = MAPBUF, dirfetch's copy)
+                                    ; (C = 0 still: the asl, sp_id < 128)
         ldaz ptr
         sta sp_ptr
         ldy #1
@@ -2445,7 +2413,7 @@ BARLEAD = 10                        ; us the Master's bar step fires early, beyo
                                     ; lead every step has, so ACCCON D can be switched in
                                     ; the blanking of the bar's last line (its handler)
   .endif
-        .segment "LGCCODE"          ; bank 7, with the game loop
+        .segment "KRNCODE"          ; the kernel: the menus build their frame with it too
 build_sections:
         ldx curbuf                  ; the buffer's CRTC base (and the Model B's mirror
         lda @cbl,x                  ; redirect: the same less the ring)
@@ -2849,6 +2817,7 @@ wait_flip:
         bne wait_flip
         rts
 
+        .segment "KRNCODE"
 ; menu_sections: the menus' frame.  build_sections, then buffer 0's first section (the
 ; bar's, in play) shows two ring rows below the window instead: the menus never draw
 ; there and clear_ring has made them black, so the menus look as they did but the bar
@@ -3032,19 +3001,6 @@ gather5:
   .endif
     .endif
 @gdone: rts
-; the title pack's directory entries and mask addresses: the eight bytes at (ptr)
-; into MAPBUF, ptr left pointing at the copy (low.s dirfetch)
-fetch8:
-        ldy #7
-:       lda (ptr),y
-        sta MAPBUF,y
-        dey
-        bpl :-
-        lda #<MAPBUF
-        sta ptr
-        lda #>MAPBUF
-        sta ptr+1
-        rts
         .segment "MAP5BSS"          ; the level's mirror shape (the loader's), for the
   .if BHW                           ; Model B's arithmetic gather (the half shape,
    .if TILEMIRROR                   ; half0-halfsub, is in zero page)
@@ -3136,7 +3092,7 @@ drawrect_clip:
 ; ============================================================================
 ; calc_ring: ringS = ((wcy mod RINGROWS) * 80 + wcx) mod RINGCHARS ; barq = ringS / 80
 ; ============================================================================
-        .segment "LGCCODE"          ; bank 7, with the row multiples
+        .segment "KRNCODE"          ; the kernel, with the row multiples
 calc_ring:
         lda wcy
         ringmod7
@@ -3261,7 +3217,7 @@ draw_dirty:
 ; IRQ1V); the Model B's isr_body in bank 7, which the stub in low RAM (low.s
 ; irq_handler) pages in around it, saving X and Y and stepping the title tune after.
 ; ============================================================================
-        PLACEH "CODE", "LGCCODE"
+        PLACEH "CODE", "KRNCODE"
   .if BHW
 isr_body:
   .else
@@ -3485,12 +3441,12 @@ irq_handler:
         jmp sound_tick              ; (the stub steps the tune)
   .else
         jsr sound_tick
-        lda MUSTICK                 ; bank 6's menu overlay, stepped as the Model B's
+        lda MUSTICK                 ; the menus' image, stepped as the Model B's
         beq @exit                   ; interrupt stub does (low.s)
         dec MUSTICK
         lda ROMSEL_CPY
         pha
-        ldpbank lda, BANK_TILES     ; (the handler is in main RAM, loaded unpatched: PBANK)
+        ldpbank lda, BANK_LVL       ; (the handler is in main RAM, loaded unpatched: PBANK)
         sta ROMSEL_CPY
         sta ROMSEL
         jsr music_tick
@@ -3519,7 +3475,7 @@ STUBLAT = 0
 VS2T = (QROWS-QVSYNC)*8*LINE - 2*LINE - 35 - 36 - STUBLAT - 8 + 2
 
 ; ---------------------------------------------------------------- keyboard
-        PLACEH "CODE", "LGCCODE"    ; the interrupt's own work: bank 7 with the Model B's
+        PLACEH "CODE", "KRNCODE"    ; the interrupt's own work: bank 7 with the Model B's
 scan_keys:                          ; handler, main RAM with the Master's
         lda #$7F
         sta VIA_DDRA
@@ -3589,13 +3545,13 @@ sound_tick:
 @music:
         lda MUSON                   ; the tune is stepped at the interrupt's tail (the
         sta MUSTICK                 ; Model B's stub in low.s, the Master's handler): its
-        rts                         ; player is in bank 6's menu overlay.  Only raised
-                                    ; here, at the vsync: the T1 steps share that tail
+        rts                         ; player is in the menus' image.  Only raised here,
+                                    ; at the vsync: the T1 steps share that tail
   .ifdef DBGSND
 @dbgsil: .byte $9F, $BF, $FF, 0
   .endif
 
-.macro SNDWRITE_BODY
+sndwrite:
         pha
         lda #$FF
         sta VIA_DDRA
@@ -3618,33 +3574,16 @@ sound_tick:
         lda #$7F
         sta VIA_DDRA
         rts
-.endmacro
-sndwrite:
-        SNDWRITE_BODY
-.macro sndw                         ; the player's own copy, in its bank
-        jsr sndwrite_m
-.endmacro
 
 ; ---------------------------------------------------------------- music
 ; 144-byte period table then the sequence (4-byte records: frames, note0..2;
-; frames = 0 -> loop), in the menu overlay beside its player (banks.s MUSIC_ADDR).
+; frames = 0 -> loop), in the menus' image beside its player (banks.s MUSIC_ADDR).
+; Stepped from the interrupt's tail with bank 7 paged, for reading and writing: the
+; Model B's stub has paged it for the body already, the Master's handler pages it.
 MUSIC_SEQ  = MUSIC_ADDR + 144
 MUSIC_TAB  = MUSIC_ADDR             ; the player is in the data's bank: no copy needed
-        .segment "MNUCODE"          ; the menu overlay (bank 6), with the tune
-sndwrite_m:
-        SNDWRITE_BODY
+        .segment "MNUCODE"          ; the menus' image, with the tune
 music_tick:
-  .if BHW                        ; the overlay comes off the disc, so the loader
-        ldx PBOARD                  ; cannot patch a companion in: the write bank by hand
-        beq @wr                     ; (A = this bank's socket, from the interrupt stub;
-        cpx #BOARD_SOLIDISK         ;  MUSDUR and MUSNOTE below are this bank's)
-        beq @sol
-        ldpbank ldx, BANK_TILES     ; Watford: a store to $FF30 + bank 6's socket
-        sta WRSEL_WATFORD,x
-        bcc @wr                     ; C = 0: PBOARD = 1 < BOARD_SOLIDISK
-@sol:   sta WRSEL_SOLIDISK          ; Solidisk: the socket on port B
-@wr:
-  .endif
         lda MUSON
         beq @done
         dec MUSDUR
@@ -3663,7 +3602,7 @@ music_tick:
         beq :+
         sta MUSNOTE,x
         tay                         ; set the voice: Y = the note (0 = rest), X = the voice
-        txa                         ; (X is not touched: sndw keeps it)
+        txa                         ; (X is not touched: sndwrite keeps it)
         asl
         asl
         asl
@@ -3681,7 +3620,7 @@ music_tick:
         and #15
         ora ISRT1
         ora #$80
-        sndw
+        jsr sndwrite
         lda MUSIC_TAB-48,y
         lsr
         lsr
@@ -3694,17 +3633,17 @@ music_tick:
         asl
         asl
         ora ISRT2
-        sndw
+        jsr sndwrite
         lda musvol,x
         ora ISRT1
 @vol:   ora #$90
-        sndw
+        jsr sndwrite
 :       inx
         cpx #3
         bne @v
 @done:  rts
 
-; A = next music byte; MUSPTR += 1.  Preserves X.  Z reflects A; Y = A.  Bank 6 selected.
+; A = next music byte; MUSPTR += 1.  Preserves X.  Z reflects A; Y = A.
 musbyte:
         ldaz MUSPTR
         inc MUSPTR
@@ -3735,7 +3674,7 @@ music_start:
         sta MUSON
         rts
 
-        .segment "LGCCODE"          ; (bank 7 stops it: the overlay may be gone)
+        .segment "KRNCODE"          ; (the kernel stops it: the menus' image may be gone)
 music_stop:
   .if BHW
         lsr MUSON                   ; MUSON is 0 or 1: 6 cycles, as lda #0 / sta
@@ -3801,7 +3740,7 @@ crtc_init:
 @reg:   .byte 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 @val:   .byte <BARCRTC, >BARCRTC, 8, $20, 7, 0, LDR7, VISROWS, 0, LDR4, $28, 98, ROWCHARS, 127
 
-        .segment "LGCCODE"          ; bank 7 (the menus call it through xcall)
+        .segment "KRNCODE"          ; the kernel (the menus call it too)
 set_palette:
         ; MODE 1: a pixel's two bits land in bits 3 and 1 of the palette index, the other
         ; two bits are don't-cares, so all 16 entries are written: logical 0..3 = K C M Y
@@ -3902,11 +3841,12 @@ m_addsprite  = addsprite
 m_clamp_window = clamp_window
 m_rnd        = rnd
 m_mark_dirty = mark_dirty
-        .segment "LGCCODE"
-; bank 7's own ringaddr, for the sprite prologue, copy_partial and blank_below: the
-; ring modulus by subtraction (no table this side), the row multiple from bank 7's
-; mulrowlo/hi, and on the Model B the buffer's base from select_backbuf (both bases
-; are xx80: ringbhi is the page)
+        .segment "KRNCODE"
+; the kernel's ringaddr, for the sprite prologue, copy_partial, blank_below and the
+; menus: the ring modulus by subtraction (no table this side), the row multiple from
+; the kernel's mulrowlo/hi, and on the Model B the buffer's base from select_backbuf
+; (both bases are xx80: ringbhi is the page).  C = 0 in: the Master's modulus (and
+; #31) leaves the caller's carry for the add, where the Model B's leaves it clear
 ringaddr7:
         ringmod7
         tax
@@ -3937,46 +3877,6 @@ ringaddr7:
         ringup sp
         sta sp+1
         rts
-; The menus live in bank 6's overlay (menu.s under MNUCODE) and are called from bank
-; 7; what they call back in bank 7 crosses the same way, through low RAM's xcall (X =
-; the bank, ctgt = the target; a tail call: xcall returns to the stub's caller).  The
-; overlay comes off the disc after the boot loader's bank patches, so its stubs read
-; bank 7's physical number from PBANK; bank 7's own are patched.  What the menus call
-; in main RAM or in bank 6 is a plain name.
-.macro XCALL name, target, tomenus
-.ident(name):
-        ldx #<target
-        stx ctgt
-        ldx #>target
-        stx ctgt+1
-  .if tomenus
-        bankimm ldx, BANK_TILES, BANK_LVL   ; bank 7's stubs, into the overlay
-  .else
-        ldpbank ldx, BANK_LVL       ; the overlay's, into bank 7 (not patched: PBANK)
-  .endif
-        jmp xcall
-.endmacro
-        .segment "LGCCODE"
-        XCALL "t_title_menu", title_menu, 1
-        XCALL "t_help_screen", help_screen, 1
-        XCALL "t_level_select", level_select, 1
-        XCALL "t_winlose", winlose, 1
-        .segment "MNUCODE"
-        XCALL "m_blank_palette", blank_palette, 0
-        XCALL "m_set_palette", set_palette, 0
-m_wait_flip:                        ; (its own copy: two instructions)
-        lda flipreq
-        bne m_wait_flip
-        rts
-        XCALL "m_music_stop", music_stop, 0
-        XCALL "m_build_sections", menu_sections, 0
-        XCALL "m_div10_16", div10_16, 0
-        XCALL "m_calc_ring", calc_ring, 0
-        XCALL "m_drawsprite", drawsprite, 0
-m_music_start = music_start
-m_ringaddr = ringaddr
-m_select_backbuf = select_backbuf
-
 ; ============================================================================
 ; Random
 ; ============================================================================

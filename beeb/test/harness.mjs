@@ -52,15 +52,22 @@ const WRAP = 2_000_000;        // cpu.currentCycles wraps at 2e6 (cycleSeconds t
 // sideways RAM, where one address names a different byte in each bank: the linker's
 // debug file says which bank each label is in (by its segment), so a PC break waits
 // for that bank to be paged ($F4, ROMSEL's copy) and a state read pages it first.
-const SEGBANK = [[/^SPR4/, 4], [/^(SPR5|MAP5)/, 5], [/^(TIL|MNU)/, 6],
-                 [/^(COMMON7|LGC)/, 7]];
+const SEGBANK = [[/^SPR4/, 4], [/^(SPR5|MAP5)/, 5], [/^TIL/, 6],
+                 [/^(COMMON7|LGC|MNU|KRN)/, 7]];
+// Bank 7 below its kernel holds one of two images, the game's (LGC*) or the menus'
+// (MNU*), and the kernel's ld_img says which (disc.s load_image): a break in either
+// waits for that image as well as the bank.
+const SEGIMG = [[/^LGC/, 0], [/^MNU/, 1]];
 export function loadBanks(dbgFile) {
   if (!existsSync(dbgFile)) return null;
-  const segBank = new Map(), byName = new Map(), byPc = new Map();
+  const segBank = new Map(), segImg = new Map(), byName = new Map(), byPc = new Map(), imgByName = new Map(), imgByPc = new Map();
   const t = readFileSync(dbgFile, "utf8");
+  const kernel = /name="KRNCODE"/.test(t);        // (before the kernel: the menus were bank 6's overlay)
   for (const m of t.matchAll(/^seg\tid=(\d+),name="(\w+)"/gm)) {
-    const e = SEGBANK.find(([re]) => re.test(m[2]));
+    const e = !kernel && /^MNU/.test(m[2]) ? [null, 6] : SEGBANK.find(([re]) => re.test(m[2]));
     if (e) segBank.set(m[1], e[1]);
+    const i = SEGIMG.find(([re]) => re.test(m[2]));
+    if (i) segImg.set(m[1], i[1]);
   }
   if (!segBank.size) return null;
   for (const m of t.matchAll(/^sym\tid=\d+,name="(\w+)",[^\n]*?val=0x([0-9A-F]+),seg=(\d+),type=lab/gm)) {
@@ -69,14 +76,22 @@ export function loadBanks(dbgFile) {
     byName.set(m[1], b);
     const a = parseInt(m[2], 16);
     byPc.set(a, byPc.has(a) && byPc.get(a) !== b ? -1 : b);   // (-1: two banks, ambiguous)
+    const i = segImg.get(m[3]);
+    if (i !== undefined) { imgByName.set(m[1], i); imgByPc.set(a, imgByPc.has(a) && imgByPc.get(a) !== i ? -1 : i); }
   }
-  return { byName, byPc };
+  return { byName, byPc, imgByName, imgByPc };
+}
+// is bank 7's image the one a label at pc is in? (read with bank 7 paged: ld_img is
+// the kernel's)
+export function imgOk(cpu, A, banks, pc) {
+  const i = banks?.imgByPc.get(pc);
+  return i === undefined || i < 0 || A.ld_img === undefined || cpu.readmem(A.ld_img) === i;
 }
 
 export class Harness {
   constructor(s, A, banks = null) { this.s = s; this.A = A; this.cpu = s._machine.processor; this.banks = banks; }
   // is the CPU at pc, in the bank that label lives in?
-  at(pc, p) { if (p !== pc) return false; const b = this.banks?.byPc.get(pc); return b === undefined || b < 0 || this.cpu.readmem(0xf4) === b; }
+  at(pc, p) { if (p !== pc) return false; const b = this.banks?.byPc.get(pc); return (b === undefined || b < 0 || this.cpu.readmem(0xf4) === b) && imgOk(this.cpu, this.A, this.banks, pc); }
   // is the CPU at address a, in the bank the named label lives in? (an address that is
   // no label -- the instruction after a jsr, say -- takes its bank from a neighbour)
   atIn(a, name, p) { if (p !== a) return false; const b = this.banks?.byName.get(name); return b === undefined || this.cpu.readmem(0xf4) === b; }
@@ -211,8 +226,9 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
   const A = loadLabels(labels);
   const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));
   if (!banks || banks.byName.get("frame_top") === undefined) throw new Error(`${labels}: no cleo.dbg beside it with the banks -- rebuild?`);
-  // boot through the loader; the game loop is bank 7's, so the title and the level are
-  // patched there, as bopen.mjs does for the Model B
+  // boot through the loader; the title is patched to start a game at once (the menus'
+  // image), and the level set as the game's image comes in, as bopen.mjs does for the
+  // Model B
   const s = new MachineSession("Master");
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const H = new Harness(s, A, banks);
@@ -220,9 +236,16 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
   const in7 = (f) => { const was = H.rd(0xf4); H.wr(0xfe30, 7); try { return f(); } finally { H.wr(0xfe30, was); } };
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   await H.runTo(A.title_loop, 200_000_000);
-  in7(() => {
-    H.wr(A.title_loop + 5, 0xea);                 // keep jsr ensure_menu; jsr t_title_menu ->
-    H.wr(A.title_loop + 3, 0xa9); H.wr(A.title_loop + 4, 0);   // "start game"
+  if (A.game_in !== undefined) {
+    in7(() => {                                  // jsr title_menu -> lda #0 (start game); nop
+      H.wr(A.title_loop, 0xa9); H.wr(A.title_loop + 1, 0); H.wr(A.title_loop + 2, 0xea);
+    });
+    await H.runTo(A.game_in, 200_000_000);       // the game's image is in: its level_loop
+  } else in7(() => {                             // (a build before bank 7's images: one
+    H.wr(A.title_loop + 5, 0xea);                //  image, the menus called from the loop)
+    H.wr(A.title_loop + 3, 0xa9); H.wr(A.title_loop + 4, 0);
+  });
+  in7(() => {                                    // ldx level -> ldx #level
     let ok = false;
     for (let a = A.level_loop; a < A.level_loop + 24; a++)
       if (H.rd(a) === 0xa6 && H.rd(a + 1) === (A.level & 255)) { H.wr(a, 0xa2); H.wr(a + 1, level); ok = true; break; }

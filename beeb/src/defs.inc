@@ -3,14 +3,15 @@
 ; four sideways banks, each with the data its inner loops read:
 ;   4  the sprite row loop (with the mirrored blitter), most of the sprite images
 ;      and masks, SWAPTAB and the mask tables
-;   5  the row loop again (no mirrored blitter), the gather and fetch8, the rest of
-;      the sprites, the map (a fixed 8K) and the mask tables; the title pack goes
-;      over them for the menus
-;   6  the tile blitter and the ring work, then the level's tiles from TILES; the
-;      menu overlay (the menus, the tune, the font) goes over the tiles for the menus
-;   7  the level's tables, then the logic, the game loop, the sprite prologue and
-;      its records, the HUD, the disc driver, the level's sprite directory; on the
-;      Model B the display driver, the interrupt's work and the sound too
+;   5  the row loop again (no mirrored blitter), the gather, the rest of the sprites,
+;      the map (a fixed 8K) and the mask tables
+;   6  the tile blitter and the ring work, then the level's tiles from TILES
+;   7  at the top the kernel, resident: the chain's builders, the palette, the disc
+;      driver, and on the Model B the interrupt's work, the keys and the sound.
+;      Below it one of two images, swapped by a disc load (disc.s go_game, go_menu):
+;      the game's -- the level's tables, the logic, the game loop, the sprite
+;      prologue and its records, the HUD, the level's sprite directory -- or the
+;      menus' -- the menus, the tune, the font, the title pieces
 ; Main RAM on the Model B is the display from $0300 -- the bar, two mirrors and two
 ; 23-slot rings (engine.s, screen shape) -- leaving zero page and $0100-$02FF (the
 ; stack, low.s).  On the Master the bar is at $2B00 and the ring at $3000 in main and
@@ -19,6 +20,8 @@
 ; in main RAM while the palette is black.
 ; ============================================================================
 VSPEG     = 3                       ; vsyncs a rendered frame (game.s): 16.7 Hz of render
+IMG_GAME  = 0                       ; bank 7's images (disc.s load_image, ldprog.s
+IMG_MENU  = 1                       ; image_load)
 
 SWAPTAB   = $BB00                   ; static in bank 4, below the mask tables: dot
 MASKTAB0  = $BC00                   ; reversal (bank 5 draws nothing mirrored); the
@@ -33,8 +36,6 @@ TILES     = $8600                   ; bank 6: this level's tiles, 64 bytes a slo
                                     ; is k + TOFF (assets.inc), so the first tile (id 1;
                                     ; id 0 is the solid, filled) sits at the first 64 bytes
                                     ; clear of the code and its variables
-MENU_BASE = TILES + (((TOFF+1)*64 + 255) & $FF00)   ; or the menu overlay, over them
-                                    ; (page aligned, above the code)
 LV_MAP    = MAP5                    ; bank 5, $9C00: row major, a fixed 8K below the
                                     ; mask tables; the level's sprites below it
   .if BHW
@@ -69,7 +70,6 @@ sp_mbase = $EC                      ; 2
 BINI     = $A5                      ; three hot scalars (profiled: 44-64, ~41 and ~35
 curR7    = $EE                      ;  accesses a frame): the bin walk's index, and the
 SECIDX   = $EF                      ;  chain's R7 and step
-fcA      = $A7                      ; xcall's A across the bank switch (low.s)
 .assert SECIDX < $F0, error, "zero page runs into the MOS's"
 
 ; ---------------------------------------------------------------- display

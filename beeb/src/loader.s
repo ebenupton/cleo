@@ -8,10 +8,10 @@
 ; BANKREF), then every write-bank store (cpu.inc wrsel).  Then the fixed pieces of the
 ; four banks from BANKS (DFS will not load into a sideways bank, so the file is read
 ; to $2000 and the pieces copied), which drive and which disc controller the game's
-; own driver is to use, and the game.  Everything else -- the menu overlay, the title
-; pack, every level -- the game loads itself (disc.s, ldprog.s), reading the physical
-; banks from PBANK, which `boot` fills from the bytes this leaves in the start-up
-; piece's header (init.s, $7000).
+; own driver is to use, and the game.  Everything else -- bank 7's images (the
+; menus', the game's), every level -- the game loads itself (disc.s, ldprog.s),
+; reading the physical banks from PBANK, which `boot` fills from the bytes this
+; leaves in the start-up piece's header (init.s, $7000).
 ; ============================================================================
         .setcpu "6502"
         .include "defs_ld.inc"      ; boot, dsk_type, dsk_drv, dsk_banks, dsk_board,

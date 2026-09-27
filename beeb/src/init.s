@@ -57,7 +57,7 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
         sta drv_type                ; memory once play starts)
         lda dsk_drv
         sta drv_unit
-        jsr lvreset                 ; the records, the buffers' state
+        ; (the records and the buffers' state: load_level's lvreset, in the game's image)
         ; MUSON and SFXREQ: the zeros above (both zero page)
         lda #$34
         sta seed
@@ -80,7 +80,7 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
         inc curbuf
         jsr build_sections
         dec curbuf                  ; (1 -> 0: build_sections only reads it)
-        ; bank 6's variables (TILBSS: the ring work's) zeroed; then spbank
+        ; bank 6's variables (TILBSS: the ring work's) zeroed
         bankimm lda, BANK_TILES, BANK_LVL
         sta ROMSEL_CPY
         sta ROMSEL
@@ -91,9 +91,7 @@ boot:   .assert dsk_type = $7000 && boot = $7007, error, "the loader's header: $
 :       dex
         sta __TILBSS_RUN__,x
         bne :-
-        bankimm lda, BANK_SPR, BANK_LVL
-        sta spbank
         jsr take_over               ; the interrupt: bank 6 still paged, as it was
         jsr pagelogic               ; bank 7 (low RAM's, the image copied above)
         jsr disc_init               ; a 1770: reset, and the head found
-        jmp game_main               ; the title menu loads its overlay and starts the tune
+        jmp go_title                ; the menus' image, and the title (disc.s)

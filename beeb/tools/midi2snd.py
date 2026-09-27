@@ -3,7 +3,7 @@
 
    python3 tools/midi2snd.py          (build.sh runs it, from beeb/)
 
-Output (build/MUSIC, which assets.py copies to music.bin for the menu overlay,
+Output (build/MUSIC, which assets.py copies to music.bin for the menus' image,
 banks.s MUSIC_ADDR): the period table, 72 x 2 bytes for MIDI notes 24..95; then
 records of 4 bytes: frames, note0, note1, note2 (0 = rest, else the MIDI note, which
 indexes the period table); terminated by frames=0.  Voice 0 = melody, voices 1/2 =

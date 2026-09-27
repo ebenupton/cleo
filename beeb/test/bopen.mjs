@@ -1,10 +1,10 @@
 // Boot the game on a jsbeeb Model B and bring it to a level's first frame_top, as
 // harness.mjs open does on the Master: the title menu is patched out and the level is
-// chosen by rewriting level_loop's `ldx level`, so the game's own loader gathers the
-// level from the disc.  Returns the session, the CPU, the labels and the helpers the
+// set as the game's image comes in (disc.s game_in), so the game's own loader gathers
+// the level from the disc.  Returns the session, the CPU, the labels and the helpers the
 // tools share.
 //   const B = await openB({ level: 0, model: "B-DFS1.2" | "B1770" })
-import { findJsbeeb, loadLabels } from "./harness.mjs";
+import { findJsbeeb, loadLabels, loadBanks, imgOk } from "./harness.mjs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -41,6 +41,7 @@ export function boardEmu(cpu, kind) {
 export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2", disc = "build/cleo.ssd", labels = "build/modelb/labels.txt", keys = false, onSession = null } = {}) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
   const A = loadLabels(labels);
+  const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));   // (bank 7's images)
   const s = new MachineSession(model);
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const cpu = s._machine.processor;
@@ -61,16 +62,24 @@ export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2
   if (onSession) onSession({ s, cpu, A, bank, cyc, PB });   // (a tool's hooks, before the boot)
   async function runTo(pc, b, budget = 3000) {
     const pb = PB(b);
-    const h = cpu.debugInstruction.add((p) => p === pc && cpu.readmem(0xf4) === pb);
-    try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (cpu.pc === pc && cpu.readmem(0xf4) === pb) return; } }
+    const at = (p) => p === pc && cpu.readmem(0xf4) === pb && imgOk(cpu, A, banks, pc);
+    const h = cpu.debugInstruction.add((p) => at(p));
+    try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at(cpu.pc)) return; } }
     finally { h.remove(); }
     throw new Error(`B: runTo ${pc.toString(16)} timed out`);
   }
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
-  await runToB(A.title_loop, 7);
-  bank(7, () => {
-    cpu.writemem(A.title_loop + 5, 0xea);   // keep jsr ensure_menu (the overlay, the title pack and the BAR); jsr t_title_menu ->
-    cpu.writemem(A.title_loop + 3, 0xa9); cpu.writemem(A.title_loop + 4, 0);   // "start game"
+  await runToB(A.title_loop, 7, 60000);          // (the menus' image: a disc load first)
+  if (A.game_in !== undefined) {
+    bank(7, () => {                               // jsr title_menu -> lda #0 (start game); nop
+      cpu.writemem(A.title_loop, 0xa9); cpu.writemem(A.title_loop + 1, 0); cpu.writemem(A.title_loop + 2, 0xea);
+    });
+    await runToB(A.game_in, 7, 60000);           // the game's image in: its level_loop
+  } else bank(7, () => {                          // (a build before bank 7's images)
+    cpu.writemem(A.title_loop + 5, 0xea);
+    cpu.writemem(A.title_loop + 3, 0xa9); cpu.writemem(A.title_loop + 4, 0);
+  });
+  bank(7, () => {                                 // ldx level -> ldx #level
     let ok = false;
     for (let a = A.level_loop; a < A.level_loop + 24; a++)
       if (cpu.readmem(a) === 0xa6 && cpu.readmem(a + 1) === (A.level & 255)) { cpu.writemem(a, 0xa2); cpu.writemem(a + 1, level); ok = true; break; }

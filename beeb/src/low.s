@@ -9,44 +9,18 @@
 
 ; ---------------------------------------------------------------- the crossings
 ; A bank cannot page another over itself, so every crossing is here: fixed thunks for
-; what bank 7 calls in the others (callbank, selbb, validate, dirfetch), for the tile
-; blitter's gather (mapstrip), and one routine for the menus (xcall).  No table, no
-; dispatch in any bank.  ROMSEL_CPY is written before ROMSEL every time, so
-; an interrupt in between puts back the bank being entered: the handler restores from
-; $F4, which is the MOS's own rule.
-
-; xcall: the menus' crossing -- their overlay (bank 6) calls a few routines in bank 7,
-; and the game loop its four entries.  X = the bank, ctgt = the address; A goes in
-; and comes back, Y is untouched, X is destroyed.  The caller's bank waits on the stack,
-; so it nests (the game loop calls a menu, which calls bank 7's div10_16).  Not hot: a
-; handful a menu frame.  (A crosses in fcA: nothing runs between its store and its load
-; but this.)
-xcall:  sta fcA
-        lda ROMSEL_CPY
-        pha
-        txa                         ; (A = the bank: wrselx's store, on a board, is A)
-        sta ROMSEL_CPY
-        sta ROMSEL
-        wrselx 0
-        lda fcA
-        jsr xcgo
-xcback: sta fcA                     ; (a label of its own: the write-bank record's marker
-        pla                         ;  is a cheap label, one per scope)
-        tax
-        stx ROMSEL_CPY
-        stx ROMSEL
-        wrselx 0
-        lda fcA
-        rts
-xcgo:   jmp (ctgt)
+; what bank 7 calls in the others (callbank, selbb, validate) and for the tile
+; blitter's gather (mapstrip).  No table, no dispatch in any bank.  ROMSEL_CPY is
+; written before ROMSEL every time, so an interrupt in between puts back the bank
+; being entered: the handler restores from $F4, which is the MOS's own rule.
 
 ; ---------------------------------------------------------------- interrupts
 ; The Model B's: the chain step and the vsync work are in bank 7 with their tables,
 ; and this pages it in around them.  The step's timing (VS2T) allows for the ~30 cycles that
 ; takes, in place of the hold loop the Master's handler has.  The title tune's
-; player is in the menu overlay (bank 6): the vsync work leaves MUSON set only
-; while the overlay is there, and it is stepped from here, between the banks, once
-; a frame -- the vsync's sound_tick raises MUSTICK; the T1 steps are this same stub.
+; player is in the menus' image of bank 7: MUSON is set only while that image is in,
+; and the tune is stepped from here once a frame, bank 7 still paged -- the vsync's
+; sound_tick raises MUSTICK; the T1 steps are this same stub.
   .if BHW                           ; (the Master's handler is in main RAM with its
 irq_handler:                        ;  chain: engine.s)
         stx irq_x
@@ -67,10 +41,7 @@ irq_handler:                        ;  chain: engine.s)
         lda $FC
         rti
 @mus:   dec MUSTICK                 ; (1 -> 0: MUSON's value, which is 0 or 1)
-        bankimm lda, BANK_TILES, 0
-        sta ROMSEL_CPY
-        sta ROMSEL
-        jsr music_tick              ; (sets its own write bank: it is disc-loaded code)
+        jsr music_tick              ; (bank 7, and its write bank: pagelogic's, above)
         jmp @nomus
   .endif
 
@@ -110,15 +81,6 @@ validate:
         jsr scroll_validate
         jmp pagelogic
 
-; the title pack's directory is in bank 5 and the prologue in bank 7: an entry's
-; eight bytes come across here (bank 5's fetch8), and ptr is left pointing at the copy
-dirfetch:                           ; ptr -> the entry in bank 5
-        bankimm lda, BANK_MAP, 0
-        sta ROMSEL_CPY
-        sta ROMSEL
-        jsr fetch8
-        jmp pagelogic               ; bank 7 back
-
 ; ---------------------------------------------------------------- the direct switch
 ; Once a sprite and once a rect: page the bank, call its entry -- BANKENTRY, the start
 ; of banks 4, 5 and 6: the sprite row loop in 4 and 5, bank6_entry + drawrect_clip in 6
@@ -130,10 +92,7 @@ callbank:                           ; A = the bank (the write bank is set by the
         jmp pagelogic
 
         .segment "LOWBSS"
-ctgt:     .res 2                    ; xcall's target
-GATHERH:  .res 21                   ; a tile row's gather (gather5): 21 tiles at most --
-MAPBUF = GATHERH                    ; and dirfetch's eight bytes, drawsprite's, when no
-                                    ; rect is being drawn
+GATHERH:  .res 21                   ; a tile row's gather (gather5): 21 tiles at most
         .segment "LOWBSS2"          ; the rest of low RAM, above the code
 GATHERL:  .res 21
         .segment "LOWBSS"
@@ -152,5 +111,3 @@ mirwcx:   .res 2                    ; the wcxm the copy was made for
 ; zero page's: engine.s)
 sprc_ok:  .res 1                    ; the resident sprites (SPRC) are in bank 4, and (the
 sprx_ok:  .res 1                    ;  Master) SPRX in HAZEL/ANDY: ldprog.s
-title_res: .res 1                   ; the menu overlay (bank 6) and the title pack (bank 5)
-                                    ; are in (a level load replaces both; menu.s reads it)

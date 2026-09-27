@@ -18,8 +18,8 @@ every level from the disc into those banks.
 |---|---|---|
 | 4 | the sprite row loop, with the mirrored blitter | most sprite images and masks; SWAPTAB; the mask tables |
 | 5 | the sprite row loop with the copy blitter; the tile row's gather | the rest of the sprites; the level's map; the mask tables |
-| 6 | the tile blitter and the ring work that calls it | the level's tiles (or the menu overlay) |
-| 7 | everything else: the logic, the game loop, the sprite prologue, the display chain's builder, the HUD, the disc driver | the level's tables, the object state, the sprite directory and records |
+| 6 | the tile blitter and the ring work that calls it | the level's tiles |
+| 7 | at the top the kernel, resident: the display chain's builders, the palette, the disc driver, the image swap (on the Model B the interrupt's work too); below it the game's image -- the logic, the game loop, the sprite prologue, the HUD -- or the menus' image | the level's tables, the object state, the sprite directory and records; or the menus, the tune, the font and the title pieces |
 
 What `BHW` changes is the hardware underneath:
 
@@ -61,9 +61,9 @@ aligned, so the crossings of its tables' indexed reads do not move with the code
 front of it.  `SAMEPAGE` asserts the hot loops' branches at link time;
 `test/cycprof.mjs` measures what the branches and crossings cost a frame.
 
-The level files, the sprites, the tile set, the title pack and the bar template are on
-the disc once and read by both.  Each machine has its own bank images (BANKSB,
-BANKSM), load-time program (LDPROGB, LDPROGM) and menu overlay (MENUB, MENUM).  Because
+The level files, the sprites, the tile set and the bar template are on the disc once
+and read by both.  Each machine has its own bank images (BANKSB, BANKSM), load-time
+program (LDPROGB, LDPROGM) and bank 7 images (IMG7B, IMG7M).  Because
 the level files carry the sprites' placed addresses, the level layout is the Model B's
 on both machines: `engine.s` asserts that each sprite bank's code ends exactly at
 `B4_CODE_END`/`B5_CODE_END` on the Model B and at most there on the Master, whose
@@ -80,7 +80,7 @@ It is off by default: no level needs it.
 | Range | Use |
 |---|---|
 | $00-$A2 | the ZEROPAGE segment (engine and logic scalars; the linker caps it at $A2): ends $A1 on the Model B, $9A on the Master |
-| $A3-$A7 | fixed (defs.inc): NSPR, BARDIRTY, BINI, SFXREQ, fcA (xcall's A) |
+| $A3-$A6 | fixed (defs.inc): NSPR, BARDIRTY, BINI, SFXREQ ($A7 free) |
 | $A8-$DE | the logic's temporaries (logic.s); LDPROG reuses $A8-$B8 during a load |
 | $DF-$EF | fixed (defs.inc): mtmp (cpu.inc's scratch), the Model B's ring and mirror state (ringbhi, ringehi, ringe3, ringneg, mrow, wcxm, rstar), the sprite prologue's hand-over (sp_disp, sp_mpg0, sp_mh, sp_mrp, sp_mbase), curR7, SECIDX |
 | $F0-$FF | the MOS's zero page, but $F4 and $FC: the hottest scalars |
@@ -191,15 +191,13 @@ $8000.
 | Range | Model B | Master |
 |---|---|---|
 | the row loop (SPR5CODE: the masked and copy blitters, no mirror) | $8000-$8251 | $8000-$822A |
-| MAP5CODE: `gather5`, `fetch8` | $8252-$82BF | $822B-$8252 |
-| SPRC's bank-5 part (1,765 bytes, the trampoline's boxes included) | $82C0-$89A4 | same |
-| the level's sprites | $89A5-$9BFF | same |
+| MAP5CODE: `gather5` | $825F-$82C5 | $825F-$8273 |
+| SPRC's bank-5 part (the trampoline's boxes included), from B5_CODE_END | $82C6- | same |
+| the level's sprites | to $9BFF | same |
 | the map (MAP5 = LV_MAP), a fixed 8K | $9C00-$BBFF | same |
 | MASKTAB0-3 | $BC00-$BFFF | same |
 
-During the menus the title pack (11,574 bytes) sits from TITLE_ADDR = $8900, over the
-sprites and the map.  It reaches SPRC's bank-5 part, so returning to the title clears
-`sprc_ok` and the next level reloads the resident block.
+The menus keep to bank 7, so SPRC stays resident from the first level on (`sprc_ok`).
 
 ### Bank 6: tiles
 
@@ -209,33 +207,47 @@ sprites and the map.  It reaches SPRC's bank-5 part, so returning to the title c
 | TILCODE: `drawrect` and its row loop, its fills (the solid's one-byte cascade too), `ringaddr` and its row tables, `select_backbuf`, `scroll_validate`, `mirdirty6` and the ring modulus table (Model B) | $8070-$8691 | $8070-$8559, padded |
 | TILBSS: BUF_CY, FLATTAB | $8692-$869F | same |
 | the level's tiles, 64 bytes a slot from TILES = $8600: id k in slot k + TOFF (2), so id 1 is at $86C0, the first 64 bytes clear of the code | $86C0-$BFFF | same |
-| or, during the menus, the menu overlay (MNUCODE, MNUDATA, MNUBSS) | from $8700 (MENU_BASE, page aligned) | same |
 
-### Bank 7: logic
+### Bank 7: the kernel and two images
+
+Bank 7 is a resident kernel at its top and, below it, one of two images, each read
+from the disc over the other (`disc.s` `go_game`, `go_menu`; start-up reads the menus'
+with `go_title`).  The two share their addresses, so nothing in either may be called
+while the other is in: what both need is the kernel's.
 
 | Range | Model B | Master |
 |---|---|---|
+| **the game's image** (GAME) | | |
 | LGCLVL: LV_ATTR0, LV_ALTCLS (256 each), LV_HDR (32), loaded | $8000-$821F | same |
-| LGCDATA: the row multiples, LV_ALTTAB, the HUD digits | $8220-$8355 | $8220-$8367 |
-| LGCCODE | $8356-$A99F | $8368-$A4FD |
-| the NMI stubs' image | $A9A0-$A9F8 | $A4FE-$A556 |
-| LGCBSS | $A9F9-$BD3B | $A557-$B82D |
-| free | $BD3C-$BFFF | $B82E-$BFFF |
+| LGCDATA: LV_ALTTAB, the HUD digits | $8220-$8327 | same |
+| LGCCODE | $8328-$A23F | $8328-$A05F |
+| LGCBSS, page aligned (zeroed as the image comes in) | $A300-$B5C0 | same |
+| **or the menus' image** (MENU) | | |
+| MNUCODE: the menus, the title's loop, the tune's player, the pieces' unpack and copy | $8000-$870C | $8000-$86E1 |
+| MNUDATA: the tune, the font, the title pieces (run-length) | $870D-$A57A | same |
+| MNUBSS: the menus' variables and TBUF, a piece unpacked | $A57B-$AE59 | same |
+| **the kernel**, resident | | |
+| KRNDATA: the row multiples | $B700-$B73F | same |
+| KRNCODE | $B740-$BE6A | $B740-$BB66 |
+| the NMI stubs' image | $BE6B-$BEC3 | (after KRNCODE) |
+| KRNBSS: the disc driver's and the swap's variables | $BEC4-$BED2 | same |
+| LGCHW (the Model B): SECTAB, BUF_SEC0, BUF_SEC0T1, LOADREQ, page aligned | $BF00-$BF6B | -- |
 
-LGCCODE is the logic, the game loop, `render_frame` and `render_core`, the sprite
-prologue (`drawsprite`), `draw_sprites`, `match_sprites`, `erase_old`, `calc_ring`,
-`copy_partial`, `blank_below`, `mark_dirty`, `draw_dirty`, `build_sections`, the HUD,
-the palette, the disc driver, and on the Model B the interrupt's work (`isr_body`,
-`scan_keys`, `sound_tick`: the Master's handler has them in main RAM) and
-`mirror_copy`.  LGCBSS is the object state
-(16 arrays of OBJN = 149, the collision grid, its chains and the bin walk lists),
-SPRMASK and SPR_TABLE (the level's sprite directory, 118 entries of 8 bytes), the
-sprite records (SPRREC, RECCNT, KEEP), the dirty lists, the disc driver's variables,
-and on the Model B the chain's tables (SECTAB, BUF_SEC0, BUF_SEC0T1, LOADREQ).
+LGCCODE is the logic, the game loop from `level_loop`, `render_frame` and
+`render_core`, the sprite prologue (`drawsprite`), `draw_sprites`, `match_sprites`,
+`erase_old`, `copy_partial`, `blank_below`, `mark_dirty`, `draw_dirty`, the HUD and
+on the Model B `mirror_copy`.  LGCBSS is the object state (16 arrays of OBJN = 149,
+the collision grid, its chains and the bin walk lists), SPRMASK and SPR_TABLE (the
+level's sprite directory, 118 entries of 8 bytes), the sprite records (SPRREC,
+RECCNT, KEEP) and the dirty lists.  KRNCODE is `build_sections`, `menu_sections`,
+`calc_ring`, `ringaddr7`, `load_begin`/`load_end`, the palette, `music_stop`,
+`div10_16`, the disc driver and the swap, and on the Model B the interrupt's work
+(`isr_body`, `scan_keys`, `sound_tick`, the sound effects: the Master's handler has
+them in main RAM).
 
 The small tables are assembled, not built at start-up, each in the bank of the code
-that indexes it: the row multiples (`mulrowlo/hi`) in bank 7 for the prologue, the
-records and the chain; the ring modulus (`ringmodtab`, RINGROWS x 5 entries, which
+that indexes it: the row multiples (`mulrowlo/hi`) in bank 7's kernel for the
+prologue, the records, the chain and the menus; the ring modulus (`ringmodtab`, RINGROWS x 5 entries, which
 `ringmod` reaches with two subtractions) in bank 6 for `ringaddr` on the Model B, where
 the Master's ring needs only `and #31`.  Bank 7 has its own `ringaddr7` (the modulus by
 subtraction, the base from `ringbhi`) so a sprite's screen address never crosses a bank.
@@ -253,15 +265,7 @@ RAM (`low.s`).  There is no table and no dispatch in any bank.
   `scroll_validate` (which draws the newly exposed strips with `drawrect`).
 - `mapstrip`: from bank 6's `drawrect`, once a tile row: pages bank 5, runs `gather5`
   over the map in place, pages bank 6 back through `page6`.
-- `dirfetch`: for the title pack's directory entries and mask addresses, which live in
-  bank 5 with the pack: `fetch8` copies eight bytes into MAPBUF.
 - `maprow`, `mapbyte`, `mapput`: the logic's reads and writes of the map in bank 5.
-- `xcall` (the menus only): X = the bank, `ctgt` = the target.  It pushes the
-  caller's bank, so it nests (a menu calls the title load, which reads the disc); A goes
-  in and comes back (through fcA), Y survives, X does not.  Its stubs are made by the
-  XCALL macro (`engine.s`): bank 7's four into the overlay (title, help, level select,
-  win/lose) and the overlay's into bank 7 (the palette, the loads, the sections, the
-  prologue, `div10_16`, `calc_ring`, `music_stop`).
 
 Every switch writes ROMSEL_CPY ($F4) before ROMSEL, so an interrupt landing between the
 two restores the bank being entered.  A switch that a store into sideways RAM may
@@ -283,8 +287,12 @@ holds a bank number is recorded at assembly (`cpu.inc`: `bankimm`, `setbank`, `B
 segment, which `build.sh` appends to BANKS and checks against the pieces (each entry
 must land on a byte whose low nibble is 4-7).  The boot loader rewrites each byte's low
 nibble to the socket found and keeps the high nibble.  So the hot paths pay nothing.
-What comes off the disc after boot -- LDPROG, the menu overlay -- cannot be patched and
-reads the socket from PBANK (four bytes, indexed by bank - 4; the `ldpbank` macro).
+Bank 7's game image comes off the disc after boot and is patched as it comes in: its
+entries of both lists are taken out of BANKS's and assembled into LDPROG (`img7fix.inc`),
+and `image_load` does what the boot loader does with them.  The two images share their
+addresses, so an entry cannot say which it is in: the menus' image carries none (`build.sh`
+checks the site labels), and reads a socket from PBANK like the rest of what comes off
+the disc -- LDPROG -- does (four bytes, indexed by bank - 4; the `ldpbank` macro).
 
 Solidisk and Watford boards read through ROMSEL like any machine but choose the bank a
 store reaches with a register of their own: Solidisk, user VIA port B bits 0-3
@@ -300,8 +308,8 @@ bank does not change what is readable, so the companion need not sit beside the 
 low RAM is nearly full, so `callbank` has none, and the bank it enters sets its own --
 `ds_entry` in banks 4 and 5, `bank6_entry` in bank 6 (BANKENTRY, falling into
 `drawrect_clip`).  `drawrect` sets it again
-after `mapstrip`.  Disc-loaded code reads PBOARD and does it by hand: `music_tick` in
-the overlay, and `ldprog.s`.  On the Master the macros are empty.
+after `mapstrip`.  LDPROG reads PBOARD and does it by hand.  On the Master the macros
+are empty.
 
 The boot loader (`loader.s`) finds the RAM with the test Stuart McConnachie's sideways
 RAM Elite loader used: page each of the 16 banks through $F4 and ROMSEL, flip bit 0 of
@@ -610,20 +618,18 @@ bytes, from which each level takes its subset by its placement list.
 
 ## The disc
 
-One single-sided 80-track disc, `build/cleo.ssd`, with 31 files, the DFS catalogue's
-limit, in this order:
+One single-sided 80-track disc, `build/cleo.ssd`, with 30 files (the DFS catalogue
+holds 31), in this order:
 
 | File | What |
 |---|---|
 | !BOOT | `*RUN LOADER` |
 | LOADER | the boot loader, both machines, at $1900 |
 | BANKSB, BANKSM | each machine's fixed pieces, bank-number patch list and write-bank store list |
-| LDPROGB, LDPROGM | each machine's load-time program |
-| MENUB, MENUM | each machine's menu overlay |
+| IMG7M, LDPROGM, LDPROGB, IMG7B | each machine's bank 7 images (the menus' to a whole sector, then the game's: LDPROG reads them as two) and load-time program; a game's start reads LDPROG, IMG7 and BAR in turn, so the Model B's are in that order |
 | BAR | the bar template |
 | SPRX, SPRC | the sprites: the level-placed ones, the resident block |
 | TILES0, TILES1 | the tile set's outdoor and shared files |
-| TITLE | the title pack |
 | L0-L15 | the levels |
 | TILES2 | the tile set's indoor file |
 
@@ -646,7 +652,7 @@ $7007.  `build.sh` asserts BANKS ends below $7000.
 
 ### The game's own disc driver
 
-After boot the MOS is abandoned: `disc.s` (bank 7) drives the 8271 or the 1770
+After boot the MOS is abandoned: `disc.s` (bank 7's kernel) drives the 8271 or the 1770
 directly.  Both raise NMI for every byte, so the transfer stubs are copied to $0D00,
 where the NMI lands, for each load; each writes through a self-modified address and
 keeps its state in that page, so it works whatever bank is paged.  `read_sectors`
@@ -690,10 +696,18 @@ of every bank from PBANK and sets the write bank by PBOARD by hand.
 Back in bank 7, `load_end`, interrupts on, and `load_level` goes on from the header
 (the map's size, the window's limits, the records reset).
 
-The title's load (`title_load`, LDPROG+3) is the same machinery: the machine's menu
-overlay to bank 6 at MENU_BASE ($8700), the title pack to bank 5 at $8900, the bar
-template to its place.  `title_res` says whether they are still there; starting a level
-clears it, and `ensure_menu` puts them back before the title or the win/lose screen.
+### Bank 7's images
+
+`image_load` (LDPROG+3, X = IMG_GAME or IMG_MENU) is the same machinery: the image
+staged and copied to its place, then its bank numbers and write-bank stores patched
+as the boot loader patches BANKS.  The game's image brings more: its variables
+(LGCBSS) are zeroed, so a game starts the same whatever the menus left there, and the
+bar template is read to its place.  The kernel's `go_game` (the menus' way out) loads
+the game's image and jumps to `level_loop` with the stack reset, the disc still open
+(`ld_open`): the first level's load goes straight on without parking the chain and
+reading LDPROG again.  `go_menu` (the game's way out: A = 0 lost, 1 won) loads the
+menus' and jumps to `menu_over`; `go_title` (start-up) loads them and jumps to
+`game_main`.
 
 ## The level files and the packer
 
@@ -731,23 +745,32 @@ the maxima over every level of what the walk rectangle can cover from any camera
 position (24 and 18).
 
 The sprite banks' code ends are set by hand in `assets.py` (B4_CODE_END = $83AF,
-B5_CODE_END = $82C0), because the packer runs before the assembler; `engine.s` asserts
+B5_CODE_END = $82C6), because the packer runs before the assembler; `engine.s` asserts
 them, so the build stops if the code moves.
 
 ## The menus
 
-`menu.s` is the overlay in bank 6: the title, help, level select and win/lose screens,
-the font, and the title tune with its player.  It draws into buffer 0 with the window
-at the origin, the palette black until a page is finished and flipped in.  On the
-Model B the screens are laid out for its 84-pixel window.  The title pack's pieces are
-drawn by `drawsprite` with `spbank` naming bank 5's socket (from PBANK: the overlay is
-not patched): their directory and mask addresses come across through `dirfetch`.
+`menu.s` is the menus' image of bank 7: the top of the game loop (`game_main`,
+`title_loop`, `new_game`, `menu_over`), the title, help, level select and win/lose
+screens, the font, and the title tune with its player.  It draws into buffer 0 with
+the window at the origin, the palette black until a page is finished and flipped in,
+calling the kernel for the sections, the palette and `ringaddr7`.  On the Model B the
+screens are laid out for its 84-pixel window.
+
+Everything the menus draw is on black, so the title pieces (the logo, YOU, WIN, LOSE
+and big Cleo's eight frames) have no masks and no blitter of the game's: each is a
+run-length stream (`convert.py` `title_rle`: n < $80, n+1 literals; $80-$FE, n-$7D
+copies of a byte; $FF the end) of its screen bytes in the screen's own order, a char
+row at a time, which `unpack` puts in TBUF as a straight run and `blit` copies to the
+screen a char row at a time.  Big Cleo is unpacked a frame ahead, so what follows the
+vsync is the copy alone, which stays ahead of the beam (no torn frame: counted on both
+machines).  The 11,574-byte masked title pack is 5,394 bytes of streams (each piece padded to whole char rows).
 
 The tune is stepped once a frame from the interrupt: the vsync's `sound_tick` raises
-MUSTICK while MUSON is set, and the stub (the Model B's) or the handler (the Master's)
-pages bank 6 and calls `music_tick`.  `music_stop` (bank 7, called by every load)
-clears MUSON, so the interrupt never enters bank 6 during a level, when the overlay is
-gone.
+MUSTICK while MUSON is set, and the stub (the Model B's, with bank 7 already paged) or
+the handler (the Master's, which pages it) calls `music_tick`.  `music_stop` (the
+kernel's, called by every load) clears MUSON, so the interrupt never calls into the
+menus' image while the game's is in.
 
 ## Timing
 

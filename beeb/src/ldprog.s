@@ -1,16 +1,16 @@
 ; ============================================================================
 ; The load-time program: read into LDPROG ($0E00) by disc.s at every level load and
-; every return to the title, and run there, in main RAM, where it can page any bank
+; every swap of bank 7's image, and run there, in main RAM, where it can page any bank
 ; in.  One per machine (LDPROGB, LDPROGM).  The display is black and the screen is
 ; its scratch (defs.inc STAGE, STAGE_LVL: $1C00-$7FFF on the Model B; $3000-$7FFF of
 ; main and shadow RAM on the Master).  A level is gathered from the shared files --
 ; the tile set's, SPRC, SPRX, the level's own -- by the lists the packer
 ; (tools/assets.py) put in the level file: which tiles, and where every image goes.
-; Bank 7 is paged on entry and on return; read_sectors (disc.s) is bank 7's and reads
-; into main RAM.
+; Bank 7 is paged on entry and on return; read_sectors (disc.s) is its kernel's, which
+; no image covers, and reads into main RAM.
 ;
 ;   LDPROG+0  lv_load     X = level index 0..15
-;   LDPROG+3  title_load  the menu overlay to bank 6, the title pack to bank 5
+;   LDPROG+3  image_load  X = IMG_GAME or IMG_MENU: bank 7's image below the kernel
 ; ============================================================================
         .ifndef BHW                 ; (cpu.inc's flag: the Model B's hardware unless the
 BHW = 1                             ;  build says -D BHW=0, the Master's)
@@ -53,12 +53,29 @@ nt    = $B8
 
         .segment "CODE"
         jmp lv_load
-        jmp title_load
+        jmp image_load
 
 ; ---------------------------------------------------------------- the file table
 ; index -> sector lo, hi, sectors (from files.inc: the disc's own order)
 .macro FILE name
         .byte <.ident(.concat("F_", name, "_SEC")), >.ident(.concat("F_", name, "_SEC")), .ident(.concat("F_", name, "_N"))
+.endmacro
+; bank 7's images are one file a machine (IMG7B, IMG7M): the menus' to a whole
+; sector, then the game's
+MENU_SECS = (MENU_LEN + 255) / 256
+  .if BHW
+F_IMG7_SEC = F_IMG7B_SEC
+F_IMG7_N   = F_IMG7B_N
+  .else
+F_IMG7_SEC = F_IMG7M_SEC
+F_IMG7_N   = F_IMG7M_N
+  .endif
+.macro IMG7 name                    ; (the & $FF: build.sh's first pass has no sizes yet)
+  .if .xmatch(name, "MENU")
+        .byte <F_IMG7_SEC, >F_IMG7_SEC, MENU_SECS
+  .else
+        .byte <(F_IMG7_SEC + MENU_SECS), >(F_IMG7_SEC + MENU_SECS), (F_IMG7_N - MENU_SECS) & $FF
+  .endif
 .endmacro
 ; a level file ends with the Master's LV_PAGE0 table, in sectors of its own (assets.py):
 ; the Model B, whose gather is arithmetic, stops before them
@@ -75,14 +92,8 @@ ftab:   FILE "SPRX"                 ; 0: the sprites placed per level (imgtab's 
         FILE "SPRC"                 ; 2: (unused)
         FILE "TILES0"               ; 3, 4: the tile set's outdoor and shared files
         FILE "TILES1"
-  .if BHW                           ; 5: this machine's menu overlay
-        FILE "MENUB"
-F_MENU_N = F_MENUB_N
-  .else
-        FILE "MENUM"
-F_MENU_N = F_MENUM_N
-  .endif
-        FILE "TITLE"                ; 6
+        IMG7 "MENU"                 ; 5, 6: this machine's images of bank 7, the
+        IMG7 "GAME"                 ; menus' and the game's (one file: build.sh)
         FILE "BAR"                  ; 7
         LFILE "L0"                   ; 8..23: the levels
         LFILE "L1"
@@ -105,7 +116,7 @@ tfi:    .byte 3, 4, 24              ; the tile set's files (convert.py TSET) by 
 FI_SPRX = 0
 FI_SPRC = 1
 FI_MENU = 5
-FI_TITLE = 6
+FI_GAME = 6
 FI_BAR = 7
 FI_L0 = 8
 
@@ -488,9 +499,9 @@ lv_load:
         jsr bcopy
   .endif
         ; ---- the sprites.  The resident block (SPRC: Cleo, the boomerang, the stars,
-        ; the trampoline) goes to its fixed places in banks 4 and 5 once, and stays until
-        ; the title pack overlays bank 5's part (title_load); the rest (SPRX) is staged
-        ; and the level's subset copied out by its placement list
+        ; the trampoline) goes to its fixed places in banks 4 and 5 once, and stays (the
+        ; menus keep to bank 7); the rest (SPRX) is staged and the level's subset copied
+        ; out by its placement list
         lda sprc_ok
         bne @sprx
         lda #FI_SPRC
@@ -891,53 +902,142 @@ unrle:                              ; src (packed) -> dst in bank 5: c < 128 = c
 @end:   lda PB_LVL
         jmp pgbank
 
-; ---------------------------------------------------------------- the menus
-title_load:
+; ---------------------------------------------------------------- bank 7's images
+; X = IMG_GAME or IMG_MENU: the image staged and copied to its place below the kernel,
+; and its bank numbers and write-bank stores made what the boot loader makes them in
+; BANKS (loader.s), from the image's own lists (img7fix.inc, build.sh).  The game's
+; variables are zeroed (the menus' image was there: its start is the same every time),
+; and the game's image brings the bar's template, straight into place (the menus never
+; touch the bar and a level does not either: engine.s menu_sections)
+image_load:
   .if .not BHW
         jsr mainram
   .endif
-        lda #FI_MENU
-        jsr stage                   ; (dst = STAGE: its lo 0 = <MENU_BASE)
-        lda #0                      ; <STAGE = 0, cnt lo = 0
+        stx item
+        lda imgfile,x
+        jsr stage
+        lda #0                      ; <STAGE = 0
         sta src
+        lda #>STAGE
+        sta src+1
+        ldx item
+        lda imgalo,x
+        sta dst
+        lda imgahi,x
+        sta dst+1
+        lda imgnlo,x
         sta cnt
-        lda #>STAGE
-        sta src+1
-        lda #>MENU_BASE
-        sta dst+1
-        lda #F_MENU_N
+        lda imgnhi,x
         sta cnt+1
-        ldx PB_TILES
+        ldx PB_LVL
   .if BHW
-        jsr bcopy                   ; (src, cnt lo kept: bcopy, readfile leave them)
+        jsr bcopy                   ; (bank 7 paged after, and its write bank)
   .else
         jsr scopy
   .endif
-        lda #FI_TITLE
-        jsr stage                   ; (dst lo 0 = <TITLE_ADDR)
-        lda #>STAGE
-        sta src+1
-        lda #>TITLE_ADDR
+        ldx item
+        lda bflo,x                  ; ---- the bank numbers: each byte, 4..7, becomes
+        sta lp                      ; that bank's socket
+        lda bfhi,x
+        sta lp+1
+@bf:    ldy #1
+        lda (lp),y
+        beq @bfd                    ; (a high byte of 0: the list's end)
         sta dst+1
-        lda #F_TITLE_N
-        sta cnt+1
-        ldx PB_MAP
-  .if BHW
-        jsr bcopy
-  .else
-        jsr scopy
-  .endif
-        lda #0                      ; the title pack reaches the resident sprites' part
-        sta sprc_ok                 ; in bank 5: the next level puts them back
-        ; ---- the bar template, straight into place: once per return to the title, as the
-        ; menus never touch it (engine.s menu_sections) and a level does not either
-        stx dst                     ; (X = 0 from bcopy; <BARADDR = 0)
+        dey
+        lda (lp),y
+        sta dst
+        lda (dst),y
+        tax
+        lda PBANK-4,x
+        sta (dst),y
+        lda lp
+        clc
+        adc #2
+        sta lp
+        bcc @bf
+        inc lp+1
+        bne @bf                     ; (always)
+@bfd:   lda PBOARD                  ; ---- the write-bank stores, on a board: each a
+        beq @wdone                  ; `sta $FE30` as assembled, a harmless second write
+        ldx item                    ; of the bank on a plain machine
+        lda wrlo,x
+        sta lp
+        lda wrhi,x
+        sta lp+1
+@wr:    ldy #1
+        lda (lp),y
+        beq @wdone
+        sta dst+1
+        dey
+        lda (lp),y
+        sta dst
+        ldy #2
+        lda (lp),y                  ; the kind: 4..7 a constant bank, $FE the bank in X
+        tax
+        lda PBOARD
+        cmp #BOARD_SOLIDISK
+        beq @wsol
+        cpx #$FE
+        beq @wdyn
+        lda PBANK-4,x               ; Watford, a constant bank: sta $FF30 + its socket
+        ora #<WRSEL_WATFORD
+        ldy #1
+        bne @whi                    ; (always)
+@wdyn:  lda #$9D                    ; Watford, the bank in X: sta $FF30,x
+        ldy #0
+        sta (dst),y
+        lda #<WRSEL_WATFORD
+        iny
+@whi:   sta (dst),y
+        lda #>WRSEL_WATFORD
+        bne @wst                    ; (always)
+@wsol:  lda #<WRSEL_SOLIDISK        ; Solidisk: sta $FE60, the bank being in A
+        ldy #1
+        sta (dst),y
+        lda #>WRSEL_SOLIDISK
+@wst:   iny
+        sta (dst),y
+        lda lp
+        clc
+        adc #3
+        sta lp
+        bcc @wr
+        inc lp+1
+        bne @wr                     ; (always)
+@wdone: lda item                    ; ---- the game's: its variables, the bar's template
+        .assert IMG_GAME = 0, error, "image_load: the game's image is 0"
+        bne @done
+        tay                         ; (A = 0)
+        sta dst
+        lda #>GAME_BSS
+        sta dst+1
+        ldx #GAME_BSS_PAGES
+        tya
+@z:     sta (dst),y                 ; (bank 7 paged, and its write bank: bcopy's pgbank)
+        iny
+        bne @z
+        inc dst+1
+        dex
+        bne @z
+        sta dst                     ; (A = 0; <BARADDR = 0)
         lda #>BARADDR
         sta dst+1
         lda #FI_BAR
         jmp readfile
-        .assert <BARADDR = 0, error, "title_load: BARADDR's low byte"
-        .assert (<STAGE | <MENU_BASE | <TITLE_ADDR) = 0, error, "title_load: page-aligned"
+@done:  rts
+        .assert <BARADDR = 0 && <STAGE = 0 && <GAME_BSS = 0, error, "image_load: page-aligned"
+imgfile: .byte FI_GAME, FI_MENU
+imgalo: .byte <GAME_ADDR, <MENU_ADDR
+imgahi: .byte >GAME_ADDR, >MENU_ADDR
+imgnlo: .byte <GAME_LEN, <MENU_LEN
+imgnhi: .byte >GAME_LEN, >MENU_LEN
+bflo:   .byte <bf_game, <bf_menu
+bfhi:   .byte >bf_game, >bf_menu
+wrlo:   .byte <wr_game, <wr_menu
+wrhi:   .byte >wr_game, >wr_menu
+        .include "img7fix.inc"      ; bf_game, bf_menu, wr_game, wr_menu (build.sh)
+        .assert IMG_MENU = 1, error, "image_load's tables: the game's, then the menus'"
 
 ; ---------------------------------------------------------------- the packer's tables
 imgtab: .incbin "imgtab.bin"  ; per item: file, offset, length, mask file, offset, length

@@ -15,7 +15,7 @@ F_LDPROG_N   = F_LDPROGB_N
 F_LDPROG_SEC = F_LDPROGM_SEC
 F_LDPROG_N   = F_LDPROGM_N
   .endif
-        .segment "LGCBSS"
+        .segment "KRNBSS"
 drv_type: .res 1                    ; 0 = 8271, 1 = 1770 (loader.s decides at boot: init.s
 drv_unit: .res 1                    ; copies them here) and the drive DFS had current
 ld_sec:   .res 2                    ; read_sectors: first sector, count, destination
@@ -25,6 +25,10 @@ ld_trk:   .res 1
 ld_sc:    .res 1
 ld_cnt:   .res 1
 ld_level: .res 1
+ld_img:   .res 1                    ; load_image's image (the test harness reads it too)
+ld_arg:   .res 1                    ; go_menu's A across it
+ld_open:  .res 1                    ; the disc is still open: go_game's load goes on into
+                                    ; the level's (ld_resume clears it: every load ends so)
 
 ; ---------------------------------------------------------------- the NMI page
 ; Copied to NMIPAGE for a load.  Each stub writes through a self-modified address
@@ -89,7 +93,7 @@ LD_RES    = NMIPAGE + (ld_res - nmi_page)
 LD_DONE   = NMIPAGE + (ld_done - nmi_page)
 LD_SECS   = NMIPAGE + (ld_secs - nmi_page)
 
-        .segment "LGCCODE"
+        .segment "KRNCODE"
 ; ---------------------------------------------------------------- reading
 ; ld_sec (16 bit), ld_n sectors -> ld_dst in main RAM.  The disc is 80 tracks of 10
 ; 256-byte sectors: the division is by repeated subtraction.
@@ -203,7 +207,7 @@ read_sectors:
         jmp @track
 @done:  rts
 
-        .segment "LGCCODE"          ; (the helpers)
+        .segment "KRNCODE"          ; (the helpers)
 i_idle: lda FDC8271_CMD             ; the 8271 takes a command when not busy
         bmi i_idle
         rts
@@ -226,9 +230,8 @@ w_wait: ldx #20
         lsr                         ; busy (bit 0) into C
         bcs :-
         rts
-        .segment "LGCBSS"
+        .segment "KRNBSS"
 w_trk:    .res 1                    ; the 1770's head, as far as this driver knows
-        .segment "LGCCODE"
 
 ; a 1770 is reset and its head found once, at start-up (init.s, main RAM): the 8271
 ; keeps DFS's state and needs nothing
@@ -248,7 +251,7 @@ disc_init:
         stx w_trk                   ; X = 0: w_wait's delay loop ends there
 @done:  rts
 @drvsel: .byte FDC_DRV0, FDC_DRV1, FDC_DRV0|FDC_SIDE1, FDC_DRV1|FDC_SIDE1
-        .segment "LGCCODE"
+        .segment "KRNCODE"
 
 ; ---------------------------------------------------------------- the loader
 ; The NMI stubs go to their page and the load-time program to LDPROG, then it runs:
@@ -281,22 +284,56 @@ disc_boot:
 ; black; the game's load_level goes on from the header afterwards)
 load_level_b:
         stx ld_level
+        lda ld_open                 ; straight on from go_game's image load: the chain is
+        bne @on                     ; parked, LDPROG in place
         jsr music_stop
         jsr load_begin              ; the chain parks the CRTC in a standard frame first
         sei                         ; (engine.s load_begin)
         jsr disc_boot
-        ldx ld_level
+@on:    ldx ld_level
         jsr LDPROG                  ; lv_load
         jmp ld_resume
 
-; the menu overlay into bank 6 and the title pack into bank 5
-load_title_b:
+; ---------------------------------------------------------------- the images
+; Bank 7 below the kernel holds one of two images: the game's (GAME: the logic, the
+; renderer's bank 7 half, the game loop) or the menus' (MENU: the menus, the tune,
+; the font, the title pieces).  Either comes off the disc over the other, and control
+; goes to its entry with the stack as boot left it: nothing the other image called
+; is returned to.
+go_title:                           ; start-up's way in (init.s): the menus' image
+        ldx #IMG_MENU
+        jsr load_image
+        jsr ld_resume
+        jmp game_main
+go_game:                            ; the menus' way out: the game's image (and the bar's
+        ldx #IMG_GAME               ; template: ldprog.s), then its level loop, whose level
+        jsr load_image              ; load goes straight on (interrupts off till it ends)
+        ldx #$3F                    ; (init.s: the stack is 64 bytes)
+        txs
+        inc ld_open                 ; (0 -> 1: the last load's ld_resume)
+        jsr bar_bg                  ; the template buries the digits: the cache is stale
+game_in:                            ; (a label for the test harness: the game's image in,
+        jmp level_loop              ;  level not yet read)
+go_menu:                            ; the game's way out, A = 0 lost, 1 won: the menus'
+        sta ld_arg                  ; image, then its win/lose screen
+        ldx #IMG_MENU
+        jsr load_image
+        jsr ld_resume
+        ldx #$3F
+        txs
+        lda ld_arg
+        jmp menu_over
+load_image:                         ; X = IMG_GAME or IMG_MENU
+        stx ld_img
+        jsr music_stop              ; (the tune's player is the menus')
         jsr load_begin
         sei
         jsr disc_boot
-        jsr LDPROG+3                ; title_load (and the bar's template: ldprog.s)
-        jsr bar_bg                  ; so the digit cache is stale
+        ldx ld_img
+        jmp LDPROG+3                ; image_load (ldprog.s)
 ld_resume:                          ; (interrupts still off: a flag raised during the load
-        jsr load_end                ;  is stale, and load_end clears it before the cli)
+        lda #0                      ;  is stale, and load_end clears it before the cli)
+        sta ld_open
+        jsr load_end
         cli
         rts

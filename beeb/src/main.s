@@ -19,4 +19,4 @@
         .include "banks.s"
         .include "init.s"
 
-.assert camoff < NSPR, error, "the zero page segment grew into defs.inc's fixed equates: raise NSPR/BARDIRTY/BINI/SFXREQ/fcA there"
+.assert camoff < NSPR, error, "the zero page segment grew into defs.inc's fixed equates: raise NSPR/BARDIRTY/BINI/SFXREQ there"

@@ -5,23 +5,24 @@
 // vsync.  The picture is in sync when the load begins.
 //   node test/loadsync2.mjs master|modelb <disc> <labels>
 // The Model B is the 8271 (B-DFS1.2), or BMODEL=B1770.
-import { findJsbeeb, loadLabels } from "./harness.mjs";
+import { findJsbeeb, loadLabels, loadBanks, imgOk } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, disc, labels] = process.argv.slice(2);
 const s = new MachineSession(kind === "modelb" ? (process.env.BMODEL ?? "B-DFS1.2") : "Master"); await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
 const cpu = s._machine.processor, A = loadLabels(labels), v = s._video;
+const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg"));
 const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
 const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
 const HV = []; let forced = 0; { const opc = v.paintAndClear.bind(v); v.paintAndClear = function () { if (v.bitmapY >= 768) forced++; HV.push([cyc(), v.bitmapY >= 768]); return opc(); }; }
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 async function to(pc, bank, budget = 6000) {
-  const at = () => cpu.pc === pc && (bank === undefined || cpu.readmem(0xf4) === P[bank - 4]);
+  const at = () => cpu.pc === pc && (bank === undefined || cpu.readmem(0xf4) === P[bank - 4]) && imgOk(cpu, A, banks, pc);
   const h = cpu.debugInstruction.add(() => at());
   try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }
   throw new Error("not reached: " + pc.toString(16));
 }
-for (let k = 0; k < 20; k++) { await to(A.menu_keys, 6); await s.runFor(1); }
+for (let k = 0; k < 20; k++) { await to(A.menu_keys, banks.byName.get("menu_keys")); await s.runFor(1); }
 const t0 = cyc(); const n0 = HV.length; forced = 0;
 s.keyDown(13); await s.runFor(200000); s.keyUp(13);
 await to(A.frame_top, 7, 60000);

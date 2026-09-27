@@ -104,46 +104,11 @@ clamp_window:
 @wyok:  rts
 
 ; ---------------------------------------------------------------- game
-game_main:
-  .if BHW
-        lda #0                      ; A dead: ensure_menu loads title_res first
-        sta hiscore
-        sta hiscore+1
-        sta maxlevel
-        sta title_res
-  .else
-        stza hiscore
-        stza hiscore+1
-        stza maxlevel
-        stza title_res
-  .endif
-title_loop:
-        jsr ensure_menu             ; the menus are bank 6's overlay: in place first
-        jsr t_title_menu
-        cmp #MENU_HELP
-        bne new_game
-        jsr t_help_screen
-        jmp title_loop
-new_game:
-        stz level
-  .if BHW
-        sta score                   ; A = 0 (the stz)
-        sta score+1
-  .else
-        stz score
-        stz score+1
-  .endif
-        lda #3
-        sta lives
-        sta health
-        lda maxlevel
-        beq level_loop
-        jsr t_level_select
-        asl
-        sta level
+; The game's image comes in at level_loop (disc.s go_game, from the menus' image,
+; which has set level, score, lives and health), and goes back to the menus' when the
+; game ends (go_menu).
 level_loop:
         jsr blank_palette           ; hide the loading and the first-frame build-up
-        stz title_res               ; the level's map replaces the title pack
         ldx level
         jsr load_level
         jsr t_level_init
@@ -210,26 +175,14 @@ fl_over:
         sta maxlevel
 :       jmp level_loop
 game_over:
-        jsr update_hiscore
-        jsr ensure_menu
-        lda #0
-        jsr t_winlose
-        jmp title_loop
+        lda #0                      ; lost
+        .byte $2C                   ; (bit abs: skips the lda #1)
 game_won:
-        jsr update_hiscore
-        jsr ensure_menu
         lda #1
-        jsr t_winlose
-        jmp title_loop
-; the menu overlay into bank 6 and the title pack into bank 5, unless they are still
-; in (a level load replaces both): before every menu, since the overlay is the menus
-ensure_menu:
-        lda title_res
-        bne :+
-        jsr blank_palette
-        jsr load_title_b
-        inc title_res
-:       rts
+        pha
+        jsr update_hiscore
+        pla
+        jmp go_menu                 ; the menus' image, and its win/lose screen (disc.s)
 update_hiscore:
         lda hiscore
         cmp score
@@ -240,7 +193,7 @@ update_hiscore:
 :       rts
 
 ; ---------------------------------------------------------------- sound data
-        PLACEH "CODE", "LGCCODE"    ; with sound_tick: bank 7 on the Model B, main RAM on the Master
+        PLACEH "CODE", "KRNCODE"    ; with sound_tick: bank 7 on the Model B, main RAM on the Master
 ; sfx steps: byte0 = channel/period latch ($80 | ch<<5 | lo4), byte1 = period hi (data byte), byte2 = volume ($90|ch<<5|att), duration
 sfxtab: .word sfx_jump, sfx_star, sfx_throw, sfx_hit, sfx_kill, sfx_power, sfx_die
 sfx_jump:  .byte $C0|8, 12, $D0, 2,  $C0|4, 9, $D2, 2,  $C0|0, 7, $D4, 2,  $C0|8, 5, $D6, 3, $FF

@@ -6,7 +6,7 @@
 //   node test/menusync.mjs master <discA> <labelsA> <discB> <labelsB>
 //   node test/menusync.mjs modelb <discA> <labelsA> <discB> <labelsB>
 // Compared: the ring memory (not the bar: the menus leave it alone) and the painted frame.
-import { findJsbeeb, loadLabels, loadBanks } from "./harness.mjs";
+import { findJsbeeb, loadLabels, loadBanks, imgOk } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
 const [kind, dA, lA, dB, lB] = process.argv.slice(2);
@@ -16,8 +16,8 @@ async function boot(disc, labels) {
   const cpu = s._machine.processor, A = loadLabels(labels);
   const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
-  const mb = loadBanks(path.join(path.dirname(labels), "cleo.dbg")).byName.get("menu_keys");   // the overlay's bank
-  const at = () => cpu.pc === A.menu_keys && cpu.readmem(0xf4) === P[mb - 4];
+  const banks = loadBanks(path.join(path.dirname(labels), "cleo.dbg")), mb = banks.byName.get("menu_keys");   // the menus' bank (and image)
+  const at = () => cpu.pc === A.menu_keys && cpu.readmem(0xf4) === P[mb - 4] && imgOk(cpu, A, banks, A.menu_keys);
   async function next() {
     const h = cpu.debugInstruction.add(() => at());
     try { for (let i = 0; i < 4000; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }
@@ -36,8 +36,10 @@ for (let k = 0; k < N; k++) {
   if (k < 2) continue;               // the first page may still be settling: a changed file
                                      // size moves the disc load, and with it that frame's timing
   let n = 0;
-  if (kind === "master") {           // the bar ($2B00) and both screens, main and shadow --
-    for (const shadow of [0, 4]) {   // not the code, which lives in main RAM below them
+  if (kind === "master") {           // the bar ($2B00) and buffer 0's screen, main RAM -- not
+    for (const shadow of [0]) {      // the code below it, nor shadow RAM: the menus show buffer
+                                     // 0 only, and shadow is a load's stage (what it holds is
+                                     // whatever file was read last)
       const was = [X, Y].map((M) => M.cpu.readmem(0xfe34));
       [X, Y].forEach((M, i) => M.cpu.writemem(0xfe34, (was[i] & ~4) | shadow));
       for (let a = 0x3000; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;
