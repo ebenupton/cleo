@@ -48,10 +48,18 @@ VISLINES = 240 if TARGET == 'master' else 160   # the window's lines: 30 rows / 
 # tables at the top of 4 and 6; bank 6's tiles run from its code's next page to the
 # end; bank 5's map is a fixed 8K below its mask tables.  These are the bounds the
 # linker config (cleo_b.cfg) and defs.inc share.
-B4_DATA = (0x83C0, 0xBB00)                  # bank 4: images and masks, between the row loop
-                                            #   ($8000) and SWAPTAB + MASKTAB ($BB00-$BFFF)
+# The sprites start exactly where each bank's code ends: every byte the code does not
+# take is sprite room.  The code's ends are the linker's (modelb/build/map.txt), set here
+# by hand because the packer runs before the assembler; engine.s asserts them both ways,
+# so the build stops if the code grows into the sprites or leaves a gap below them.
+_MIR = os.environ.get('TILEMIRROR') == '1'
+B4_CODE_END = 0x8392 if TARGET == 'master' else 0x83AF             # the row loop (SPR4CODE)
+B5_CODE_END = ((0x8271 if _MIR else 0x8258) if TARGET == 'master'   # the row loop, the gather
+               else (0x8302 if _MIR else 0x82CA))                    #   and its shape (MAP5BSS)
+B4_DATA = (B4_CODE_END, 0xBB00)             # bank 4: images and masks, between the row loop
+                                            #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (no hole now: one run)
-B5_DATA = (0x8310 if os.environ.get('TILEMIRROR') == '1' else 0x82D0, 0x9C00)                  # bank 5: all its sprites, one run, between the row
+B5_DATA = (B5_CODE_END, 0x9C00)                  # bank 5: all its sprites, one run, between the row
                                             #   loop + gather and the map: the resident part
                                             #   (SPRC6) at the bottom, the level's above it
 B5_HOLE = (0x9C00, 0x9C00)                  #   (no hole now)
@@ -417,5 +425,6 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('SPR5_MIRROR = 0\n')            # bank 5 holds no image that is drawn mirrored
     f.write('SPR4_COPY = 0\n')              # and bank 4 nothing the copy blitter draws
     f.write('B4_DATA_END = $%04X\nB5_TOP = $%04X\nMAP5 = $%04X\n' % (B4_DATA[1], B5_TOP, MAP5))
+    f.write('B4_CODE_END = $%04X\nB5_CODE_END = $%04X\n' % (B4_CODE_END, B5_CODE_END))
     f.write('NIMGTAB = %d\n' % (NIMG + 15))
 print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))

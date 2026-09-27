@@ -2462,6 +2462,7 @@ ds_done: rts
         .endif
         .endscope
         .assert spr4::ds_entry = BANKENTRY, error, "bank 4's row loop must start the bank"
+        .assert * = B4_CODE_END, error, "bank 4's code must end where its sprites start: set B4_CODE_END in modelb/tools/assets.py"
         .segment "SPR5CODE"
         .scope spr5
         SPRITE_LOOPS ::SPR5_MIRROR, 1, ::BANK_TIL1
@@ -3466,6 +3467,7 @@ halfsub:   .res 1                   ; half0 less the slot the first half takes i
 mir0:      .res 1                   ; the first mirrored tile's id (the loader's)
 MIRTAB:    .res MAXMIR              ; per mirrored id: the slot of the tile it mirrors
   .endif
+        .assert * = B5_CODE_END, error, "bank 5's code must end where its sprites start: set B5_CODE_END in modelb/tools/assets.py"
   .endif
         PLACE "LOW", "TIL6ENT"     ; render-time helpers in the NMI page ($0D03..),
                                    ; copied there at init; banked: the start of bank 6
