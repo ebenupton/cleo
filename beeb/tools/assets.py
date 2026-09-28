@@ -62,7 +62,8 @@ VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the M
 # on the Model B, at most on the Master), so the build stops if they move.
 _MIR = os.environ.get('TILEMIRROR') == '1'
 NIB = m.NIBSPR                              # 4-bit sprites (a trial: convert.py)
-NOBOX = NIB or os.environ.get('NOBOX') == '1'   # stars and the trampoline as masked sprites (the trial's control)
+NOBOX = os.environ.get('NOBOX') == '1'      # stars and the trampoline as masked sprites (a control: no box path)
+SPRGEOM = os.environ.get('SPRGEOM') == '1'   # the split directory (beebgame's option)
 B4_CODE_END = 0x83BD                        # the row loop (SPR4CODE)
 B5_CODE_END = 0x82FE if _MIR else 0x82C6    # the row loop, the gather and its shape (MAP5BSS)
 if NIB:                                     # (both blitters in each bank, larger)
@@ -85,7 +86,7 @@ TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page 
 # BOXID0 + BOXN are the engine's "still" aliases of the boxes, BOXN below them):
 # images 0..102 (the entries of the original's dim), boxes 103..117 -- the box stars'
 # twelve (six a star class) and the trampoline's three frames.
-BOXID0, BOXN = (103, 0) if NIB else (103, 15)   # (4-bit sprites: no boxes)
+BOXID0, BOXN = 103, 15
 NDIR = BOXID0 + BOXN                        # directory entries
 NBOXART, NTRAMP = 12, 3                     # the box stars' images, the trampoline's frames
 # The split between resident and staged, which is the game's to choose: the resident
@@ -95,7 +96,7 @@ NBOXART, NTRAMP = 12, 3                     # the box stars' images, the trampol
 # set: what (nearly) every level draws.
 RESIDENT_IDS = list(range(46))              # Cleo, the boomerang, the stars and their
                                             # collect animation (0..42), 43..45
-RESIDENT_TRAMP = not NIB                    # the trampoline (15 levels of 16 have one; none with 4-bit sprites)
+RESIDENT_TRAMP = True                       # the trampoline (15 levels of 16 have one)
 ALWAYS_IDS = range(43)                      # the ids a level draws whatever its objects
 
 # ---------------------------------------------------------------- the shared files
@@ -164,11 +165,9 @@ for j in range(NIMG):
     mo, mn = len(sprx), len(m.img_mask[j]); sprx += m.img_mask[j]
     imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, mo & 255, mo >> 8, mn & 255, mn >> 8])
 for k in range(NBOXART):                    # the box stars' boxes (no masks)
-    if NIB:
-        imgtab += bytes(10); continue       # (4-bit sprites: no boxes)
     o, n = len(sprx), len(m.allbox_bytes[k]); sprx += m.allbox_bytes[k]
     imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, 0, 0, 0, 0])
-assert RESIDENT_TRAMP or NIB                # (the trampoline staged: not written)
+assert RESIDENT_TRAMP                       # (the trampoline staged: not written)
 imgtab += bytes(10 * NTRAMP)                # (the trampoline's: resident)
 assert len(sprx) <= 0x4000                  # STAGE's 16K
 out('SPRX', sprx)
@@ -198,10 +197,10 @@ for i in range(BOXID0):
     sprdir += bytes([item_index('img', j), 0, W, hh, rx & 255, ry & 255, (1 if mirror else 0) | 2, 2 * hh])
 for k in range(NBOXART if BOXN else 0):
     lo, wc = m.box_geom[k % 6]
-    sprdir += bytes([item_index('box', k), 1, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
+    sprdir += bytes([item_index('box', k), 1, wc, m.BOX_H, (6 - 2 * lo) & 255, 8] + ([8, m.BOX_H] if NIB else [2 | 8, m.BOX_H * 2]))
 for f in range(NTRAMP if BOXN else 0):
     lo, wc = m.tramp_geom[f]
-    sprdir += bytes([item_index('tramp', f), 2, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255, (-8) & 255, 2 | 8, m.TRAMP_H * 2])
+    sprdir += bytes([item_index('tramp', f), 2, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255, (-8) & 255] + ([8, m.TRAMP_H] if NIB else [2 | 8, m.TRAMP_H * 2]))
 assert len(sprdir) == NDIR * 8
 
 # ---------------------------------------------------------------- placing for the loops
@@ -348,7 +347,7 @@ def place_sprites(lv, sub):
     # the box stars' art by each star's class (convert.py star_class: 1 on sky, the
     # first six boxes; 2 on black, the second six -- logic.s boxbase), not by the set
     classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
-    bxs = [] if NIB else (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
+    bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
     tramps = []                             # (resident: SPRC)
     R5BASE = C5_BASE + C5_LEN               # above the resident part, up to the map
                                             # (r6, h6, s6 and the report's b6 are bank 5's)
@@ -396,7 +395,9 @@ def place_sprites(lv, sub):
             return False
         for kind, j, nd, nm in items:
             key = (kind, j)
-            if canmirror((kind, j, nd, nm)):
+            if NIB:                             # (4-bit: either bank mirrors, and boxes
+                ok = (try4(key, nd, nm) or try5(key, nd, nm)) if prefer4 else (try5(key, nd, nm) or try4(key, nd, nm))
+            elif canmirror((kind, j, nd, nm)):  #  are plain images)
                 ok = try4(key, nd, nm)
             elif kind != 'img':                 # the copy blitter is bank 5's alone
                 ok = try5(key, nd, nm)
@@ -530,6 +531,8 @@ def pack_level(lv, sub):
         if i < BOXID0 and not NIB:          # the box ids have no mask (nor 4-bit sprites)
             masks.append(0 if k is None else mask_addr.get(k, 0))
     directory, smask = lf.directory(entries, masks)
+    if SPRGEOM:                             # the level's part: the addresses alone
+        directory = lf.directory_split([None if e is None else (e[0], e[1]) for e in entries])
 
     # ---- the file (beebgame's levelfile: the engine's format)
     data = lf.encode(lf.Level(lw=L['lw'], lh=L['lh'], game_header=ghdr, shape=lf.Shape(**T['B']['shape']),
@@ -606,6 +609,8 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('; generated by tools/assets.py: the bounds every level fits\n')
     f.write('SOLID_CYAN = %d\nSOLID_BLACK = %d\nFLAT0 = %d\nNFLAT = %d\nMAXMIR = %d\n' % (SOLID_CYAN, SOLID_BLACK, m.FLAT0, m.NFLAT, m.MAXMIR))
     f.write('BOXID0 = %d\nBOXN = %d\n' % (BOXID0, BOXN))
+    if SPRGEOM:
+        f.write('SPRGFL = 1\n')            # the geometry carries flags by shape (engine.s)
     f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC5_BASE = $%04X\nSPRC5_LEN = %d\nSPRX_LEN = %d\n'
             % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
     f.write('TOFF = %d\n' % m.TOFF)          # id k's tile slot is k + TOFF (convert.py)
@@ -619,3 +624,20 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
 print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))
 if NIB:
     out('nibtab.bin', m.NIBTAB)             # the engine's L0TAB, L1TAB, NMASK (banks.s)
+if SPRGEOM:                                 # the geometry every level shares, by shape
+    shapes, six = [], []
+    for i in range(NDIR):
+        t = sprdir[i * 8:i * 8 + 8]
+        g = (t[2], t[4], t[5], t[7], t[6]) if t[0] != 0xFF else None   # W, refx, refy, lines, flags
+        if g is None:
+            six.append(0); continue
+        if g not in shapes:
+            shapes.append(g)
+        six.append(shapes.index(g))
+    assert len(shapes) <= 256
+    with open(os.path.join(OUT, 'sprgeom.inc'), 'w') as f:
+        f.write('; generated by tools/assets.py: the sprites\' geometry by shape (SPRGEOM)\n')
+        f.write('SPRG_IX: .byte %s\n' % ', '.join(map(str, six)))
+        for name, k in (('SPRG_W', 0), ('SPRG_RX', 1), ('SPRG_RY', 2), ('SPRG_LN', 3), ('SPRG_FL', 4)):
+            f.write('%s: .byte %s\n' % (name, ', '.join(str(sh[k]) for sh in shapes)))
+    print('SPRGEOM: %d ids, %d shapes: %d bytes of geometry' % (NDIR, len(shapes), NDIR + 5 * len(shapes)))

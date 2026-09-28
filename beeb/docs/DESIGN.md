@@ -25,10 +25,23 @@ root, assets step and tune.
 
 The packer picks the tiles the map (and the animations) can show, merges the identical
 ones, classes them full, half or flat and numbers them, and places the level's sprites
-not in SPRC: box stars and trampolines in bank 5 (the copy blitter), mirrored images in
-bank 4 (SWAPTAB), the rest wherever they fit, largest first, a mask always in its
-image's bank; when that greedy order leaves a hole too small, it tries other orders,
-deterministically.  A box star's art is chosen by its star's class (on sky, the first
+not in SPRC wherever they fit, largest first; when that greedy order leaves a hole too
+small, it tries other orders, deterministically.
+
+The sprites are beebgame's 4-bit format (NIBSPR, since 29 Sep 2026; `NIBSPR=0 sh
+build.sh` builds the masked format as before): a game pixel is one of fifteen 2x2
+patterns of MODE 1 dots, a nibble, 0 transparent, with no mask.  Cleo's dither already
+turns each colour into one fixed pattern; the fifteen (`convert.py` NIB_PATTERNS) are
+solid cyan, for the box stars' sky, and the fourteen of the dither's twenty-one that
+lose least (a colour whose pattern is not among them takes the nearest in Lab: 3.4% of
+the opaque game pixels).  The box stars and the trampoline's boxes are opaque 4-bit
+images, drawn by the same blitter, so either bank takes any sprite, mirrored or not.
+The directory is split (SPRGEOM): a level carries the images' addresses, and the
+geometry, by shape, is `sprgeom.inc` in bank 7's GAMEDATA (`SPRG_FL` carries the
+mirror, Cleo's being by id).  Against the masked format: frame work -5.2% on the
+Model B and -6.2% on the Master (every level faster), sprites 23.0K to 10.3K, bank 7
++443 bytes free, loads 2-3 seconds shorter.  (The masked format placed box stars and
+trampolines in bank 5, for the copy blitter, and mirrored images in bank 4, SWAPTAB's.)  A box star's art is chosen by its star's class (on sky, the first
 six boxes; on black, the second six), not by the level's set.  MAXSPR and BINMAX are
 the maxima over every level of what the walk rectangle can cover from any camera
 position (24 and 18).

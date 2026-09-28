@@ -10,6 +10,9 @@ digits_art:                         ; the HUD's ten digits, 16 bytes each: a nib
         .incbin "digits.bin"      ; byte column and two game rows (assets.py)
 DIGTOP:     .incbin "digtab.bin", 0, 16   ; a nibble's top scanline byte
 DIGBOT:     .incbin "digtab.bin", 16, 16  ; and its bottom one
+  .if SPRGEOM
+        .include "sprgeom.inc"      ; the sprites' geometry by shape (assets.py; the
+  .endif                            ;  engine's SPRGEOM prologue reads it, bank 7)
         .segment "GAMEBSS"
 ; the object state arrays, laid out as logic.s names them: O_STAMP + k*OBJN, then
 ; the grid heads and chains and the cached bin walk lists.  level_init's clear runs

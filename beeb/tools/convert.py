@@ -985,13 +985,14 @@ for (im, full, src), shift in zip(images, img_shift):
 
 # ---- 4-bit sprites (NIBSPR=1, beebgame's option; a trial): every game pixel one of
 # fifteen 2x2 patterns, nibble 0 transparent -- a byte a game-pixel row for each column
-# (the left pixel in the high nibble), no mask.  The fifteen are the patterns today's
-# dither uses, less the six rarest-to-lose: each colour keeps its pattern if it is one
-# of them, else takes the one nearest in Lab (as a linear mix of its dots).  NIBTAB is
+# (the left pixel in the high nibble), no mask.  The fifteen: solid cyan (the box
+# stars' sky) and the fourteen of the dither's patterns that lose least: each colour
+# keeps its pattern if it is one of them, else takes the one nearest in Lab (as a
+# linear mix of its dots).  NIBTAB is
 # the expansion the engine draws through: L0TAB, L1TAB (a stored byte's two scanlines)
 # and NMASK (the AND mask for its transparent pixels).
 NIBSPR = os.environ.get('NIBSPR') == '1'
-NIB_PATTERNS = 'CCCM CCKK CKKK CMKK CMMY CMYY CYYK CYYY KKKK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
+NIB_PATTERNS = 'CCCC CCCM CCKK CKKK CMKK CMYY CYYK CYYY KKKK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
 if NIBSPR:
     _crgb, _seq = _CMYK[4]
     _code = [''.join('KCMY'[d] for d in s_) for s_ in _seq]
@@ -1147,6 +1148,37 @@ print('trampoline black boxes: widths', [w for _l, w in tramp_geom],
       '= %d bytes' % sum(len(b) for b in tramp_bytes))
 
 allbox_bytes = box_bytes + tramp_bytes
+if NIBSPR:                              # the boxes as opaque 4-bit images: the same
+    _NCYAN = 1 + NIB_PAT.index(_code.index('CCCC'))       # fields, a game pixel a nibble
+    _NBLACK = 1 + NIB_PAT.index(_code.index('KKKK'))
+    def _nibbox(im, mirror, x0, fieldw, h, bg, lo, wc):
+        fld = np.full((h, fieldw), bg, np.uint8)
+        H_, w_ = im.shape
+        W_ = (w_ + 1) // 2
+        pad = np.full((H_, W_ * 2), spr_tr, dtype=im.dtype)
+        pad[:, :w_] = im
+        if mirror:
+            pad = pad[:, ::-1]
+        n = NIB_OF[pad]
+        sub = fld[:, x0:x0 + 2 * W_]
+        fld[:, x0:x0 + 2 * W_] = np.where(pad != spr_tr, n, sub)
+        fld = fld[:, 2 * lo:2 * (lo + wc)]
+        return bytes(((fld[:, 0::2] << 4) | fld[:, 1::2]).T.astype(np.uint8).tobytes())
+    box_bytes = []
+    for _bg in (_NCYAN, _NBLACK):
+        for f in range(6):
+            j, mirror, rx, ry = entry[34 + f]
+            _col, _x0 = box_art[f]
+            lo, Wc = box_geom[f]
+            box_bytes.append(_nibbox(images[j][0], mirror, _x0, FIELD, BOX_H, _bg, lo, Wc))
+    tramp_bytes = []
+    for f, _i in enumerate(TRAMP_IDS):
+        _j = entry[_i][0]
+        _col, _x0 = tramp_art[f]
+        lo, Wc = tramp_geom[f]
+        tramp_bytes.append(_nibbox(images[_j][0], False, _x0, TRAMP_FIELD, TRAMP_H, _NBLACK, lo, Wc))
+    allbox_bytes = box_bytes + tramp_bytes
+    print('NIBSPR: boxes %d bytes' % sum(len(b) for b in allbox_bytes))
 
 # font: 40 glyphs 8x8 at tit.png y=26.., 10 per row -> 1 bit per pixel
 tit_idx, tit_rgb, tit_tr = load_indexed('tit.png')
