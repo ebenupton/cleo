@@ -2065,6 +2065,35 @@ process_object:
         rts
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
         .word ob_spike, ob_none, ob_flame, ob_powerup, ob_vanish, ob_switch
+; (RNGTAB here, not beside inrange, only to keep it in a page: its reads are hot)
+RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, each +128
+        .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
+        .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
+        .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
+        .byte 112, 144, 104, 140        ; 12: <-16, 16, <-24, 12
+        .byte 120, 136, 112, 132        ; 16: <-8, 8, <-16, 4
+        .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
+        .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
+        .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
+        .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
+        .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
+        .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
+        .byte 118, 138, 112, 136        ; 44: <-10, 10, <-16, 8
+        .byte 120, 128, 104, 136        ; 48: <-8, 0, <-24, 8
+        .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
+        .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
+        .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
+        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
+        ; Append new quads, never insert: callers hold fixed offsets, and a quad put in
+        ; mid-table once shifted every later one under them (the bat read Cleo's band,
+        ; the vanishing platforms never saw her feet).
+        .byte 105, 147, 113, 152        ; 64: Cleo      <-23, 19, <-15, 24
+        .byte 111, 144, 118, 143        ; 68: boomerang <-17, 16, <-10, 15
+        ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
+        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
+        .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
+        .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
+        .assert >RNGTAB = >(*-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read): move it"
 po_star:                            ; the lean prologue, then straight in: the star list
         lda O_XL,y
         sta spx
@@ -2121,33 +2150,6 @@ inrange:
         rts
 @no:    clc
         rts
-RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, each +128
-        .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
-        .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
-        .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
-        .byte 112, 144, 104, 140        ; 12: <-16, 16, <-24, 12
-        .byte 120, 136, 112, 132        ; 16: <-8, 8, <-16, 4
-        .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
-        .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
-        .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
-        .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
-        .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
-        .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
-        .byte 118, 138, 112, 136        ; 44: <-10, 10, <-16, 8
-        .byte 120, 128, 104, 136        ; 48: <-8, 0, <-24, 8
-        .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
-        .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
-        .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
-        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
-        ; Append new quads, never insert: callers hold fixed offsets, and a quad put in
-        ; mid-table once shifted every later one under them (the bat read Cleo's band,
-        ; the vanishing platforms never saw her feet).
-        .byte 105, 147, 113, 152        ; 64: Cleo      <-23, 19, <-15, 24
-        .byte 111, 144, 118, 143        ; 68: boomerang <-17, 16, <-10, 15
-        ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
-        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
-        .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
-        .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
 
 ; boomerang-relative position: sx = spx - bx ; sy = spy - by  (uses spx/spy as the object's draw pos)
 boomrel:

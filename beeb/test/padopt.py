@@ -33,6 +33,9 @@ for l in open('beebgame/src/pads.inc'):
     if mm:
         PADS[mm.group(1)] = int(mm.group(2))
 LB, LM = labels('modelb'), labels('master')
+NAMES.sort(key=lambda kl: LB[kl[1]] - (PADS['PADB_' + kl[0]] if kl[0] != 'BB' else 0))
+assert NAMES[-1][0] == 'BB', 'the Model B pad after blank_below must be the last'
+assert [k for k, _ in sorted(NAMES[:-1], key=lambda kl: LM[kl[1]])] == [k for k, _ in NAMES[:-1]], 'the machines order ENGCODE alike'
 n = len(NAMES)
 curB = [None] + [PADS['PADB_' + k] for k, _ in NAMES]
 curM = [None] + [PADS.get('PADM_' + k, 0) for k, _ in NAMES[:-1]]
