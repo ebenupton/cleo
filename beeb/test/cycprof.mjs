@@ -49,6 +49,10 @@ const where = { get: (k) => { const s = src.get(k), m = mac.get(k); return s ? (
 
 // ---- run
 const st = new Map();                                           // "bank|pc" -> [exec, taken, extra]
+// PHASEDUMP=file: bank 7's taken branches (from, to) and indexed reads (pc, base,
+// index) with their counts, for choosing where bank 7's code sits (tools: phase.py)
+const PD = process.env.PHASEDUMP, pd = new Map();
+const pdAdd = (k) => pd.set(k, (pd.get(k) ?? 0) + 1);
 for (const level of levels) {
   const M = machine === "master" ? await open({ disc, labels, level }) : await openB({ level, disc, labels });
   const cpu = M.cpu, A = M.A;
@@ -58,8 +62,8 @@ for (const level of levels) {
   let pend = null;                                              // the branch just executed
   const hook = cpu.debugInstruction.add((pc) => {
     if (pend) {                                                 // did the last branch go?
-      const [rec, from] = pend; pend = null;
-      if (pc !== ((from + 2) & 0xffff)) { rec[1]++; rec[2]++; if ((pc & 0xff00) !== ((from + 2) & 0xff00)) rec[2]++; }
+      const [rec, from, pend7] = pend; pend = null;
+      if (pc !== ((from + 2) & 0xffff)) { rec[1]++; rec[2]++; if ((pc & 0xff00) !== ((from + 2) & 0xff00)) rec[2]++; if (PD && pend7) pdAdd(`b ${from} ${pc}`); }
     }
     let bank = -1;
     if (pc >= 0x8000 && pc < 0xc000) { const s = cpu.readmem(0xf4); if (!sockBank.has(s)) sockBank.set(s, bankOf(s)); bank = sockBank.get(s); }
@@ -67,13 +71,15 @@ for (const level of levels) {
     let rec = st.get(k); if (!rec) st.set(k, (rec = [0, 0, 0]));
     rec[0]++;
     const op = cpu.readmem(pc);
-    if (BR.has(op)) pend = [rec, pc];
+    if (BR.has(op)) pend = [rec, pc, bank === 7];
     else if (RD_ABSX.has(op) || RD_ABSY.has(op)) {
-      const base = cpu.readmem(pc + 1) | (cpu.readmem(pc + 2) << 8);
-      if (((base + (RD_ABSX.has(op) ? cpu.x : cpu.y)) & 0xff00) !== (base & 0xff00)) rec[2]++;
+      const base = cpu.readmem(pc + 1) | (cpu.readmem(pc + 2) << 8), ix = RD_ABSX.has(op) ? cpu.x : cpu.y;
+      if (((base + ix) & 0xff00) !== (base & 0xff00)) rec[2]++;
+      if (PD) pdAdd(`r ${bank === 7 ? pc : -1} ${base} ${ix}`);
     } else if (RD_IZY.has(op)) {
       const zp = cpu.readmem(pc + 1), base = cpu.readmem(zp) | (cpu.readmem((zp + 1) & 0xff) << 8);
       if (((base + cpu.y) & 0xff00) !== (base & 0xff00)) rec[2]++;
+      if (PD) pdAdd(`r ${bank === 7 ? pc : -1} ${base} ${cpu.y}`);
     }
     return false;
   });
@@ -85,6 +91,7 @@ for (const level of levels) {
   if (M.s?.destroy) M.s.destroy();
 }
 const per = (n) => n / (frames * levels.length);
+if (PD) (await import("node:fs")).writeFileSync(PD, JSON.stringify({ frames: frames * levels.length, ev: [...pd] }));
 
 // ---- by source line
 const lines = new Map();
