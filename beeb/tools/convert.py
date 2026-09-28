@@ -983,6 +983,53 @@ for (im, full, src), shift in zip(images, img_shift):
     padded[:, shift:shift + w] = im
     img_mask.append(mask_plane(padded != spr_tr))
 
+# ---- 4-bit sprites (NIBSPR=1, beebgame's option; a trial): every game pixel one of
+# fifteen 2x2 patterns, nibble 0 transparent -- a byte a game-pixel row for each column
+# (the left pixel in the high nibble), no mask.  The fifteen are the patterns today's
+# dither uses, less the six rarest-to-lose: each colour keeps its pattern if it is one
+# of them, else takes the one nearest in Lab (as a linear mix of its dots).  NIBTAB is
+# the expansion the engine draws through: L0TAB, L1TAB (a stored byte's two scanlines)
+# and NMASK (the AND mask for its transparent pixels).
+NIBSPR = os.environ.get('NIBSPR') == '1'
+NIB_PATTERNS = 'CCCM CCKK CKKK CMKK CMMY CMYY CYYK CYYY KKKK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
+if NIBSPR:
+    _crgb, _seq = _CMYK[4]
+    _code = [''.join('KCMY'[d] for d in s_) for s_ in _seq]
+    NIB_PAT = [_code.index(c) for c in NIB_PATTERNS]          # nibble n+1 -> pattern
+    def _lab(lin):
+        M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+        xyz = lin @ M.T / np.array([0.95047, 1.0, 1.08883])
+        f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+        return np.stack([116 * f[:, 1] - 16, 500 * (f[:, 0] - f[:, 1]), 200 * (f[:, 1] - f[:, 2])], axis=1)
+    _PL = _lab(_crgb.astype(np.float64))
+    _v = (spr_rgb.astype(np.float32) / 255.0) ** GAMMA          # the dither's own choice first
+    _today = ((_v[:, None, :] - _crgb[None, :, :]) ** 2).sum(axis=2).argmin(axis=1)
+    NIB_OF = np.zeros(len(spr_rgb), np.uint8)                   # palette index -> nibble
+    for _c in range(len(spr_rgb)):
+        _p = _today[_c]
+        if _p not in NIB_PAT:
+            _p = min(NIB_PAT, key=lambda q: ((_PL[_p] - _PL[q]) ** 2).sum())
+        NIB_OF[_c] = 1 + NIB_PAT.index(_p)
+    NIB_OF[spr_tr] = 0
+    _entry = lambda n, line: 0 if n == 0 else (
+        (_seq[NIB_PAT[n - 1]][0] << 2) | _seq[NIB_PAT[n - 1]][2] if line == 0     # TL, TR
+        else (_seq[NIB_PAT[n - 1]][3] << 2) | _seq[NIB_PAT[n - 1]][1])          # BL, BR
+    NIBTAB = bytearray(768)
+    for _b in range(256):
+        _hi, _lo = _b >> 4, _b & 15
+        for _line in (0, 1):
+            NIBTAB[256 * _line + _b] = int(packcol(np.array([[_entry(_hi, _line), _entry(_lo, _line)]], np.uint8))[0, 0])
+        NIBTAB[512 + _b] = 0xFF if _b == 0 else (0xCC if _hi == 0 else 0) | (0x33 if _lo == 0 else 0)
+    for _j, ((im, full, src), shift) in enumerate(zip(images, img_shift)):
+        h, w = im.shape
+        W = (w + 1) // 2
+        padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
+        padded[:, shift:shift + w] = im
+        n = NIB_OF[padded]
+        img_bytes[_j] = bytes(((n[:, 0::2] << 4) | n[:, 1::2]).T.astype(np.uint8).tobytes())   # column-major
+        img_mask[_j] = b''
+    print('NIBSPR: 4-bit sprites, %d bytes (no masks)' % sum(len(b) for b in img_bytes))
+
 # box stars: each spin frame (34..39) composited over cyan and over black in a box just
 # wide enough to cover its own art AND the previous frame's, so drawing frame N erases
 # frame N-1 with no mask and no erase pass.  The frames are all 24 lines tall but the
