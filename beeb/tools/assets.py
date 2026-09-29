@@ -62,7 +62,6 @@ VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the M
 # on the Model B, at most on the Master), so the build stops if they move.
 _MIR = os.environ.get('TILEMIRROR') == '1'
 NIB = m.NIBSPR                              # 4-bit sprites (a trial: convert.py)
-NOBOX = os.environ.get('NOBOX') == '1'      # stars and the trampoline as masked sprites (a control: no box path)
 SPRGEOM = os.environ.get('SPRGEOM') == '1'   # the split directory (beebgame's option)
 B4_CODE_END = 0x83BD                        # the row loop (SPR4CODE)
 B5_CODE_END = 0x82FE if _MIR else 0x82C6    # the row loop, the gather and its shape (MAP5BSS)
@@ -474,10 +473,10 @@ def pack_level(lv, sub):
     for (t, x, y, ex) in L['objs']:
         e = (list(ex) + [0, 0, 0])[:3]
         if t == 0:
-            e[0] = 0 if NOBOX else m.star_class(cm, x, y)     # (class 0: the masked star, no box)
+            e[0] = m.star_class(cm, x, y)
             e[1] = 1 if m.star_reachable(x, y, reach) else 0
         elif t == 1:
-            e[0] = 0 if NOBOX else m.tramp_class(cm, x, y)    # (class 0: the masked trampoline)
+            e[0] = m.tramp_class(cm, x, y)
             b = m.TYPE_BOX[1]
             selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
             e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
