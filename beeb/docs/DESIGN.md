@@ -36,6 +36,15 @@ solid cyan, for the box stars' sky, and the fourteen of the dither's twenty-one 
 lose least (a colour whose pattern is not among them takes the nearest in Lab: 3.4% of
 the opaque game pixels).  The box stars and the trampoline's boxes are opaque 4-bit
 images, drawn by the same blitter, so either bank takes any sprite, mirrored or not.
+The boxes are screen bytes, drawn by the copy blitter, so the sky's box stars are exact.
+Every trampoline's rest state is a box baked over its own backdrop (identical ones share
+a slot), and so are the masked stars that cost the most vsyncs: `test/starplan.mjs`
+finds the frames that miss the 3-vsync peg and what each star costs in them
+(`tools/starbake.json`), and `assets.py` takes, greedily, the stars that save the most
+vsyncs a sector of disc (a bonus level at a quarter), within each level's slots, its
+banks and the disc (BAKE, 100 sectors: the disc is the limit).  Each object's box id is
+in its e0 (logic.s: ob_star, ob_tramp), and a box-drawn object that overlaps another
+static object is marked disturbable (e1), so it is redrawn rather than kept.
 The directory is split (SPRGEOM): a level carries the images' addresses, and the
 geometry, by shape, is `sprgeom.inc` in bank 7's GAMEDATA (`SPRG_FL` carries the
 mirror, Cleo's being by id).  Against the masked format: frame work -5.2% on the

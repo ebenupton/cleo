@@ -985,14 +985,14 @@ for (im, full, src), shift in zip(images, img_shift):
 
 # ---- 4-bit sprites (NIBSPR=1, beebgame's option; a trial): every game pixel one of
 # fifteen 2x2 patterns, nibble 0 transparent -- a byte a game-pixel row for each column
-# (the left pixel in the high nibble), no mask.  The fifteen: solid cyan (the box
-# stars' sky) and the fourteen of the dither's patterns that lose least: each colour
-# keeps its pattern if it is one of them, else takes the one nearest in Lab (as a
-# linear mix of its dots).  NIBTAB is
+# (the left pixel in the high nibble), no mask.  The fifteen are the dither's patterns
+# that lose least: each colour keeps its pattern if it is one of them, else takes the
+# one nearest in Lab (as a linear mix of its dots).  (The boxes are not 4-bit: their
+# screen bytes, backdrop and all, are copied -- below.)  NIBTAB is
 # the expansion the engine draws through: L0TAB, L1TAB (a stored byte's two scanlines)
 # and NMASK (the AND mask for its transparent pixels).
 NIBSPR = os.environ.get('NIBSPR') == '1'
-NIB_PATTERNS = 'CCCC CCCM CCKK CKKK CMKK CMYY CYYK CYYY KKKK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
+NIB_PATTERNS = 'CCCM CCKK CKKK CMKK CMMY CMYY CYYK CYYY KKKK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
 if NIBSPR:
     _crgb, _seq = _CMYK[4]
     _code = [''.join('KCMY'[d] for d in s_) for s_ in _seq]
@@ -1148,37 +1148,54 @@ print('trampoline black boxes: widths', [w for _l, w in tramp_geom],
       '= %d bytes' % sum(len(b) for b in tramp_bytes))
 
 allbox_bytes = box_bytes + tramp_bytes
-if NIBSPR:                              # the boxes as opaque 4-bit images: the same
-    _NCYAN = 1 + NIB_PAT.index(_code.index('CCCC'))       # fields, a game pixel a nibble
-    _NBLACK = 1 + NIB_PAT.index(_code.index('KKKK'))
-    def _nibbox(im, mirror, x0, fieldw, h, bg, lo, wc):
-        fld = np.full((h, fieldw), bg, np.uint8)
-        H_, w_ = im.shape
-        W_ = (w_ + 1) // 2
-        pad = np.full((H_, W_ * 2), spr_tr, dtype=im.dtype)
-        pad[:, :w_] = im
-        if mirror:
-            pad = pad[:, ::-1]
-        n = NIB_OF[pad]
-        sub = fld[:, x0:x0 + 2 * W_]
-        fld[:, x0:x0 + 2 * W_] = np.where(pad != spr_tr, n, sub)
-        fld = fld[:, 2 * lo:2 * (lo + wc)]
-        return bytes(((fld[:, 0::2] << 4) | fld[:, 1::2]).T.astype(np.uint8).tobytes())
-    box_bytes = []
-    for _bg in (_NCYAN, _NBLACK):
-        for f in range(6):
-            j, mirror, rx, ry = entry[34 + f]
-            _col, _x0 = box_art[f]
-            lo, Wc = box_geom[f]
-            box_bytes.append(_nibbox(images[j][0], mirror, _x0, FIELD, BOX_H, _bg, lo, Wc))
-    tramp_bytes = []
-    for f, _i in enumerate(TRAMP_IDS):
-        _j = entry[_i][0]
-        _col, _x0 = tramp_art[f]
-        lo, Wc = tramp_geom[f]
-        tramp_bytes.append(_nibbox(images[_j][0], False, _x0, TRAMP_FIELD, TRAMP_H, _NBLACK, lo, Wc))
-    allbox_bytes = box_bytes + tramp_bytes
-    print('NIBSPR: boxes %d bytes' % sum(len(b) for b in allbox_bytes))
+
+# ---- baked boxes: a sprite's frame composited over the level's own tiles where it
+# stands, its screen bytes column by column (every scanline: the copy blitter's), for
+# the trampolines at rest and the stars the packer chooses (assets.py).  A box at map
+# game pixel (X0, Y0), wc bytes by h rows; the art's col lines and alpha at field
+# column fx0 of the box.  None where the box would show an animated tile (the
+# vanishing blocks, the flowers) or leave the map: those keep their masked frames.
+_ANIMATED = set(special['VANISH0'] + i for i in range(8)) | set(special['FLOWER0'] + i for i in range(4))
+def bake_box(cm, X0, Y0, wc, h, col, alpha, fx0):
+    mh, mw = cm.shape
+    fld = np.zeros((2 * h, 2 * wc), np.uint8)
+    for line in range(2 * h):
+        my = 2 * Y0 + line                      # map scanline
+        ty = my // 16
+        for gx in range(2 * wc):
+            X = X0 + gx
+            tx = X // 8
+            if not (0 <= ty < mh and 0 <= tx < mw) or X < 0 or my < 0:
+                return None
+            c = int(cm[ty, tx])
+            if c in _ANIMATED:
+                return None
+            fld[line, gx] = tile_preview[c][my % 16, X % 8]
+    ah, aw = col.shape
+    for line in range(ah):
+        for ax in range(aw):
+            gx = fx0 + ax
+            if 0 <= gx < 2 * wc and alpha[line, ax]:
+                fld[line, gx] = col[line, ax]
+    packed = packcol(fld)
+    return bytes(packed.T.astype(np.uint8).tobytes())         # column-major, 2h lines a column
+# the trampoline's rest state (frame 0 alone: its box need cover no other frame)
+_r0 = _tspan(0)
+TRAMP_REST_LO, TRAMP_REST_WC = _r0[0] // 2, _r0[1] // 2 - _r0[0] // 2 + 1
+def bake_tramp_rest(cm, x, y):             # (a trampoline stands at 8x + 4: logic.s @t1)
+    col, x0 = tramp_art[0]
+    return bake_box(cm, 8 * x + 4 - TRAMP_HOT + 2 * TRAMP_REST_LO, 8 * y + 8, TRAMP_REST_WC, TRAMP_H,
+                    col, _tmask(0), x0 - 2 * TRAMP_REST_LO)
+def bake_star(cm, x, y):                    # its six spin frames, each box covering the last
+    out = []
+    for f in range(6):
+        col, x0 = box_art[f]
+        lo, wc = box_geom[f]
+        b = bake_box(cm, 8 * x - 6 + 2 * lo, 8 * y - 8, wc, BOX_H, col, _boxmask(f), x0 - 2 * lo)
+        if b is None:
+            return None
+        out.append(b)
+    return out
 
 # font: 40 glyphs 8x8 at tit.png y=26.., 10 per row -> 1 bit per pixel
 tit_idx, tit_rgb, tit_tr = load_indexed('tit.png')

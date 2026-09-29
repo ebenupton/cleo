@@ -640,7 +640,11 @@ level_init:
         lsr
         sta gy
         jmp @box
-@t1:    lda O_XL,y
+@t1:    lda q3                      ; e0 = its rest state's baked box id (0: none), e1 =
+        sta O_EL,y                  ; an enemy's range covers it (assets.py) -- stored as
+        lda q4                      ; @t0 does for a star (a trampoline never had them:
+        sta O_EH,y                  ; its black boxes were never drawn)
+        lda O_XL,y
         ora #4                      ; x*8 has bit 2 clear: +4 cannot carry into O_XH
         sta O_XL,y
         lda q1
@@ -2226,18 +2230,17 @@ ob_star:
         cmp #18
         bcs @done
         lsr
-        ldx O_EL,y
-        beq @regc                   ; carry unknown on this path: force it
-        cmp #6
+        ldx O_EL,y                  ; the star's first box id (0: none -- its masked frames):
+        beq @regc                   ; the sky's, black's, or its own baked six (assets.py)
+        cmp #6                      ; (carry unknown on the beq's path: forced there)
         bcs @reg                    ; C = 1 here, so @reg can assume it
-        adc boxbase-1,x
+        adc O_EL,y                  ; (C = 0: the bcs was not taken)
         ldx #64                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
         bne box_safe                ; always: Z = 0 from the ldx
 @regc:  sec
 @reg:   adc #33                     ; C = 1: +34
         jmp addsprite
 @done:  rts
-boxbase: .byte 103, 109
 
 ; A box star is an opaque rectangle, so if the same frame is already on screen in the
 ; same place its pixels are still right -- unless something has been drawn through
@@ -2276,18 +2279,19 @@ ob_tramp:
         mov16i vy, -2048
         lda #SFX_JUMP
         sta SFXREQ
-@draw:  lda O_AL,y
-        clc
+@draw:  lda O_AL,y                  ; at rest (0): its rest state's baked box, if it has
+        bne @bounce                 ; one (assets.py: an id a trampoline; 0 for none)
+        lda O_EL,y
+        bne @rest
+@bounce: clc                        ; (A = O_AL, or 0: frame 0)
         adc #2
         lsr
-        lsr                         ; bounce frame 0..2
-        clc                         ; hoisted: serves both arms
-        ldx O_EL,y
-        bne @box
+        lsr                         ; bounce frame 0..2: the masked frames
+        clc
         adc #43
         jmp addsprite
-@box:   adc #115
-        ldx #72                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
+@rest:  ldx #72                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
+        clc
         ; fall through
 ; A = frame, X = the RNGTAB quad for Cleo (64 star, 72 trampoline; the boomerang's is
 ; X+4 -- inrange and boomrel leave X alone), C = 0.  Adds BOXN if nothing can draw
