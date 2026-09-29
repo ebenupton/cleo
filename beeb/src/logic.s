@@ -2122,8 +2122,14 @@ inrange:
 @no:    clc
         rts
 
-; (RNGTAB here, after inrange, only to keep it in a page on both machines: its reads
-; are hot)
+
+; boomerang-relative position: sx = spx - bx ; sy = spy - by  (uses spx/spy as the object's draw pos)
+boomrel:
+        dif16 sx, spx, bx
+        dif16 sy, spy, by
+        rts
+; (RNGTAB here, after boomrel, only to keep it in a page on both machines: its reads
+; are hot.  Anything that moves bank 7's code can move it across one: the build warns.)
 RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, each +128
         .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
         .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
@@ -2152,12 +2158,6 @@ RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, eac
         .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
         .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
         .assert >RNGTAB = >(*-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read): move it"
-
-; boomerang-relative position: sx = spx - bx ; sy = spy - by  (uses spx/spy as the object's draw pos)
-boomrel:
-        dif16 sx, spx, bx
-        dif16 sy, spy, by
-        rts
 ; boomerang hit test helper: bactive && bcnt < 8 -> carry set
 boomready:
         lda bactive
