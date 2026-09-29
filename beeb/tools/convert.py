@@ -1186,6 +1186,28 @@ def bake_tramp_rest(cm, x, y):             # (a trampoline stands at 8x + 4: log
     col, x0 = tramp_art[0]
     return bake_box(cm, 8 * x + 4 - TRAMP_HOT + 2 * TRAMP_REST_LO, 8 * y + 8, TRAMP_REST_WC, TRAMP_H,
                     col, _tmask(0), x0 - 2 * TRAMP_REST_LO)
+# The loader's baker (beebgame ldprog.s bake) makes the same bytes on the Beeb from an
+# overlay a kind: each column's pixels (2h lines) then its mask (1s where the backdrop
+# shows), (backdrop AND mask) OR pixels.  BAKE_KINDS: kind 0 the trampoline at rest,
+# 1..6 the star's frames: (bytes wide, lines, dx from 8x in game pixels, dty from y in
+# tile rows, the overlay)
+def bake_overlay(wc, h, col, alpha, fx0):
+    dat = np.zeros((2 * h, 2 * wc), np.uint8)
+    msk = np.full((2 * h, 2 * wc), 15, np.uint8)
+    ah, aw = col.shape
+    for line in range(ah):
+        for ax in range(aw):
+            gx = fx0 + ax
+            if 0 <= gx < 2 * wc and alpha[line, ax]:
+                dat[line, gx], msk[line, gx] = col[line, ax], 0
+    d, k = packcol(dat), packcol(msk)
+    return b''.join(d[:, c].tobytes() + k[:, c].tobytes() for c in range(wc))
+BAKE_KINDS = [(TRAMP_REST_WC, 2 * TRAMP_H, 4 - TRAMP_HOT + 2 * TRAMP_REST_LO, 1,
+               bake_overlay(TRAMP_REST_WC, TRAMP_H, tramp_art[0][0], _tmask(0), tramp_art[0][1] - 2 * TRAMP_REST_LO))]
+for _f in range(6):
+    _lo, _wc = box_geom[_f]
+    BAKE_KINDS.append((_wc, 2 * BOX_H, -6 + 2 * _lo, -1,
+                       bake_overlay(_wc, BOX_H, box_art[_f][0], _boxmask(_f), box_art[_f][1] - 2 * _lo)))
 def bake_star(cm, x, y):                    # its six spin frames, each box covering the last
     out = []
     for f in range(6):

@@ -127,7 +127,7 @@ def level_bakes(lv, sub):
     if (lv, sub) in _bakes:
         return _bakes[(lv, sub)]
     L, cm = m.levels[(lv, sub)], m.maps[(lv, sub)]
-    tr, st, by = {}, {}, {}
+    tr, st, by, at = {}, {}, {}, {}
     if NIB:
         slot = {}                           # (trampolines whose boxes come out the same share one)
         for oi, (t, x, y, e) in enumerate(L['objs']):
@@ -135,7 +135,7 @@ def level_bakes(lv, sub):
                 b = m.bake_tramp_rest(cm, x, y)
                 if b is not None and (b in slot or len(slot) < TRMAX):
                     if b not in slot:
-                        slot[b] = len(slot); by[('tr', slot[b])] = b
+                        slot[b] = len(slot); by[('tr', slot[b])] = b; at[('tr', slot[b])] = (x, y)
                     tr[oi] = slot[b]
         want = CHOSEN.get((lv, sub), [])
         pos = {(x, y): oi for oi, (t, x, y, e) in enumerate(L['objs']) if t == 0}
@@ -147,11 +147,11 @@ def level_bakes(lv, sub):
             if fr is not None:
                 st[oi] = len(st)
                 for f, b in enumerate(fr):
-                    by[('sb', st[oi] * 6 + f)] = b
-    _bakes[(lv, sub)] = (tr, st, by)
+                    by[('sb', st[oi] * 6 + f)] = b; at[('sb', st[oi] * 6 + f)] = xy
+    _bakes[(lv, sub)] = (tr, st, by, at)
     return _bakes[(lv, sub)]
 CUR = [None]                                # the level being placed (its baked items' bytes)
-CHUNKS = {}                                 # level file -> its chunk of BAKE
+BAKEAT = {}                                 # (level, sub) -> its baked items' (bank, address)
 def item_bytes(kind, j):
     if kind in ('tr', 'sb'):
         return level_bakes(*CUR[0])[2][(kind, j)]
@@ -212,14 +212,15 @@ for j in range(NIMG):
 for k in range(NBOXART):                    # the box stars' boxes (no masks)
     o, n = len(sprx), len(m.allbox_bytes[k]); sprx += m.allbox_bytes[k]
     imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, 0, 0, 0, 0])
-FI_BAKE = 25                                # (ldprog.s: BAKE, the level's chunk)
-if NIB:                                     # the baked slots: in BAKE, at the offset the placement
-    _tr_len = m.TRAMP_REST_WC * m.TRAMP_H * 2   # entry carries (its mask field); a fixed length
-    for k in range(TRMAX):
-        imgtab += bytes([FI_BAKE, 0, 0, _tr_len & 255, _tr_len >> 8, 0, 0, 0, 0, 0])
-    for k in range(NSTAR * 6):
-        _l = m.box_geom[k % 6][1] * m.BOX_H * 2
-        imgtab += bytes([FI_BAKE, 0, 0, _l & 255, _l >> 8, 0, 0, 0, 0, 0])
+BAKEITEM0 = NIMG + NBOXART                  # the baked slots: made by the loader (ldprog.s bake)
+if NIB:                                     # from an overlay in SPRX a kind over the level's
+    bakegeom = bytearray()                  # tiles where the object stands (its tile in the
+    for wc, lines, dx, dty, ov in m.BAKE_KINDS:   # placement entry's mask field)
+        o = len(sprx); sprx += ov
+        assert lines <= 32 and len(ov) == 2 * wc * lines
+        bakegeom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, 0])
+    bakekind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)])
+    # (no imgtab entries: placewalk bakes them before it looks)
 else:
     assert RESIDENT_TRAMP                   # (the trampoline staged: not written)
     imgtab += bytes(10 * NTRAMP)            # (the trampoline's: resident)
@@ -420,7 +421,7 @@ def place_sprites(lv, sub):
     items0 += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]
     items0 += [('tramp', f, len(m.tramp_bytes[f]), 0) for f in tramps]
     CUR[0] = (lv, sub)
-    _tr, _st, _by = level_bakes(lv, sub)
+    _tr, _st, _by, _at = level_bakes(lv, sub)
     items0 += [(k[0], k[1], len(b), 0) for k, b in sorted(_by.items())]
     def canmirror(it):
         return it[0] == 'img' and it[1] in mirrored
@@ -536,7 +537,7 @@ def pack_level(lv, sub):
         ghdr[HDR_SPECIAL + i] = local.get(cid, 255)
     objs = []
     reach = m.enemy_reach(L['objs'])
-    _tr, _st, _by = level_bakes(lv, sub)
+    _tr, _st, _by, _at = level_bakes(lv, sub)
     for oi, (t, x, y, ex) in enumerate(L['objs']):
         e = (list(ex) + [0, 0, 0])[:3]
         if t == 0:
@@ -606,14 +607,10 @@ def pack_level(lv, sub):
     # each region: the order and padding that cost the sprite loops least (sprpack)
     fill, img_addr, mask_addr, img_bank, items0, regions, imgs = place_sprites(lv, sub)
     img_addr, mask_addr, cost0, cost1 = settle_level(lv * 2 + sub, img_addr, mask_addr, img_bank, regions)
-    # the level's chunk of BAKE: its baked items in slot order; each one's offset in it
-    # rides in its placement entry's mask field (ldprog.s placewalk)
-    chunk, boff = bytearray(), {}
-    for k in sorted(_by):
-        boff[k] = len(chunk); chunk += _by[k]
-    CHUNKS[lv * 2 + sub] = bytes(chunk)
+    # a baked item's tile (x, y) rides in its placement entry's mask field (ldprog.s bake)
+    BAKEAT[(lv, sub)] = {k: (img_bank[k], img_addr[k]) for k in _by}
     placement = lf.placement([(item_index(kind, j), img_bank[(kind, j)], a,
-                               boff[(kind, j)] if kind in ('tr', 'sb') else mask_addr.get((kind, j), 0))
+                               _at[(kind, j)][0] | _at[(kind, j)][1] << 8 if kind in ('tr', 'sb') else mask_addr.get((kind, j), 0))
                               for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0]))])
     for f in range(NTRAMP if RESIDENT_TRAMP else 0):   # (the resident block, for the directory)
         img_addr[('tramp', f)] = tramp_addr[f]; img_bank[('tramp', f)] = 5
@@ -660,10 +657,9 @@ if NIB and STARPLAN:
     # it; a frame's vsyncs are ceil(work / V), no fewer than the peg's, so a star saves
     # something only where taking its cycles out crosses a multiple of V -- summed over
     # every frame it is drawn in, a bonus level's (a small map: 32 x 32 tiles or less,
-    # played far less often) at a quarter.  Greedy: the best star, its frames updated,
-    # the next; each within its level's slots, its banks (the placement must still fit)
-    # and BAKE_SECTORS on the disc.
-    BAKE_SECTORS = int(os.environ.get("BAKE_SECTORS", 100))   # (the disc: 800 less every other file, with a little to spare)
+    # played far less often) at a quarter.  Greedy: the best star a byte of bank, its
+    # frames updated, the next; each within its level's slots and its banks (the
+    # placement must still fit).  (The loader bakes them: nothing on the disc.)
     played = lambda lv, sub: 0.25 if m.maps[(lv, sub)].size <= 32 * 32 else 1.0
     frames = {}                             # (lv, sub) -> [work, {(x, y): cycles}]
     for lv in range(8):
@@ -675,8 +671,6 @@ if NIB and STARPLAN:
     def gain(key, xy):
         V, fl = frames[key]
         return sum(vs(w, V) - vs(w - st[xy], V) for w, st in fl if xy in st) * played(*key)
-    def secs():
-        return sum((sum(len(b) for b in level_bakes(lv, sub)[2].values()) + 255) // 256 for lv in range(8) for sub in (0, 1))
     cand = {(key, xy) for key, (V, fl) in frames.items() for w, st in fl for xy in st
             if m.star_class(m.maps[key], *xy) == 0 and m.bake_star(m.maps[key], *xy) is not None}
     size = lambda key, xy: sum(len(b) for b in m.bake_star(m.maps[key], *xy))
@@ -693,7 +687,7 @@ if NIB and STARPLAN:
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 place_sprites(*key)
-            ok = secs() <= BAKE_SECTORS
+            ok = True
         except SystemExit:
             ok = False
         if not ok:
@@ -764,7 +758,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     if SPRGEOM:
         f.write('SPRGFL = 1\n')            # the geometry carries flags by shape (engine.s)
     if NIB:
-        f.write('BAKEFILE = 1\n')          # the per-level baked boxes (ldprog.s placewalk)
+        f.write('BAKEITEM0 = %d\n' % BAKEITEM0)   # the items the loader bakes (ldprog.s bake)
     f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC5_BASE = $%04X\nSPRC5_LEN = %d\nSPRX_LEN = %d\n'
             % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
     f.write('TOFF = %d\n' % m.TOFF)          # id k's tile slot is k + TOFF (convert.py)
@@ -778,15 +772,12 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
 print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))
 if NIB:
     out('nibtab.bin', m.NIBTAB)             # the engine's L0TAB, L1TAB, NMASK (banks.s)
-    bake, tab = bytearray(), [[], [], []]   # BAKE: the chunks, each to a whole sector
-    for i in range(16):
-        c = CHUNKS.get(i, b'')
-        sec, n = len(bake) // 256, (len(c) + 255) // 256
-        bake += c + bytes(-len(c) % 256)
-        tab[0].append(sec & 255); tab[1].append(sec >> 8); tab[2].append(n)
-    out('BAKE', bake)
-    out('bakechunks.bin', bytes(tab[0] + tab[1] + tab[2]))
-    print('BAKE: %d bytes, %d sectors; trampolines baked %d, stars %d' % (len(bake), len(bake) // 256,
+    out('bakegeom.bin', bytes(bakegeom))   # the baker's tables (ldprog.s)
+    out('bakekind.bin', bakekind)
+    json.dump({'%d' % (lv * 2 + sub): [[k[0], k[1], list(_bk[3][k]), list(BAKEAT[(lv, sub)][k]), list(_bk[2][k])] for k in sorted(_bk[2])]
+               for lv in range(8) for sub in (0, 1) for _bk in [level_bakes(lv, sub)]},
+              open(os.path.join(OUT, 'bakes.json'), 'w'))   # (test/bakecheck.mjs: what the loader must make)
+    print('baked by the loader: trampolines %d, stars %d' % (
           sum(len(level_bakes(lv, sub)[0]) for lv in range(8) for sub in (0, 1)),
           sum(len(level_bakes(lv, sub)[1]) for lv in range(8) for sub in (0, 1))))
 if SPRGEOM:                                 # the geometry every level shares, by shape

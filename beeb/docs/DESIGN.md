@@ -41,8 +41,11 @@ Every trampoline's rest state is a box baked over its own backdrop (identical on
 a slot), and so are the masked stars that cost the most vsyncs: `test/starplan.mjs`
 finds the frames that miss the 3-vsync peg and what each star costs in them
 (`tools/starbake.json`), and `assets.py` takes, greedily, the stars that save the most
-vsyncs a sector of disc (a bonus level at a quarter), within each level's slots, its
-banks and the disc (BAKE, 100 sectors: the disc is the limit).  Each object's box id is
+vsyncs a byte of bank (a bonus level at a quarter), within each level's slots (8 stars:
+the ids run out) and its banks.  The loader bakes them at load (beebgame `ldprog.s
+bake`) from the level's tiles and an overlay a kind in SPRX (convert.py BAKE_KINDS),
+so they cost nothing on the disc; `test/bakecheck.mjs` checks every one against the
+packer's bytes on either machine.  Each object's box id is
 in its e0 (logic.s: ob_star, ob_tramp), and a box-drawn object that overlaps another
 static object is marked disturbable (e1), so it is redrawn rather than kept.
 The directory is split (SPRGEOM): a level carries the images' addresses, and the
