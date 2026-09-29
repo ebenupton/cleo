@@ -13,7 +13,8 @@ M.forEach((m, i) => { m.cyBank = loadBanks(dbgPath(builds[i][1]))?.byName.get("B
 const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjssllllllllllllllllllllllllllllljljljljljss";
 const KK = (c) => ({ s: 0, r: 2, l: 1, j: 4 })[c] ?? 0;
 const RING = [0x0A80, 0x4680], RINGBYTES = 23 * 640, BAR = [0x0300, 0x0800];
-const window = (m, bf) => [m.cpu.readmem(m.A.BUF_CX + 2 * bf) | (m.cpu.readmem(m.A.BUF_CX + 2 * bf + 1) << 8),
+const window = (m, bf) => [m.A.BUF_CXH !== undefined ? m.cpu.readmem(m.A.BUF_CX + bf) | (m.cpu.readmem(m.A.BUF_CXH + bf) << 8)
+                                                     : m.cpu.readmem(m.A.BUF_CX + 2 * bf) | (m.cpu.readmem(m.A.BUF_CX + 2 * bf + 1) << 8),
                            m.bank(m.cyBank, () => m.cpu.readmem(m.A.BUF_CY + bf))];
 let bad = 0, badFrames = 0;
 for (let f = 0; f < +nS; f++) {

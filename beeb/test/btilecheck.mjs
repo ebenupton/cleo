@@ -22,7 +22,7 @@ for (let f = 0; f < N; f++) {
   const lw = rd(A.maplw), stride = 1 << lw;
   let fb = 0;
   for (const bf of [0, 1]) {
-    const cx = rd(A.BUF_CX + 2 * bf) | (rd(A.BUF_CX + 2 * bf + 1) << 8);
+    const cx = (A.BUF_CXH !== undefined ? rd(A.BUF_CX + bf) | (rd(A.BUF_CXH + bf) << 8) : rd(A.BUF_CX + 2 * bf) | (rd(A.BUF_CX + 2 * bf + 1) << 8));
     if (cx & 0x8000) continue;
     const cy = bank(6, () => rd(A.BUF_CY + bf));
     const recs = bank(7, () => { const r = []; for (const b2 of [0, 1]) for (let i = 0; i < rd(A.RECCNT + b2); i++) { const b = A.SPRREC + (b2 * MAXREC + i) * 10;
