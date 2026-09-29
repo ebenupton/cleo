@@ -663,7 +663,7 @@ if NIB and STARPLAN:
     # played far less often) at a quarter.  Greedy: the best star, its frames updated,
     # the next; each within its level's slots, its banks (the placement must still fit)
     # and BAKE_SECTORS on the disc.
-    BAKE_SECTORS = 100                      # (the disc: 800 less every other file, with a little to spare)
+    BAKE_SECTORS = int(os.environ.get("BAKE_SECTORS", 100))   # (the disc: 800 less every other file, with a little to spare)
     played = lambda lv, sub: 0.25 if m.maps[(lv, sub)].size <= 32 * 32 else 1.0
     frames = {}                             # (lv, sub) -> [work, {(x, y): cycles}]
     for lv in range(8):
@@ -680,6 +680,7 @@ if NIB and STARPLAN:
     cand = {(key, xy) for key, (V, fl) in frames.items() for w, st in fl for xy in st
             if m.star_class(m.maps[key], *xy) == 0 and m.bake_star(m.maps[key], *xy) is not None}
     size = lambda key, xy: sum(len(b) for b in m.bake_star(m.maps[key], *xy))
+    saved = [0.0]
     while cand:
         best = max(cand, key=lambda kx: (gain(*kx) / size(*kx), kx))
         key, xy = best
@@ -699,10 +700,11 @@ if NIB and STARPLAN:
             CHOSEN[key].pop(); _bakes.pop(key, None)
             continue
         V, fl = frames[key]
+        saved[0] += gain(key, xy) / played(*key)
         for f in fl:
             if xy in f[1]:
                 f[0] -= f[1].pop(xy)
-    print('stars chosen: %s' % ', '.join('L%d: %d' % (k[0] * 2 + k[1], len(v)) for k, v in sorted(CHOSEN.items()) if v))
+    print('stars chosen (the plan\'s frames: %d vsyncs saved): %s' % (saved[0], ', '.join('L%d: %d' % (k[0] * 2 + k[1], len(v)) for k, v in sorted(CHOSEN.items()) if v)))
 _spare4 = _spare5 = 0x10000
 for lv in range(8):
     for sub in (0, 1):

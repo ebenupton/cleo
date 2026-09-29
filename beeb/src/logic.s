@@ -3028,7 +3028,10 @@ ob_spike:
         lda hurt
         bne @draw
         mov16 hx, rx
-        jsr player_hit
+        ora hx                      ; (A = rx+1 from the mov16) the original knocks Cleo
+        bne :+                      ; right when rx <= 0 (CleoApp.run case 7: rx > 0 is
+        dec hx+1                    ; -768, else +768), player_hit only when hx < 0: level
+:       jsr player_hit              ; with the spike (rx = 0), hx = -256 says so
 @draw:  lda fa
         bmi @done
         cmp #8
