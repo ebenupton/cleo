@@ -66,7 +66,7 @@ SPRGEOM = os.environ.get('SPRGEOM') == '1'   # the split directory (beebgame's o
 B4_CODE_END = 0x83BD                        # the row loop (SPR4CODE)
 B5_CODE_END = 0x82FE if _MIR else 0x82C6    # the row loop, the gather and its shape (MAP5BSS)
 if NIB:                                     # (both blitters in each bank, larger)
-    B4_CODE_END, B5_CODE_END = 0x83E0, 0x8447   # (the Model B's: map.txt)
+    B4_CODE_END, B5_CODE_END = 0x83E5, 0x844C   # (the Model B's: map.txt)
 B4_DATA = (B4_CODE_END, 0xBC00 if NIB else 0xBB00)   # bank 4: images and masks, between the row loop
                                             #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
 B4_HOLE = (0xBB00, 0xBB00)                  #   (empty: the placer's second region in bank 4)
