@@ -268,8 +268,6 @@ fd:       .res 2
 fe:       .res 2
 rx:       .res 2
 ry:       .res 2
-sx:       .res 2
-sy:       .res 2
 qx:       .res 2
 qy:       .res 2
 alt:      .res 1
@@ -372,19 +370,35 @@ getinfo:
 ; the three come from one visit to the map (mapcol) and the rest is arithmetic.  A
 ; pixel off the map takes the general way (@off), a read at a time through getinfo.
 getaltitude:
-        jsr tilexy                  ; X = tx, A = ty
-        bcc @in
-        jmp @off                    ; (out of a branch's reach)
-@in:    tay
-        lda MROWL,y
+        lda qy+1                    ; tilexy's, in line, the row into X and the column
+        cmp maph+1                  ; into Y
+        bcs @offj
+        lsr
+        sta q2
+        lda qy
+        and #$F8
+        ora q2
+        ror
+        ror
+        ror
+        tax                         ; X = ty
+        lda qx+1
+        cmp mapw+1
+        bcs @offj
+        lsr
+        sta q2
+        lda qx
+        and #$F8
+        ora q2
+        ror
+        ror
+        ror
+        tay                         ; Y = tx
+        lda MROWL,x
         sta mapptr
-        lda MROWH,y
+        lda MROWH,x
         sta mapptr+1
-        txa
-        tay
-        jsr mapcol                  ; A = the tile, X = the one above, Y = the one below
-        stx tp
-        sty tp+1
+        jsr mapcol                  ; A = the tile, tp = the one above, tp+1 the one below
         ALTOF
         tax                         ; X = n3 (the alt byte)
         and #15
@@ -413,6 +427,7 @@ getaltitude:
         adc #9                      ; as @b1's
         sbc q5
         rts
+@offj:  jmp @off                    ; (a pixel off the map: out of the tests' reach)
 @fnb:   txa
         lsr
         lsr
@@ -487,13 +502,39 @@ getaltitude:
 
 ; gettileattr: A = attribute byte for the tile at (qx,qy): bits0-2 push+3, bit7 kill ; 3 if outside
 gettileattr:
-        jsr tilexy                  ; X = qx>>3, A = qy>>3
-        bcc :+
-        lda #3
-        rts
-:       jsr maptile
+        lda qy+1                    ; tilexy's, in line (as getaltitude's): row into X,
+        cmp maph+1                  ; column into Y
+        bcs @out
+        lsr
+        sta q2
+        lda qy
+        and #$F8
+        ora q2
+        ror
+        ror
+        ror
+        tax                         ; X = ty
+        lda qx+1
+        cmp mapw+1
+        bcs @out
+        lsr
+        sta q2
+        lda qx
+        and #$F8
+        ora q2
+        ror
+        ror
+        ror
+        tay                         ; Y = tx
+        lda MROWL,x
+        sta mapptr
+        lda MROWH,x
+        sta mapptr+1
+        jsr mapbyte
         tay
         lda LV_ATTR0,y
+        rts
+@out:   lda #3                      ; off the map
         rts
 
 ; ============================================================================
@@ -539,6 +580,11 @@ level_init:
         sta MROWH,x
         dex
         bpl @mrow
+        ldx #RNGTABN-1              ; inrange's limits, into their page (RNGTAB0)
+@rng:   lda RNGTAB0,x
+        sta RNGTAB,x
+        dex
+        bpl @rng
         lda #80                     ; the camera starts centred; the lookahead eases in
         sta camoff
         ; clear object state, then grid
@@ -1151,8 +1197,8 @@ game_frame:
         ldy LV_BINSTAR,x
         lda frame
         sta O_STAMP,y
-        sty obj
-        jsr po_star                 ; no type read, no table
+        jsr po_star                 ; no type read, no table, no obj (nothing a star
+                                    ; runs reads it)
         inc BINI
         bne @rls                    ; BINI < NSTARL <= 255: never 0
 @rlo:   stz BINI
@@ -2037,21 +2083,19 @@ player_update:
 
 
 ; ============================================================================
-; Object processing.  Y = object index (obj).  Types below NLEAN work on the arrays in
-; place; the rest are staged through zero page, dispatched and stored back.
+; Object processing.  Y = object index (obj).  Every type shares the prologue --
+; spx/spy (where it draws) and rx/ry (relative to Cleo) -- then goes to its entry in
+; @tab.  Types below NLEAN (the star, the trampoline) work on the arrays in place,
+; with Y the index throughout.  The rest are staged through zero page: each has a
+; wrapper (os_*) that copies in just the fields it and what it calls touch (audited
+; per handler, with its callees and fall-throughs), runs it, and puts them back.
+; ox/oy, the object's position, are spx/spy's copies, for the two that read them.
 ; ============================================================================
 process_object:
         lda O_TYPE,y
         sta otype
-        asl                         ; X = otype*2, the dispatch index, for both paths:
-        tax                         ; neither prologue below touches X
-        cmp #NLEAN*2                ; types below NLEAN read and write the arrays in
-        bcs @gen                    ; place; the rest are still staged through zero page
-@lean:  ; Nothing staged.  Y is the object index throughout -- none of these handlers,
-        ; nor anything they call, touches it -- so each reads and writes its own fields
-        ; where they live: one cycle over a zero-page access, against seven to fetch a
-        ; field and eight to put it back.  Every field these handlers use is 8-bit
-        ; (audited per handler).
+        asl                         ; X = otype*2, the dispatch index
+        tax
         lda O_XL,y                  ; rx/ry = object relative to the player
         sta spx                     ; spx/spy = where it draws: sta touches no flags,
         sec                         ; so the source byte can be banked on the way past
@@ -2071,91 +2115,145 @@ process_object:
         sbc py+1
         sta ry+1
 @call:                              ; tail dispatch: the handler returns to our caller
-  .if ::BHW                      ; jmpx less its pha/pla: every handler loads A before
-        lda @tab,x                  ; reading it (ob_none returns to a setbank or to
-        sta jv                      ; the lean path's caller, which only gets types 0/1)
+  .if ::BHW                         ; jmpx less its pha/pla: every handler loads A before
+        lda @tab,x                  ; reading it
+        sta jv
         lda @tab+1,x
         sta jv+1
         jmp (jv)
   .else
         jmpx @tab
   .endif
-        ; (@call is the jsr entry for the staged path)
-@gen:   lda O_XL,y
-        sta ox
-        sta spx
-        sec
-        sbc px
-        sta rx
-        lda O_XH,y
-        sta ox+1
-        sta spx+1
-        sbc px+1
-        sta rx+1
-        lda O_YL,y
-        sta oy
-        sta spy
-        sec
-        sbc py
-        sta ry
-        lda O_YH,y
-        sta oy+1
-        sta spy+1
-        sbc py+1
-        sta ry+1
-        lda O_AL,y
-        sta fa
-        lda O_AH,y
-        sta fa+1
-        lda O_BL,y
-        sta fb
-        lda O_BH,y
-        sta fb+1
-        lda O_CL,y
-        sta fc
-        lda O_CH,y
-        sta fc+1
-        lda O_DL,y
-        sta fd
-        lda O_DH,y
-        sta fd+1
-        lda O_EL,y
-        sta fe
-        lda O_EH,y
-        sta fe+1
-        jsr @call
-        ; store back
-        setbank BANK_LVL, BANK_LVL
+@tab:   .word ob_star, ob_tramp, os_snake, os_rsnake, os_bat, os_walker, os_walker
+        .word os_spike, ob_none, os_flame, os_powerup, os_vanish, os_switch
+
+; ---- the staged types' wrappers.  OIN f, field: the object's field into zero page
+; (fa..fe from O_AL..O_EH); OOUT the other way; Y = obj throughout the copies.
+.macro OIN f, lo
+        lda lo,y
+        sta f
+.endmacro
+.macro OOUT f, lo
+        lda f
+        sta lo,y
+.endmacro
+os_snake:                           ; fa, fb, fc low, fe low
+        OIN fa, O_AL
+        OIN fa+1, O_AH
+        OIN fb, O_BL
+        OIN fb+1, O_BH
+        OIN fc, O_CL
+        OIN fe, O_EL
+        jsr ob_snake
+os_fabce:                           ; (os_walker's way back too: the same fields)
         ldy obj
-        lda fa
-        sta O_AL,y
-        lda fa+1
-        sta O_AH,y
-        lda fb
-        sta O_BL,y
-        lda fb+1
-        sta O_BH,y
-        lda fc
-        sta O_CL,y
-        lda fc+1
-        sta O_CH,y
-        lda fd
-        sta O_DL,y
-        lda fd+1
-        sta O_DH,y
-        lda fe
-        sta O_EL,y
-        lda fe+1
-        sta O_EH,y
+        OOUT fa, O_AL
+        OOUT fa+1, O_AH
+        OOUT fb, O_BL
+        OOUT fb+1, O_BH
+        OOUT fc, O_CL
+        OOUT fe, O_EL
         rts
-@tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
-        .word ob_spike, ob_none, ob_flame, ob_powerup, ob_vanish, ob_switch
+os_rsnake:                          ; fa low, fb, fc, fd, ox, oy
+        OIN fa, O_AL
+        OIN fb, O_BL
+        OIN fb+1, O_BH
+        OIN fc, O_CL
+        OIN fc+1, O_CH
+        OIN fd, O_DL
+        OIN fd+1, O_DH
+        jsr os_oxy
+        jsr ob_rsnake
+        ldy obj
+        OOUT fa, O_AL
+        OOUT fb, O_BL
+        OOUT fb+1, O_BH
+        OOUT fc, O_CL
+        OOUT fc+1, O_CH
+        OOUT fd, O_DL
+        OOUT fd+1, O_DH
+        rts
+os_bat:                             ; fa, fb, fc, fd, fe low
+        OIN fa, O_AL
+        OIN fa+1, O_AH
+        OIN fb, O_BL
+        OIN fb+1, O_BH
+        OIN fc, O_CL
+        OIN fc+1, O_CH
+        OIN fd, O_DL
+        OIN fd+1, O_DH
+        OIN fe, O_EL
+        jsr ob_bat
+        ldy obj
+        OOUT fa, O_AL
+        OOUT fa+1, O_AH
+        OOUT fb, O_BL
+        OOUT fb+1, O_BH
+        OOUT fc, O_CL
+        OOUT fc+1, O_CH
+        OOUT fd, O_DL
+        OOUT fd+1, O_DH
+        OOUT fe, O_EL
+        rts
+os_walker:                          ; fa, fb, fc low, fe low (with ob_spike's, which it
+        OIN fa, O_AL                ; can fall into: fa low)
+        OIN fa+1, O_AH
+        OIN fb, O_BL
+        OIN fb+1, O_BH
+        OIN fc, O_CL
+        OIN fe, O_EL
+        jsr ob_walker
+        jmp os_fabce
+os_spike:                           ; fa low
+        OIN fa, O_AL
+        jsr ob_spike
+        jmp os_fa
+os_powerup:                         ; fa low
+        OIN fa, O_AL
+        jsr ob_powerup
+os_fa:  ldy obj
+        OOUT fa, O_AL
+        rts
+os_flame:                           ; fe low
+        OIN fe, O_EL
+        jsr ob_flame
+        ldy obj
+        OOUT fe, O_EL
+        rts
+os_vanish:                          ; fe low, ox, oy
+        OIN fe, O_EL
+        jsr os_oxy
+        jsr ob_vanish
+        ldy obj
+        OOUT fe, O_EL
+        rts
+os_switch:                          ; fa, fb, fc, fd: the low bytes
+        OIN fa, O_AL
+        OIN fb, O_BL
+        OIN fc, O_CL
+        OIN fd, O_DL
+        jsr ob_switch
+        ldy obj
+        OOUT fa, O_AL
+        OOUT fb, O_BL
+        OOUT fc, O_CL
+        OOUT fd, O_DL
+        rts
+os_oxy: lda spx                     ; ox, oy: the object's position (the prologue's spx,
+        sta ox                      ; spy)
+        lda spx+1
+        sta ox+1
+        lda spy
+        sta oy
+        lda spy+1
+        sta oy+1
+        rts
 ob_none:
         rts
 
-; (RNGTAB here, before inrange, only to keep it in a page on both machines: its reads
-; are hot.  Anything that moves bank 7's code can move it across one: the build warns.)
-RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, each +128
+; (RNGTAB0 is the table's source: level_init copies it to RNGTAB, in GAMELVL's page
+; ($82) where no code change can move it, as inrange's reads are hot.)
+RNGTAB0:                            ; inrange limit quads: lo, hi, lo2, hi2, each +128
         .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
         .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
         .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
@@ -2182,7 +2280,9 @@ RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, eac
         ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
         .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
         .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
-        .assert >RNGTAB = >(*-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read): move it"
+RNGTABN = * - RNGTAB0
+        .assert RNGTABN <= 80, error, "RNGTAB0 has outgrown its copy (gamedata.s RNGTAB)"
+        .assert >RNGTAB = >(RNGTAB+RNGTABN-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read)"
 
 ; range check: rx > lo && rx < hi && ry > lo2 && ry < hi2 ; X = offset of the limit
 ; quad in RNGTAB (limits stored +128 so the test is an unsigned byte compare on r^$80,
@@ -2219,10 +2319,10 @@ inrange:
         rts
 
 
-; boomerang-relative position: sx = spx - bx ; sy = spy - by  (uses spx/spy as the object's draw pos)
+; boomerang-relative position: rx = spx - bx ; ry = spy - by  (spx/spy: the object's draw pos)
 boomrel:
-        dif16 sx, spx, bx
-        dif16 sy, spy, by
+        dif16 rx, spx, bx
+        dif16 ry, spy, by
         rts
 ; boomerang hit test helper: bactive && bcnt < 8 -> carry set
 boomready:
@@ -2318,8 +2418,6 @@ ob_star1:
         lda bactive
         beq @anim
         jsr boomrel
-        mov16 rx, sx
-        mov16 ry, sy
         lda #0
         sta q2                      ; rx, ry are the boomerang's: box_safe tests them
         ldx #4
@@ -2421,8 +2519,6 @@ box_safe:
 @cfar:  lda bactive
         beq @yes
         jsr boomrel
-        mov16 rx, sx
-        mov16 ry, sy
         txa
         ora #4
         tax
@@ -2554,8 +2650,6 @@ ob_snake:
 @boom:  jsr boomready
         bcc @draw
         jsr boomrel
-        mov16 rx, sx
-        mov16 ry, sy
         ldx #16
         jsr inrange
         bcc @draw
@@ -2662,8 +2756,6 @@ ob_rsnake:
 @boom:  jsr boomready
         bcc @hitp
         jsr boomrel
-        mov16 rx, sx
-        mov16 ry, sy
         ldx #20
         jsr inrange
         bcc @hitp
@@ -2867,8 +2959,6 @@ ob_bat:
         mov16 t16, rx
         mov16 t16b, ry
         jsr boomrel
-        mov16 rx, sx
-        mov16 ry, sy
         ldx #28
         jsr inrange
         mov16 rx, t16               ; lda/sta do not touch carry
@@ -3064,10 +3154,6 @@ ob_walker:
 @boom:  jsr boomready
         bcc @draw
         jsr boomrel
-        sta ry+1                    ; A = sy+1: boomrel's last store
-        lda sy
-        sta ry
-        mov16 rx, sx
         ldx #44
         jsr inrange
         bcc @draw
@@ -3482,12 +3568,14 @@ rnd:    lsr seed+1
 
         .segment "LOWBSS"           ; (low RAM: the engine's segment, the game's bytes)
 BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
-        .segment "GAMEBSS"          ; the bin walk's
-BINR:      .res 4
+        .segment "GAMEBSS"          ; the first of it (logic.s is assembled before gamedata.s):
+MROWL:     .res 128                 ; the map's row addresses (level_init), page aligned, so
+MROWH:     .res 128                 ;  the reads cross no page
+        .assert <MROWL = 0, warning, "MROWL is not page aligned: its reads cross pages"
+BINR:      .res 4                   ; the bin walk's
 BINOK:     .res 1
-        .align 256                  ; the map's row addresses (level_init), a page:
-MROWL:     .res 128                 ;  maptile's and getaltitude's reads cross none
-MROWH:     .res 128
+        .segment "GAMELVL"          ; (bank 7 below the image's variables: a page's end)
+RNGTAB:    .res 80                  ; inrange's limits (RNGTAB0, level_init's copy)
 
         .segment "GAMECODE"      
 ; ============================================================================
