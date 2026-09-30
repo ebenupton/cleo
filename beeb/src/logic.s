@@ -276,6 +276,8 @@ q4:       .res 1
 q5:       .res 1
 q6:       .res 1
 obj:      .res 1
+BINR:     .res 4                  ; the bin walk's rectangle, and its list's validity
+BINOK:    .res 1                  ;  (profiled hot: zero page)
 gx:       .res 1
 gy:       .res 1
 gx0:      .res 1
@@ -3661,9 +3663,6 @@ rnd:    lsr seed+1
 
         .segment "LOWBSS"           ; (low RAM: the engine's segment, the game's bytes)
 BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
-        .segment "GAMEBSS"          ; the bin walk's
-BINR:      .res 4
-BINOK:     .res 1
 ; The map's row addresses (level_init) and inrange's limits: tables whose reads are
 ; hot, each in a page, outside the image's variables (so those end a page sooner)
         .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
