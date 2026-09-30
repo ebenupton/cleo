@@ -15,7 +15,7 @@ for (let lv = 0; lv < 16; lv++) {
   const cost = new Map(), kept = []; let miss = 0, total = 0, lvV = 0, lost = 0;
   for (const seed of sd.split(",").map(Number)) {
     let cpu, A, step, wr, cyc;
-    if (machine === "master") { const H = await open({ disc: "build/cleo.ssd", labels: "build/master/labels.txt", level: lv }); cpu = H.cpu; A = H.A; step = () => H.runTo(A.frame_top); wr = (a, v) => H.wr(a, v); cyc = () => H.cyc(); }
+    if (machine === "master") { const H = await open({ disc: process.env.SDISC ?? "build/cleo.ssd", labels: process.env.SLABELS ?? "build/master/labels.txt", level: lv }); cpu = H.cpu; A = H.A; step = () => H.runTo(A.frame_top); wr = (a, v) => H.wr(a, v); cyc = () => H.cyc(); }
     else { const B = await openB({ level: lv, ...(process.env.SDISC ? { disc: process.env.SDISC, labels: process.env.SLABELS } : {}) }); cpu = B.cpu; A = B.A; step = () => B.runTo(A.frame_top, 7); wr = (a, v) => B.bank(7, () => cpu.writemem(a, v)); cyc = B.cyc; }
     const ret = (sp) => (cpu.readmem(0x101 + sp) | cpu.readmem(0x102 + sp) << 8) + 1;
     let isrAt = -1, lastC = 0, lastPc = -1, t0 = -1, work = 0, isrTot = 0, c0 = cyc();
