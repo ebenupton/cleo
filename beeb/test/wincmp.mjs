@@ -25,7 +25,9 @@ for (let f = 0; f < N; f++) {
   let fb = 0;
   for (let r = r0; r < r1; r++) for (let c = 0; c < 80; c++) {
     const a = 0x3000 + (((S + r * 80 + c) % 2560 + 2560) % 2560) * 8;
-    for (let l = 0; l < 8; l++) if (M.rd(a + l) !== C.rd(a + l)) { fb++; if (bad + fb <= 3) console.log(`f${f} row ${r} col ${c}`); break; }
+    // the lines shown: the composed row above (-1) its first 8 - f, the partial below its first f
+    const l0 = 0, l1 = r === -1 ? 8 - wfine : r === 30 ? wfine : 8;
+    for (let l = l0; l < l1; l++) if (M.rd(a + l) !== C.rd(a + l)) { fb++; if (bad + fb <= 3) console.log(`f${f} row ${r} col ${c}`); break; }
   }
   for (let a = 0x2B00; a < 0x3000; a++) if (M.rd(a) !== C.rd(a)) { fb++; if (bad + fb <= 3) console.log(`f${f} bar ${a.toString(16)}`); break; }
   if (fb) badf++; bad += fb;

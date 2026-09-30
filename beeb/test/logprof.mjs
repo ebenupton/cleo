@@ -3,6 +3,8 @@
 // script.  Every jsr is followed (a routine's cycles are its own plus its callees'),
 // and the tree is printed to a depth, as cycles a rendered frame.
 // With FLAT=n, then the n source lines costing most (cycles and executions a frame).
+// With FULL=1, the whole frame: frame_top to render_done, the render too (the flip
+// wait's spin is wait_flip's own line: idle, not work).
 //   node test/logprof.mjs master|modelb <disc> <labels> [frames=300] [seed=1] [levels=0] [depth=3]
 import { open, dbgPath } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
@@ -12,11 +14,13 @@ const frames = +fr, DEPTH = +dp;
 // the label names, for jsr targets: the nearest label at or below
 const names = new Map();
 for (const l of readFileSync(labels, "utf8").split("\n")) {
-  const p = l.split(/\s+/); if (p[0] === "al") { const a = parseInt(p[1], 16), n = p[2].replace(/^\./, ""); if (!names.has(a) || n.length < names.get(a).length) names.set(a, n); }
+  const p = l.split(/\s+/); if (p[0] === "al") { const a = parseInt(p[1], 16), n = p[2].replace(/^\./, ""); if (/^[a-z]/.test(n) && (!names.has(a) || /^[A-Z]/.test(names.get(a)))) { if (!names.has(a) || n.startsWith("po_") || n.startsWith("ob_")) names.set(a, n); } else if (!names.has(a)) names.set(a, n); }
 }
 const nameOf = (a) => names.get(a) ?? `$${a.toString(16)}`;
 const tree = { n: "logic", c: 0, calls: 0, kids: new Map() };
 const FLAT = +(process.env.FLAT ?? 0), flat = new Map();    // "bank|pc" -> [cycles, execs]
+const FULL = process.env.FULL === "1";
+let idle = 0;
 let nFrames = 0;
 for (const LEVEL of lvs.split(",").map(Number)) {
   let cpu, A, cyc, step, inB7, wr;
@@ -28,7 +32,7 @@ for (const LEVEL of lvs.split(",").map(Number)) {
     cpu = B.cpu; A = B.A; cyc = B.cyc; const B7 = B.PB(7);
     step = () => B.runTo(A.frame_top, 7); inB7 = () => cpu.readmem(0xf4) === B7; wr = (a, v) => B.bank(7, () => cpu.writemem(a, v));
   }
-  let on = false, isr = false, lastC = 0, stack = [], lastK = null;   // stack: [node, return address]
+  let on = false, isr = false, lastC = 0, stack = [], lastK = null, lastPcX = -1;   // stack: [node, return address]
   const meter = cpu.debugInstruction.add((pc, op) => {
     const now = cyc();
     if (isr) { if (op === 0x40) { isr = false; lastC = now + 6; } return false; }
@@ -42,7 +46,8 @@ for (const LEVEL of lvs.split(",").map(Number)) {
       lastK = `${pc >= 0x8000 && pc < 0xc000 ? (inB7() ? 7 : -1) : -1}|${pc}`;
       let r = flat.get(lastK); if (!r) flat.set(lastK, (r = [0, 0])); r[1]++;
     }
-    if (op === 0x20 && stack.length === 0 && (cpu.readmem(pc + 1) | cpu.readmem(pc + 2) << 8) === A.render_frame) { on = false; return false; }
+    if (!FULL && op === 0x20 && stack.length === 0 && (cpu.readmem(pc + 1) | cpu.readmem(pc + 2) << 8) === A.render_frame) { on = false; return false; }
+    if (FULL && pc === A.render_done && inB7()) { on = false; return false; }
     // unwind returns: rts lands at a frame's return address
     while (stack.length && stack[stack.length - 1][1] === pc) stack.pop();
     if (op === 0x20) {
@@ -111,6 +116,6 @@ const pr = (nd, depth, ind) => {
   console.log(`${ind}${(nd.c / nFrames).toFixed(0).padStart(7)}  ${nd.n}${nd.calls ? `  (x${(nd.calls / nFrames).toFixed(1)}/frame)` : ""}${kids.length ? `  own ${(own / nFrames).toFixed(0)}` : ""}`);
   if (depth < DEPTH) for (const k of kids) if (k.c / nFrames >= 20) pr(k, depth + 1, ind + "  ");
 };
-console.log(`${machine}, levels ${lvs}, ${nFrames} frames: cycles a rendered frame (inclusive; interrupts excluded)`);
+console.log(`${machine}, levels ${lvs}, ${nFrames} frames: cycles a rendered frame (inclusive; interrupts excluded${FULL ? "; wait_flip is the flip wait's idle spin" : ""})`);
 pr(tree, 0, "");
 process.exit(0);

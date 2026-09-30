@@ -13,7 +13,7 @@ import json, re, sys
 
 LO, HI = (int(sys.argv[1]), int(sys.argv[2])) if len(sys.argv) > 2 else (-8, 8)
 LIM = 64                                    # the largest pad tried
-# the pads in ENGCODE's order, each before its routine (BB: after blank_below, the
+# the pads in ENGCODE's order, each before its routine (BB: before render_frame, the
 # Model B's only; the code after it is render_frame)
 NAMES = [('MS', 'match_sprites'), ('SP', 'draw_sprites'), ('EO', 'erase_old'),
          ('DS', 'drawsprite'), ('CP', 'copy_partial'), ('BB', 'render_frame')]
@@ -34,7 +34,7 @@ for l in open('beebgame/src/pads.inc'):
         PADS[mm.group(1)] = int(mm.group(2))
 LB, LM = labels('modelb'), labels('master')
 NAMES.sort(key=lambda kl: LB[kl[1]] - (PADS['PADB_' + kl[0]] if kl[0] != 'BB' else 0))
-assert NAMES[-1][0] == 'BB', 'the Model B pad after blank_below must be the last'
+assert NAMES[-1][0] == 'BB', 'the Model B pad before render_frame must be the last'
 assert [k for k, _ in sorted(NAMES[:-1], key=lambda kl: LM[kl[1]])] == [k for k, _ in NAMES[:-1]], 'the machines order ENGCODE alike'
 n = len(NAMES)
 curB = [None] + [PADS['PADB_' + k] for k, _ in NAMES]
