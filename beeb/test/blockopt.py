@@ -21,7 +21,7 @@ for l in open('beebgame/src/pads.inc'):
     if mm: PADS[mm.group(1)] = int(mm.group(2))
 CH = [('match_sprites', 'MS'), ('addsprite', None), ('draw_sprites', 'SP'), ('erase_old', 'EO'), ('drawsprite', 'DS'),
       ('copy_partial', 'CP'), ('blank_below', None), ('render_frame', None), ('render_core', None), ('mark_dirty', None),
-      ('draw_dirty', None), ('sext', None), ('mirror_copy', None), ('mirdirty', None), ('lvreset', None)]
+      ('draw_dirty', None), ('mirror_copy', None), ('mirdirty', None), ('lvreset', None)]
 _LB = labels('modelb')
 CH.sort(key=lambda c: _LB.get(c[0], 1 << 20))     # as they lie now
 def extents(m):
