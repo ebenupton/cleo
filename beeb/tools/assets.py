@@ -15,11 +15,10 @@ them identically (build.sh checks).  What this writes to $BD:
 
    L0..L15        per level: a table of section offsets, then the header, objects,
                   attr/altcls, the level's tile lists (convert.py pack_tiles), the
-                  sprite placement list, the RLE map, the finished sprite directory
-                  and SPRMASK, and last the Master's LV_PAGE0 in two whole sectors
+                  sprite placement list, the RLE map, the finished sprite directory,
+                  and last the Master's LV_PAGE0 in two whole sectors
    SPRC, SPRX     the sprites, as above
-   imgtab.bin     per image, box and trampoline: which shared file holds it and
-                  where, and the same for its mask (ldprog.s)
+   imgtab.bin     per image and box: which shared file holds it and where (ldprog.s)
    digits.bin     the HUD's digits packed, digtab.bin their decode (bank 7, banks.s);
                   font.bin (the menus' glyphs); alt.bin (the altitude classes);
                   music.bin (build/MUSIC, midi2snd.py's: the menus' tune); title.bin
@@ -190,13 +189,12 @@ out('SPRC', sprc)
 sprx, imgtab = bytearray(), bytearray()
 for j in range(NIMG):
     if j in common_addr:
-        imgtab += bytes(10); continue       # (never placed: resident)
+        imgtab += bytes(5); continue        # (never placed: resident)
     o, n = len(sprx), len(m.img_bytes[j]); sprx += m.img_bytes[j]
-    mo = len(sprx)                          # (the mask fields: none, a length of 0)
-    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, mo & 255, mo >> 8, 0, 0])
+    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])   # file 0 (SPRX), offset, length
 for k in range(NBOXART):                    # the box stars' boxes
     o, n = len(sprx), len(m.box_bytes[k]); sprx += m.box_bytes[k]
-    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, 0, 0, 0, 0])
+    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])
 BAKEITEM0 = NIMG + NBOXART                  # the baked slots: made by the loader (ldprog.s bake)
 bakegeom = bytearray()                  # tiles where the object stands (its tile in the
 for wc, lines, dx, dty, ov in m.BAKE_KINDS:   # placement entry's mask field)
@@ -679,7 +677,7 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
     f.write('B4_DATA_END = $%04X\nB5_TOP = $%04X\nMAP5 = $%04X\n' % (B4_DATA[1], B5_TOP, MAP5))
     f.write('B4_CODE_END = $%04X\nB5_CODE_END = $%04X\n' % (B4_CODE_END, B5_CODE_END))
-print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))
+print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, len(imgtab) // 5))
 out('nibtab.bin', m.NIBTAB)             # the engine's L0TAB, L1TAB, NMASK (banks.s)
 out('bakegeom.bin', bytes(bakegeom))   # the baker's tables (ldprog.s)
 out('bakekind.bin', bakekind)
