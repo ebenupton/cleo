@@ -481,6 +481,31 @@ def pack_level(lv, sub):
             selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
             e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
         objs.append([t, x, y] + e)
+    # The stars' phases (e2): a star's spin step is the level's star clock plus its
+    # phase (logic.s ob_star), so the stars a screen shows at once can be spread across
+    # the spin -- its frames run from 7 byte columns wide to 1 (edge on) -- and their
+    # drawing kept level rather than all wide together.  Greedy, in map order: each
+    # star takes the phase that makes the widest moment of it and the stars already
+    # placed within a screen's reach narrowest (then the steadiest).
+    def star_cols(x):                   # a star's byte columns at each of the spin's 12 steps
+        cs = []
+        for a_ in range(12):
+            im_, rx_, ry_ = m.crops[34 + (a_ >> 1)]
+            cs.append((((8 * x - rx_) & 1) + im_.shape[1] + 1) // 2)
+        return cs
+    placed = []                         # (x px, y px, cols, phase)
+    for i in sorted((i for i, o in enumerate(objs) if o[0] == 0), key=lambda i: (objs[i][1], objs[i][2])):
+        x, y = objs[i][1], objs[i][2]
+        cs = star_cols(x)
+        near = [p_ for p_ in placed if abs(p_[0] - 8 * x) < 160 and abs(p_[1] - 8 * y) < 120]
+        best = None
+        for ph in range(12):
+            tot = [cs[(t + ph) % 12] + sum(q[2][(t + q[3]) % 12] for q in near) for t in range(12)]
+            score = (max(tot), sum(v * v for v in tot), ph)
+            if best is None or score < best[0]:
+                best = (score, ph)
+        objs[i][5] = best[1]
+        placed.append((8 * x, 8 * y, cs, best[1]))
     # a kept box must not be drawn over: any box-drawn object (a star or trampoline
     # with a box id) whose drawn area meets another static object's -- over every
     # frame either can show, a star's sparkle too -- is marked disturbable (e1), so

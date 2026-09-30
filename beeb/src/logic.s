@@ -276,6 +276,7 @@ q4:       .res 1
 q5:       .res 1
 q6:       .res 1
 obj:      .res 1
+starclk:  .res 1                  ; the stars' clock, 0..11: a star's spin step is it plus its phase
 BINR:     .res 4                  ; the bin walk's rectangle, and its list's validity
 BINOK:    .res 1                  ;  (profiled hot: zero page)
 gx:       .res 1
@@ -591,6 +592,7 @@ level_init:
         lda #0
         tax
         sta BINOK                   ; the cached object list belongs to the old level
+        sta starclk                 ; the stars' clock: every phase from the level's start
         sta stars
         sta bent
 :       sta O_STAMP,x
@@ -748,9 +750,9 @@ level_init:
         sta O_EL,y                  ; e0 = box class from the converter (0 none/1 cyan/2 black)
         lda q4
         sta O_EH,y                  ; e1 = an enemy's range covers this one
-        jsr rnd
-        jsr mod12
-        sta O_AL,y
+        jsr rnd                     ; (drawn as ever, so the enemies' draws follow as they were)
+        lda q5                      ; e2: its phase in the spin, the packer's (balanced
+        sta O_AL,y                  ;  over the stars a screen shows at once)
         inc stars
         lda gy                      ; the prologue already left q2>>3 in gy
         sta gy1
@@ -984,14 +986,6 @@ level_init:
         asl
         rts
 
-; A = A mod 12 (A unsigned)
-mod12:  and #$7F
-:       cmp #12
-        bcc :+
-        sbc #12
-        bcs :-                      ; C = 1: cmp found A >= 12, so the sbc does not borrow
-:       rts
-
 ; t16 = t16 mod t16b (unsigned 16 bit, t16 < 4096, t16b >= 1)
 mod16:  lda t16
         sec
@@ -1012,7 +1006,16 @@ game_frame:
         inc frame
         bne :+
         inc frame+1
-:       stz bounce                  ; A is dead: lda health follows
+:       lda frame                   ; the stars' clock: a step on even frames, 0..11
+        lsr
+        bcs @sc1
+        lda starclk
+        adc #1                      ; C = 0: the bcs was not taken
+        cmp #12
+        bcc @sc0
+        lda #0
+@sc0:   sta starclk
+@sc1:   stz bounce                  ; A is dead: lda health follows
         ; ---- camera
         lda health
         beq @cam
@@ -2310,23 +2313,19 @@ po_star:                            ; the star list's: Y = the star
         lda #0
         sta q2
 ob_star1:
+        lda O_CL,y
+        beq @live
+        ; ---- collected: the sparkle, its own count 12..18, a step on even frames
         lda frame
         lsr                         ; C = frame bit 0: odd frames do not step
-        lda O_AL,y                  ; A = the star's A on every way to @nostep
-        bcs @nostep
+        lda O_AL,y
+        bcs @anim
         cmp #18                     ; cap: a collected star's A must not wrap 8-bit
-        bcs @nostep                 ; (it would make the star reappear ~every 20s).
+        bcs @anim                   ; (it would make the star reappear ~every 20s)
         adc #1                      ; C = 0: the bcs was not taken
         sta O_AL,y
-@nostep:
-        cmp #12
-        bne :+
-        lda O_CL,y
-        bne @anim                   ; (the reload at : would take the same branch)
-        sta O_AL,y                  ; A = 0 (no stz abs,y either)
-:       lda O_CL,y
-        bne @anim
-        lda health
+        bcc @anim                   ; always: A <= 18
+@live:  lda health
         beq @tryboom
         lda q2
         bne @tryboom                ; Cleo far: the collect cannot pass
@@ -2335,13 +2334,13 @@ ob_star1:
         bcs @collect
 @tryboom:
         lda bactive
-        beq @anim
+        beq @phase
         jsr boomrel
         lda #0
         sta q2                      ; rx, ry are the boomerang's: box_safe tests them
         ldx #4
         jsr inrange
-        bcc @anim
+        bcc @phase
 @collect:
         lda #12
         sta O_AL,y
@@ -2354,8 +2353,17 @@ ob_star1:
         jsr addscore                ; A = 1 still; it ends in jmp bar_touch
         lda #SFX_STAR
         sta SFXREQ
-@anim:  lda O_AL,y
-        cmp #18
+        lda #12                     ; the sparkle's first step
+        bne @anim                   ; always
+        ; ---- the spin: the level's star clock plus this star's phase (A, the
+        ; packer's), mod 12 -- a star out of the bin window keeps its place in step
+@phase: lda O_AL,y
+        clc
+        adc starclk
+        cmp #12
+        bcc @anim
+        sbc #12                     ; C = 1: the bcc was not taken
+@anim:  cmp #18
         bcs @done
         lsr
         ldx O_EL,y                  ; the star's first box id (0: none -- its masked frames):
