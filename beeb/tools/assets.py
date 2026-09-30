@@ -60,22 +60,15 @@ VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the M
 # leaves a gap below them.  The ends are the linker's (build/modelb/map.txt), set here
 # by hand because the packer runs before the assembler; engine.s asserts them (exactly
 # on the Model B, at most on the Master), so the build stops if they move.
-_MIR = os.environ.get('TILEMIRROR') == '1'
-NIB = m.NIBSPR                              # 4-bit sprites (a trial: convert.py)
 SPRGEOM = os.environ.get('SPRGEOM') == '1'   # the split directory (beebgame's option)
-B4_CODE_END = 0x83BD                        # the row loop (SPR4CODE)
-B5_CODE_END = 0x82FE if _MIR else 0x82C6    # the row loop, the gather and its shape (MAP5BSS)
-if NIB:                                     # (both blitters in each bank, larger)
-    B4_CODE_END, B5_CODE_END = 0x83E5, 0x844C   # (the Model B's: map.txt)
-B4_DATA = (B4_CODE_END, 0xBC00 if NIB else 0xBB00)   # bank 4: images and masks, between the row loop
-                                            #   and SWAPTAB + MASKTAB ($BB00-$BFFF)
-B4_HOLE = (0xBB00, 0xBB00)                  #   (empty: the placer's second region in bank 4)
+B4_CODE_END = 0x83E5                        # the row loop and blitters (SPR4CODE)
+B5_CODE_END = 0x844C                        # the same, the gather and its shape (MAP5BSS)
+B4_DATA = (B4_CODE_END, 0xBC00)             # bank 4: images, between the row loop and the
+                                            #   expansion tables and SWAPTAB ($BC00-$BFFF)
 B5_DATA = (B5_CODE_END, 0x9C00)                  # bank 5: all its sprites, one run, between the row
                                             #   loop + gather and the map: the resident part
                                             #   (SPRC's bank-5 part) at the bottom, the level's above it
-B5_HOLE = (0x9C00, 0x9C00)                  #   (empty, as B4_HOLE)
-B5_SWAP = (0x9C00, 0x9C00)
-MAP5 = 0x9C00                               # the map: a fixed 8K below MASKTAB0-3 ($BC00)
+MAP5 = 0x9C00                               # the map: a fixed 8K below the tables ($BC00)
 B5_TOP = MAP5                               #   (the end of bank 5's sprites)
 TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page aligned),
                                             #   above the code (the cfgs' B6X), to the end
@@ -83,15 +76,14 @@ TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page 
 # ---------------------------------------------------------------- Cleo's sprites
 # The sprite ids (the engine's directory: BOXID0 images, then BOXN boxes; ids from
 # BOXID0 + BOXN are the engine's "still" aliases of the boxes, BOXN below them):
-# images 0..102 (the entries of the original's dim), boxes 103..117 -- the box stars'
-# twelve (six a star class) and the trampoline's three frames.
-# (NIBSPR: the boxes are screen bytes, copied: the twelve box stars on sky and on
-# black, then TRMAX slots for the level's trampolines at rest and NSTAR slots of six
-# for its baked stars -- each slot the level's own art, from BAKE: bake below)
+# images 0..102 (the entries of the original's dim), then the boxes -- screen bytes,
+# copied: the twelve box stars on sky and on black, then TRMAX slots for the level's
+# trampolines at rest and NSTAR slots of six for its baked stars, each slot the
+# level's own art, baked by the loader (below).
 TRMAX, NSTAR = 13, 8
-BOXID0, BOXN = (103, 12 + TRMAX + 6 * NSTAR) if NIB else (103, 15)
+BOXID0, BOXN = 103, 12 + TRMAX + 6 * NSTAR
 NDIR = BOXID0 + BOXN                        # directory entries
-NBOXART, NTRAMP = 12, 3                     # the box stars' images, the trampoline's frames
+NBOXART = 12                                # the box stars' images
 # The split between resident and staged, which is the game's to choose: the resident
 # sprites (SPRC) are loaded once, to fixed places in banks 4 and 5 (assets.inc
 # SPRC_BASE, SPRC5_BASE); the staged ones (SPRX) are staged at each level load and
@@ -99,7 +91,6 @@ NBOXART, NTRAMP = 12, 3                     # the box stars' images, the trampol
 # set: what (nearly) every level draws.
 RESIDENT_IDS = list(range(46))              # Cleo, the boomerang, the stars and their
                                             # collect animation (0..42), 43..45
-RESIDENT_TRAMP = not NIB                    # the trampoline's black boxes (15 levels of 16 have one; NIBSPR: none, its rest boxes are baked)
 ALWAYS_IDS = range(43)                      # the ids a level draws whatever its objects
 
 # ---------------------------------------------------------------- the shared files
@@ -108,17 +99,17 @@ ALWAYS_IDS = range(43)                      # the ids a level draws whatever its
 # the addresses placed below.  (The Master keeps SPRX resident after its first read:
 # ldprog.s.)  imgtab says where in SPRX each item is.
 NIMG = len(m.images)
-# item keys: ('img', j) | ('box', k) | ('tramp', f) -> a small integer the placement
+# item keys: ('img', j) | ('box', k) | ('tr', k) | ('sb', k) -> a small integer the placement
 # lists and the directory template use
 def item_index(kind, j):
-    return {'img': 0, 'box': NIMG, 'tramp': NIMG + NBOXART, 'tr': NIMG + NBOXART, 'sb': NIMG + NBOXART + TRMAX}[kind] + j
-# The level's baked boxes (NIBSPR): every trampoline's rest state, and the stars the
+    return {'img': 0, 'box': NIMG, 'tr': NIMG + NBOXART, 'sb': NIMG + NBOXART + TRMAX}[kind] + j
+# The level's baked boxes: every trampoline's rest state, and the stars the
 # plan names (tools/starbake.json: by level file, the stars' tiles, best first -- the
 # frames that miss their peg draw them: test/starplan.mjs), each composited over its
 # own backdrop (convert.py bake_box).  A slot for each, as long as the level has ids
 # for it and the placement can fit it.
 try:
-    STARPLAN = json.load(open(os.path.join(HERE, 'starbake.json'))) if NIB else {}
+    STARPLAN = json.load(open(os.path.join(HERE, 'starbake.json')))
 except OSError:
     STARPLAN = {}
 _bakes = {}
@@ -128,26 +119,25 @@ def level_bakes(lv, sub):
         return _bakes[(lv, sub)]
     L, cm = m.levels[(lv, sub)], m.maps[(lv, sub)]
     tr, st, by, at = {}, {}, {}, {}
-    if NIB:
-        slot = {}                           # (trampolines whose boxes come out the same share one)
-        for oi, (t, x, y, e) in enumerate(L['objs']):
-            if t == 1:
-                b = m.bake_tramp_rest(cm, x, y)
-                if b is not None and (b in slot or len(slot) < TRMAX):
-                    if b not in slot:
-                        slot[b] = len(slot); by[('tr', slot[b])] = b; at[('tr', slot[b])] = (x, y)
-                    tr[oi] = slot[b]
-        want = CHOSEN.get((lv, sub), [])
-        pos = {(x, y): oi for oi, (t, x, y, e) in enumerate(L['objs']) if t == 0}
-        for xy in want:                     # (in the plan's order: the costliest first)
-            oi = pos.get(xy)
-            if oi is None or m.star_class(cm, *xy) != 0 or len(st) >= NSTAR:
-                continue
-            fr = m.bake_star(cm, *xy)
-            if fr is not None:
-                st[oi] = len(st)
-                for f, b in enumerate(fr):
-                    by[('sb', st[oi] * 6 + f)] = b; at[('sb', st[oi] * 6 + f)] = xy
+    slot = {}                           # (trampolines whose boxes come out the same share one)
+    for oi, (t, x, y, e) in enumerate(L['objs']):
+        if t == 1:
+            b = m.bake_tramp_rest(cm, x, y)
+            if b is not None and (b in slot or len(slot) < TRMAX):
+                if b not in slot:
+                    slot[b] = len(slot); by[('tr', slot[b])] = b; at[('tr', slot[b])] = (x, y)
+                tr[oi] = slot[b]
+    want = CHOSEN.get((lv, sub), [])
+    pos = {(x, y): oi for oi, (t, x, y, e) in enumerate(L['objs']) if t == 0}
+    for xy in want:                     # (in the plan's order: the costliest first)
+        oi = pos.get(xy)
+        if oi is None or m.star_class(cm, *xy) != 0 or len(st) >= NSTAR:
+            continue
+        fr = m.bake_star(cm, *xy)
+        if fr is not None:
+            st[oi] = len(st)
+            for f, b in enumerate(fr):
+                by[('sb', st[oi] * 6 + f)] = b; at[('sb', st[oi] * 6 + f)] = xy
     _bakes[(lv, sub)] = (tr, st, by, at)
     return _bakes[(lv, sub)]
 CUR = [None]                                # the level being placed (its baked items' bytes)
@@ -155,24 +145,23 @@ BAKEAT = {}                                 # (level, sub) -> its baked items' (
 def item_bytes(kind, j):
     if kind in ('tr', 'sb'):
         return level_bakes(*CUR[0])[2][(kind, j)]
-    return m.img_bytes[j] if kind == 'img' else (m.box_bytes[j] if kind == 'box' else m.tramp_bytes[j])
+    return m.img_bytes[j] if kind == 'img' else m.box_bytes[j]
 COMMON = sorted(set(m.entry[i][0] for i in RESIDENT_IDS if m.entry[i] is not None))
-# The mirrored ones must be in bank 4 (its sprite loop has the dot-reversal table);
-# bank 4 cannot also hold all the plain ones beside the biggest levels' mirrored
-# enemies, so the rest go to the bottom of bank 5's sprite run.
+# The mirrored ones go in bank 4 (from when only bank 4 could mirror: kept, as moving
+# them would move every level's layout); bank 4 cannot also hold all the plain ones
+# beside the biggest levels' mirrored enemies, so the rest go to the bottom of bank
+# 5's sprite run.
 _mirrored_all = set(m.entry[i][0] for i in range(BOXID0) if m.entry[i] is not None and m.entry[i][1])
-common_addr, common_mask, common_bank = {}, {}, {}
+common_addr, common_bank = {}, {}
 def _pack(js, base):
     blk = bytearray()
-    for j in js:                            # each image, then its mask
+    for j in js:
         common_addr[j] = base + len(blk); blk += m.img_bytes[j]
-        if len(m.img_mask[j]):
-            common_mask[j] = base + len(blk); blk += m.img_mask[j]
     return blk
 c4 = [j for j in COMMON if j in _mirrored_all]
 # the plain ones: bank 4 takes what it can spare beside the biggest level's mirrored
 # enemies (largest first), bank 5 the rest
-_sz = lambda j: len(m.img_bytes[j]) + len(m.img_mask[j])
+_sz = lambda j: len(m.img_bytes[j])
 _maxmir = 0
 for (_lv, _sub), _L in m.levels.items():
     _js = set()
@@ -189,13 +178,9 @@ for j in sorted((j for j in COMMON if j not in _mirrored_all), key=lambda j: -_s
     else:
         c6.append(j)
 sprc4 = _pack(c4, B4_DATA[0])
-TRAMP_LEN = sum(len(b) for b in m.tramp_bytes) if RESIDENT_TRAMP else 0   # the trampoline's boxes: bank 5 (the copy blitter's)
-C5_LEN = sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c6) + TRAMP_LEN
+C5_LEN = sum(len(m.img_bytes[j]) for j in c6)
 C5_BASE = B5_DATA[0]
 sprc5 = _pack(c6, C5_BASE)
-tramp_addr = {}
-for f in range(NTRAMP if RESIDENT_TRAMP else 0):
-    tramp_addr[f] = C5_BASE + len(sprc5); sprc5 += m.tramp_bytes[f]
 for j in c4: common_bank[j] = 4
 for j in c6: common_bank[j] = 5
 COMMON_END = B4_DATA[0] + len(sprc4)
@@ -207,23 +192,19 @@ for j in range(NIMG):
     if j in common_addr:
         imgtab += bytes(10); continue       # (never placed: resident)
     o, n = len(sprx), len(m.img_bytes[j]); sprx += m.img_bytes[j]
-    mo, mn = len(sprx), len(m.img_mask[j]); sprx += m.img_mask[j]
-    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, mo & 255, mo >> 8, mn & 255, mn >> 8])
-for k in range(NBOXART):                    # the box stars' boxes (no masks)
-    o, n = len(sprx), len(m.allbox_bytes[k]); sprx += m.allbox_bytes[k]
+    mo = len(sprx)                          # (the mask fields: none, a length of 0)
+    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, mo & 255, mo >> 8, 0, 0])
+for k in range(NBOXART):                    # the box stars' boxes
+    o, n = len(sprx), len(m.box_bytes[k]); sprx += m.box_bytes[k]
     imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8, 0, 0, 0, 0, 0])
 BAKEITEM0 = NIMG + NBOXART                  # the baked slots: made by the loader (ldprog.s bake)
-if NIB:                                     # from an overlay in SPRX a kind over the level's
-    bakegeom = bytearray()                  # tiles where the object stands (its tile in the
-    for wc, lines, dx, dty, ov in m.BAKE_KINDS:   # placement entry's mask field)
-        o = len(sprx); sprx += ov
-        assert lines <= 32 and len(ov) == 2 * wc * lines
-        bakegeom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, 0])
-    bakekind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)])
-    # (no imgtab entries: placewalk bakes them before it looks)
-else:
-    assert RESIDENT_TRAMP                   # (the trampoline staged: not written)
-    imgtab += bytes(10 * NTRAMP)            # (the trampoline's: resident)
+bakegeom = bytearray()                  # tiles where the object stands (its tile in the
+for wc, lines, dx, dty, ov in m.BAKE_KINDS:   # placement entry's mask field)
+    o = len(sprx); sprx += ov
+    assert lines <= 32 and len(ov) == 2 * wc * lines
+    bakegeom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, 0])
+bakekind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)])
+# (no imgtab entries: placewalk bakes them before it looks)
 assert len(sprx) <= 0x4000                  # STAGE's 16K
 out('SPRX', sprx)
 out('imgtab.bin', imgtab)
@@ -247,23 +228,16 @@ for i in range(BOXID0):
         rx = (2 * W - 1) - rx
     if i < 27 and not rx & 1:               # convert.py: Cleo's refx parity rule
         rx -= 1
-    if NIB:                                 # (4-bit: a stored byte a row, two scanlines)
-        sprdir += bytes([item_index('img', j), 0, W, hh, rx & 255, ry & 255, 1 if mirror else 0, hh]); continue
-    sprdir += bytes([item_index('img', j), 0, W, hh, rx & 255, ry & 255, (1 if mirror else 0) | 2, 2 * hh])
-for k in range(NBOXART if BOXN else 0):
+    sprdir += bytes([item_index('img', j), 0, W, hh, rx & 255, ry & 255, 1 if mirror else 0, hh])   # (a byte a row)
+for k in range(NBOXART):
     lo, wc = m.box_geom[k % 6]
     sprdir += bytes([item_index('box', k), 1, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
-if NIB:                                     # the level's slots: the same shape in every level
-    for k in range(TRMAX):
-        sprdir += bytes([item_index('tr', k), 3, m.TRAMP_REST_WC, m.TRAMP_H, (m.TRAMP_HOT - 2 * m.TRAMP_REST_LO) & 255,
-                         (-8) & 255, 2 | 8, m.TRAMP_H * 2])
-    for k in range(NSTAR * 6):
-        lo, wc = m.box_geom[k % 6]
-        sprdir += bytes([item_index('sb', k), 4, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
-else:
-  for f in range(NTRAMP):
-    lo, wc = m.tramp_geom[f]
-    sprdir += bytes([item_index('tramp', f), 2, wc, m.TRAMP_H, (m.TRAMP_HOT - 2 * lo) & 255, (-8) & 255, 2 | 8, m.TRAMP_H * 2])
+for k in range(TRMAX):
+    sprdir += bytes([item_index('tr', k), 3, m.TRAMP_REST_WC, m.TRAMP_H, (m.TRAMP_HOT - 2 * m.TRAMP_REST_LO) & 255,
+                     (-8) & 255, 2 | 8, m.TRAMP_H * 2])
+for k in range(NSTAR * 6):
+    lo, wc = m.box_geom[k % 6]
+    sprdir += bytes([item_index('sb', k), 4, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
 assert len(sprdir) == NDIR * 8
 
 # ---------------------------------------------------------------- placing for the loops
@@ -302,8 +276,8 @@ def weights(level):
     return ws
 SPRPACK_CACHE = os.path.join(BEEB, 'build', 'sprpack.cache')
 _cache = sprpack.load_cache(SPRPACK_CACHE)
-def chunk_items(keys_img, keys_mask, ws):
-    """sprpack items: each image, each mask, sized, weighted, costed"""
+def chunk_items(keys_img, ws):
+    """sprpack items: each image, sized, weighted, costed"""
     out_ = []
     for key in keys_img:                    # (one table: the directions' tables, weighed)
         W, Lh = GEOM[item_index(*key)]
@@ -312,11 +286,6 @@ def chunk_items(keys_img, keys_mask, ws):
         tot = f + r
         out_.append(dict(key=('i',) + key, size=len(item_bytes(*key)), w=tot or 0.001,
                          table=[(f * a + r * b) / tot for a, b in zip(tf, tr)] if tot else tf))
-    for key in keys_mask:
-        W, Lh = GEOM[item_index(*key)]
-        f, r = ws.get(item_index(*key), (0.0, 0.0))
-        out_.append(dict(key=('m',) + key, size=len(m.img_mask[key[1]]), w=(f + r) or 0.001,
-                         table=sprpack.mask_table(W, Lh)))
     return out_
 
 # The HUD's digits, 8 x 8 game px each (16 lines of 4 bytes, convert.py), are drawn
@@ -411,71 +380,36 @@ def place_sprites(lv, sub):
     # first six boxes; 2 on black, the second six -- logic.s boxbase), not by the set
     classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
     bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
-    tramps = []                             # (resident: SPRC)
     R5BASE = C5_BASE + C5_LEN               # above the resident part, up to the map
-                                            # (r6, h6, s6 and the report's b6 are bank 5's)
-    regions = {'r4': [COMMON_END, B4_DATA[1]], 'h4': [B4_HOLE[0], B4_HOLE[1]],
-               'r6': [R5BASE, B5_DATA[1]], 's6': [B5_SWAP[0], B5_SWAP[1]], 'h6': [B5_HOLE[0], B5_HOLE[1]]}
+    regions = {'r4': [COMMON_END, B4_DATA[1]], 'r6': [R5BASE, B5_DATA[1]]}   # (r6: bank 5's)
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
-    items0 = [('img', j, len(m.img_bytes[j]), len(m.img_mask[j])) for j in imgs]
-    items0 += [('box', k, len(m.box_bytes[k]), 0) for k in bxs]
-    items0 += [('tramp', f, len(m.tramp_bytes[f]), 0) for f in tramps]
+    items0 = [('img', j, len(m.img_bytes[j])) for j in imgs]
+    items0 += [('box', k, len(m.box_bytes[k])) for k in bxs]
     CUR[0] = (lv, sub)
     _tr, _st, _by, _at = level_bakes(lv, sub)
-    items0 += [(k[0], k[1], len(b), 0) for k, b in sorted(_by.items())]
+    items0 += [(k[0], k[1], len(b)) for k, b in sorted(_by.items())]
     def canmirror(it):
         return it[0] == 'img' and it[1] in mirrored
     def attempt(items, prefer4):
         """One greedy placement in this order; None if something does not fit."""
         fill = {r: 0 for r in regions}
-        img_addr, mask_addr, img_bank = {}, {}, {}
-        def place(region, n):
-            base = regions[region][0] + fill[region]; fill[region] += n; return base
-        def room(region):
-            return regions[region][1] - regions[region][0] - fill[region]
-        def try4(key, nd, nm):
-            if room('r4') >= nd + nm:
-                img_addr[key] = place('r4', nd); img_bank[key] = 4
-                if nm: mask_addr[key] = place('h4' if room('h4') >= nm else 'r4', nm)
-            elif room('r4') >= nd and room('h4') >= nm:
-                img_addr[key] = place('r4', nd); img_bank[key] = 4
-                if nm: mask_addr[key] = place('h4', nm)
-            elif room('h4') >= nd + nm:
-                img_addr[key] = place('h4', nd); img_bank[key] = 4
-                if nm: mask_addr[key] = place('h4', nm)
-            else:
+        img_addr, img_bank = {}, {}
+        def fits(key, r, n, bank):
+            if regions[r][1] - regions[r][0] - fill[r] < n:
                 return False
+            img_addr[key] = regions[r][0] + fill[r]; fill[r] += n; img_bank[key] = bank
             return True
-        def try5(key, nd, nm):
-            for r in ('r6', 'h6', 's6'):
-                if room(r) >= nd + nm:
-                    img_addr[key] = place(r, nd); img_bank[key] = 5
-                    if nm: mask_addr[key] = place(r, nm)
-                    return True
-            for r in ('r6', 'h6'):
-                for rm in ('s6', 'h6', 'r6'):
-                    if rm != r and room(r) >= nd and room(rm) >= nm:
-                        img_addr[key] = place(r, nd); img_bank[key] = 5
-                        if nm: mask_addr[key] = place(rm, nm)
-                        return True
-            return False
-        for kind, j, nd, nm in items:
+        for kind, j, n in items:            # (either bank takes any image, mirrored or not)
             key = (kind, j)
-            if NIB:                             # (4-bit: either bank mirrors, and boxes
-                ok = (try4(key, nd, nm) or try5(key, nd, nm)) if prefer4 else (try5(key, nd, nm) or try4(key, nd, nm))
-            elif canmirror((kind, j, nd, nm)):  #  are plain images)
-                ok = try4(key, nd, nm)
-            elif kind != 'img':                 # the copy blitter is bank 5's alone
-                ok = try5(key, nd, nm)
-            else:
-                ok = (try4(key, nd, nm) or try5(key, nd, nm)) if prefer4 else (try5(key, nd, nm) or try4(key, nd, nm))
+            ok = (fits(key, 'r4', n, 4) or fits(key, 'r6', n, 5)) if prefer4 else \
+                 (fits(key, 'r6', n, 5) or fits(key, 'r4', n, 4))
             if not ok:
                 return None
-        return fill, img_addr, mask_addr, img_bank
-    # the fixed pieces first (the box stars, the mirrored images: each has one bank),
-    # then the rest largest first; when that greedy order leaves a hole too small,
-    # other orders of the rest, deterministically, until one fits
-    base_order = sorted(items0, key=lambda it: (0 if it[0] != 'img' else (1 if canmirror(it) else 2), -(it[2] + it[3])))
+        return fill, img_addr, img_bank
+    # the boxes and the mirrored images first, then the rest largest first; when that
+    # greedy order leaves a hole too small, other orders of the rest, deterministically,
+    # until one fits
+    base_order = sorted(items0, key=lambda it: (0 if it[0] != 'img' else (1 if canmirror(it) else 2), -it[2]))
     fixed = [it for it in base_order if it[0] != 'img' or canmirror(it)]
     rest = [it for it in base_order if not (it[0] != 'img' or canmirror(it))]
     import random
@@ -487,10 +421,10 @@ def place_sprites(lv, sub):
             break
     if got is None:
         raise SystemExit('%s: sprites do not fit in any order tried' % name)
-    fill, img_addr, mask_addr, img_bank = got
-    return fill, img_addr, mask_addr, img_bank, items0, regions, imgs
+    fill, img_addr, img_bank = got
+    return fill, img_addr, img_bank, items0, regions, imgs
 
-def settle_level(level, img_addr, mask_addr, img_bank, regions):
+def settle_level(level, img_addr, img_bank, regions):
     """The placed items, reordered and padded within each region for the loops."""
     ws = weights(level)
     c0 = c1 = 0.0
@@ -500,14 +434,12 @@ def settle_level(level, img_addr, mask_addr, img_bank, regions):
         bank = 4 if r.endswith('4') else 5      # (a region is one bank's: the address alone
         inr = lambda k, a: lo <= a < hi and img_bank[k] == bank   #  can be the other bank's)
         keys_i = [k for k, a in img_addr.items() if inr(k, a) and (k[0], k[1]) not in RESIDENT]
-        keys_m = [k for k, a in mask_addr.items() if inr(k, a) and k not in RESIDENT]
-        if not keys_i and not keys_m:
+        if not keys_i:
             continue
-        addr, b, a_, end = sprpack.optimise(chunk_items(keys_i, keys_m, ws), lo, hi, _cache)
+        addr, b, a_, end = sprpack.optimise(chunk_items(keys_i, ws), lo, hi, _cache)
         c0 += b; c1 += a_
         for k in keys_i: img_addr[k] = addr[('i',) + k]
-        for k in keys_m: mask_addr[k] = addr[('m',) + k]
-    return img_addr, mask_addr, c0, c1
+    return img_addr, c0, c1
 
 # ---------------------------------------------------------------- one level
 # Cleo's fields in the level header (logic.s level_init): the start and exit, in tiles,
@@ -542,40 +474,36 @@ def pack_level(lv, sub):
         e = (list(ex) + [0, 0, 0])[:3]
         if t == 0:
             e[0] = m.star_class(cm, x, y)
-            if NIB:                         # (NIBSPR: the first box id of its six -- the
-                e[0] = {0: 0, 1: BOXID0, 2: BOXID0 + 6}[e[0]]   # sky's, black's, or its own)
-                if oi in _st:
-                    e[0] = BOXID0 + 12 + TRMAX + 6 * _st[oi]
+            e[0] = {0: 0, 1: BOXID0, 2: BOXID0 + 6}[e[0]]   # its six boxes' first id: the sky's,
+            if oi in _st:                   # the black's, or its own (baked)
+                e[0] = BOXID0 + 12 + TRMAX + 6 * _st[oi]
             e[1] = 1 if m.star_reachable(x, y, reach) else 0
         elif t == 1:
-            e[0] = m.tramp_class(cm, x, y)
-            if NIB:                         # (NIBSPR: its rest state's box id, 0 for none)
-                e[0] = BOXID0 + 12 + _tr[oi] if oi in _tr else 0
+            e[0] = BOXID0 + 12 + _tr[oi] if oi in _tr else 0
             b = m.TYPE_BOX[1]
             selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
             e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
         objs.append([t, x, y] + e)
-    if NIB:
-        # a kept box must not be drawn over: any box-drawn object (a star or trampoline
-        # with a box id) whose drawn area meets another static object's -- over every
-        # frame either can show, a star's sparkle too -- is marked disturbable (e1), so
-        # it is redrawn every frame (still a copy, never erased) rather than kept
-        def area(t, x, y):
-            ids = range(34, 43) if t == 0 else range(43, 46)
-            bs = [m._SPRBOX[i] for i in ids if i in m._SPRBOX]
-            ox = 8 * x + (4 if t == 1 else 0)
-            r = (ox + min(b[0] for b in bs), ox + max(b[1] for b in bs), 8 * y + min(b[2] for b in bs), 8 * y + max(b[3] for b in bs))
-            if t == 1:                      # (and the rest box itself)
-                bx = ox - m.TRAMP_HOT + 2 * m.TRAMP_REST_LO
-                r = (min(r[0], bx), max(r[1], bx + 2 * m.TRAMP_REST_WC), min(r[2], 8 * y + 8), max(r[3], 8 * y + 8 + m.TRAMP_H))
-            else:
-                r = (min(r[0], 8 * x - 6), max(r[1], 8 * x + 8), min(r[2], 8 * y - 8), max(r[3], 8 * y + 4))
-            return r
-        stat = [(i, area(o[0], o[1], o[2])) for i, o in enumerate(objs) if o[0] in (0, 1)]
-        meet = lambda p, q: p[0] < q[1] and q[0] < p[1] and p[2] < q[3] and q[2] < p[3]
-        for i, ri in stat:
-            if objs[i][3] and any(j != i and meet(ri, rj) for j, rj in stat):
-                objs[i][4] = 1
+    # a kept box must not be drawn over: any box-drawn object (a star or trampoline
+    # with a box id) whose drawn area meets another static object's -- over every
+    # frame either can show, a star's sparkle too -- is marked disturbable (e1), so
+    # it is redrawn every frame (still a copy, never erased) rather than kept
+    def area(t, x, y):
+        ids = range(34, 43) if t == 0 else range(43, 46)
+        bs = [m._SPRBOX[i] for i in ids if i in m._SPRBOX]
+        ox = 8 * x + (4 if t == 1 else 0)
+        r = (ox + min(b[0] for b in bs), ox + max(b[1] for b in bs), 8 * y + min(b[2] for b in bs), 8 * y + max(b[3] for b in bs))
+        if t == 1:                      # (and the rest box itself)
+            bx = ox - m.TRAMP_HOT + 2 * m.TRAMP_REST_LO
+            r = (min(r[0], bx), max(r[1], bx + 2 * m.TRAMP_REST_WC), min(r[2], 8 * y + 8), max(r[3], 8 * y + 8 + m.TRAMP_H))
+        else:
+            r = (min(r[0], 8 * x - 6), max(r[1], 8 * x + 8), min(r[2], 8 * y - 8), max(r[3], 8 * y + 4))
+        return r
+    stat = [(i, area(o[0], o[1], o[2])) for i, o in enumerate(objs) if o[0] in (0, 1)]
+    meet = lambda p, q: p[0] < q[1] and q[0] < p[1] and p[2] < q[3] and q[2] < p[3]
+    for i, ri in stat:
+        if objs[i][3] and any(j != i and meet(ri, rj) for j, rj in stat):
+            objs[i][4] = 1
     objs = b''.join(bytes(o) for o in objs)
     attr = bytearray(256)
     acls = bytearray(256)
@@ -605,30 +533,24 @@ def pack_level(lv, sub):
 
     # ---- sprites: which images, and where each goes (place_sprites), then where in
     # each region: the order and padding that cost the sprite loops least (sprpack)
-    fill, img_addr, mask_addr, img_bank, items0, regions, imgs = place_sprites(lv, sub)
-    img_addr, mask_addr, cost0, cost1 = settle_level(lv * 2 + sub, img_addr, mask_addr, img_bank, regions)
+    fill, img_addr, img_bank, items0, regions, imgs = place_sprites(lv, sub)
+    img_addr, cost0, cost1 = settle_level(lv * 2 + sub, img_addr, img_bank, regions)
     # a baked item's tile (x, y) rides in its placement entry's mask field (ldprog.s bake)
     BAKEAT[(lv, sub)] = {k: (img_bank[k], img_addr[k]) for k in _by}
     placement = lf.placement([(item_index(kind, j), img_bank[(kind, j)], a,
-                               _at[(kind, j)][0] | _at[(kind, j)][1] << 8 if kind in ('tr', 'sb') else mask_addr.get((kind, j), 0))
+                               _at[(kind, j)][0] | _at[(kind, j)][1] << 8 if kind in ('tr', 'sb') else 0)
                               for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0]))])
-    for f in range(NTRAMP if RESIDENT_TRAMP else 0):   # (the resident block, for the directory)
-        img_addr[('tramp', f)] = tramp_addr[f]; img_bank[('tramp', f)] = 5
-    for j in COMMON:
+    for j in COMMON:                        # (the resident block, for the directory)
         img_addr[('img', j)] = common_addr[j]; img_bank[('img', j)] = common_bank[j]
-        if j in common_mask:
-            mask_addr[('img', j)] = common_mask[j]
-    # the directory and SPRMASK as the game reads them: the template's entries with each
-    # placed item's address (and bank 5's flag), and each sprite id's mask address
+    # the directory as the game reads it: the template's entries with each placed
+    # item's address (and bank 5's flag)
     byitem = {item_index(*k): k for k in img_addr}
-    entries, masks = [], []
+    entries = []
     for i in range(NDIR):
         t = sprdir[i * 8:i * 8 + 8]
         k = byitem.get(t[0]) if t[0] != 0xFF else None
         entries.append(None if k is None else (img_addr[k], img_bank[k], t[2:8]))
-        if i < BOXID0 and not NIB:          # the box ids have no mask (nor 4-bit sprites)
-            masks.append(0 if k is None else mask_addr.get(k, 0))
-    directory, smask = lf.directory(entries, masks)
+    directory = lf.directory(entries)
     if SPRGEOM:                             # the level's part: the addresses alone
         directory = lf.directory_split([None if e is None else (e[0], e[1]) for e in entries])
 
@@ -637,21 +559,21 @@ def pack_level(lv, sub):
                               objects=bytes(objs), tile_tables=(bytes(attr), bytes(acls)),
                               tiles=T['B']['tiles'], placement=placement, map=mapb, flat=T['flat'],
                               halves=T['halves'], hpair=T['hpair'], mir=T['B']['mir'],
-                              directory=directory, masks=smask, page0=T['B']['page0'],
-                              boxid0=BOXID0, boxn=BOXN, nibble=NIB))
-    back = lf.decode(data, BOXID0, NIB)
+                              directory=directory, page0=T['B']['page0'],
+                              boxid0=BOXID0, boxn=BOXN))
+    back = lf.decode(data)
     assert back['map'] == mapb and back['objs'] == bytes(objs) and back['dir'] == directory
     maprle = lf.rle(mapb)                   # (for the report)
     out('L%d' % (lv * 2 + sub), data)
     stats = dict(name=name, ntiles=T['ntiles'], nflat=T['nflat'], nhalf=T['nhalf'], nmir=T['nmir'], w=w, h=h, nobj=len(L['objs']),
-                 nimg=len(imgs), r4=fill['r4'], h4=fill['h4'], r6=fill['r6'], h6=fill['h6'], s6=fill['s6'],
+                 nimg=len(imgs), r4=fill['r4'], r6=fill['r6'],
                  maxspr=MAXSPR, binmax=BINMAX, maprle=len(maprle), size=len(data), cost0=cost0, cost1=cost1)
     return stats
 
 # ---- the resident block, placed for the loops too: it may pad into the room the
 # fullest level leaves in each bank (the levels' first fit, before it moves)
-RESIDENT = set([('img', j) for j in COMMON] + [('tramp', f) for f in range(NTRAMP if RESIDENT_TRAMP else 0)])
-if NIB and STARPLAN:
+RESIDENT = set(('img', j) for j in COMMON)
+if STARPLAN:
     # Which stars: the ones that save the most vsyncs a sector of disc.  The plan has
     # every frame that missed its peg (3 vsyncs of V usable cycles) with a masked star in
     # it; a frame's vsyncs are ceil(work / V), no fewer than the peg's, so a star saves
@@ -706,36 +628,27 @@ for lv in range(8):
         _spare4 = min(_spare4, regions['r4'][1] - regions['r4'][0] - fill['r4'])
         _spare5 = min(_spare5, regions['r6'][1] - regions['r6'][0] - fill['r6'])
 _wr = weights(None)
-def _resident(keys_i, keys_m, lo, budget):
-    size = sum(len(item_bytes(*k)) for k in keys_i) + sum(len(m.img_mask[k[1]]) for k in keys_m)
-    if not keys_i and not keys_m:
+def _resident(keys_i, lo, budget):
+    size = sum(len(item_bytes(*k)) for k in keys_i)
+    if not keys_i:
         return {}, bytearray(), 0.0, 0.0
-    addr, b, a_, end = sprpack.optimise(chunk_items(keys_i, keys_m, _wr), lo, lo + size + budget, _cache)
+    addr, b, a_, end = sprpack.optimise(chunk_items(keys_i, _wr), lo, lo + size + budget, _cache)
     blk = bytearray(end - lo)
     for k in keys_i:
         d = item_bytes(*k); blk[addr[('i',) + k] - lo:addr[('i',) + k] - lo + len(d)] = d
-    for k in keys_m:
-        d = m.img_mask[k[1]]; blk[addr[('m',) + k] - lo:addr[('m',) + k] - lo + len(d)] = d
     return addr, blk, b, a_
-_a4, sprc4, _rb4, _ra4 = _resident([('img', j) for j in c4], [('img', j) for j in c4 if len(m.img_mask[j])],
-                                   B4_DATA[0], _spare4)
-_a5, sprc5, _rb5, _ra5 = _resident([('img', j) for j in c6] + [('tramp', f) for f in range(NTRAMP if RESIDENT_TRAMP else 0)],
-                                   [('img', j) for j in c6 if len(m.img_mask[j])], C5_BASE, _spare5)
+_a4, sprc4, _rb4, _ra4 = _resident([('img', j) for j in c4], B4_DATA[0], _spare4)
+_a5, sprc5, _rb5, _ra5 = _resident([('img', j) for j in c6], C5_BASE, _spare5)
 for j in c4 + c6:
-    _a = _a4 if j in c4 else _a5
-    common_addr[j] = _a[('i', 'img', j)]
-    if len(m.img_mask[j]):
-        common_mask[j] = _a[('m', 'img', j)]
-for f in range(NTRAMP if RESIDENT_TRAMP else 0):
-    tramp_addr[f] = _a5[('i', 'tramp', f)]
+    common_addr[j] = (_a4 if j in c4 else _a5)[('i', 'img', j)]
 COMMON_END = B4_DATA[0] + len(sprc4)
 C5_LEN = len(sprc5)
 assert COMMON_END <= B4_DATA[1] and C5_BASE + C5_LEN <= B5_DATA[1]
 sprc = sprc4 + sprc5
 out('SPRC', sprc)
 print('resident: bank 4 %d bytes (+%d padding), bank 5 %d (+%d); loops %.1f -> %.1f cycles a frame'
-      % (len(sprc4), len(sprc4) - sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c4),
-         len(sprc5), len(sprc5) - sum(len(m.img_bytes[j]) + len(m.img_mask[j]) for j in c6) - TRAMP_LEN,
+      % (len(sprc4), len(sprc4) - sum(len(m.img_bytes[j]) for j in c4),
+         len(sprc5), len(sprc5) - sum(len(m.img_bytes[j]) for j in c6),
          _rb4 + _rb5, _ra4 + _ra5))
 
 allstats = []
@@ -744,9 +657,9 @@ for lv in range(8):
         s = pack_level(lv, sub)
         allstats.append(s)
         print('%-4s %3d tiles +%2d half +%2d mirror +%d flat map %3dx%2d rle %5d  %3d obj %2d img  '
-              'b4 %5d+%3d  b6 %5d+%3d+%3d  spr %2d bin %2d  file %5d  loops %.1f -> %.1f'
+              'b4 %5d  b5 %5d  spr %2d bin %2d  file %5d  loops %.1f -> %.1f'
               % (s['name'], s['ntiles'], s['nhalf'], s['nmir'], s['nflat'], s['w'], s['h'], s['maprle'], s['nobj'], s['nimg'],
-                 s['r4'], s['h4'], s['r6'], s['h6'], s['s6'], s['maxspr'], s['binmax'], s['size'], s['cost0'], s['cost1']))
+                 s['r4'], s['r6'], s['maxspr'], s['binmax'], s['size'], s['cost0'], s['cost1']))
 sprpack.save_cache(_cache, SPRPACK_CACHE)
 
 MAXSPR = max(s['maxspr'] for s in allstats)
@@ -757,29 +670,25 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('BOXID0 = %d\nBOXN = %d\n' % (BOXID0, BOXN))
     if SPRGEOM:
         f.write('SPRGFL = 1\n')            # the geometry carries flags by shape (engine.s)
-    if NIB:
-        f.write('BAKEITEM0 = %d\n' % BAKEITEM0)   # the items the loader bakes (ldprog.s bake)
+    f.write('BAKEITEM0 = %d\n' % BAKEITEM0)   # the items the loader bakes (ldprog.s bake)
     f.write('SPRC_BASE = $%04X\nSPRC_LEN = %d\nSPRC5_BASE = $%04X\nSPRC5_LEN = %d\nSPRX_LEN = %d\n'
             % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
     f.write('TOFF = %d\n' % m.TOFF)          # id k's tile slot is k + TOFF (convert.py)
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')   # the title pieces (convert.py)
     f.write('TBUF_LEN = %d\n' % max(len(p[3]) for p in m.title_pieces))   # the largest, unpacked (menu.s)
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
-    f.write('SPR5_MIRROR = 0\n')            # bank 5 holds no image that is drawn mirrored
-    f.write('SPR4_COPY = 0\n')              # and bank 4 nothing the copy blitter draws
     f.write('B4_DATA_END = $%04X\nB5_TOP = $%04X\nMAP5 = $%04X\n' % (B4_DATA[1], B5_TOP, MAP5))
     f.write('B4_CODE_END = $%04X\nB5_CODE_END = $%04X\n' % (B4_CODE_END, B5_CODE_END))
 print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, NIMG + 15))
-if NIB:
-    out('nibtab.bin', m.NIBTAB)             # the engine's L0TAB, L1TAB, NMASK (banks.s)
-    out('bakegeom.bin', bytes(bakegeom))   # the baker's tables (ldprog.s)
-    out('bakekind.bin', bakekind)
-    json.dump({'%d' % (lv * 2 + sub): [[k[0], k[1], list(_bk[3][k]), list(BAKEAT[(lv, sub)][k]), list(_bk[2][k])] for k in sorted(_bk[2])]
-               for lv in range(8) for sub in (0, 1) for _bk in [level_bakes(lv, sub)]},
-              open(os.path.join(OUT, 'bakes.json'), 'w'))   # (test/bakecheck.mjs: what the loader must make)
-    print('baked by the loader: trampolines %d, stars %d' % (
-          sum(len(level_bakes(lv, sub)[0]) for lv in range(8) for sub in (0, 1)),
-          sum(len(level_bakes(lv, sub)[1]) for lv in range(8) for sub in (0, 1))))
+out('nibtab.bin', m.NIBTAB)             # the engine's L0TAB, L1TAB, NMASK (banks.s)
+out('bakegeom.bin', bytes(bakegeom))   # the baker's tables (ldprog.s)
+out('bakekind.bin', bakekind)
+json.dump({'%d' % (lv * 2 + sub): [[k[0], k[1], list(_bk[3][k]), list(BAKEAT[(lv, sub)][k]), list(_bk[2][k])] for k in sorted(_bk[2])]
+           for lv in range(8) for sub in (0, 1) for _bk in [level_bakes(lv, sub)]},
+          open(os.path.join(OUT, 'bakes.json'), 'w'))   # (test/bakecheck.mjs: what the loader must make)
+print('baked by the loader: trampolines %d, stars %d' % (
+      sum(len(level_bakes(lv, sub)[0]) for lv in range(8) for sub in (0, 1)),
+      sum(len(level_bakes(lv, sub)[1]) for lv in range(8) for sub in (0, 1))))
 if SPRGEOM:                                 # the geometry every level shares, by shape
     shapes, six = [], []
     for i in range(NDIR):

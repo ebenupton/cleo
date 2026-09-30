@@ -37,9 +37,8 @@ GAMMA = 1.35   # compromise: pure sRGB thresholding is too bright, linear too da
 # pixel is a 2x2 block of dots, each one of C, M, Y or K (logical 1, 2, 3, 0).  The 2x2
 # kernel IS the pixel: per pixel the ink counts nearest its colour are chosen, then laid
 # in kernel order.  A col entry is one game px on one scanline: (left dot << 2) | right
-# dot, so 0 is black -- and also transparent, which is why a sprite carries a mask
-# plane (mask_plane; the box stars and trampolines are opaque boxes, drawn by the copy
-# blitter), and why no tile or sprite byte may carry a tag: every bit is a pixel.
+# dot, so 0 is black.  A sprite's transparency is its own (the 4-bit sprites' nibble 0,
+# below); the box stars and trampolines are opaque boxes, drawn by the copy blitter.
 _CMYK_RGB = np.array([[0, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 0]], np.float32)   # K C M Y
 def _cmyk_tables():
     res = {}
@@ -529,15 +528,6 @@ def box_reachable(box, x, y, reach, skip=None):
             return True
     return False
 
-def tramp_class(cm, x, y):           # 1 = its rectangle is all solid black (bakeable)
-    h, w = cm.shape
-    dx0, dx1, dy0, dy1 = TYPE_BOX[1]
-    for ty in range((8 * y + dy0) // 8, (8 * y + dy1 - 1) // 8 + 1):
-        for tx in range((8 * x + dx0) // 8, (8 * x + dx1 - 1) // 8 + 1):
-            if not (0 <= tx < w and 0 <= ty < h) or tile_class[int(cm[ty, tx])] != 2:
-                return 0
-    return 1
-
 # ---------------------------------------------------------------------------
 # Renumber so that every tile carrying pixel data comes first: a solid tile is a
 # fill and its 64 bytes are never read.  Sorting is stable within each group, so
@@ -915,9 +905,11 @@ print('refy snapped:', snapped)
 #
 # An odd-width image leaves one transparent pixel of padding, and it can sit at either
 # end: both give the same ceil(w/2) columns, but they pair art columns into bytes
-# differently.  A byte with both pixels opaque is a straight store (and can join a RUN);
-# a byte with one opaque pixel goes through MASKTAB/ORTAB -- read, mask, or, store.  So
-# the phase that leaves fewer half-opaque bytes is strictly cheaper to blit, for nothing.
+# differently.  A byte with both pixels opaque is a straight store; a byte with one
+# goes through the mask -- read, mask, or, store.  So the phase that leaves fewer
+# half-opaque bytes is cheaper to blit, for nothing.  (The count is made on the MODE 1
+# screen bytes of the dithered image, as when sprites were stored that way: the 4-bit
+# bytes below are built from the same padded images, and the choice is kept as it was.)
 # x0 cancels the shift in the dither so every art pixel keeps the phase it had.
 img_bytes = []
 img_wbytes = []
@@ -955,35 +947,7 @@ print('sprite padding phase: %d of %d images pad on the left, %d fewer masked by
       % (sum(img_shift), len(images), _saved))
 
 
-def mask_plane(alpha):
-    """A sprite mask: one bit per game pixel, 1 = opaque.  A data byte's two pixels
-    are a 2-bit pair (left in bit 1), four horizontally adjacent columns pack into one
-    byte (column 4g+j in bits 7-2j, 6-2j), and the plane is column-group-major: for
-    group g, h consecutive bytes, one per pixel row -- the shape of the data itself, so
-    the blitter's mask pointer walks exactly like its data pointer."""
-    h, w2 = alpha.shape
-    W = w2 // 2
-    pair = (alpha[:, 0::2].astype(np.uint8) << 1) | alpha[:, 1::2].astype(np.uint8)   # (h, W)
-    out = bytearray()
-    for g in range((W + 3) // 4):
-        for r in range(h):
-            b = 0
-            for j in range(4):
-                c = 4 * g + j
-                if c < W:
-                    b |= int(pair[r, c]) << (6 - 2 * j)
-            out.append(b)
-    return bytes(out)
-
-img_mask = []
-for (im, full, src), shift in zip(images, img_shift):
-    h, w = im.shape
-    W = (w + 1) // 2
-    padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
-    padded[:, shift:shift + w] = im
-    img_mask.append(mask_plane(padded != spr_tr))
-
-# ---- 4-bit sprites (NIBSPR=1, beebgame's option; a trial): every game pixel one of
+# ---- 4-bit sprites: every game pixel one of
 # fifteen 2x2 patterns, nibble 0 transparent -- a byte a game-pixel row for each column
 # (the left pixel in the high nibble), no mask.  The fifteen are the dither's patterns
 # that lose least: each colour keeps its pattern if it is one of them, else takes the
@@ -991,45 +955,42 @@ for (im, full, src), shift in zip(images, img_shift):
 # screen bytes, backdrop and all, are copied -- below.)  NIBTAB is
 # the expansion the engine draws through: L0TAB, L1TAB (a stored byte's two scanlines)
 # and NMASK (the AND mask for its transparent pixels).
-NIBSPR = os.environ.get('NIBSPR') == '1'
 NIB_PATTERNS = 'CCCM CCKK CKKK CMKK CMMY CMYY CYYK CYYY KKKK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
-if NIBSPR:
-    _crgb, _seq = _CMYK[4]
-    _code = [''.join('KCMY'[d] for d in s_) for s_ in _seq]
-    NIB_PAT = [_code.index(c) for c in NIB_PATTERNS]          # nibble n+1 -> pattern
-    def _lab(lin):
-        M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
-        xyz = lin @ M.T / np.array([0.95047, 1.0, 1.08883])
-        f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
-        return np.stack([116 * f[:, 1] - 16, 500 * (f[:, 0] - f[:, 1]), 200 * (f[:, 1] - f[:, 2])], axis=1)
-    _PL = _lab(_crgb.astype(np.float64))
-    _v = (spr_rgb.astype(np.float32) / 255.0) ** GAMMA          # the dither's own choice first
-    _today = ((_v[:, None, :] - _crgb[None, :, :]) ** 2).sum(axis=2).argmin(axis=1)
-    NIB_OF = np.zeros(len(spr_rgb), np.uint8)                   # palette index -> nibble
-    for _c in range(len(spr_rgb)):
-        _p = _today[_c]
-        if _p not in NIB_PAT:
-            _p = min(NIB_PAT, key=lambda q: ((_PL[_p] - _PL[q]) ** 2).sum())
-        NIB_OF[_c] = 1 + NIB_PAT.index(_p)
-    NIB_OF[spr_tr] = 0
-    _entry = lambda n, line: 0 if n == 0 else (
-        (_seq[NIB_PAT[n - 1]][0] << 2) | _seq[NIB_PAT[n - 1]][2] if line == 0     # TL, TR
-        else (_seq[NIB_PAT[n - 1]][3] << 2) | _seq[NIB_PAT[n - 1]][1])          # BL, BR
-    NIBTAB = bytearray(768)
-    for _b in range(256):
-        _hi, _lo = _b >> 4, _b & 15
-        for _line in (0, 1):
-            NIBTAB[256 * _line + _b] = int(packcol(np.array([[_entry(_hi, _line), _entry(_lo, _line)]], np.uint8))[0, 0])
-        NIBTAB[512 + _b] = 0xFF if _b == 0 else (0xCC if _hi == 0 else 0) | (0x33 if _lo == 0 else 0)
-    for _j, ((im, full, src), shift) in enumerate(zip(images, img_shift)):
-        h, w = im.shape
-        W = (w + 1) // 2
-        padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
-        padded[:, shift:shift + w] = im
-        n = NIB_OF[padded]
-        img_bytes[_j] = bytes(((n[:, 0::2] << 4) | n[:, 1::2]).T.astype(np.uint8).tobytes())   # column-major
-        img_mask[_j] = b''
-    print('NIBSPR: 4-bit sprites, %d bytes (no masks)' % sum(len(b) for b in img_bytes))
+_crgb, _seq = _CMYK[4]
+_code = [''.join('KCMY'[d] for d in s_) for s_ in _seq]
+NIB_PAT = [_code.index(c) for c in NIB_PATTERNS]          # nibble n+1 -> pattern
+def _lab(lin):
+    M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+    xyz = lin @ M.T / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+    return np.stack([116 * f[:, 1] - 16, 500 * (f[:, 0] - f[:, 1]), 200 * (f[:, 1] - f[:, 2])], axis=1)
+_PL = _lab(_crgb.astype(np.float64))
+_v = (spr_rgb.astype(np.float32) / 255.0) ** GAMMA          # the dither's own choice first
+_today = ((_v[:, None, :] - _crgb[None, :, :]) ** 2).sum(axis=2).argmin(axis=1)
+NIB_OF = np.zeros(len(spr_rgb), np.uint8)                   # palette index -> nibble
+for _c in range(len(spr_rgb)):
+    _p = _today[_c]
+    if _p not in NIB_PAT:
+        _p = min(NIB_PAT, key=lambda q: ((_PL[_p] - _PL[q]) ** 2).sum())
+    NIB_OF[_c] = 1 + NIB_PAT.index(_p)
+NIB_OF[spr_tr] = 0
+_entry = lambda n, line: 0 if n == 0 else (
+    (_seq[NIB_PAT[n - 1]][0] << 2) | _seq[NIB_PAT[n - 1]][2] if line == 0     # TL, TR
+    else (_seq[NIB_PAT[n - 1]][3] << 2) | _seq[NIB_PAT[n - 1]][1])          # BL, BR
+NIBTAB = bytearray(768)
+for _b in range(256):
+    _hi, _lo = _b >> 4, _b & 15
+    for _line in (0, 1):
+        NIBTAB[256 * _line + _b] = int(packcol(np.array([[_entry(_hi, _line), _entry(_lo, _line)]], np.uint8))[0, 0])
+    NIBTAB[512 + _b] = 0xFF if _b == 0 else (0xCC if _hi == 0 else 0) | (0x33 if _lo == 0 else 0)
+for _j, ((im, full, src), shift) in enumerate(zip(images, img_shift)):
+    h, w = im.shape
+    W = (w + 1) // 2
+    padded = np.full((h, W * 2), spr_tr, dtype=im.dtype)
+    padded[:, shift:shift + w] = im
+    n = NIB_OF[padded]
+    img_bytes[_j] = bytes(((n[:, 0::2] << 4) | n[:, 1::2]).T.astype(np.uint8).tobytes())   # column-major
+print('4-bit sprites: %d bytes' % sum(len(b) for b in img_bytes))
 
 # box stars: each spin frame (34..39) composited over cyan and over black in a box just
 # wide enough to cover its own art AND the previous frame's, so drawing frame N erases
@@ -1096,10 +1057,9 @@ for bg in (CYAN_COL, 0):
 print('box stars: widths (chars) per frame', [w for _l, w in box_geom],
       '= %d bytes for 12 boxes (was %d)' % (sum(len(b) for b in box_bytes), 12 * 7 * 24))
 
-# trampoline black boxes: the three bounce frames (43,44,45) composited over black,
-# same scheme as the star boxes but one background.  8 px tall, ~24 px wide; the
-# hotspot is TRAMP_HOT px in so every frame lines up, and each frame's box covers it
-# and the frame that can precede it (the cycle is 43->44->45->43, or a static 43).
+# the trampoline's art: its three bounce frames (43, 44, 45), 8 px tall, lined up on a
+# hotspot TRAMP_HOT px in.  Its rest frame is baked over each level's backdrop (below);
+# the bounce frames are drawn as ordinary 4-bit sprites.
 TRAMP_IDS = [43, 44, 45]
 TRAMP_H = 8
 TRAMP_FIELD = 26
@@ -1126,28 +1086,6 @@ def _tspan(f):
     xs = np.where(_tmask(f).any(axis=0))[0]
     return x0 + int(xs.min()), x0 + int(xs.max())
 
-def _tboxgeom(f):
-    p = (f - 1) % 3
-    lo = min(_tspan(f)[0], _tspan(p)[0]) // 2
-    hi = max(_tspan(f)[1], _tspan(p)[1]) // 2
-    return lo, hi - lo + 1
-
-tramp_geom = [_tboxgeom(f) for f in range(3)]
-tramp_bytes = []
-for f in range(3):
-    col, x0 = tramp_art[f]
-    lo, Wc = tramp_geom[f]
-    field = np.zeros((TRAMP_H * 2, TRAMP_FIELD), np.uint8)   # black background
-    field[:, x0:x0 + col.shape[1]] = np.where(_tmask(f), col, field[:, x0:x0 + col.shape[1]])
-    packed = packcol(field[:, 2 * lo:2 * (lo + Wc)])
-    b = bytearray()
-    for c in range(Wc):
-        b += packed[:, c].tobytes()
-    tramp_bytes.append(bytes(b))
-print('trampoline black boxes: widths', [w for _l, w in tramp_geom],
-      '= %d bytes' % sum(len(b) for b in tramp_bytes))
-
-allbox_bytes = box_bytes + tramp_bytes
 
 # ---- baked boxes: a sprite's frame composited over the level's own tiles where it
 # stands, its screen bytes column by column (every scanline: the copy blitter's), for
@@ -1312,8 +1250,7 @@ def rect_image(idx, rgb, tr, x, y, w, h, full, opaque=False):
     data = bytearray()
     for c in range(W):
         data += pk[:, c].tobytes()
-    mask = mask_plane(alpha) if not opaque else b''
-    return W, (2 * h if full else h), h, data, col, mask
+    return W, (2 * h if full else h), h, data, col
 
 title_pieces = []                 # (name, W, char rows, bytes in the screen's order)
 pieces = [('logo', 0, 0, 80, 26, True), ('you', 0, 58, 38, 13, True), ('win', 38, 58, 39, 13, True), ('lose', 0, 71, 45, 13, True)]
@@ -1323,7 +1260,7 @@ tpreview = []                       # (the sheet's ninth frame is never shown: n
 for (name, x, y, w, h, full) in pieces:
     # every piece is drawn opaque: the menus draw on black, and a transparent pixel
     # is black already (rect_image's col is 0 there), so no mask is built
-    W, lines, hpx, data, col, mask = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=True)
+    W, lines, hpx, data, col = rect_image(tit_idx, tit_rgb, tit_tr, x, y, w, h, full, opaque=True)
     rows = (lines + 7) // 8         # char rows: the last one's lines past the piece are 0
     scr = bytearray()
     for r in range(rows):           # the screen's order: a char row, each column's eight

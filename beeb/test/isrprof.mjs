@@ -14,7 +14,7 @@ const files = new Map(), segs = new Map(), spans = new Map();
 for (const m of dbg.matchAll(/^file\tid=(\d+),name="([^"]+)"/gm)) files.set(m[1], m[2].replace(/^src\//, ""));
 for (const m of dbg.matchAll(/^seg\tid=(\d+),name="(\w+)",start=0x([0-9A-F]+)/gm)) segs.set(m[1], { name: m[2], start: parseInt(m[3], 16) });
 for (const m of dbg.matchAll(/^span\tid=(\d+),seg=(\d+),start=(\d+),size=(\d+)/gm)) spans.set(m[1], { seg: m[2], start: +m[3], size: +m[4] });
-const BANKSEG = { SPR4CODE: 4, SPR4SWAP: 4, SPR4MASK: 4, SPR5CODE: 5, MAP5CODE: 5, SPR5MASK: 5, TIL6ENT: 6, TILCODE: 6, MNUCODE: 7, GAMECODE: 7, GAMEDATA: 7, ENGCODE: 7, KRNCODE: 7, KRNDATA: 7 };
+const BANKSEG = { SPR4CODE: 4, SPR4TAB: 4, SPR5TAB: 5, SPR4SWAP: 4, SPR4MASK: 4, SPR5CODE: 5, MAP5CODE: 5, SPR5MASK: 5, TIL6ENT: 6, TILCODE: 6, MNUCODE: 7, GAMECODE: 7, GAMEDATA: 7, ENGCODE: 7, KRNCODE: 7, KRNDATA: 7 };
 const src = new Map(), mac = new Map();                         // "bank|addr" -> file:line, and inside a macro
 for (const m of dbg.matchAll(/^line\tid=\d+,file=(\d+),line=(\d+)(,type=\d+)?(,count=\d+)?,span=([\d+]+)/gm)) {
   const loc = `${files.get(m[1])}:${m[2]}`, isMacro = !!m[3];

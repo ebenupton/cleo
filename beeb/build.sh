@@ -10,10 +10,8 @@
 set -e
 cd "$(dirname "$0")"
 [ -f beebgame/tools/build.sh ] || { echo "beebgame is missing: git submodule update --init"; exit 1; }
-# Cleo's sprites are beebgame's 4-bit format with the split directory (NIBSPR=0 for
-# the masked format, as before 29 Sep 2026)
-export NIBSPR=${NIBSPR-1}
-[ "$NIBSPR" = 1 ] && export SPRGEOM=${SPRGEOM-1}
+# Cleo's sprites use the split directory (beebgame's SPRGEOM)
+export SPRGEOM=${SPRGEOM-1}
 export GAME_MAIN=src/main.s GAME_SRC=src DISC_TITLE=CLEO DISC_OUT=build/cleo.ssd GAME_NAME=Cleo
 export GAME_MUSIC="python3 beebgame/tools/midi2snd.py assets/v500/thm.mid build/MUSIC"
 export GAME_ASSETS="python3 tools/assets.py"
