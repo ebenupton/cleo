@@ -99,8 +99,8 @@ clamp_window:
         sta wy
         sta wy+1
   .else
-@wy0:   stza wy
-        stza wy+1
+@wy0:   stz wy
+        stz wy+1
   .endif
 @wyok:  rts
 

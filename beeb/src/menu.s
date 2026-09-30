@@ -24,9 +24,9 @@ game_main:
         sta hiscore+1
         sta maxlevel
   .else
-        stza hiscore
-        stza hiscore+1
-        stza maxlevel
+        stz hiscore
+        stz hiscore+1
+        stz maxlevel
   .endif
 title_loop:
         jsr title_menu
