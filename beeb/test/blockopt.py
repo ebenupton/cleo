@@ -1,12 +1,11 @@
-"""The order of ENGCODE's blocks (each `.segment "ENGCODE"` in beebgame's engine.s,
+"""The order of ENGCODE's blocks (each `.segment "ENGCODE"` in beebgame's engine/frame.s,
 then mirror.s and banks.s), chosen over a profile: every block ends in a jump, a
 return or data, so any order works, and all of bank 7's code moves with the kernel's
 start.  A block's cost -- the page crossings of its taken branches and of the indexed
 reads of its data -- is tabulated for every start, both machines (the Model B's
 blocks run on from ENGCODE's start as the Master's do, the total being fixed), then
 orders are searched from random starts, with a small charge for every block moved.
-drawsprite and draw_dirty stay in order (drawsprite's block defines the macros the
-sprite banks use after it), and the other files' three blocks stay last.  The pads
+drawsprite and draw_dirty stay in order, and the other files' three blocks stay last.  The pads
 come after (test/padopt.py).
     for m in master modelb; do PHASEDUMP=build/pd_$m.json node test/cycprof.mjs $m build/cleo.ssd build/$m/labels.txt; done
     python3 test/blockopt.py"""
