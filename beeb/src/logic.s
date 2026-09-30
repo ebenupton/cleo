@@ -2150,28 +2150,39 @@ process_object:
         rts
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
         .word ob_spike, ob_none, ob_flame, ob_powerup, ob_vanish, ob_switch
-po_star:                            ; the lean prologue, then straight in: the star list
-        lda O_XL,y
-        sta spx
-        sec
-        sbc px
-        sta rx
-        lda O_XH,y
-        sta spx+1
-        sbc px+1
-        sta rx+1
-        lda O_YL,y
-        sta spy
-        sec
-        sbc py
-        sta ry
-        lda O_YH,y
-        sta spy+1
-        sbc py+1
-        sta ry+1
-        jmp ob_star
 ob_none:
         rts
+
+; (RNGTAB here, before inrange, only to keep it in a page on both machines: its reads
+; are hot.  Anything that moves bank 7's code can move it across one: the build warns.)
+RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, each +128
+        .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
+        .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
+        .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
+        .byte 112, 144, 104, 140        ; 12: <-16, 16, <-24, 12
+        .byte 120, 136, 112, 132        ; 16: <-8, 8, <-16, 4
+        .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
+        .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
+        .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
+        .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
+        .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
+        .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
+        .byte 118, 138, 112, 136        ; 44: <-10, 10, <-16, 8
+        .byte 120, 128, 104, 136        ; 48: <-8, 0, <-24, 8
+        .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
+        .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
+        .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
+        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
+        ; Append new quads, never insert: callers hold fixed offsets, and a quad put in
+        ; mid-table once shifted every later one under them (the bat read Cleo's band,
+        ; the vanishing platforms never saw her feet).
+        .byte 105, 147, 113, 152        ; 64: Cleo      <-23, 19, <-15, 24
+        .byte 111, 144, 118, 143        ; 68: boomerang <-17, 16, <-10, 15
+        ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
+        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
+        .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
+        .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
+        .assert >RNGTAB = >(*-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read): move it"
 
 ; range check: rx > lo && rx < hi && ry > lo2 && ry < hi2 ; X = offset of the limit
 ; quad in RNGTAB (limits stored +128 so the test is an unsigned byte compare on r^$80,
@@ -2213,36 +2224,6 @@ boomrel:
         dif16 sx, spx, bx
         dif16 sy, spy, by
         rts
-; (RNGTAB here, after boomrel, only to keep it in a page on both machines: its reads
-; are hot.  Anything that moves bank 7's code can move it across one: the build warns.)
-RNGTAB:                             ; inrange limit quads: lo, hi, lo2, hi2, each +128
-        .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
-        .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
-        .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
-        .byte 112, 144, 104, 140        ; 12: <-16, 16, <-24, 12
-        .byte 120, 136, 112, 132        ; 16: <-8, 8, <-16, 4
-        .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
-        .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
-        .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
-        .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
-        .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
-        .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
-        .byte 118, 138, 112, 136        ; 44: <-10, 10, <-16, 8
-        .byte 120, 128, 104, 136        ; 48: <-8, 0, <-24, 8
-        .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
-        .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
-        .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
-        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
-        ; Append new quads, never insert: callers hold fixed offsets, and a quad put in
-        ; mid-table once shifted every later one under them (the bat read Cleo's band,
-        ; the vanishing platforms never saw her feet).
-        .byte 105, 147, 113, 152        ; 64: Cleo      <-23, 19, <-15, 24
-        .byte 111, 144, 118, 143        ; 68: boomerang <-17, 16, <-10, 15
-        ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
-        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
-        .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
-        .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
-        .assert >RNGTAB = >(*-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read): move it"
 ; boomerang hit test helper: bactive && bcnt < 8 -> carry set
 boomready:
         lda bactive
@@ -2264,7 +2245,52 @@ addscore:                           ; A = points
 :       jmp bar_touch
 
 ; ---------------------------------------------------------------- STAR (0)
-ob_star:
+; Cleo's two tests on a star -- the collect (RNGTAB quad 0) and box_safe's (quad 64)
+; -- can only pass with rx in -22..18.  So the star list's prologue (po_star) tests
+; rx against that first, and outside it sets q2 (Cleo far): both tests are skipped,
+; and ry, which only they read, is not worked out.  The boomerang's tests set rx and
+; ry themselves (boomrel), and clear q2, as does every other way in.
+ob_star:                            ; the object table's way in (the list full: rare)
+        lda #0
+        sta q2
+        beq ob_star1                ; always: Z from the lda
+po_star:                            ; the star list's: Y = the star
+        lda O_YL,y
+        sta spy
+        lda O_YH,y
+        sta spy+1
+        lda O_XL,y
+        sta spx
+        sec
+        sbc px
+        sta rx
+        lda O_XH,y
+        sta spx+1
+        sbc px+1
+        sta rx+1                    ; A = rx+1
+        bne @neg
+        lda rx
+        cmp #19
+        bcc @near                   ; 0..18
+        bcs @far
+@neg:   cmp #$FF
+        bne @far
+        lda rx
+        cmp #<-22
+        bcs @near                   ; -22..-1
+@far:   lda #1
+        sta q2
+        bne ob_star1                ; always
+@near:  lda spy
+        sec
+        sbc py
+        sta ry
+        lda spy+1
+        sbc py+1
+        sta ry+1
+        lda #0
+        sta q2
+ob_star1:
         lda frame
         lsr                         ; C = frame bit 0: odd frames do not step
         lda O_AL,y                  ; A = the star's A on every way to @nostep
@@ -2283,6 +2309,8 @@ ob_star:
         bne @anim
         lda health
         beq @tryboom
+        lda q2
+        bne @tryboom                ; Cleo far: the collect cannot pass
         ldx #0
         jsr inrange
         bcs @collect
@@ -2292,6 +2320,8 @@ ob_star:
         jsr boomrel
         mov16 rx, sx
         mov16 ry, sy
+        lda #0
+        sta q2                      ; rx, ry are the boomerang's: box_safe tests them
         ldx #4
         jsr inrange
         bcc @anim
@@ -2371,7 +2401,9 @@ ob_tramp:
         clc
         adc #43
         jmp addsprite
-@rest:  ldx #72                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
+@rest:  ldx #0
+        stx q2                      ; (box_safe's Cleo test: rx, ry are hers)
+        ldx #72                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
         clc
         ; fall through
 ; A = frame, X = the RNGTAB quad for Cleo (64 star, 72 trampoline; the boomerang's is
@@ -2382,9 +2414,11 @@ box_safe:
         sta q1
         lda O_EH,y                  ; an enemy's range covers it
         bne @no
+        lda q2
+        bne @cfar                   ; Cleo far (a star's prologue said so)
         jsr inrange                 ; Cleo overlaps its rectangle
         bcs @no
-        lda bactive
+@cfar:  lda bactive
         beq @yes
         jsr boomrel
         mov16 rx, sx
