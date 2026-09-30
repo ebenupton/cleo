@@ -60,7 +60,7 @@ VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the M
 # by hand because the packer runs before the assembler; engine.s asserts them (exactly
 # on the Model B, at most on the Master), so the build stops if they move.
 B4_CODE_END = 0x83CB                        # the row loop and blitters (SPR4CODE)
-B5_CODE_END = 0x8432                        # the same, the gather and its shape (MAP5BSS)
+B5_CODE_END = 0x8468                        # the same, the gather and its shape (MAP5BSS)
 B4_DATA = (B4_CODE_END, 0xBC00)             # bank 4: images, between the row loop and the
                                             #   expansion tables and SWAPTAB ($BC00-$BFFF)
 B5_DATA = (B5_CODE_END, 0x9C00)                  # bank 5: all its sprites, one run, between the row

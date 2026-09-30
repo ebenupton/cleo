@@ -768,7 +768,17 @@ def pack_tiles(lv, sub):
     for v in halves.values():
         v.sort(key=lambda h: loc(h[0]))
     hlist = halves['top'] + halves['bot'] + halves['pair']
-    halfpair = b''.join(h[2] for h in hlist)
+    # A half's fill is one of a few pairs (5 at most a level): a palette of 8, each
+    # half's low bits the fill's row (bit 3 the top, bit 4 the bottom, neither for a
+    # pair of stored rows) and its colour in the palette (bits 0-2).  The section: the
+    # palette's first bytes, its second bytes, then each half's low bits.
+    pal = sorted(set(h[2] for h in hlist if h in halves['top'] or h in halves['bot']))
+    assert len(pal) <= 8, (lv, sub, 'more than 8 half fill pairs', len(pal))
+    hlow = bytes((8 if h in halves['top'] else 16 if h in halves['bot'] else 0) |
+                 (pal.index(h[2]) if h[2] in pal and h not in halves['pair'] else 0) for h in hlist)
+    pal8 = pal + [b'\0\0'] * (8 - len(pal))
+    halfpair = bytes(p[0] for p in pal8) + bytes(p[1] for p in pal8)   # bank 6's: 16 bytes
+    hpairsec = halfpair + hlow
     assert len(flats) <= NFLAT, (lv, sub, len(flats))
     # mirrors (TILEMIRROR only): only while the bank is short, the least used first; a
     # mirror's source stays a stored tile
@@ -820,6 +830,7 @@ def pack_tiles(lv, sub):
                       halfpage=B['HALFPAGE'] >> 8, halfoff=B['HALFOFF'], mir0=mir0, nmir=NMIR,
                       solidfill=0x0F if sol0 == 1 else 0x00)    # (beebgame levelfile.Shape)
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
+    assert B['HALFOFF'] + NHALF <= 64, (lv, sub, 'the halves outgrow HLOW (gather.s)')
     # and the Master's LV_PAGE0 for these slots: per id, the pair the Model B's gather
     # computes -- a mirror is kind 3 at its source's slot (an id no tile has -- the
     # rows past the map's end are read too, whatever lies there -- is a black fill:
@@ -835,11 +846,11 @@ def pack_tiles(lv, sub):
     for i, h in enumerate(hlist):
         t, kk = half0 + i, B['HALFOFF'] + i
         bhi[t] = ((B['HALFPAGE'] >> 8) + (kk >> 3)) & 0x7F   # (its page less $80: a half's mark)
-        blo[t] = ((kk & 7) << 5) | (5 if t < half1 else 6 if t < half2 else 4)
+        blo[t] = ((kk & 7) << 5) | hlow[i]
     for j in range(NFLAT + 2):
         blo[FLAT0 + j], bhi[FLAT0 + j] = 2 * j, 0x40
     B['page0'] = bytes(blo + bhi)
-    return dict(local=local, B=B, flat=flattab, halves=halflist, hpair=halfpair,
+    return dict(local=local, B=B, flat=flattab, halves=halflist, hpair=hpairsec,
                 ntiles=NT, nhalf=NHALF, nmir=NMIR, nflat=len(flats), usage=usage)
 
 # ----------------------------------------------------------------------------
