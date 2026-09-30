@@ -834,7 +834,7 @@ def pack_tiles(lv, sub):
         blo[mir0 + i], bhi[mir0 + i] = ((s_ & 3) << 6) | 3, (B_TILES >> 8) + (s_ >> 2)
     for i, h in enumerate(hlist):
         t, kk = half0 + i, B['HALFOFF'] + i
-        bhi[t] = (B['HALFPAGE'] >> 8) + (kk >> 3)
+        bhi[t] = ((B['HALFPAGE'] >> 8) + (kk >> 3)) & 0x7F   # (its page less $80: a half's mark)
         blo[t] = ((kk & 7) << 5) | (5 if t < half1 else 6 if t < half2 else 4)
     for j in range(NFLAT + 2):
         blo[FLAT0 + j], bhi[FLAT0 + j] = 2 * j, 0x40
