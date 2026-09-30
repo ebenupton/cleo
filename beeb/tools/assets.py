@@ -556,7 +556,7 @@ def pack_level(lv, sub):
                               halves=T['halves'], hpair=T['hpair'], mir=T['B']['mir'],
                               directory=directory, page0=T['B']['page0'],
                               boxid0=BOXID0, boxn=BOXN))
-    back = lf.decode(data)
+    back = lf.decode(data, BOXID0, BOXN)
     assert back['map'] == mapb and back['objs'] == bytes(objs) and back['dir'] == directory
     maprle = lf.rle(mapb)                   # (for the report)
     out('L%d' % (lv * 2 + sub), data)
