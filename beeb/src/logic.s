@@ -302,12 +302,32 @@ grow:     .res 1                  ; bucket walk: gy << gridsh
 ; Map queries.  The map is in bank 5 and this code in bank 7, so every touch goes
 ; through low RAM's maprow/mapbyte/mapput (engine.s), which put bank 7 back.
 ; ============================================================================
-; get map byte (the tile id) at tile (X = tx, A = ty) -> A; mapptr = the row, X kept
+; get map byte (the tile id) at tile (X = tx, A = ty) -> A; mapptr = the row, Y = tx,
+; X kept.  The row's address from the level's table (MROWL/MROWH, level_init).
 maptile:
-        jsr maprow
+        tay
+        lda MROWL,y
+        sta mapptr
+        lda MROWH,y
+        sta mapptr+1
         txa
         tay
         jmp mapbyte
+
+; ALTOF: A = a tile id -> A = its alt byte at column qx & 7 (ALTTAB[cls*8 + (qx&7)],
+; cls = LV_ALTCLS[id]).  Y clobbered.
+.macro ALTOF
+        tay
+        lda LV_ALTCLS,y
+        asl
+        asl
+        asl
+        eor qx                      ; (A & $F8) | (qx & 7): A's low 3 bits are 0
+        and #$F8
+        eor qx
+        tay
+        lda LV_ALTTAB,y
+.endmacro
 
 ; tilexy: X = qx >> 3, A = qy >> 3, carry set if (qx,qy) is inside the map.
 ; Map sizes are multiples of 256 px, so "0 <= q < size" is just a compare of the high
@@ -342,25 +362,77 @@ getinfo:
         jsr tilexy                  ; X = qx>>3, A = qy>>3
         bcs @out8                   ; (outside: out of line, after the rts)
         jsr maptile
-        ; alt class = LV_ALTCLS[tile id]
-        tay
-        lda LV_ALTCLS,y
-        ; ALTTAB[cls*8 + (qx&7)]
-        asl
-        asl
-        asl
-        eor qx                      ; (A & $F8) | (qx & 7): A's low 3 bits are 0
-        and #$F8
-        eor qx
-        tay
-        lda LV_ALTTAB,y
+        ALTOF
         rts
 @out8:  lda #8                      ; outside the map
         rts
 
-; getaltitude: A = altitude (signed) at pixel (qx, qy)  [qy modified]
+; getaltitude: A = altitude (signed) at pixel (qx, qy)  [qy modified; tp clobbered]
+; It reads the tile at (qx, qy) and at most one of the tiles above and below it, so
+; the three come from one visit to the map (mapcol) and the rest is arithmetic.  A
+; pixel off the map takes the general way (@off), a read at a time through getinfo.
 getaltitude:
-        jsr getinfo
+        jsr tilexy                  ; X = tx, A = ty
+        bcc @in
+        jmp @off                    ; (out of a branch's reach)
+@in:    tay
+        lda MROWL,y
+        sta mapptr
+        lda MROWH,y
+        sta mapptr+1
+        txa
+        tay
+        jsr mapcol                  ; A = the tile, X = the one above, Y = the one below
+        stx tp
+        sty tp+1
+        ALTOF
+        tax                         ; X = n3 (the alt byte)
+        and #15
+        sta q3                      ; n3 & 15
+        lda qy
+        and #7
+        sta q5                      ; n5
+        cmp q3
+        bcc @fnb                    ; n5 < (n3 & 15)
+        lda qy                      ; C = 1 from the cmp: +7 is +8
+        adc #7
+        sta qy
+        bcc @fb1
+        inc qy+1
+@fb1:   lda qy+1                    ; the pixel 8 below: the tile below, or getinfo's 8
+        cmp maph+1                  ; past the map's bottom (tilexy's test)
+        lda #8
+        bcs @fb2
+        lda tp+1
+        ALTOF
+@fb2:   lsr
+        lsr
+        lsr
+        lsr
+        clc
+        adc #9                      ; as @b1's
+        sbc q5
+        rts
+@fnb:   txa
+        lsr
+        lsr
+        lsr
+        lsr                         ; n4
+        bne @d2
+        lda qy
+        sec
+        sbc #8
+        sta qy
+        bcs @fn1
+        dec qy+1
+@fn1:   lda qy+1                    ; the pixel 8 above: the tile above, or getinfo's 8
+        cmp maph+1                  ; above the map's top (qy+1 = $FF) or past it
+        lda #8
+        bcs @fn2
+        lda tp
+        ALTOF
+@fn2:   jmp @nb2
+@off:   lda #8                      ; getinfo's for a pixel off the map
         tax                         ; X = n3 (the alt byte)
         and #15
         sta q3                      ; n3 & 15
@@ -397,7 +469,7 @@ getaltitude:
         bcs :+
         dec qy+1
 :       jsr getinfo
-        tax
+@nb2:   tax
         and #15
         cmp #8
         beq @eq
@@ -458,6 +530,15 @@ level_init:
         sec
         sbc #3
         sta gridsh
+        ldx #127                    ; the map's row addresses, for the map queries
+@mrow:  txa                         ; (rows past the map's are never read)
+        jsr maprow                  ; X kept
+        lda mapptr
+        sta MROWL,x
+        lda mapptr+1
+        sta MROWH,x
+        dex
+        bpl @mrow
         lda #80                     ; the camera starts centred; the lookahead eases in
         sta camoff
         ; clear object state, then grid
@@ -3370,6 +3451,9 @@ BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
         .segment "GAMEBSS"          ; the bin walk's
 BINR:      .res 4
 BINOK:     .res 1
+        .align 256                  ; the map's row addresses (level_init), a page:
+MROWL:     .res 128                 ;  maptile's and getaltitude's reads cross none
+MROWH:     .res 128
 
         .segment "GAMECODE"      
 ; ============================================================================
