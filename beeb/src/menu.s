@@ -28,6 +28,10 @@ game_main:
         stz hiscore+1
         stz maxlevel
   .endif
+  .if ALLLEVELS
+        lda #7                      ; (a test build: every main level on the chooser)
+        sta maxlevel
+  .endif
 title_loop:
         jsr title_menu
         cmp #MENU_HELP

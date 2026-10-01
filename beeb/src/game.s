@@ -157,11 +157,13 @@ fl_over:
         ; level over
         ldx lives
         beq game_over
+  .if .not ALLLEVELS                ; (a test build takes every bonus level)
         lda stars
         beq @next1
         lda level
         ora #1                      ; a star: on to the next odd level (+2 from even)
         sta level
+  .endif
 @next1: inc level
         lda level
         cmp #16
