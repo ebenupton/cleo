@@ -55,7 +55,10 @@ new_game:
         jsr level_select
         asl
         sta level
-:       jmp go_game                 ; the game's image, and its level loop (disc.s)
+:       pha                         ; (A: go_game's)
+        jsr blank_palette           ; the load is dark: the menu's screen is overwritten
+        pla
+        jmp go_game                 ; the game's image, and its level loop (disc.s)
 menu_over:
         jsr winlose
         jmp title_loop

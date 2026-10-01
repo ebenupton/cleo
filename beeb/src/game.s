@@ -180,6 +180,7 @@ game_won:
         lda #1
         pha
         jsr update_hiscore
+        jsr blank_palette           ; the load is dark (A on the stack)
         pla
         jmp go_menu                 ; the menus' image, and its win/lose screen (disc.s)
 update_hiscore:
