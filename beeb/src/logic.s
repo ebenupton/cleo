@@ -1334,9 +1334,8 @@ player_hit:
 ; player dead: fall, then respawn
 ; ============================================================================
 player_dead:
-        ; vy: gravity's two steps ; py += two steps of (vy+128)>>8
-        jsr gravity
-        jsr vy_step
+        ; vy and py: the original's two steps (fall2)
+        jsr fall2
         add16 py, dpx
         ; if (frame - evframe) > 30 -> respawn (the original's 60 steps; unsigned
         ; delta: wrap-safe)
@@ -1394,16 +1393,59 @@ player_dead:
         lda #26
         jmp addsprite
 
-; vy = (vy + 160) * 15 >> 4: two of the original's (vy + 80) * 31 >> 5
+; ---- the frame's vertical motion: the original's two steps exactly -- each its
+; gravity, vy = (vy + 80) * 31 >> 5, then its move, (vy + 128) >> 8 (MAXDWY0 down at
+; most) -- summed into dpx (MAXFALL down at most; X = dpx+1).  fall2: both steps with
+; gravity; move2: a jump's or a stand's, the first without it and the second with it
+; only if rising (the original's second step took @grav on vy < 0).  q5: the first
+; step's move.
+MAXDWY0 = 8                         ; the original's fall a step at most
+fall2:  jsr gravity
+        jsr step1
+        sta q5
+        jsr gravity
+        jmp fstep2
+move2:  jsr step1
+        sta q5
+        bit vy+1
+        bpl fstep2
+        jsr gravity
+fstep2: jsr step1
+        sta pdy                     ; (the frame's middle is one step back: inrange2)
+        clc
+        adc q5                      ; the two moves (-40..16: a byte, signed)
+        ldx #0
+        cmp #$80
+        bcs @up
+        cmp #MAXFALL+1
+        bcc @st
+        lda #MAXFALL
+        bne @st                     ; always
+@up:    dex
+@st:    sta dpx
+        stx dpx+1
+        rts
+; A = (vy + 128) >> 8, signed: a step's move, at most MAXDWY0 down
+step1:  lda vy                      ; C = the carry out of vy low + 128
+        cmp #$80
+        lda vy+1
+        adc #0
+        bmi @r
+        cmp #MAXDWY0+1
+        bcc @r
+        lda #MAXDWY0
+@r:     rts
+
+; vy = (vy + 80) * 31 >> 5: the original's step of gravity
 gravity:
-        add16i vy, 160
+        add16i vy, 80
         sec
         lda #0
         sbc vy
         sta t16
         lda #0
         sbc vy+1                    ; A = high byte of -vy, not yet stored
-        .repeat 4
+        .repeat 5
         cmp #$80                    ; C = sign of the current high byte
         ror a                       ; arithmetic shift of the high byte, in A
         ror t16                     ; and of the low byte, in place
@@ -1418,25 +1460,6 @@ gravity:
         sta vy+1
         rts
 
-; dpx = ((vy + 128) >> 8) * 2 (signed): the frame's two steps
-vy_step:
-        ldx #0                      ; X = dpx+1, the sign extension
-        lda vy                      ; C = the carry out of vy low + 128
-        cmp #$80
-        lda vy+1
-        adc #0                      ; A = (vy + 128) >> 8, a step
-        asl                         ; two (N its sign: |A| < 64)
-        bmi @up
-        cmp #MAXFALL+1              ; down: MAXFALL a frame at most
-        bcc @st
-        lda #MAXFALL
-@st:    sta dpx
-        stx dpx+1
-        rts
-@up:    dex                         ; up, uncapped: dpx+1 = $FF
-        stx dpx+1
-        sta dpx
-        rts
 
 ; ============================================================================
 ; player alive update
@@ -1494,9 +1517,10 @@ player_update:
         lda #1
         sta control
         bne @move                   ; always: A = 1
-@grav:  jsr gravity
-@move:  jsr vy_step
-        txa                         ; X = dpx+1, 0 or $FF (vy_step)
+@grav:  jsr fall2
+        jmp @mvd
+@move:  jsr move2
+@mvd:   txa                         ; X = dpx+1, 0 or $FF (fall2/move2)
         bpl @down
         clc                         ; up: py += dpx, dpx+1 = $FF
         lda py
@@ -2216,34 +2240,43 @@ ob_none:
 ; ($82) where no code change can move it, as inrange's reads are hot.)
 RNGTAB0:                            ; inrange limit quads: lo, hi, lo2, hi2, each +128
         .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
-        .byte 120, 136, 120, 136        ; 4: <-8, 8, <-8, 8
+        .byte 113, 143, 120, 136        ; 4: <-15, 15, <-8, 8 (the boomerang's: x 7 wider each side, below)
         .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
         .byte 112, 144, 104, 140        ; 12: <-16, 16, <-24, 12
-        .byte 120, 136, 112, 132        ; 16: <-8, 8, <-16, 4
-        .byte 116, 140, 110, 130        ; 20: <-12, 12, <-18, 2
+        .byte 113, 143, 112, 132        ; 16: <-15, 15, <-16, 4 (the boomerang's: x 7 wider each side, below)
+        .byte 109, 147, 110, 130        ; 20: <-19, 19, <-18, 2 (the boomerang's: x 7 wider each side, below)
         .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
-        .byte 116, 140, 116, 140        ; 28: <-12, 12, <-12, 12
+        .byte 109, 147, 116, 140        ; 28: <-19, 19, <-12, 12 (the boomerang's: x 7 wider each side, below)
         .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
         .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
         .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
-        .byte 118, 138, 112, 136        ; 44: <-10, 10, <-16, 8
+        .byte 111, 145, 112, 136        ; 44: <-17, 17, <-16, 8 (the boomerang's: x 7 wider each side, below)
         .byte 120, 128, 104, 136        ; 48: <-8, 0, <-24, 8
         .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
         .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
         .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
-        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch".
+        ; The boomerang's hit bands (4, 16, 20, 28, 44) are 7 px wider each side across
+        ; than the original's: it flies up to 14 px a step, two steps a frame, and is
+        ; tested once a frame -- a band at least 28 across cannot be stepped over, as
+        ; the original's two tests a frame did not let it.  (Its height moves slowly:
+        ; widening that would hit what it flies over.)
+        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch"
+        ; this frame -- where Cleo and the boomerang are when the objects run, grown by
+        ; the most each moves before it is drawn: Cleo 6 across and 14 up or down, the
+        ; boomerang 30 each way (a frame is two of the original's steps).
         ; Append new quads, never insert: callers hold fixed offsets, and a quad put in
         ; mid-table once shifted every later one under them (the bat read Cleo's band,
         ; the vanishing platforms never saw her feet).
-        .byte 105, 147, 113, 152        ; 64: Cleo      <-23, 19, <-15, 24
-        .byte 111, 144, 118, 143        ; 68: boomerang <-17, 16, <-10, 15
+        .byte 99, 153, 99, 166        ; 64: Cleo      <-29, 25, <-29, 38
+        .byte 81, 174, 88, 173        ; 68: boomerang <-47, 46, <-40, 45
         ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
-        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
-        .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
-        .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
+        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7),
+        ; and by the frame's move, as above)
+        .byte 99, 163, 87, 150        ; 72: Cleo      <-29, 35, <-41, 22
+        .byte 81, 184, 76, 157        ; 76: boomerang <-47, 56, <-52, 29
         ; the health powerup's baked box (-6..6, 4..14) grown the same way
-        .byte 107, 147, 103, 140        ; 80: Cleo      <-21, 19, <-25, 12
-        .byte 113, 144, 108, 131        ; 84: boomerang <-15, 16, <-20, 3
+        .byte 101, 153, 89, 154        ; 80: Cleo      <-27, 25, <-39, 26
+        .byte 83, 174, 78, 161        ; 84: boomerang <-45, 46, <-50, 33
 RNGTABN = * - RNGTAB0
         .assert RNGTABN <= 88, error, "RNGTAB0 has outgrown its copy (logic.s RNGTAB)"
         .assert >RNGTAB = >(RNGTAB+RNGTABN-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read)"
@@ -2282,6 +2315,33 @@ inrange:
 @no:    clc
 @nc:    rts                         ; (C already 0)
 
+
+;---- inrange2: Cleo's test as the original made it, twice a frame a step apart --
+; where she is, then (missing) where her first step left her: ry + pdy, pdy being the
+; frame's second move (fall2).  Only up and down: a frame moves her at most 6 px
+; across, under every band's width, but up to 12 down, over the trampoline's 8.
+; X = the quad, kept; C set if inside; rx, ry and Y kept.
+inrange2:
+        jsr inrange
+        bcs @r
+        lda ry
+        pha
+        lda ry+1
+        pha
+        lda pdy
+        bpl :+
+        dec ry+1                    ; (a negative move: the high byte's borrow first)
+:       clc
+        adc ry
+        sta ry
+        bcc :+
+        inc ry+1
+:       jsr inrange
+        pla
+        sta ry+1
+        pla
+        sta ry
+@r:     rts
 
 ; boomerang-relative position: rx = spx - bx ; ry = spy - by  (spx/spy: the object's draw pos)
 boomrel:
@@ -2370,7 +2430,7 @@ ob_star1:
         lda q2
         bne @tryboom                ; Cleo far: the collect cannot pass
         ldx #0
-        jsr inrange
+        jsr inrange2
         bcs @collect
 @tryboom:
         lda bactive
@@ -2445,7 +2505,7 @@ ob_tramp:                           ; A (O_AL) its spring's count: 2, 4 .. 10, t
 :       lda health
         beq @draw
         ldx #8
-        jsr inrange
+        jsr inrange2
         bcc @draw
         lda vy+1                    ; bmi16 vy and beq16 vy from one load
         bmi @draw
@@ -2454,6 +2514,13 @@ ob_tramp:                           ; A (O_AL) its spring's count: 2, 4 .. 10, t
         lda #2
         sta O_AL,y
         mov16i vy, -2048
+        sec                         ; on its surface, 6 px into the band, where the
+        lda spy                     ;  original's step-a-time test found her: a frame's
+        sbc #6                      ;  two steps may carry her deeper or through it
+        sta py
+        lda spy+1
+        sbc #0
+        sta py+1
         lda #SFX_JUMP
         sta SFXREQ
 @draw:  lda O_AL,y                  ; at rest (0): its rest state's baked box, if it has
@@ -2583,7 +2650,7 @@ ob_snake:                           ; in place: Y = obj throughout (reloaded aft
         lda health
         beq @boom
         ldx #12
-        jsr inrange
+        jsr inrange2
         bcc @boom
         lda O_CL,y
         cmp #4
@@ -2834,7 +2901,7 @@ ob_rsnake:                          ; in place: Y = obj (reloaded after the call
         sta ry+1
         ldy obj
         ldx #24
-        jsr inrange
+        jsr inrange2
         bcc @draw
         lda hurt
         bne @draw
@@ -3063,7 +3130,7 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         lda health
         beq @draw
         ldx #32
-        jsr inrange
+        jsr inrange2
         bcc @draw
         ble16i ry, 4, @nostomp
         lda vy+1                    ; bmi16 vy, then beq16 vy, from one load
@@ -3077,7 +3144,7 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         lda hurt
         bne @draw
         ldx #36
-        jsr inrange
+        jsr inrange2
         bcc @draw
         mov16 hx, rx
         jsr player_hit
@@ -3264,7 +3331,7 @@ ob_walker:                          ; in place: Y = obj throughout (reloaded aft
         lda health
         beq @boom
         ldx #40
-        jsr inrange
+        jsr inrange2
         bcc @boom
         lda hurt
         bne @boom
@@ -3357,7 +3424,7 @@ ob_spike:
         adc #130                    ; (fa+1)*2 biased by $80
         sta RNGTAB+49
         ldx #48
-        jsr inrange
+        jsr inrange2
         bcc @draw
         lda hurt
         bne @draw
@@ -3403,7 +3470,7 @@ ob_powerup:                         ; in place: A (O_AL) the pickup's progress; 
         cmp #3
         bcs @draw
         ldx #52
-        jsr inrange
+        jsr inrange2
         bcc @draw
         lda #1                      ; A was 0: bne @adv fell through
         sta O_AL,y
@@ -3439,7 +3506,7 @@ ob_vanish:
         bne @count
         ; rx > -16 && rx <= 0 && ry == 16 && vy == 0
         ldx #56
-        jsr inrange
+        jsr inrange2
         bcc @ret
         lda vy
         ora vy+1
@@ -3496,7 +3563,7 @@ ob_switch:
         lda fd
         bne @draw
         ldx #60
-        jsr inrange
+        jsr inrange2
         bcc @draw
         lda #20
         jsr addscore
