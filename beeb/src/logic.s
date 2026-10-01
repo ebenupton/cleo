@@ -585,11 +585,6 @@ level_init:
         sta MROWH,x
         dex
         bpl @mrow
-        ldx #RNGTABN-1              ; inrange's limits, into their page (RNGTAB0)
-@rng:   lda RNGTAB0,x
-        sta RNGTAB,x
-        dex
-        bpl @rng
         lda #80                     ; the camera starts centred; the lookahead eases in
         sta camoff
         ; clear object state, then grid
@@ -2236,51 +2231,6 @@ os_oxy: lda spx                     ; ox, oy: the object's position (the prologu
 ob_none:
         rts
 
-; (RNGTAB0 is the table's source: level_init copies it to RNGTAB, in GAMELVL's page
-; ($82) where no code change can move it, as inrange's reads are hot.)
-RNGTAB0:                            ; inrange limit quads: lo, hi, lo2, hi2, each +128
-        .byte 112, 144, 112, 148        ; 0: <-16, 16, <-16, 20
-        .byte 113, 143, 120, 136        ; 4: <-15, 15, <-8, 8 (the boomerang's: x 7 wider each side, below)
-        .byte 119, 145, 128, 136        ; 8: <-9, 17, 0, 8
-        .byte 112, 144, 104, 140        ; 12: <-16, 16, <-24, 12
-        .byte 113, 143, 112, 132        ; 16: <-15, 15, <-16, 4 (the boomerang's: x 7 wider each side, below)
-        .byte 109, 147, 110, 130        ; 20: <-19, 19, <-18, 2 (the boomerang's: x 7 wider each side, below)
-        .byte 118, 138, 120, 144        ; 24: <-10, 10, <-8, 16
-        .byte 109, 147, 116, 140        ; 28: <-19, 19, <-12, 12 (the boomerang's: x 7 wider each side, below)
-        .byte 112, 144, 116, 144        ; 32: <-16, 16, <-12, 16
-        .byte 116, 140, 0, 255          ; 36: <-12, 12, <-128, 127
-        .byte 112, 144, 104, 148        ; 40: <-16, 16, <-24, 20
-        .byte 111, 145, 112, 136        ; 44: <-17, 17, <-16, 8 (the boomerang's: x 7 wider each side, below)
-        .byte 120, 128, 104, 136        ; 48: <-8, 0, <-24, 8
-        .byte 112, 144, 104, 140        ; 52: <-16, 16, <-24, 12
-        .byte 112, 129, 143, 145        ; 56: <-16, 1, 15, 17
-        .byte 112, 144, 104, 140        ; 60: <-16, 16, <-24, 12
-        ; The boomerang's hit bands (4, 16, 20, 28, 44) are 7 px wider each side across
-        ; than the original's: it flies up to 14 px a step, two steps a frame, and is
-        ; tested once a frame -- a band at least 28 across cannot be stepped over, as
-        ; the original's two tests a frame did not let it.  (Its height moves slowly:
-        ; widening that would hit what it flies over.)
-        ; Guard bands: not "close enough to collect" but "the drawn rectangles touch"
-        ; this frame -- where Cleo and the boomerang are when the objects run, grown by
-        ; the most each moves before it is drawn: Cleo 6 across and 14 up or down, the
-        ; boomerang 30 each way (a frame is two of the original's steps).
-        ; Append new quads, never insert: callers hold fixed offsets, and a quad put in
-        ; mid-table once shifted every later one under them (the bat read Cleo's band,
-        ; the vanishing platforms never saw her feet).
-        .byte 99, 153, 99, 166        ; 64: Cleo      <-29, 25, <-29, 38
-        .byte 81, 174, 88, 173        ; 68: boomerang <-47, 46, <-40, 45
-        ; trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
-        ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7),
-        ; and by the frame's move, as above)
-        .byte 99, 163, 87, 150        ; 72: Cleo      <-29, 35, <-41, 22
-        .byte 81, 184, 76, 157        ; 76: boomerang <-47, 56, <-52, 29
-        ; the health powerup's baked box (-6..6, 4..14) grown the same way
-        .byte 101, 153, 89, 154        ; 80: Cleo      <-27, 25, <-39, 26
-        .byte 83, 174, 78, 161        ; 84: boomerang <-45, 46, <-50, 33
-RNGTABN = * - RNGTAB0
-        .assert RNGTABN <= 88, error, "RNGTAB0 has outgrown its copy (logic.s RNGTAB)"
-        .assert >RNGTAB = >(RNGTAB+RNGTABN-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read)"
-
 ; range check: rx > lo && rx < hi && ry > lo2 && ry < hi2 ; X = offset of the limit
 ; quad in RNGTAB (limits stored +128 so the test is an unsigned byte compare on r^$80,
 ; after checking r fits in -128..127 - anything wider fails every limit anyway).
@@ -2434,9 +2384,15 @@ ob_star1:
 @tryboom:
         lda bactive
         beq @phase
-        jsr boomrel
-        lda #0
-        sta q2                      ; rx, ry are the boomerang's: box_safe tests them
+        lda q2                      ; box_safe's Cleo test, now: boomrel takes rx, ry
+        bne @tbr                    ; (Cleo far: q2 says so already)
+        ldx #64
+        jsr inrange                 ; C = 1: she overlaps the box's guard band
+        lda #1                      ; q2: 1 safe of her, $80 not (box_safe)
+        bcc :+
+        lda #$80
+:       sta q2
+@tbr:   jsr boomrel
         ldx #4
         jsr inrange
         bcc @phase
@@ -2539,20 +2495,29 @@ ob_tramp:                           ; A (O_AL) its spring's count: 2, 4 .. 10, t
         clc
         ; fall through
 ; A = frame, X = the RNGTAB quad for Cleo (64 star, 72 trampoline; the boomerang's is
-; X+4 -- inrange and boomrel leave X alone), C = 0.  Adds BOXN if nothing can draw
-; through the box, then tail-calls addsprite.  (For the trampoline rx/ry are still
-; Cleo-relative: ob_tramp does not call boomrel.)
+; X+4 -- inrange and boomrel leave X alone), C = 0, q2: 0 test Cleo (rx, ry are hers),
+; 1 she is clear, $80 she is not (a star's prologue, or its boomerang test, which
+; takes rx, ry).  Adds BOXN if nothing can draw through the box, then tail-calls
+; addsprite.
 box_safe:
         sta q1
         lda O_EH,y                  ; an enemy's range covers it
         bne @no
         lda q2
-        bne @cfar                   ; Cleo far (a star's prologue said so)
+        bmi @no                     ; Cleo overlaps (the star's boomerang test found)
+        bne @cfar                   ; Cleo clear
         jsr inrange                 ; Cleo overlaps its rectangle
         bcs @no
 @cfar:  lda bactive
-        beq @yes
-        jsr boomrel
+        bne @bt
+        lda firing                  ; a throw that launches this frame (Cleo's step runs
+        beq @yes                    ;  after the objects, anim 2 -> 4) starts from her
+        lda anim                    ;  place: test it there (bx, by are dead until the
+        eor #2                      ;  launch writes them; eor keeps C clear)
+        bne @yes
+        mov16 bx, px
+        mov16 by, py
+@bt:    jsr boomrel
         txa
         ora #4
         tax
@@ -3800,7 +3765,8 @@ BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
 ; The map's row addresses (level_init) and inrange's limits: tables whose reads are
 ; hot, each in a page, outside the image's variables (so those end a page sooner)
         .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
-RNGTAB:    .res 88                  ; inrange's limits (RNGTAB0, level_init's copy)
+RNGTAB:    .res 88                  ; inrange's limits: the level file's header tail
+        .assert RNGTAB = LV_HDR + 32, error, "RNGTAB: where the loader puts the header's tail"
 MROWL:     .res 128                 ; the row addresses' low bytes
         .segment "GAMEHI"           ; bank 7's last page, after the kernel's KRNHW
 MROWH:     .res 128                 ; and their high bytes

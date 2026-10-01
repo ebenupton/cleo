@@ -462,6 +462,50 @@ def settle_level(level, img_addr, img_bank, regions):
 # Cleo's fields in the level header (logic.s level_init): the start and exit, in tiles,
 # and the special tiles' ids (the vanishing blocks, the flowers)
 HDR_STARTX, HDR_STARTY, HDR_EXITX, HDR_EXITY, HDR_SPECIAL = 2, 3, 4, 5, 8
+# logic.s RNGTAB: inrange's limit quads (lo, hi, lo2, hi2, each +128: rx > lo && rx <
+# hi && ry > lo2 && ry < hi2), every level's header tail -- the loader puts it at LV_HDR
+# + 32, in its page ($82), where inrange's hot reads need it.  Append new quads, never
+# insert: callers hold fixed offsets (ldx #n), and a quad put in mid-table once shifted
+# every later one under them (the bat read Cleo's band, the vanishing platforms never
+# saw her feet).
+RNGTAB = bytes([
+    112, 144, 112, 148,     # 0: <-16, 16, <-16, 20
+    113, 143, 120, 136,     # 4: <-15, 15, <-8, 8 (the boomerang's: x 7 wider each side, below)
+    119, 145, 128, 136,     # 8: <-9, 17, 0, 8
+    112, 144, 104, 140,     # 12: <-16, 16, <-24, 12
+    113, 143, 112, 132,     # 16: <-15, 15, <-16, 4 (the boomerang's: x 7 wider each side, below)
+    109, 147, 110, 130,     # 20: <-19, 19, <-18, 2 (the boomerang's: x 7 wider each side, below)
+    118, 138, 120, 144,     # 24: <-10, 10, <-8, 16
+    109, 147, 116, 140,     # 28: <-19, 19, <-12, 12 (the boomerang's: x 7 wider each side, below)
+    112, 144, 116, 144,     # 32: <-16, 16, <-12, 16
+    116, 140, 0, 255,       # 36: <-12, 12, <-128, 127
+    112, 144, 104, 148,     # 40: <-16, 16, <-24, 20
+    111, 145, 112, 136,     # 44: <-17, 17, <-16, 8 (the boomerang's: x 7 wider each side, below)
+    120, 128, 104, 136,     # 48: <-8, 0, <-24, 8 (+49: ob_health sets it)
+    112, 144, 104, 140,     # 52: <-16, 16, <-24, 12
+    112, 129, 143, 145,     # 56: <-16, 1, 15, 17
+    112, 144, 104, 140,     # 60: <-16, 16, <-24, 12
+    # The boomerang's hit bands (4, 16, 20, 28, 44) are 7 px wider each side across
+    # than the original's: it flies up to 14 px a step, two steps a frame, and is
+    # tested once a frame -- a band at least 28 across cannot be stepped over, as
+    # the original's two tests a frame did not let it.  (Its height moves slowly:
+    # widening that would hit what it flies over.)
+    # Guard bands: not "close enough to collect" but "the drawn rectangles touch"
+    # this frame -- where Cleo and the boomerang are when the objects run, grown by
+    # the most each moves before it is drawn: Cleo 6 across and 14 up or down, the
+    # boomerang 30 each way (a frame is two of the original's steps).
+    99, 153, 99, 166,       # 64: Cleo      <-29, 25, <-29, 38
+    81, 174, 88, 173,       # 68: boomerang <-47, 46, <-40, 45
+    # trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
+    # which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7),
+    # and by the frame's move, as above)
+    99, 163, 87, 150,       # 72: Cleo      <-29, 35, <-41, 22
+    81, 184, 76, 157,       # 76: boomerang <-47, 56, <-52, 29
+    # the health powerup's baked box (-6..6, 4..14) grown the same way
+    101, 153, 89, 154,      # 80: Cleo      <-27, 25, <-39, 26
+    83, 174, 78, 161,       # 84: boomerang <-45, 46, <-50, 33
+])
+assert len(RNGTAB) <= 88, 'RNGTAB has outgrown its memory (logic.s RNGTAB)'
 def pack_level(lv, sub):
     L = m.levels[(lv, sub)]
     name = m.name_of(lv, sub)
@@ -620,7 +664,7 @@ def pack_level(lv, sub):
                               objects=bytes(objs), tile_tables=(bytes(attr), bytes(acls)),
                               tiles=T['B']['tiles'], placement=placement, map=mapb, flat=T['flat'],
                               halves=T['halves'], hpair=T['hpair'], mir=T['B']['mir'],
-                              directory=directory, page0=T['B']['page0'],
+                              directory=directory, page0=T['B']['page0'], header_tail=RNGTAB,
                               boxid0=BOXID0, boxn=BOXN))
     back = lf.decode(data, BOXID0, BOXN)
     assert back['map'] == mapb and back['objs'] == bytes(objs) and back['dir'] == directory
