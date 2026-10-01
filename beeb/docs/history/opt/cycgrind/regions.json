@@ -1,0 +1,438 @@
+{
+ "total_modelb": 79068.90000000007,
+ "total_master": 79059.70000000043,
+ "regions": [
+  {
+   "id": "r00",
+   "file": "beebgame/src/engine/sprloops.s",
+   "lo": 210,
+   "hi": 359,
+   "cyc": 46712.5,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r00.txt"
+  },
+  {
+   "id": "r01",
+   "file": "beebgame/src/engine/tiles.s",
+   "lo": 247,
+   "hi": 396,
+   "cyc": 31626.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r01.txt"
+  },
+  {
+   "id": "r02",
+   "file": "beebgame/src/engine/tiles.s",
+   "lo": 397,
+   "hi": 475,
+   "cyc": 30670.2,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r02.txt"
+  },
+  {
+   "id": "r03",
+   "file": "beebgame/src/engine/tiles.s",
+   "lo": 526,
+   "hi": 605,
+   "cyc": 26457.7,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r03.txt"
+  },
+  {
+   "id": "r04",
+   "file": "beebgame/src/engine/sprloops.s",
+   "lo": 60,
+   "hi": 209,
+   "cyc": 23720.8,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r04.txt"
+  },
+  {
+   "id": "r05",
+   "file": "beebgame/src/engine/sprloops.s",
+   "lo": 396,
+   "hi": 427,
+   "cyc": 16530.7,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r05.txt"
+  },
+  {
+   "id": "r06",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 517,
+   "hi": 619,
+   "cyc": 7992.4,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r06.txt"
+  },
+  {
+   "id": "r07",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 599,
+   "hi": 748,
+   "cyc": 7170.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r07.txt"
+  },
+  {
+   "id": "r08",
+   "file": "beebgame/src/engine/macros.s",
+   "lo": 180,
+   "hi": 299,
+   "cyc": 6594.7,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r08.txt"
+  },
+  {
+   "id": "r09",
+   "file": "beebgame/src/engine/gather.s",
+   "lo": 43,
+   "hi": 173,
+   "cyc": 3430.8,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r09.txt"
+  },
+  {
+   "id": "r10",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 116,
+   "hi": 237,
+   "cyc": 2835.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r10.txt"
+  },
+  {
+   "id": "r11",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 621,
+   "hi": 770,
+   "cyc": 2756.3,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r11.txt"
+  },
+  {
+   "id": "r12",
+   "file": "beebgame/src/low.s",
+   "lo": 15,
+   "hi": 98,
+   "cyc": 2365.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r12.txt"
+  },
+  {
+   "id": "r13",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 367,
+   "hi": 516,
+   "cyc": 2239.5,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r13.txt"
+  },
+  {
+   "id": "r14",
+   "file": "beebgame/src/engine/tiles.s",
+   "lo": 97,
+   "hi": 246,
+   "cyc": 2131.7,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r14.txt"
+  },
+  {
+   "id": "r15",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 879,
+   "hi": 1028,
+   "cyc": 2112.3,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r15.txt"
+  },
+  {
+   "id": "r16",
+   "file": "beebgame/src/mirror.s",
+   "lo": 77,
+   "hi": 103,
+   "cyc": 1895.3,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r16.txt"
+  },
+  {
+   "id": "r17",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 767,
+   "hi": 916,
+   "cyc": 1681.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r17.txt"
+  },
+  {
+   "id": "r18",
+   "file": "src/logic.s",
+   "lo": 348,
+   "hi": 465,
+   "cyc": 1613.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r18.txt"
+  },
+  {
+   "id": "r19",
+   "file": "beebgame/src/engine/sprloops.s",
+   "lo": 360,
+   "hi": 388,
+   "cyc": 1393.2,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r19.txt"
+  },
+  {
+   "id": "r20",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 771,
+   "hi": 852,
+   "cyc": 1170.8,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r20.txt"
+  },
+  {
+   "id": "r21",
+   "file": "src/logic.s",
+   "lo": 2261,
+   "hi": 2410,
+   "cyc": 1137.8,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r21.txt"
+  },
+  {
+   "id": "r22",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 246,
+   "hi": 346,
+   "cyc": 989.2,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r22.txt"
+  },
+  {
+   "id": "r23",
+   "file": "beebgame/src/engine/lowram.s",
+   "lo": 17,
+   "hi": 101,
+   "cyc": 986.1,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r23.txt"
+  },
+  {
+   "id": "r24",
+   "file": "src/logic.s",
+   "lo": 1155,
+   "hi": 1304,
+   "cyc": 948.9,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r24.txt"
+  },
+  {
+   "id": "r25",
+   "file": "src/logic.s",
+   "lo": 3569,
+   "hi": 3718,
+   "cyc": 904.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r25.txt"
+  },
+  {
+   "id": "r26",
+   "file": "src/logic.s",
+   "lo": 2411,
+   "hi": 2560,
+   "cyc": 821.4,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r26.txt"
+  },
+  {
+   "id": "r27",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 1186,
+   "hi": 1227,
+   "cyc": 766.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r27.txt"
+  },
+  {
+   "id": "r28",
+   "file": "beebgame/src/engine/macros.s",
+   "lo": 30,
+   "hi": 179,
+   "cyc": 752.8,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r28.txt"
+  },
+  {
+   "id": "r29",
+   "file": "beebgame/src/cpu.inc",
+   "lo": 196,
+   "hi": 258,
+   "cyc": 720.7,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r29.txt"
+  },
+  {
+   "id": "r30",
+   "file": "beebgame/src/cpu.inc",
+   "lo": 262,
+   "hi": 326,
+   "cyc": 717.4,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r30.txt"
+  },
+  {
+   "id": "r31",
+   "file": "src/logic.s",
+   "lo": 1724,
+   "hi": 1819,
+   "cyc": 689.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r31.txt"
+  },
+  {
+   "id": "r32",
+   "file": "beebgame/src/engine/lowram.s",
+   "lo": 107,
+   "hi": 125,
+   "cyc": 659.9,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r32.txt"
+  },
+  {
+   "id": "r33",
+   "file": "src/logic.s",
+   "lo": 2106,
+   "hi": 2239,
+   "cyc": 620.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r33.txt"
+  },
+  {
+   "id": "r34",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 376,
+   "hi": 453,
+   "cyc": 608.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r34.txt"
+  },
+  {
+   "id": "r35",
+   "file": "src/logic.s",
+   "lo": 1005,
+   "hi": 1154,
+   "cyc": 579.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r35.txt"
+  },
+  {
+   "id": "r36",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 226,
+   "hi": 375,
+   "cyc": 578.4,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r36.txt"
+  },
+  {
+   "id": "r37",
+   "file": "src/logic.s",
+   "lo": 478,
+   "hi": 552,
+   "cyc": 492.7,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r37.txt"
+  },
+  {
+   "id": "r38",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 76,
+   "hi": 225,
+   "cyc": 460.6,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r38.txt"
+  },
+  {
+   "id": "r39",
+   "file": "src/logic.s",
+   "lo": 1424,
+   "hi": 1573,
+   "cyc": 434.2,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r39.txt"
+  },
+  {
+   "id": "r40",
+   "file": "src/logic.s",
+   "lo": 310,
+   "hi": 343,
+   "cyc": 424.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r40.txt"
+  },
+  {
+   "id": "r41",
+   "file": "src/logic.s",
+   "lo": 1574,
+   "hi": 1723,
+   "cyc": 421.5,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r41.txt"
+  },
+  {
+   "id": "r42",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 501,
+   "hi": 571,
+   "cyc": 356.4,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r42.txt"
+  },
+  {
+   "id": "r43",
+   "file": "beebgame/src/cpu.inc",
+   "lo": 98,
+   "hi": 132,
+   "cyc": 339.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r43.txt"
+  },
+  {
+   "id": "r44",
+   "file": "beebgame/src/engine/kernel.s",
+   "lo": 1019,
+   "hi": 1124,
+   "cyc": 325.8,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r44.txt"
+  },
+  {
+   "id": "r45",
+   "file": "beebgame/src/engine/tiles.s",
+   "lo": 822,
+   "hi": 902,
+   "cyc": 309.4,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r45.txt"
+  },
+  {
+   "id": "r46",
+   "file": "beebgame/src/engine/tiles.s",
+   "lo": 633,
+   "hi": 782,
+   "cyc": 298.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r46.txt"
+  },
+  {
+   "id": "r47",
+   "file": "src/logic.s",
+   "lo": 1828,
+   "hi": 1973,
+   "cyc": 272.8,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r47.txt"
+  },
+  {
+   "id": "r48",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 1029,
+   "hi": 1073,
+   "cyc": 248.9,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r48.txt"
+  },
+  {
+   "id": "r49",
+   "file": "src/logic.s",
+   "lo": 2933,
+   "hi": 3082,
+   "cyc": 242.7,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r49.txt"
+  },
+  {
+   "id": "r50",
+   "file": "beebgame/src/engine/frame.s",
+   "lo": 1160,
+   "hi": 1266,
+   "cyc": 225.0,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r50.txt"
+  },
+  {
+   "id": "r51",
+   "file": "src/logic.s",
+   "lo": 2561,
+   "hi": 2615,
+   "cyc": 154.5,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r51.txt"
+  },
+  {
+   "id": "r52",
+   "file": "src/logic.s",
+   "lo": 1,
+   "hi": 37,
+   "cyc": 138.1,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r52.txt"
+  },
+  {
+   "id": "r53",
+   "file": "src/logic.s",
+   "lo": 2628,
+   "hi": 2696,
+   "cyc": 130.5,
+   "path": "/private/tmp/claude-501/-Users-ebenupton-cleo/d6791b40-6bac-43f8-8e47-3671300b4960/scratchpad/grind/regions/r53.txt"
+  }
+ ]
+}

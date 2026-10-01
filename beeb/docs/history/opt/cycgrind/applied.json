@@ -1,0 +1,920 @@
+[
+ {
+  "id": "r00:3",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 323
+ },
+ {
+  "id": "r08:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/macros.s",
+  "lo": 243
+ },
+ {
+  "id": "r30:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 949
+ },
+ {
+  "id": "r15:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 949
+ },
+ {
+  "id": "r19:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 357
+ },
+ {
+  "id": "r21:1",
+  "outcome": "anon",
+  "file": "src/logic.s",
+  "lo": 2347
+ },
+ {
+  "id": "r31:0",
+  "outcome": "anon",
+  "file": "src/logic.s",
+  "lo": 1735
+ },
+ {
+  "id": "r34:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 425
+ },
+ {
+  "id": "r02s:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 462
+ },
+ {
+  "id": "r02:1",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 462
+ },
+ {
+  "id": "r46:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 774
+ },
+ {
+  "id": "r38:0",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 193
+ },
+ {
+  "id": "r45:2",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 895
+ },
+ {
+  "id": "r42:1",
+  "outcome": "anon",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 522
+ },
+ {
+  "id": "r06:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 595,
+  "batch": 1,
+  "dB": -262,
+  "dM": -193
+ },
+ {
+  "id": "r02:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 434,
+  "batch": 2,
+  "dB": -304,
+  "dM": -231
+ },
+ {
+  "id": "r06:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 592,
+  "batch": 2,
+  "dB": -304,
+  "dM": -231
+ },
+ {
+  "id": "r13:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 378,
+  "batch": 1,
+  "dB": -102,
+  "dM": -106
+ },
+ {
+  "id": "r10:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 128,
+  "batch": 1,
+  "dB": -76,
+  "dM": -79
+ },
+ {
+  "id": "r03s:0",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 593
+ },
+ {
+  "id": "r23:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/lowram.s",
+  "lo": 76,
+  "batch": 1,
+  "dB": -52,
+  "dM": -51
+ },
+ {
+  "id": "r22:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 259,
+  "batch": 1,
+  "dB": -49,
+  "dM": -57
+ },
+ {
+  "id": "r00s:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 215,
+  "batch": 1,
+  "dB": -348,
+  "dM": -380
+ },
+ {
+  "id": "r12:0",
+  "outcome": "build",
+  "file": "beebgame/src/low.s",
+  "lo": 86
+ },
+ {
+  "id": "r04:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 82,
+  "batch": 2,
+  "dB": -115,
+  "dM": -138
+ },
+ {
+  "id": "r04s:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 122,
+  "batch": 2,
+  "dB": -115,
+  "dM": -138
+ },
+ {
+  "id": "r11:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 704,
+  "batch": 2,
+  "dB": -60,
+  "dM": -122
+ },
+ {
+  "id": "r27:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 1211,
+  "batch": 2,
+  "dB": -60,
+  "dM": -122
+ },
+ {
+  "id": "r16:0",
+  "outcome": "kept",
+  "file": "beebgame/src/mirror.s",
+  "lo": 52,
+  "batch": 1,
+  "dB": -53,
+  "dM": 8
+ },
+ {
+  "id": "r03:0",
+  "outcome": "build",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 580
+ },
+ {
+  "id": "r00:2",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 292
+ },
+ {
+  "id": "r05:0",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 215
+ },
+ {
+  "id": "r00:1",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 215
+ },
+ {
+  "id": "r05:1",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 292
+ },
+ {
+  "id": "r04:1",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 122
+ },
+ {
+  "id": "r00s:1",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 210
+ },
+ {
+  "id": "r04:3",
+  "outcome": "build",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 84
+ },
+ {
+  "id": "r01s:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 279,
+  "batch": 1,
+  "dB": -17,
+  "dM": -31
+ },
+ {
+  "id": "r05:2",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 216,
+  "batch": 2,
+  "dB": -57,
+  "dM": -80
+ },
+ {
+  "id": "r20:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 800,
+  "batch": 2,
+  "dB": -57,
+  "dM": -80
+ },
+ {
+  "id": "r18:2",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 445,
+  "batch": 4,
+  "dB": -57,
+  "dM": -102
+ },
+ {
+  "id": "r01:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 257,
+  "batch": 4,
+  "dB": -57,
+  "dM": -102
+ },
+ {
+  "id": "r01:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 301,
+  "batch": 4,
+  "dB": -57,
+  "dM": -102
+ },
+ {
+  "id": "r09:4",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/gather.s",
+  "lo": 80,
+  "batch": 4,
+  "dB": -57,
+  "dM": -102
+ },
+ {
+  "id": "r00:0",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 210
+ },
+ {
+  "id": "r14:0",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 236
+ },
+ {
+  "id": "r01s:0",
+  "outcome": "stale",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 302
+ },
+ {
+  "id": "r04s:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 84,
+  "batch": 4,
+  "dB": -58,
+  "dM": -82
+ },
+ {
+  "id": "r24:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1233,
+  "batch": 4,
+  "dB": -58,
+  "dM": -82
+ },
+ {
+  "id": "r35:2",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1099,
+  "batch": 4,
+  "dB": -58,
+  "dM": -82
+ },
+ {
+  "id": "r35:3",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1118,
+  "batch": 4,
+  "dB": -58,
+  "dM": -82
+ },
+ {
+  "id": "r11:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 679,
+  "batch": 2,
+  "dB": -17,
+  "dM": -51
+ },
+ {
+  "id": "r04s:2",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 127,
+  "batch": 2,
+  "dB": -17,
+  "dM": -51
+ },
+ {
+  "id": "r32:0",
+  "outcome": "build",
+  "file": "beebgame/src/engine/lowram.s",
+  "lo": 122
+ },
+ {
+  "id": "r18:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 407,
+  "batch": 1,
+  "dB": -4,
+  "dM": -4
+ },
+ {
+  "id": "r41:0",
+  "outcome": "stale",
+  "file": "src/logic.s",
+  "lo": 1604
+ },
+ {
+  "id": "r24:1",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1236,
+  "batch": 1,
+  "dB": -13,
+  "dM": -10
+ },
+ {
+  "id": "r04:2",
+  "outcome": "build",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 132
+ },
+ {
+  "id": "r17:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 910,
+  "batch": 1,
+  "dB": 0,
+  "dM": -39
+ },
+ {
+  "id": "r17:2",
+  "outcome": "behaviour",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 896
+ },
+ {
+  "id": "r50:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 1197,
+  "batch": 4,
+  "dB": -58,
+  "dM": -23
+ },
+ {
+  "id": "r18:1",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 418,
+  "batch": 4,
+  "dB": -58,
+  "dM": -23
+ },
+ {
+  "id": "r35:4",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1066,
+  "batch": 4,
+  "dB": -58,
+  "dM": -23
+ },
+ {
+  "id": "r19:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 417,
+  "batch": 4,
+  "dB": -58,
+  "dM": -23
+ },
+ {
+  "id": "r09:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/gather.s",
+  "lo": 101,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r14:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 178,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r26:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2407,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r09:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/gather.s",
+  "lo": 95,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r26:1",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2500,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r09:2",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/gather.s",
+  "lo": 111,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r37:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 495,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r46:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 692,
+  "batch": 8,
+  "dB": -112,
+  "dM": -36
+ },
+ {
+  "id": "r45:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 872,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r20:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 792,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r39:5",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1481,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r36:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 247,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r44:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 1071,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r34:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 390,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r21:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2265,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r45:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 889,
+  "batch": 8,
+  "dB": -37,
+  "dM": -15
+ },
+ {
+  "id": "r33:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2143,
+  "batch": 2,
+  "dB": -5,
+  "dM": -12
+ },
+ {
+  "id": "r03s:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 555,
+  "batch": 2,
+  "dB": -5,
+  "dM": -12
+ },
+ {
+  "id": "r41:1",
+  "outcome": "behaviour",
+  "file": "src/logic.s",
+  "lo": 1674
+ },
+ {
+  "id": "r35:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1099,
+  "batch": 1,
+  "dB": -4,
+  "dM": -4
+ },
+ {
+  "id": "r35:1",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1085,
+  "batch": 4,
+  "dB": -27,
+  "dM": -18
+ },
+ {
+  "id": "r09:3",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/gather.s",
+  "lo": 140,
+  "batch": 4,
+  "dB": -27,
+  "dM": -18
+ },
+ {
+  "id": "r26:2",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2532,
+  "batch": 4,
+  "dB": -27,
+  "dM": -18
+ },
+ {
+  "id": "r26:3",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2549,
+  "batch": 4,
+  "dB": -27,
+  "dM": -18
+ },
+ {
+  "id": "r14:2",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 129,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r17:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 956,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r04:4",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 188,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r48:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 1061,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r49:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2997,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r47:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1884,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r14:3",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 158,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r23:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/lowram.s",
+  "lo": 29,
+  "batch": 8,
+  "dB": -16,
+  "dM": -66
+ },
+ {
+  "id": "r42:2",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 546,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r39:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1541,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r41:2",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1635,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r53:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2665,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r13:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 487,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r02s:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 468,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r42:0",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 517,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r35:5",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1043,
+  "batch": 8,
+  "dB": -4,
+  "dM": -25
+ },
+ {
+  "id": "r39:4",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1453,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r39:1",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1517,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r39:2",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1499,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r49:1",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2953,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r51:0",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 2576,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r36:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 231,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r38:1",
+  "outcome": "kept",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 145,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r24:2",
+  "outcome": "kept",
+  "file": "src/logic.s",
+  "lo": 1139,
+  "batch": 8,
+  "dB": -6,
+  "dM": -9
+ },
+ {
+  "id": "r39:3",
+  "outcome": "slower (Model B +0, Master +0)",
+  "file": "src/logic.s",
+  "lo": 1423
+ }
+]

@@ -405,23 +405,23 @@ getaltitude:
         jsr mapcol                  ; A = the tile, tp = the one above, tp+1 the one below
         ALTOF
         tax                         ; X = n3 (the alt byte)
-        and #15
-        sta q3                      ; n3 & 15
         lda qy
         and #7
         sta q5                      ; n5
-        cmp q3
-        bcc @fnb                    ; n5 < (n3 & 15)
-        lda qy                      ; C = 1 from the cmp: +7 is +8
-        adc #7
+        txa
+        and #15                     ; C = 0 from ALTOF (a class < 32: its third asl)
+        sbc q5                      ; (n3 & 15) - n5 - 1: C = 1 iff n5 < (n3 & 15)
+        bcs @fnb                    ; n5 < (n3 & 15)
+        lda qy                      ; C = 0 from the sbc: +8
+        adc #8
         sta qy
-        bcc @fb1
+        bcc @fbt                    ; no carry: qy+1 as tested at entry, inside the map
         inc qy+1
-@fb1:   lda qy+1                    ; the pixel 8 below: the tile below, or getinfo's 8
+        lda qy+1                    ; the pixel 8 below: the tile below, or getinfo's 8
         cmp maph+1                  ; past the map's bottom (tilexy's test)
         lda #8
         bcs @fb2
-        lda tp+1
+@fbt:   lda tp+1
         ALTOF
 @fb2:   lsr
         lsr
@@ -442,13 +442,13 @@ getaltitude:
         sec
         sbc #8
         sta qy
-        bcs @fn1
+        bcs @fnt                    ; no borrow: qy+1 as tested at entry, inside the map
         dec qy+1
-@fn1:   lda qy+1                    ; the pixel 8 above: the tile above, or getinfo's 8
+        lda qy+1                    ; the pixel 8 above: the tile above, or getinfo's 8
         cmp maph+1                  ; above the map's top (qy+1 = $FF) or past it
         lda #8
         bcs @fn2
-        lda tp
+@fnt:   lda tp
         ALTOF
 @fn2:   jmp @nb2
 @off:   lda #8                      ; getinfo's for a pixel off the map
@@ -492,8 +492,10 @@ getaltitude:
         and #15
         cmp #8
         beq @eq
-        lda #0                      ; n4, which was 0
-        beq @d2
+        lda #0                      ; n4, which was 0: @d2's tail in line
+        sec
+        sbc q5
+        rts
 @eq:    txa
         lsr
         lsr
@@ -1038,12 +1040,12 @@ game_frame:
         ldx #120
 :       cpx camoff
         beq @offok
+        lda camoff                  ; (C is still cpx's)
         bcs @offup                  ; target > camoff (cpx: C set when X >= camoff)
-        dec camoff
-        dec camoff
-        bcc @offok                  ; C = 0: the bcs above was not taken
-@offup: inc camoff
-        inc camoff
+        sbc #1                      ; C = 0: camoff - 2
+        bcs @offst                  ; C = 1: camoff > target >= 40, no borrow
+@offup: adc #1                      ; C = 1: camoff + 2
+@offst: sta camoff
 @offok: lda px
         sec
         sbc camoff
@@ -1063,68 +1065,50 @@ game_frame:
         lda py+1
         sbc #0
         tay
-        txa                         ; target + UPPAN < wy: limit
-        clc
-        adc #UPPAN
-        sta t16
-        tya
-        adc #0
-        sta t16+1
-        lda t16                     ; (signed, and no overflow: both are within
-        cmp wy                      ;  -64..2048)
-        lda t16+1
-        sbc wy+1
-        bpl @wyset                  ; within UPPAN of the window, or below it: follow
-        lda wy                      ; else up by UPPAN
+        lda wy                      ; wy -= UPPAN in place: the limit, if it applies
         sec
         sbc #UPPAN
-        tax
-        lda wy+1
-        sbc #0
-        tay
-@wyset: stx wy
+        sta wy
+        bcs @wyb
+        dec wy+1
+@wyb:   cpx wy                      ; target < wy - UPPAN: keep the limit (signed, and
+        tya                         ;  no overflow: both are within -64..2048)
+        sbc wy+1
+        bmi @wyset
+        stx wy                      ; within UPPAN of the window, or below it: follow
         sty wy+1
+@wyset:
         jsr clamp_window
 @cam:
         setbank BANK_LVL, BANK_LVL
         ; ---- bucket range (16-bit >> 6)
         lda wx                      ; gx0 = wx >> 6 (wx < 16384): shift the top
         asl                         ; two bits of the low byte into the high byte
-        sta t16
+        tax                         ; X = wx<<1: cpx #$80 below gives C = wx bit 6
         lda wx+1
         rol
-        asl t16
+        cpx #$80
         rol
         sta gx0
-        lda wx                      ; gx1 = (wx + 159) >> 6
-        clc
-        adc #159
-        sta t16
-        lda wx+1
-        adc #0
-        asl t16
-        rol
-        asl t16
-        rol
+        lda wx                      ; gx1 = (wx + 159) >> 6 = gx0 + 2 + ((wx & 63) >= 33)
+        and #63                     ;  (159 = 2*64 + 31; exact mod 256 for any 16-bit wx)
+        cmp #33
+        lda gx0
+        adc #2
         sta gx1
         lda wy                      ; gy = wy >> 6
         asl
-        sta t16
+        tax                         ; X = wy<<1: cpx #$80 below gives C = wy bit 6
         lda wy+1
         rol
-        asl t16
+        cpx #$80
         rol
         sta gy
-        lda wy                      ; gy1 = (wy + VISLINES/2-1) >> 6
-        clc
-        adc #VISLINES/2-1
-        sta t16
-        lda wy+1
-        adc #0
-        asl t16
-        rol
-        asl t16
-        rol
+        lda wy                      ; gy1 = (wy + VISLINES/2-1) >> 6, from gy:
+        and #63                     ;  + its 64s, + 1 if wy's remainder carries
+        cmp #64-((VISLINES/2-1) & 63)
+        lda gy
+        adc #(VISLINES/2-1)/64
         sta gy1
         ; ---- the object list, cached between steps.
         ; LV_GRID/LV_BOBJ/LV_BNEXT and every O_TYPE are written only by level_init, so
@@ -1153,6 +1137,7 @@ game_frame:
         sta BINR
         lda gx1
         sta BINR+1
+        sta BINOK                   ; gx1 >= 2 (wx >= 0): nonzero = list valid
         lda gy
         sta BINR+2
         lda gy1
@@ -1165,8 +1150,6 @@ game_frame:
         stz NSTARL
         stz NOTHL
   .endif
-        lda #1
-        sta BINOK
 @rows:  lda gx0
         sta gx
         lda gy                      ; row base = gy << gridsh, once per row
@@ -1230,28 +1213,32 @@ game_frame:
         ; a list is rebuilt, but 'cmp frame' tests the low byte alone: let a stamp go 256
         ; steps stale and an object returning to range matches it and is skipped for
         ; the whole life of the cached list.
-        stz BINI
-@rls:   ldx BINI
+        ldx #0                      ; test at the bottom: BINI kept in step with X
         cpx NSTARL
         beq @rlo
+@rls:   stx BINI
         ldy LV_BINSTAR,x
         lda frame
         sta O_STAMP,y
         jsr po_star                 ; no type read, no table, no obj (nothing a star
                                     ; runs reads it)
-        inc BINI
-        bne @rls                    ; BINI < NSTARL <= 255: never 0
-@rlo:   stz BINI
-@rl2:   ldx BINI
+        ldx BINI
+        inx
+        cpx NSTARL
+        bne @rls
+@rlo:   ldx #0                      ; test at the bottom: BINI kept in step with X
         cpx NOTHL
         beq @rldone
+@rl2:   stx BINI
         ldy LV_BINOTH,x
         lda frame
         sta O_STAMP,y
         sty obj
         jsr process_object
-        inc BINI
-        bne @rl2                    ; BINI < NOTHL <= 255: never 0
+        ldx BINI
+        inx
+        cpx NOTHL
+        bne @rl2
 @rldone:
         ; ---- after objects
         lda bounce
@@ -1463,14 +1450,16 @@ vy_step:
         lda vy+1
         adc #0                      ; A = (vy + 128) >> 8, a step
         asl                         ; two (N its sign: |A| < 64)
-        bpl @dn
-        dex                         ; up, uncapped: dpx+1 = $FF (the camera's pan up
-        bne @st                     ;  is what is limited: UPPAN); always, X = $FF
-@dn:    cmp #MAXFALL+1              ; down: MAXFALL a frame at most
+        bmi @up
+        cmp #MAXFALL+1              ; down: MAXFALL a frame at most
         bcc @st
         lda #MAXFALL
 @st:    sta dpx
         stx dpx+1
+        rts
+@up:    dex                         ; up, uncapped: dpx+1 = $FF (the camera's pan up
+        stx dpx+1                   ;  is what is limited: UPPAN)
+        sta dpx
         rts
 
 ; ============================================================================
@@ -1490,12 +1479,12 @@ player_update:
         sta alt
         ; start throw?
         bne @nothrow
+        lda keys                    ; down first: rarely held here
+        and #K_DOWN
+        beq @nothrow
         lda firing
         bne @nothrow
         lda control
-        beq @nothrow
-        lda keys
-        and #K_DOWN
         beq @nothrow
         lda bactive
         bne @nothrow
@@ -1508,7 +1497,7 @@ player_update:
         beq :+
         bpl @grav
 :       stz vy                      ; both arms zero it: -1280 = $FB00, low byte zero
-        lda firing
+        ldx firing                  ; X, so A stays 0 (B: stz vy's lda #0)
         bne @stand
         lda control
         beq @stand
@@ -1520,13 +1509,19 @@ player_update:
         lda #SFX_JUMP
         sta SFXREQ
         bne @move                   ; always: SFX_JUMP = 1
-@stand: stz vy+1
+@stand:
+  .if BHW
+        sta vy+1                    ; A = 0 on every way in
+  .else
+        stz vy+1
+  .endif
         lda #1
         sta control
         bne @move                   ; always: A = 1
 @grav:  jsr gravity
 @move:  jsr vy_step
-        bpl16 dpx, @down            ; dpx+1 is 0 or $FF (vy_step)
+        txa                         ; X = dpx+1, 0 or $FF (vy_step)
+        bpl @down
         clc                         ; up: py += dpx, dpx+1 = $FF
         lda py
         adc dpx
@@ -1551,8 +1546,8 @@ player_update:
         cmp dpx
         bcs :+
         sta dpx
-:       sec
-        sbc dpx
+        sec                         ; dy = alt: alt - dy = 0
+:       sbc dpx                     ; C = 1: cmp's no borrow, or the sec
         sta alt
         clc                         ; py += dpx
         lda py
@@ -1646,12 +1641,11 @@ player_update:
         ; * 48: |48*q6| <= 96, so it fits in 8 bits and needs one sign extension
         lda q6
         asl
-        asl
-        asl
-        sta t16                     ; 8p
-        asl                         ; 16p
         clc
-        adc t16                     ; 24p
+        adc q6                      ; 3p
+        asl
+        asl
+        asl
         asl                         ; 48p, N = its sign
         bpl :+
         dey                         ; Y = 0 from above: now the sign fill
@@ -1893,7 +1887,8 @@ player_update:
         lda vx
         beq @spr2
         inx                         ; 23
-@spr2:  jmp @spr+1                  ; past @spr's tax: the frame is in X already
+@spr2:  txa                         ; the frame in A for @spr
+        bne @spr                    ; always: 22 or 23
 @ctl:   lda firing
         beq @nofire
         lda anim
@@ -1916,7 +1911,7 @@ player_update:
         bpl @jump
 @ground:
         lda anim
-        ldx running                 ; X dead: @sprf ends in tax
+        ldx running                 ; X dead: @spr keeps the frame in A (or tax)
         beq @standing
         lsr
         and #$FE                    ; (anim >> 2) << 1 with one shift, not three
@@ -1942,15 +1937,21 @@ player_update:
         bne @sprf                   ; always: Z = 0 from the load
 @j24:   lda #24
 @sprf:  ora facing
-@spr:   tax
-        lda hurt
+@spr:   ldy hurt                    ; the frame stays in A (Y is dead: see below)
         beq @drawp
+        tax                         ; flashing: hold the frame in X for the test
         lda frame
         and #1
         bne @boom
-@drawp: mov16 spx, px
-        mov16 spy, py
         txa
+@drawp: ldy px                      ; Y, not A: A holds the frame for addsprite
+        sty spx
+        ldy px+1
+        sty spx+1
+        ldy py
+        sty spy
+        ldy py+1
+        sty spy+1
         jsr addsprite
 @boom:  ; ---- boomerang: its flight takes the frame's two steps (a homing spring
         ; doubled would overshoot, and the catch is a 14-pixel box)
@@ -2152,7 +2153,9 @@ player_update:
 process_object:
         lda O_TYPE,y
         sta otype
-        asl                         ; X = otype*2, the dispatch index
+  .if .not ::BHW
+        asl                         ; X = otype*2, the dispatch index (Model B: otype,
+  .endif                            ;  split tables)
         tax
         lda O_XL,y                  ; rx/ry = object relative to the player
         sta spx                     ; spx/spy = where it draws: sta touches no flags,
@@ -2174,16 +2177,20 @@ process_object:
         sta ry+1
 @call:                              ; tail dispatch: the handler returns to our caller
   .if ::BHW                         ; jmpx less its pha/pla: every handler loads A before
-        lda @tab,x                  ; reading it
+        lda @tlo,x                  ; reading it
         sta jv
-        lda @tab+1,x
+        lda @thi,x
         sta jv+1
         jmp (jv)
+@tlo:   .lobytes ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
+        .lobytes ob_spike, ob_none, ob_flame, ob_powerup, os_vanish, os_switch
+@thi:   .hibytes ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
+        .hibytes ob_spike, ob_none, ob_flame, ob_powerup, os_vanish, os_switch
   .else
         jmp (@tab,x)
-  .endif
 @tab:   .word ob_star, ob_tramp, ob_snake, ob_rsnake, ob_bat, ob_walker, ob_walker
         .word ob_spike, ob_none, ob_flame, ob_powerup, os_vanish, os_switch
+  .endif
 
 ; ---- the staged types' wrappers.  OIN f, field: the object's field into zero page
 ; (fa..fe from O_AL..O_EH); OOUT the other way; Y = obj throughout the copies.
@@ -2274,11 +2281,11 @@ inrange:
         asl                         ; C = the low byte's sign
         lda rx+1
         adc #0                      ; $FF+1 and 0+0 are 0; nothing else is
-        bne @no
+        bne @nc                     ; (C = 0: adc #0 carries only into 0)
         lda rx
         eor #$80
         cmp RNGTAB,x
-        bcc @no
+        bcc @nc
         beq @no                     ; rx > lo
         cmp RNGTAB+1,x
         bcs @no                     ; rx < hi
@@ -2286,18 +2293,18 @@ inrange:
         asl
         lda ry+1
         adc #0
-        bne @no
+        bne @nc                     ; (C = 0, as above)
         lda ry
         eor #$80
         cmp RNGTAB+2,x
-        bcc @no
+        bcc @nc
         beq @no
         cmp RNGTAB+3,x
         bcs @no
         sec
         rts
 @no:    clc
-        rts
+@nc:    rts                         ; (C already 0)
 
 
 ; boomerang-relative position: rx = spx - bx ; ry = spy - by  (spx/spy: the object's draw pos)
@@ -2418,11 +2425,11 @@ ob_star1:
         clc
         adc starclk
         cmp #12
-        bcc @anim
+        bcc @spin                   ; A < 12: the cmp #18 cannot pass
         sbc #12                     ; C = 1: the bcc was not taken
 @anim:  cmp #18
         bcs @done
-        lsr
+@spin:  lsr
         ldx O_EL,y                  ; the star's first box id (0: none -- its masked frames):
         beq @regc                   ; the sky's, black's, or its own baked six (assets.py)
         cmp #6                      ; (carry unknown on the beq's path: forced there)
@@ -2511,9 +2518,9 @@ box_safe:
         bcs @no
 @yes:   lda q1                      ; both ways in fall through a 'bcs @no' that was not
         adc #BOXN                   ; taken, so C is already clear here
-        sta q1
+        bcc @add                    ; always: id + BOXN < 256 (ids < BOXID0+BOXN)
 @no:    lda q1
-        jmp addsprite
+@add:   jmp addsprite
 
 ; ---------------------------------------------------------------- GREEN SNAKE (2)
 ob_snake:                           ; in place: Y = obj throughout (reloaded after
@@ -2538,9 +2545,10 @@ ob_snake:                           ; in place: Y = obj throughout (reloaded aft
         txa                         ; C
         and #1
         sta O_CL,y
+        tax                         ; X = C still, for @st
 @z:     lda #0
         sta O_EL,y
-@st:    lda O_CL,y
+@st:    txa                         ; X = O_CL on every way in
         beq @c0
         cmp #1
         beq @c1
@@ -2552,12 +2560,12 @@ ob_snake:                           ; in place: Y = obj throughout (reloaded aft
         lda O_BL,y                  ; B + 1 (C = 0: the bcs was not taken)
         adc #1
         sta O_BL,y
-        bcc @c0b
+        bcc @c0c                    ; A = O_BL already (the sta keeps it)
         lda O_BH,y
         adc #0                      ; C = 1: + 1
         sta O_BH,y
 @c0b:   lda O_BL,y                  ; B = A: on to state 1
-        cmp O_AL,y
+@c0c:   cmp O_AL,y
         bne @ar
         lda O_BH,y
         cmp O_AH,y
@@ -2573,8 +2581,8 @@ ob_snake:                           ; in place: Y = obj throughout (reloaded aft
         sbc #0                      ; (C = 0: the bcs was not taken, so this is - 1)
         sta O_BH,y
         lda #0
-@c1b:   sec
-        sbc #1
+        clc                         ; so the sbc #0 below is - 1 both ways in
+@c1b:   sbc #0                      ; C = 0 (bne way: the bcs @ar was not taken)
         sta O_BL,y
         bne @ar
         lda O_BH,y                  ; B = 0: back to state 0
@@ -2660,13 +2668,13 @@ ob_snake:                           ; in place: Y = obj throughout (reloaded aft
         sta bcnt
         lda #SFX_KILL
         sta SFXREQ
-@draw:  lda O_BL,y                  ; B <= -128: not drawn (ble16i's bias form)
-        cmp #<(-127)
+@draw:  ldx O_BL,y                  ; B <= -128: not drawn (ble16i's bias form)
+        cpx #<(-127)
         lda O_BH,y
         eor #$80
         sbc #(>(-127) ^ $80)
         bcc @done
-        lda O_BL,y                  ; B - A against 128, as @c4 (C = 1: the bcc fell through)
+        txa                         ; B - A against 128, as @c4 (C = 1: the bcc fell through)
         sbc O_AL,y
         tax
         lda O_BH,y
@@ -2949,16 +2957,16 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
 @alive: adc #2                      ; A = E < 8 and C = 0 from the bcc:
         and #7                      ; E = (E + 2) & 7: two steps
         sta O_EL,y
-        lda O_CL,y
-        sta fc
-        lda O_CH,y
-        sta fc+1
         lda O_DL,y
         sta fd
         lda O_DH,y
         sta fd+1
+        lda O_CL,y
+        sta fc
+        lda O_CH,y
+        sta fc+1
         ; rx += C>>1 ; ry += D>>1 (Y is scratch here)
-        lda fc+1                    ; X:Y = fc >> 1 (arithmetic); rx += it, spx += it
+                                    ; A = fc+1: X:Y = fc >> 1 (arithmetic); rx += it, spx += it
         cmp #$80
         ror a
         tax
@@ -2999,8 +3007,7 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         adc spy+1
         sta spy+1
         ; chase: the frame's two steps of it (each limited)
-        lda #2
-        sta q4
+        ldx #2                      ; the step count in X (the loop leaves X alone)
         ldy obj
 @chase: bpl16 rx, @rxpos
         lda fc                      ; C >= A (bge16's signed compare): no faster
@@ -3042,7 +3049,7 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         bne @dl
         dec fd+1
 @dl:    dec fd
-@vput:  dec q4
+@vput:  dex
         bne @chase
         lda fc                      ; the velocity back
         sta O_CL,y
