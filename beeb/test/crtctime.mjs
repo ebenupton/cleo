@@ -1,5 +1,5 @@
 // Where every CRTC register write (and, on the Master, every ACCCON write) lands in
-// the frame: for each store to $FE01 (or $FE34), the register, the value and the
+// the frame: for each store to $FE01 (or $FE34, or the palette's $FE21: register 21), the register, the value and the
 // 6845's position when the store happens -- row, scanline, character -- over N frames
 // of the usual key script.  Two builds' logs, compared write by write, show whether
 // a change to the interrupt handler moved the chain's timing: the rupture's registers
@@ -45,6 +45,7 @@ cpu.writemem = function (addr, b) {
     if (addr === 0xfe00) idx = b & 31;
     else if (addr === 0xfe01) out.push(`${frame} ${idx} ${b} ${v.vertCounter} ${v.scanlineCounter} ${v.horizCounter}`);
     else if (mode === "master" && addr === 0xfe34) out.push(`${frame} 99 ${b & 1} ${v.vertCounter} ${v.scanlineCounter} ${v.horizCounter}`);
+    else if (addr === 0xfe21) out.push(`${frame} 21 ${b} ${v.vertCounter} ${v.scanlineCounter} ${v.horizCounter}`);
   }
   return orig(addr, b);
 };
