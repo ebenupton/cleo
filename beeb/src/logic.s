@@ -194,6 +194,7 @@
 
 ; ---------------------------------------------------------------- object arrays (bank 7)
 OBJN    = 149                      ; the most objects a level has (L7B)
+UPPAN   = 2                        ; the camera's pan up a logic step at most: 4 px a frame
 O_STAMP = LV_OBJST
 O_TYPE  = O_STAMP + OBJN
 O_XL    = O_TYPE + OBJN
@@ -955,6 +956,8 @@ level_init:
         ; player state
         mov16 px, startx
         mov16 py, starty
+        lda #1                      ; the camera: straight there
+        sta camsnap
         sty vx                      ; Y = 0 on both ways in (ldy nobj / ldy obj)
         sty vx+1
         sty vy
@@ -1040,13 +1043,43 @@ game_frame:
         lda px+1
         sbc #0
         sta wx+1
+        ; vertical: Cleo 46 px from the window's top, but the window rises at most
+        ; UPPAN a logic step -- 4 px a rendered frame, a char row -- so a jump or a
+        ; trampoline does not redraw rows as fast as she rises; down it follows her
+        ; at once (her fall is MAXDWY a step at most).  camsnap skips the limit.
         lda py
         sec
         sbc #46
-        sta wy
+        tax                         ; Y:X = the target
         lda py+1
         sbc #0
-        sta wy+1
+        tay
+        lda camsnap
+        bne @wyset
+        txa                         ; target + UPPAN < wy: limit
+        clc
+        adc #UPPAN
+        sta t16
+        tya
+        adc #0
+        sta t16+1
+        lda t16
+        cmp wy
+        lda t16+1
+        sbc wy+1
+        bvc :+
+        eor #$80
+:       bpl @wyset                  ; within UPPAN of the window, or below it: follow
+        lda wy                      ; else up by UPPAN
+        sec
+        sbc #UPPAN
+        tax
+        lda wy+1
+        sbc #0
+        tay
+@wyset: stx wy
+        sty wy+1
+        stz camsnap
         jsr clamp_window
 @cam:
         setbank BANK_LVL, BANK_LVL
@@ -1347,6 +1380,8 @@ player_dead:
 @respawn:
         mov16 px, startx
         mov16 py, starty
+        lda #1                      ; the camera: straight there
+        sta camsnap
   .if BHW
         lda #0
         sta vx
@@ -1420,18 +1455,15 @@ vy_step:
         cmp #$80
         lda vy+1
         adc #0                      ; A = (vy + 128) >> 8
-        bmi @up
-        cmp #MAXDWY+1
+        bpl @dn
+        dex                         ; up, uncapped: dpx+1 = $FF (the camera's pan up
+        bne @st                     ;  is what is limited: UPPAN); always, X = $FF
+@dn:    cmp #MAXDWY+1               ; down: MAXDWY at most
         bcc @st
         lda #MAXDWY
 @st:    sta dpx
         stx dpx+1
         rts
-@up:    dex                         ; dpx+1 = $FF
-        cmp #<-MAXDWY
-        bcs @st
-        lda #<-MAXDWY
-        bcc @st                     ; C = 0 from the compare
 
 ; ============================================================================
 ; player alive update
@@ -3676,6 +3708,8 @@ BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
         .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
 RNGTAB:    .res 80                  ; inrange's limits (RNGTAB0, level_init's copy)
 MROWL:     .res 128                 ; the row addresses' low bytes
+camsnap:   .res 1                   ; non-zero: the camera goes straight to Cleo (a level's
+                                    ;  start, a respawn), not at the limited pan up (UPPAN)
         .segment "GAMEHI"           ; bank 7's last page, after the kernel's KRNHW
 MROWH:     .res 128                 ; and their high bytes
         .assert >MROWL = >(MROWL+127) && >MROWH = >(MROWH+127), warning, "MROWL/MROWH cross a page: their reads +1"
