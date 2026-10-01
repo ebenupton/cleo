@@ -194,7 +194,6 @@
 
 ; ---------------------------------------------------------------- object arrays (bank 7)
 OBJN    = 149                      ; the most objects a level has (L7B)
-UPPAN   = 4                        ; the camera's pan up a frame at most: a char row
 MAXFALL = 12                       ; Cleo's fall a frame at most (the camera follows it):
                                    ;  three char rows (the original's 8 a step was 16)
 O_STAMP = LV_OBJST
@@ -964,8 +963,6 @@ level_init:
         ; player state
         mov16 px, startx
         mov16 py, starty
-        sty wy                      ; the camera: straight there (wy = 0 is under any
-        sty wy+1                    ;  target, and only the pan up is limited)
         sty vx                      ; Y = 0 on both ways in (ldy nobj / ldy obj)
         sty vx+1
         sty vy
@@ -1053,31 +1050,14 @@ game_frame:
         lda px+1
         sbc #0
         sta wx+1
-        ; vertical: Cleo 46 px from the window's top, but the window rises at most
-        ; UPPAN a frame -- 4 px, a char row -- so a jump or a
-        ; trampoline does not redraw rows as fast as she rises; down it follows her
-        ; at once (her fall is MAXFALL a frame at most).  A level's start and a respawn
-        ; set wy to 0: under any target, so the window goes straight there.
+        ; vertical: Cleo 46 px from the window's top, one for one
         lda py
         sec
         sbc #46
-        tax                         ; Y:X = the target
+        sta wy
         lda py+1
         sbc #0
-        tay
-        lda wy                      ; wy -= UPPAN in place: the limit, if it applies
-        sec
-        sbc #UPPAN
-        sta wy
-        bcs @wyb
-        dec wy+1
-@wyb:   cpx wy                      ; target < wy - UPPAN: keep the limit (signed, and
-        tya                         ;  no overflow: both are within -64..2048)
-        sbc wy+1
-        bmi @wyset
-        stx wy                      ; within UPPAN of the window, or below it: follow
-        sty wy+1
-@wyset:
+        sta wy+1
         jsr clamp_window
 @cam:
         setbank BANK_LVL, BANK_LVL
@@ -1374,16 +1354,12 @@ player_dead:
         mov16 py, starty
   .if BHW
         lda #0
-        sta wy                      ; the camera: straight there (as level_init)
-        sta wy+1
         sta vx
         sta vx+1
         sta vy
         sta vy+1
         sta anim
   .else
-        stz wy
-        stz wy+1
         stz vx
         stz vx+1
         stz vy
@@ -1457,8 +1433,8 @@ vy_step:
 @st:    sta dpx
         stx dpx+1
         rts
-@up:    dex                         ; up, uncapped: dpx+1 = $FF (the camera's pan up
-        stx dpx+1                   ;  is what is limited: UPPAN)
+@up:    dex                         ; up, uncapped: dpx+1 = $FF
+        stx dpx+1
         sta dpx
         rts
 
