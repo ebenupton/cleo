@@ -127,11 +127,11 @@ level_loop:
         sta logicvs
 
 frame_loop:
-        ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes two
-        ; steps for each one, so the player, every animation and every enemy move
-        ; two of the original's steps per rendered frame.  Two steps is a fixed
-        ; pairing, not catching up: time lost to a long frame is dropped, so the
-        ; window never moves more in a frame than these two steps ask for.
+        ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes one
+        ; step for each, at twice the original's rates: the player, every animation
+        ; and every enemy move two of the original's steps' worth per rendered frame
+        ; (logic.s game_frame).  Not catching up: time lost to a long frame is
+        ; dropped, so the window never moves more in a frame than a step asks for.
         lda vsyncs
         sec
         sbc logicvs
@@ -144,10 +144,6 @@ frame_top:                          ; exactly once per rendered frame, before th
                                     ; here so every wait and every input it applies is
                                     ; quantised to a frame boundary (test/harness.mjs)
         jsr game_frame            ; (NSPR is 0 here: render_frame and load_level clear it)
-        lda exiting
-        bne fl_over
-        sta NSPR                    ; A = 0: exiting, just tested
-        jsr game_frame
         lda exiting
         bne fl_over
         jsr render_frame
