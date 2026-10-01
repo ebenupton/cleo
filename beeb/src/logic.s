@@ -2331,8 +2331,7 @@ inrange2:
         lda pdy
         bpl :+
         dec ry+1                    ; (a negative move: the high byte's borrow first)
-:       clc
-        adc ry
+:       adc ry                      ; (C = 0: inrange's miss)
         sta ry
         bcc :+
         inc ry+1
@@ -2369,8 +2368,8 @@ addscore:                           ; A = points
 :       jmp bar_touch
 
 ; ---------------------------------------------------------------- STAR (0)
-; Cleo's two tests on a star -- the collect (RNGTAB quad 0) and box_safe's (quad 64)
-; -- can only pass with rx in -22..18.  So the star list's prologue (po_star) tests
+; Cleo's two tests on a star -- the collect (RNGTAB quad 0) and box_safe's (quad 64,
+; grown by a frame's move) -- can only pass with rx in -29..25.  So the star list's prologue (po_star) tests
 ; rx against that first, and outside it sets q2 (Cleo far): both tests are skipped,
 ; and ry, which only they read, is not worked out.  The boomerang's tests set rx and
 ; ry themselves (boomrel), and clear q2, as does every other way in.
@@ -2394,14 +2393,14 @@ po_star:                            ; the star list's: Y = the star
         sta rx+1                    ; A = rx+1
         bne @neg
         lda rx
-        cmp #19
-        bcc @near                   ; 0..18
+        cmp #26
+        bcc @near                   ; 0..25
         bcs @far
 @neg:   cmp #$FF
         bne @far
         lda rx
-        cmp #<-22
-        bcs @near                   ; -22..-1
+        cmp #<-29
+        bcs @near                   ; -29..-1
 @far:   lda #1
         sta q2
         bne ob_star1                ; always
