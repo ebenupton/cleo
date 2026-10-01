@@ -999,7 +999,10 @@ print('sprite padding phase: %d of %d images pad on the left, %d fewer masked by
 # screen bytes, backdrop and all, are copied -- below.)  NIBTAB is
 # the expansion the engine draws through: L0TAB, L1TAB (a stored byte's two scanlines)
 # and NMASK (the AND mask for its transparent pixels).
-NIB_PATTERNS = 'CCCM CCKK CKKK CMKK CMMY CMYY CYYK CYYY KKKK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
+# (MMYK in place of CMMY, 2 Oct 2026: the heart's red, so the red snake's rotated red
+# matches the powerup's box instead of taking a cyan dot; CMMY's other user, a lavender
+# on the bats and walkers, takes MMYK too)
+NIB_PATTERNS = 'CCCM CCKK CKKK CMKK CMYY CYYK CYYY KKKK MMYK MYKK MYYK MYYY YKKK YYKK YYYY'.split()
 _crgb, _seq = _CMYK[4]
 _code = [''.join('KCMY'[d] for d in s_) for s_ in _seq]
 NIB_PAT = [_code.index(c) for c in NIB_PATTERNS]          # nibble n+1 -> pattern
