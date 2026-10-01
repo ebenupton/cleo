@@ -536,6 +536,18 @@ clear_items:
 
 ; ---------------------------------------------------------------- screens
 ; title menu: returns 0 start, 1 help, 2 exit
+; ---- a screen laid out for the Model B's 84 px of window, centred in a taller one
+; (the Master's 120): with its ink spanning top..bot-1, the offset is
+; (VISLINES/2 - bot - top) / 2, rounded to a char row (4 px)
+  .if VISLINES/2 > 84
+TITLE_DY = ((VISLINES/2 - 70 - 4) / 2 + 2) & $FC    ; the logo's top to the second item's
+HELP_DY  = ((VISLINES/2 - 74 - 16) / 2 + 2) & $FC   ;  last row; the help's lines;
+WL_DY    = ((VISLINES/2 - 84 - 4) / 2 + 2) & $FC    ;  YOU WIN's top to the hi-score's last
+  .else                                             ;  row (YOU LOSE: a row lower, 2 px off)
+TITLE_DY = 0
+HELP_DY  = 0
+WL_DY    = 0
+  .endif
 title_menu:
         lda MUSON
         bne :+
@@ -543,7 +555,7 @@ title_menu:
 :       jsr menu_begin
         lda #40
         sta spx
-        lda #4
+        lda #4+TITLE_DY
         sta spy
         lda #TP_LOGO                ; = 0: both high bytes
         .assert TP_LOGO = 0, error, "title_menu: TP_LOGO doubles as the zero high bytes"
@@ -559,7 +571,7 @@ title_menu:
         lda #1
         sta mclear
         asl                         ; A = 2 items
-        ldx #48
+        ldx #48+TITLE_DY
         jmp menu_list
 
 help_screen:
@@ -576,8 +588,8 @@ help_screen:
         tya                         ; y = i*10+16, the last line at 66: laid out for
         asl                         ; the Model B's 84 px of window (Y = 2i, C = 0 from
         adc tmp3                    ; the asl above): i*5
-        adc #8
-        asl                         ; (i*5+8)*2 = i*10+16
+        adc #8+HELP_DY/2
+        asl                         ; (i*5+8)*2 = i*10+16 (+ HELP_DY)
         tax
         jsr text_centred
         ldx tmp3
@@ -632,7 +644,11 @@ winlose:
         lda #0
         sta spx+1
         sta spy+1
-        lda #4
+        lda mtop                    ; YOU WIN at 4, YOU LOSE at 8: big Cleo (24) is then
+        eor #1                      ;  centred between the words and the score -- the
+        asl                         ;  lose frames' ink starts 6 px into the piece, the
+        asl                         ;  win frames' at 0 (C = 0 from the asls)
+        adc #4+WL_DY
         sta spy
         lda mtop                    ; 1 win, 0 lose
         asl                         ; (C = 0)
@@ -652,8 +668,8 @@ winlose:
         sta ptr
         lda #>str_score
         sta ptr+1
-SCORE_Y = 64                        ; 84 px of window: under big Cleo (28..59)
-HISCORE_Y = 76                      ; (a glyph row is a multiple of 4)
+SCORE_Y = 64+WL_DY                  ; 84 px of window: under big Cleo (24..55)
+HISCORE_Y = 76+WL_DY                ; (a glyph row is a multiple of 4)
         lda #12
         ldx #SCORE_Y
         jsr drawtext
@@ -680,8 +696,8 @@ HISCORE_Y = 76                      ; (a glyph row is a multiple of 4)
                                     ;                        menu_show's callees)
         lda #66                     ; big Cleo's place, once: nothing in the loop moves
         sta spx                     ; spx/spy (spx+1, spy+1 are 0 from the pieces above)
-        lda #28
-        sta spy
+        lda #24+WL_DY               ; (ink 24..54 winning, 30..54 losing: 7 and 9 px /
+        sta spy                     ;  9 and 9 px from the words and the score)
 @loop:  jsr cleo_frame              ; the frame for msel: in TBUF already (unpacked a
         cmp mcount                  ; frame ahead, below) but for the first
         beq @same
