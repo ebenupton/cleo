@@ -1538,11 +1538,34 @@ player_update:
         inc py+1
         bpl @upl                    ; py+1 < $7F
 @down:  lda alt                     ; dy = min(dy, alt); dpx+1 = 0 here
+        beq @dland
         cmp dpx
-        bcs :+
-        sta dpx
-        sec                         ; dy = alt: alt - dy = 0
-:       sbc dpx                     ; C = 1: cmp's no borrow, or the sec
+        beq :+
+        bcs @dfit
+:       tax                         ; 0 < alt <= dy: the altitude looks a tile ahead
+        clc                         ;  at most, and a frame's fall (12) can reach it --
+        adc py                      ;  go alt, and look again from
+        sta py                      ;  there (else she stops short, alt 0 in the air:
+        bcc :+                      ;  the standing frame)
+        inc py+1
+:       lda dpx
+        stx dpx
+        sec
+        sbc dpx
+        sta dpx                     ; dy - alt
+        clc                         ; qx = px still: getaltitude keeps it
+        lda py
+        adc #16
+        sta qy
+        lda py+1
+        adc #0
+        sta qy+1
+        jsr getaltitude
+        sta alt
+        jmp @down
+@dland: sta dpx                     ; alt 0: on the ground, dy = 0
+        sec                         ; (alt - dy = 0)
+@dfit:  sbc dpx                     ; C = 1: cmp's no borrow, or the sec
         sta alt
         clc                         ; py += dpx
         lda py
@@ -3096,8 +3119,17 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         ldx #32
         jsr inrange2
         bcc @draw
-        ble16i ry, 4, @nostomp
-        lda vy+1                    ; bmi16 vy, then beq16 vy, from one load
+        lda ry                      ; a stomp if she was above it a step back (ry +
+        clc                         ;  pdy > 4): a frame's fall (12) can take her from
+        adc pdy                     ;  over it to level with it, where the original's
+        tax                         ;  first step found her on top (pdy >= 0 falling)
+        lda ry+1
+        adc #0
+        bmi @nostomp
+        bne :+
+        cpx #5
+        bcc @nostomp
+:       lda vy+1                    ; bmi16 vy, then beq16 vy, from one load
         bmi @nostomp
         ora vy
         beq @nostomp
