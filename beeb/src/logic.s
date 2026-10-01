@@ -195,6 +195,8 @@
 ; ---------------------------------------------------------------- object arrays (bank 7)
 OBJN    = 149                      ; the most objects a level has (L7B)
 UPPAN   = 4                        ; the camera's pan up a frame at most: a char row
+MAXFALL = 12                       ; Cleo's fall a frame at most (the camera follows it):
+                                   ;  three char rows (the original's 8 a step was 16)
 O_STAMP = LV_OBJST
 O_TYPE  = O_STAMP + OBJN
 O_XL    = O_TYPE + OBJN
@@ -1052,7 +1054,7 @@ game_frame:
         ; vertical: Cleo 46 px from the window's top, but the window rises at most
         ; UPPAN a frame -- 4 px, a char row -- so a jump or a
         ; trampoline does not redraw rows as fast as she rises; down it follows her
-        ; at once (her fall is MAXDWY a step at most).  A level's start and a respawn
+        ; at once (her fall is MAXFALL a frame at most).  A level's start and a respawn
         ; set wy to 0: under any target, so the window goes straight there.
         lda py
         sec
@@ -1464,9 +1466,9 @@ vy_step:
         bpl @dn
         dex                         ; up, uncapped: dpx+1 = $FF (the camera's pan up
         bne @st                     ;  is what is limited: UPPAN); always, X = $FF
-@dn:    cmp #2*MAXDWY+1             ; down: MAXDWY a step at most
+@dn:    cmp #MAXFALL+1              ; down: MAXFALL a frame at most
         bcc @st
-        lda #2*MAXDWY
+        lda #MAXFALL
 @st:    sta dpx
         stx dpx+1
         rts
