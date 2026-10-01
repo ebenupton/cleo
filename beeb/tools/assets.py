@@ -104,6 +104,7 @@ def item_index(kind, j):
     return {'img': 0, 'box': NIMG, 'tr': NIMG + NBOXART, 'sb': NIMG + NBOXART + TRMAX,
             'pw': NIMG + NBOXART + TRMAX + 6 * NSTAR}[kind] + j
 BAKED = ('tr', 'sb', 'pw')
+PW_RECT = (-m.PW_LEFT, 2 * m.PW_WC - m.PW_LEFT, m.PW_TOP, m.PW_TOP + m.PW_H)   # the powerup's box about (8x, 8y)
 # The level's baked boxes: every trampoline's rest state, and the stars the
 # plan names (tools/starbake.json: by level file, the stars' tiles, best first -- the
 # frames that miss their peg draw them: test/starplan.mjs), each composited over its
@@ -210,10 +211,12 @@ for k in range(NBOXART):                    # the box stars' boxes
     imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])
 BAKEITEM0 = NIMG + NBOXART                  # the baked slots: made by the loader (ldprog.s bake)
 bakegeom = bytearray()                  # tiles where the object stands (its tile in the
-for wc, lines, dx, dty, ov in m.BAKE_KINDS:   # placement entry's mask field)
+for k_ in m.BAKE_KINDS:                 # placement entry's mask field; skip: the first tile
+    wc, lines, dx, dty, ov = k_[:5]     # row from its bottom char row)
+    skip = k_[5] if len(k_) > 5 else 0
     o = len(sprx); sprx += ov
     assert lines <= 32 and len(ov) == 2 * wc * lines
-    bakegeom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, 0])
+    bakegeom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, skip])
 bakekind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)] + [m.PW_KIND] * PWMAX)
 # (no imgtab entries: placewalk bakes them before it looks)
 assert len(sprx) <= 0x4000                  # STAGE's 16K
@@ -250,7 +253,7 @@ for k in range(NSTAR * 6):
     lo, wc = m.box_geom[k % 6]
     sprdir += bytes([item_index('sb', k), 4, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
 for k in range(PWMAX):                      # the powerup at rest: the box from (8x - PW_LEFT, 8y)
-    sprdir += bytes([item_index('pw', k), 5, m.PW_WC, m.PW_H, m.PW_LEFT, 0, 2 | 8, m.PW_H * 2])
+    sprdir += bytes([item_index('pw', k), 5, m.PW_WC, m.PW_H, m.PW_LEFT, (-m.PW_TOP) & 255, 2 | 8, m.PW_H * 2])
 assert len(sprdir) == NDIR * 8
 
 # ---------------------------------------------------------------- placing for the loops
@@ -489,7 +492,7 @@ def pack_level(lv, sub):
     for pi, (t, x, y, ex) in enumerate(L['objs']):
         if t != 10:
             continue
-        b0, b1, c0, c1 = 8 * x - m.PW_LEFT, 8 * x - m.PW_LEFT + 2 * m.PW_WC, 8 * y, 8 * y + m.PW_H
+        b0, b1, c0, c1 = 8 * x + PW_RECT[0], 8 * x + PW_RECT[1], 8 * y + PW_RECT[2], 8 * y + PW_RECT[3]
         pc = cellbox(10, x, y, [0, 0, 0])
         for qi, o in enumerate(L['objs']):
             if o[0] in (0, 10) or not any(x0 < b1 and b0 < x1 and y0 < c1 and c0 < y1 for (x0, x1, y0, y1) in m.enemy_reach([o])):
@@ -506,8 +509,11 @@ def pack_level(lv, sub):
             if oi in _st:                   # the black's, or its own (baked)
                 e[0] = BOXID0 + 12 + TRMAX + 6 * _st[oi]
             e[1] = 1 if m.star_reachable(x, y, reach) else 0
-        elif t == 10:                       # its baked box's id (logic.s ob_powerup)
-            e[0] = BOXID0 + 12 + TRMAX + 6 * NSTAR + PWOF[(lv, sub)][oi]
+        elif t == 10:                       # its baked box's id (logic.s ob_powerup), and
+            e[0] = BOXID0 + 12 + TRMAX + 6 * NSTAR + PWOF[(lv, sub)][oi]   # can an enemy reach it
+            b = m.TYPE_BOX[10]
+            selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
+            e[1] = 1 if m.box_reachable(PW_RECT, x, y, reach, skip=selfbox) else 0
         elif t == 1:
             e[0] = BOXID0 + 12 + _tr[oi] if oi in _tr else 0
             b = m.TYPE_BOX[1]
@@ -544,6 +550,8 @@ def pack_level(lv, sub):
     # frame either can show, a star's sparkle too -- is marked disturbable (e1), so
     # it is redrawn every frame (still a copy, never erased) rather than kept
     def area(t, x, y):
+        if t == 10:                     # the powerup: its box, all it draws at rest
+            return (8 * x + PW_RECT[0], 8 * x + PW_RECT[1], 8 * y + PW_RECT[2], 8 * y + PW_RECT[3])
         ids = range(34, 43) if t == 0 else range(43, 46)
         bs = [m._SPRBOX[i] for i in ids if i in m._SPRBOX]
         ox = 8 * x + (4 if t == 1 else 0)
@@ -554,7 +562,7 @@ def pack_level(lv, sub):
         else:
             r = (min(r[0], 8 * x - 6), max(r[1], 8 * x + 8), min(r[2], 8 * y - 8), max(r[3], 8 * y + 4))
         return r
-    stat = [(i, area(o[0], o[1], o[2])) for i, o in enumerate(objs) if o[0] in (0, 1)]
+    stat = [(i, area(o[0], o[1], o[2])) for i, o in enumerate(objs) if o[0] in (0, 1, 10)]
     meet = lambda p, q: p[0] < q[1] and q[0] < p[1] and p[2] < q[3] and q[2] < p[3]
     for i, ri in stat:
         if objs[i][3] and any(j != i and meet(ri, rj) for j, rj in stat):

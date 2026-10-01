@@ -915,8 +915,10 @@ level_init:
         sta O_BL,y
         lda q5
         sta O_CL,y
-@t10:   lda q3                      ; e0: a powerup's baked box id (assets.py); the
-        sta O_EL,y                  ;  spike and the switch (by @t12) never read E
+@t10:   lda q3                      ; e0, e1: a powerup's baked box id and its "an
+        sta O_EL,y                  ;  enemy can reach it" (assets.py); the spike and
+        lda q4                      ;  the switch (by @t12) never read E
+        sta O_EH,y
 @box:   ; insert into grid cells gx0..gx1 x gy..gy1
         lda gy1
         cmp gy                      ; branch out iff gy1 < gy, i.e. gy > gy1
@@ -2211,6 +2213,7 @@ os_switch:                          ; fa, fb, fc, fd: the low bytes
         OOUT fc, O_CL
         OOUT fd, O_DL
         rts
+        .segment "LOWCODE"          ; (low RAM: room the game image has not)
 os_oxy: lda spx                     ; ox, oy: the object's position (the prologue's spx,
         sta ox                      ; spy)
         lda spx+1
@@ -2220,6 +2223,7 @@ os_oxy: lda spx                     ; ox, oy: the object's position (the prologu
         lda spy+1
         sta oy+1
         rts
+        .segment "GAMECODE"
 ob_none:
         rts
 
@@ -2252,8 +2256,11 @@ RNGTAB0:                            ; inrange limit quads: lo, hi, lo2, hi2, eac
         ; which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7))
         .byte 105, 157, 101, 136        ; 72: Cleo      <-23, 29, <-27, 8
         .byte 111, 154, 106, 127        ; 76: boomerang <-17, 26, <-22, -1
+        ; the health powerup's baked box (-6..6, 4..14) grown the same way
+        .byte 107, 147, 103, 140        ; 80: Cleo      <-21, 19, <-25, 12
+        .byte 113, 144, 108, 131        ; 84: boomerang <-15, 16, <-20, 3
 RNGTABN = * - RNGTAB0
-        .assert RNGTABN <= 80, error, "RNGTAB0 has outgrown its copy (gamedata.s RNGTAB)"
+        .assert RNGTABN <= 88, error, "RNGTAB0 has outgrown its copy (logic.s RNGTAB)"
         .assert >RNGTAB = >(RNGTAB+RNGTABN-1), warning, "RNGTAB crosses a page (+1 cycle an inrange read)"
 
 ; range check: rx > lo && rx < hi && ry > lo2 && ry < hi2 ; X = offset of the limit
@@ -3430,11 +3437,15 @@ ob_powerup:                         ; in place: A (O_AL) the pickup's progress; 
         lsr
         bne @pk                     ; picking up: its frames
         lda O_EL,y                  ; at rest: its baked box (every powerup has one: the
-        bne @as                     ;  full dither, its reds kept -- assets.py), always
+        ldx #0                      ;  full dither, its reds kept -- assets.py), kept
+        stx q2                      ;  still as the stars' and trampolines' are (box_safe:
+        ldx #80                     ;  rx, ry are Cleo's; her band, the boomerang's +4)
+        clc
+        jmp box_safe
 @pk:    cmp #3
         bcs @done
         adc #97
-@as:    jmp addsprite
+        jmp addsprite
 @done:  rts
 
 ; ---------------------------------------------------------------- VANISHING BLOCK (11)
@@ -3738,7 +3749,7 @@ BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
 ; The map's row addresses (level_init) and inrange's limits: tables whose reads are
 ; hot, each in a page, outside the image's variables (so those end a page sooner)
         .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
-RNGTAB:    .res 80                  ; inrange's limits (RNGTAB0, level_init's copy)
+RNGTAB:    .res 88                  ; inrange's limits (RNGTAB0, level_init's copy)
 MROWL:     .res 128                 ; the row addresses' low bytes
         .segment "GAMEHI"           ; bank 7's last page, after the kernel's KRNHW
 MROWH:     .res 128                 ; and their high bytes
