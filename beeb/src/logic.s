@@ -746,7 +746,7 @@ level_init:
         bne :+
         jmp @t12
 :
-        jmp @box                    ; 7, 10: defaults
+        jmp @t10                    ; 7, 10: defaults, and e0 into E
 @t0:    lda q3
         sta O_EL,y                  ; e0 = box class from the converter (0 none/1 cyan/2 black)
         lda q4
@@ -915,6 +915,8 @@ level_init:
         sta O_BL,y
         lda q5
         sta O_CL,y
+@t10:   lda q3                      ; e0: a powerup's baked box id (assets.py); the
+        sta O_EL,y                  ;  spike and the switch (by @t12) never read E
 @box:   ; insert into grid cells gx0..gx1 x gy..gy1
         lda gy1
         cmp gy                      ; branch out iff gy1 < gy, i.e. gy > gy1
@@ -956,8 +958,8 @@ level_init:
         ; player state
         mov16 px, startx
         mov16 py, starty
-        lda #1                      ; the camera: straight there
-        sta camsnap
+        sty wy                      ; the camera: straight there (wy = 0 is under any
+        sty wy+1                    ;  target, and only the pan up is limited)
         sty vx                      ; Y = 0 on both ways in (ldy nobj / ldy obj)
         sty vx+1
         sty vy
@@ -1048,7 +1050,8 @@ game_frame:
         ; vertical: Cleo 46 px from the window's top, but the window rises at most
         ; UPPAN a frame -- 4 px, a char row -- so a jump or a
         ; trampoline does not redraw rows as fast as she rises; down it follows her
-        ; at once (her fall is MAXDWY a step at most).  camsnap skips the limit.
+        ; at once (her fall is MAXDWY a step at most).  A level's start and a respawn
+        ; set wy to 0: under any target, so the window goes straight there.
         lda py
         sec
         sbc #46
@@ -1056,8 +1059,6 @@ game_frame:
         lda py+1
         sbc #0
         tay
-        lda camsnap
-        bne @wyset
         txa                         ; target + UPPAN < wy: limit
         clc
         adc #UPPAN
@@ -1065,13 +1066,11 @@ game_frame:
         tya
         adc #0
         sta t16+1
-        lda t16
-        cmp wy
+        lda t16                     ; (signed, and no overflow: both are within
+        cmp wy                      ;  -64..2048)
         lda t16+1
         sbc wy+1
-        bvc :+
-        eor #$80
-:       bpl @wyset                  ; within UPPAN of the window, or below it: follow
+        bpl @wyset                  ; within UPPAN of the window, or below it: follow
         lda wy                      ; else up by UPPAN
         sec
         sbc #UPPAN
@@ -1081,7 +1080,6 @@ game_frame:
         tay
 @wyset: stx wy
         sty wy+1
-        stz camsnap
         jsr clamp_window
 @cam:
         setbank BANK_LVL, BANK_LVL
@@ -1383,16 +1381,18 @@ player_dead:
 @respawn:
         mov16 px, startx
         mov16 py, starty
-        lda #1                      ; the camera: straight there
-        sta camsnap
   .if BHW
         lda #0
+        sta wy                      ; the camera: straight there (as level_init)
+        sta wy+1
         sta vx
         sta vx+1
         sta vy
         sta vy+1
         sta anim
   .else
+        stz wy
+        stz wy+1
         stz vx
         stz vx+1
         stz vy
@@ -3428,10 +3428,13 @@ ob_powerup:                         ; in place: A (O_AL) the pickup's progress; 
         sta O_AL,y
 @draw:  lda O_AL,y
         lsr
-        cmp #3
+        bne @pk                     ; picking up: its frames
+        lda O_EL,y                  ; at rest: its baked box (every powerup has one: the
+        bne @as                     ;  full dither, its reds kept -- assets.py), always
+@pk:    cmp #3
         bcs @done
         adc #97
-        jmp addsprite
+@as:    jmp addsprite
 @done:  rts
 
 ; ---------------------------------------------------------------- VANISHING BLOCK (11)
@@ -3737,8 +3740,6 @@ BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
         .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
 RNGTAB:    .res 80                  ; inrange's limits (RNGTAB0, level_init's copy)
 MROWL:     .res 128                 ; the row addresses' low bytes
-camsnap:   .res 1                   ; non-zero: the camera goes straight to Cleo (a level's
-                                    ;  start, a respawn), not at the limited pan up (UPPAN)
         .segment "GAMEHI"           ; bank 7's last page, after the kernel's KRNHW
 MROWH:     .res 128                 ; and their high bytes
         .assert >MROWL = >(MROWL+127) && >MROWH = >(MROWH+127), warning, "MROWL/MROWH cross a page: their reads +1"

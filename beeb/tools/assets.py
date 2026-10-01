@@ -76,10 +76,11 @@ TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page 
 # BOXID0 + BOXN are the engine's "still" aliases of the boxes, BOXN below them):
 # images 0..102 (the entries of the original's dim), then the boxes -- screen bytes,
 # copied: the twelve box stars on sky and on black, then TRMAX slots for the level's
-# trampolines at rest and NSTAR slots of six for its baked stars, each slot the
-# level's own art, baked by the loader (below).
-TRMAX, NSTAR = 13, 8
-BOXID0, BOXN = 103, 12 + TRMAX + 6 * NSTAR
+# trampolines at rest, NSTAR slots of six for its baked stars and PWMAX for its health
+# powerups, each slot the level's own art, baked by the loader (below).
+TRMAX, NSTAR, PWMAX = 13, 8, 2
+BOXID0, BOXN = 103, 12 + TRMAX + 6 * NSTAR + PWMAX
+assert BOXID0 + 2 * BOXN <= 256                 # (the boxes' "still" aliases are ids too)
 NDIR = BOXID0 + BOXN                        # directory entries
 NBOXART = 12                                # the box stars' images
 # The split between resident and staged, which is the game's to choose: the resident
@@ -97,10 +98,12 @@ ALWAYS_IDS = range(43)                      # the ids a level draws whatever its
 # the addresses placed below.  (The Master keeps SPRX resident after its first read:
 # ldprog.s.)  imgtab says where in SPRX each item is.
 NIMG = len(m.images)
-# item keys: ('img', j) | ('box', k) | ('tr', k) | ('sb', k) -> a small integer the placement
-# lists and the directory template use
+# item keys: ('img', j) | ('box', k) | ('tr', k) | ('sb', k) | ('pw', k) -> a small integer
+# the placement lists and the directory template use
 def item_index(kind, j):
-    return {'img': 0, 'box': NIMG, 'tr': NIMG + NBOXART, 'sb': NIMG + NBOXART + TRMAX}[kind] + j
+    return {'img': 0, 'box': NIMG, 'tr': NIMG + NBOXART, 'sb': NIMG + NBOXART + TRMAX,
+            'pw': NIMG + NBOXART + TRMAX + 6 * NSTAR}[kind] + j
+BAKED = ('tr', 'sb', 'pw')
 # The level's baked boxes: every trampoline's rest state, and the stars the
 # plan names (tools/starbake.json: by level file, the stars' tiles, best first -- the
 # frames that miss their peg draw them: test/starplan.mjs), each composited over its
@@ -111,6 +114,7 @@ try:
 except OSError:
     STARPLAN = {}
 _bakes = {}
+PWOF = {}                                   # (level, sub) -> {object index: its powerup slot}
 CHOSEN = {}                                 # (level, sub) -> the stars it bakes, in order (chosen below)
 def level_bakes(lv, sub):
     if (lv, sub) in _bakes:
@@ -125,6 +129,16 @@ def level_bakes(lv, sub):
                 if b not in slot:
                     slot[b] = len(slot); by[('tr', slot[b])] = b; at[('tr', slot[b])] = (x, y)
                 tr[oi] = slot[b]
+    pw, pslot = {}, {}                  # the health powerups: every one, always
+    for oi, (t, x, y, e) in enumerate(L['objs']):
+        if t == 10:
+            b = m.bake_powerup(cm, x, y)
+            assert b is not None, ('%s: a powerup the baker cannot make' % m.name_of(lv, sub), x, y)
+            if b not in pslot:
+                pslot[b] = len(pslot); by[('pw', pslot[b])] = b; at[('pw', pslot[b])] = (x, y)
+            pw[oi] = pslot[b]
+    assert len(pslot) <= PWMAX, (lv, sub, len(pslot))
+    PWOF[(lv, sub)] = pw
     want = CHOSEN.get((lv, sub), [])
     pos = {(x, y): oi for oi, (t, x, y, e) in enumerate(L['objs']) if t == 0}
     for xy in want:                     # (in the plan's order: the costliest first)
@@ -141,7 +155,7 @@ def level_bakes(lv, sub):
 CUR = [None]                                # the level being placed (its baked items' bytes)
 BAKEAT = {}                                 # (level, sub) -> its baked items' (bank, address)
 def item_bytes(kind, j):
-    if kind in ('tr', 'sb'):
+    if kind in BAKED:
         return level_bakes(*CUR[0])[2][(kind, j)]
     return m.img_bytes[j] if kind == 'img' else m.box_bytes[j]
 COMMON = sorted(set(m.entry[i][0] for i in RESIDENT_IDS if m.entry[i] is not None))
@@ -200,7 +214,7 @@ for wc, lines, dx, dty, ov in m.BAKE_KINDS:   # placement entry's mask field)
     o = len(sprx); sprx += ov
     assert lines <= 32 and len(ov) == 2 * wc * lines
     bakegeom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, 0])
-bakekind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)])
+bakekind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)] + [m.PW_KIND] * PWMAX)
 # (no imgtab entries: placewalk bakes them before it looks)
 assert len(sprx) <= 0x4000                  # STAGE's 16K
 out('SPRX', sprx)
@@ -235,6 +249,8 @@ for k in range(TRMAX):
 for k in range(NSTAR * 6):
     lo, wc = m.box_geom[k % 6]
     sprdir += bytes([item_index('sb', k), 4, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
+for k in range(PWMAX):                      # the powerup at rest: the box from (8x - PW_LEFT, 8y)
+    sprdir += bytes([item_index('pw', k), 5, m.PW_WC, m.PW_H, m.PW_LEFT, 0, 2 | 8, m.PW_H * 2])
 assert len(sprdir) == NDIR * 8
 
 # ---------------------------------------------------------------- placing for the loops
@@ -372,6 +388,7 @@ def place_sprites(lv, sub):
         if t in m.TYPE_IDS:
             lo, hi = m.TYPE_IDS[t]
             ids |= set(range(lo, hi + 1))
+    ids.discard(m.PW_ID)                    # (the powerup draws its baked box, never 97)
     imgs = sorted(set(m.entry[i][0] for i in ids if m.entry[i] is not None) - set(COMMON))   # (placed per level)
     # the box stars' art by each star's class (convert.py star_class: 1 on sky, the
     # first six boxes; 2 on black, the second six -- logic.s boxbase), not by the set
@@ -466,6 +483,20 @@ def pack_level(lv, sub):
         ghdr[HDR_SPECIAL + i] = local.get(cid, 255)
     objs = []
     reach = m.enemy_reach(L['objs'])
+    # a powerup's box is opaque: whatever can be drawn over it must be listed after it
+    # (the walk's first cell, then each cell's chain, the later object first --
+    # convert.py parse_level puts the powerups last)
+    for pi, (t, x, y, ex) in enumerate(L['objs']):
+        if t != 10:
+            continue
+        b0, b1, c0, c1 = 8 * x - m.PW_LEFT, 8 * x - m.PW_LEFT + 2 * m.PW_WC, 8 * y, 8 * y + m.PW_H
+        pc = cellbox(10, x, y, [0, 0, 0])
+        for qi, o in enumerate(L['objs']):
+            if o[0] in (0, 10) or not any(x0 < b1 and b0 < x1 and y0 < c1 and c0 < y1 for (x0, x1, y0, y1) in m.enemy_reach([o])):
+                continue
+            qc = cellbox(o[0], o[1], o[2], (list(o[3]) + [0, 0, 0])[:3])
+            assert (qc[2], qc[0]) > (pc[2], pc[0]) or ((qc[2], qc[0]) == (pc[2], pc[0]) and qi < pi), \
+                ('%s: an object listed before the powerup it can be drawn over' % name, o, (x, y))
     _tr, _st, _by, _at = level_bakes(lv, sub)
     for oi, (t, x, y, ex) in enumerate(L['objs']):
         e = (list(ex) + [0, 0, 0])[:3]
@@ -475,6 +506,8 @@ def pack_level(lv, sub):
             if oi in _st:                   # the black's, or its own (baked)
                 e[0] = BOXID0 + 12 + TRMAX + 6 * _st[oi]
             e[1] = 1 if m.star_reachable(x, y, reach) else 0
+        elif t == 10:                       # its baked box's id (logic.s ob_powerup)
+            e[0] = BOXID0 + 12 + TRMAX + 6 * NSTAR + PWOF[(lv, sub)][oi]
         elif t == 1:
             e[0] = BOXID0 + 12 + _tr[oi] if oi in _tr else 0
             b = m.TYPE_BOX[1]
@@ -560,7 +593,7 @@ def pack_level(lv, sub):
     # a baked item's tile (x, y) rides in its placement entry's mask field (ldprog.s bake)
     BAKEAT[(lv, sub)] = {k: (img_bank[k], img_addr[k]) for k in _by}
     placement = lf.placement([(item_index(kind, j), img_bank[(kind, j)], a,
-                               _at[(kind, j)][0] | _at[(kind, j)][1] << 8 if kind in ('tr', 'sb') else 0)
+                               _at[(kind, j)][0] | _at[(kind, j)][1] << 8 if kind in BAKED else 0)
                               for (kind, j), a in sorted(img_addr.items(), key=lambda kv: item_index(*kv[0]))])
     for j in COMMON:                        # (the resident block, for the directory)
         img_addr[('img', j)] = common_addr[j]; img_bank[('img', j)] = common_bank[j]

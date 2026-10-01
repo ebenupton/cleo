@@ -133,6 +133,11 @@ def parse_level(lv, sub):
         elif t == 12:
             extra = list(d[p:p + 3]); p += 3
         objs.append((t, x, y, extra))
+    # the health powerups last: level_init chains each grid cell's objects head first,
+    # so they are walked, and drawn, first in their cell -- under anything that passes,
+    # as their opaque baked boxes must be (assets.py checks it).  They draw no rnd in
+    # level_init, so the rest keep their draws.
+    objs = [o for o in objs if o[0] != 10] + [o for o in objs if o[0] == 10]
     return dict(lw=lw, lh=lh, w=w, h=h, map=m, start=(sx, sy), exit=(ex, ey), objs=objs)
 
 
@@ -869,12 +874,36 @@ for i, (x, y, w, h, rx, ry) in enumerate(DIM):
     y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
     crops.append((im[y0:y1, x0:x1], rx - x0, ry - y0))
 
+# The health powerup (97): its reds turned 30% of the way round to magenta (hue 0 ->
+# 342, saturation and value kept), in new palette entries, for the game's image only
+# (the HUD's heart, bar_icon, keeps crops[97]).  With its box (below) this undoes the
+# 4-bit sprites' loss: its reds had come out pale in the fifteen patterns.
+PW_ID, PW_HUE = 97, 0.3 * -60
+def _hue_rotated(im):
+    import colorsys
+    free = [k for k in range(len(spr_rgb)) if k != spr_tr and k not in set(np.unique(spr_idx).tolist())]
+    out, remap = im.copy(), {}
+    for k in sorted(set(np.unique(im).tolist()) - {spr_tr}):
+        r, g, b = (spr_rgb[k] / 255.0).tolist()
+        h, s, v = colorsys.rgb_to_hsv(r, g, b)
+        if s == 0 or not (h < 30 / 360 or h > 330 / 360):
+            continue                            # (the white highlight, any non-red)
+        h = (h + PW_HUE / 360) % 1.0
+        n = free.pop(0)
+        spr_rgb[n] = np.round(np.array(colorsys.hsv_to_rgb(h, s, v)) * 255).astype(np.uint8)
+        remap[k] = n
+    for k, n in remap.items():
+        out[im == k] = n
+    return out
+spr_rgb = spr_rgb.copy()
 images = []   # list of (idx array, full)
 entry = []    # per logical sprite: (image index, mirror, refx, refy)
 for i in range(103):
     if i in SKIP:
         entry.append(None); continue
     im, rx, ry = crops[i]
+    if i == PW_ID:
+        im = _hue_rotated(im)
     found = None
     for j, (jm, jfull, jsrc) in enumerate(images):
         if jm.shape != im.shape or jfull != (i in FULLRES):
@@ -1157,6 +1186,28 @@ for _f in range(6):
     _lo, _wc = box_geom[_f]
     BAKE_KINDS.append((_wc, 2 * BOX_H, -6 + 2 * _lo, -1,
                        bake_overlay(_wc, BOX_H, box_art[_f][0], _boxmask(_f), box_art[_f][1] - 2 * _lo)))
+# the health powerup at rest (97): always a baked box -- the full dither, not the
+# fifteen patterns.  It draws at (8x, 8y) with its art refy px up (ry < 0: below); the
+# box starts on the tile row (the baker's dty) and on an even game px, and is tall
+# and wide enough for the art from there.
+_pj, _pmir, _prx, _pry = entry[PW_ID]
+_pim = images[_pj][0]
+assert not _pmir and _pry <= 0
+_ph, _pw = _pim.shape
+PW_TOP = -_pry                                # game px from 8y to the art's top
+PW_LEFT = _prx + (_prx & 1)                   # game px from the box's left to 8x (even)
+PW_FX0 = PW_LEFT - _prx                       # the art's first column in the box
+PW_WC = (PW_FX0 + _pw + 1) // 2
+PW_H = PW_TOP + _ph
+_ppad = np.full((PW_TOP + _ph, _pw), spr_tr, dtype=_pim.dtype)
+_ppad[PW_TOP:] = _pim
+pw_col = dither(spr_rgb[_ppad], _ppad != spr_tr, full=True)
+pw_alpha = np.repeat(_ppad != spr_tr, 2, axis=0)
+def bake_powerup(cm, x, y):
+    return bake_box(cm, 8 * x - PW_LEFT, 8 * y, PW_WC, PW_H, pw_col, pw_alpha, PW_FX0)
+BAKE_KINDS.append((PW_WC, 2 * PW_H, -PW_LEFT, 0, bake_overlay(PW_WC, PW_H, pw_col, pw_alpha, PW_FX0)))
+PW_KIND = len(BAKE_KINDS) - 1
+
 def bake_star(cm, x, y):                    # its six spin frames, each box covering the last
     out = []
     for f in range(6):
