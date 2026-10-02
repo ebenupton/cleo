@@ -5,9 +5,68 @@
 ; ============================================================================
         .segment "GAMECODE"         ; bank 7, with the logic it drives
 VSPEG     = 3                       ; vsyncs a rendered frame: 16.7 Hz of render
-; ---------------------------------------------------------------- level loading
-; X = level index 0..15 (even = main, odd = bonus)
-load_level:
+; ---------------------------------------------------------------- camera clamp
+; clamp wx to [0, maxwx] (and even), wy to [0, maxwy]
+clamp_window:
+        lda wx+1
+        bmi @wx0
+        ldx wx                      ; X = wx for @wxok (X dead: the caller's tax reloads it)
+        cpx maxwx
+        lda wx+1
+        sbc maxwx+1
+        bmi @wxok
+  .if BHW
+        lda maxwx+1
+        sta wx+1
+        lda maxwx
+        bcs @wxev                   ; C = 1: wx >= maxwx >= 0, no borrow
+@wx0:   ldx #0
+        stx wx+1
+@wxok:  txa                         ; X = wx, or 0 from @wx0
+@wxev:  and #$FE
+        sta wx
+  .else
+        lda maxwx
+        sta wx
+        lda maxwx+1
+        sta wx+1
+        bcs @wxok                   ; C = 1: wx >= maxwx >= 0, no borrow
+@wx0:   stz wx
+        stz wx+1
+@wxok:
+        lda #1
+        trb wx                      ; wx &= ~1 : the 65C02 does this in one RMW
+  .endif
+        lda wy+1
+        bmi @wy0
+        lda wy
+        cmp maxwy
+        lda wy+1
+        sbc maxwy+1
+        bmi @wyok
+        lda maxwy
+        sta wy
+        lda maxwy+1
+        sta wy+1
+        rts
+  .if BHW
+@wy0:   lda #0                      ; A dead: the caller's setbank reloads it
+        sta wy
+        sta wy+1
+  .else
+@wy0:   stz wy
+        stz wy+1
+  .endif
+@wyok:  rts
+
+; ---------------------------------------------------------------- game
+; The game's image comes in at level_loop (disc.s go_game, from the menus' image,
+; which has set level, score, lives and health), and goes back to the menus' when the
+; game ends (go_menu).
+level_loop:
+        jsr blank_palette           ; hide the loading and the first-frame build-up
+        ldx level
+        ; the level: X = level index 0..15 (even = main, odd = bonus)
         jsr load_level_b            ; the disc: everything into the banks (disc.s)
         lda #8                      ; mapw = 8 << lw ; maph = 8 << lh
         sta mapw
@@ -46,75 +105,9 @@ load_level:
         sta maxwy+1
         jsr lvreset                 ; the records (bank 7) and the buffers' state (main RAM)
         sta NSPR                    ; A = 0: lvreset ends with a stz
-        rts
-
-
-; ---------------------------------------------------------------- camera clamp
-; clamp wx to [0, maxwx] (and even), wy to [0, maxwy]
-clamp_window:
-        lda wx+1
-        bmi @wx0
-        lda wx
-        cmp maxwx
-        lda wx+1
-        sbc maxwx+1
-        bmi @wxok
-  .if BHW
-        lda maxwx+1
-        sta wx+1
-        lda maxwx
-        bcs @wxev                   ; C = 1: wx >= maxwx >= 0, no borrow
-@wx0:   lda #0
-        sta wx+1
-        beq @wxev                   ; A = 0
-@wxok:  lda wx
-@wxev:  and #$FE
-        sta wx
-  .else
-        lda maxwx
-        sta wx
-        lda maxwx+1
-        sta wx+1
-        jmp @wxok
-@wx0:   stz wx
-        stz wx+1
-@wxok:
-        lda #1
-        trb wx                      ; wx &= ~1 : the 65C02 does this in one RMW
-  .endif
-        lda wy+1
-        bmi @wy0
-        lda wy
-        cmp maxwy
-        lda wy+1
-        sbc maxwy+1
-        bmi @wyok
-        lda maxwy
-        sta wy
-        lda maxwy+1
-        sta wy+1
-        rts
-  .if BHW
-@wy0:   lda #0                      ; A dead: the caller's setbank reloads it
-        sta wy
-        sta wy+1
-  .else
-@wy0:   stz wy
-        stz wy+1
-  .endif
-@wyok:  rts
-
-; ---------------------------------------------------------------- game
-; The game's image comes in at level_loop (disc.s go_game, from the menus' image,
-; which has set level, score, lives and health), and goes back to the menus' when the
-; game ends (go_menu).
-level_loop:
-        jsr blank_palette           ; hide the loading and the first-frame build-up
-        ldx level
-        jsr load_level
         jsr level_init
-        lda #1                      ; the digits on the first render (the bar's template is
-        sta BARDIRTY                ; in place already: bar_bg)
+        sty BARDIRTY                ; Y = 1 (level_init's exit): the digits on the first
+                                    ; render (the bar's template is in place already: bar_bg)
         ; initial camera; render both buffers before the palette comes back
         jsr game_frame
         jsr render_frame
@@ -125,7 +118,11 @@ level_loop:
 
         lda vsyncs
         sta logicvs
-
+fl_wait:  ; nothing to do yet: wait for the next vsync (the first frame starts here too:
+          ; logicvs = vsyncs is never at the peg), then fall into the peg's test
+        lda vsyncs
+:       cmp vsyncs
+        beq :-
 frame_loop:
         ; The peg is three vsyncs -- 16.7Hz of render -- and the logic takes one
         ; step for each, at twice the original's rates: the player, every animation
@@ -148,11 +145,6 @@ frame_top:                          ; exactly once per rendered frame, before th
         bne fl_over
         jsr render_frame
         jmp frame_loop
-fl_wait:  ; nothing to do yet: wait for the next vsync
-        lda vsyncs
-:       cmp vsyncs
-        beq :-
-        bne frame_loop              ; Z = 0: the vsync ticked
 fl_over:
         ; level over
         ldx lives
@@ -160,9 +152,9 @@ fl_over:
   .if .not ALLLEVELS                ; (a test build takes every bonus level)
         lda stars
         beq @next1
-        lda level
-        ora #1                      ; a star: on to the next odd level (+2 from even)
-        sta level
+        lsr level                   ; a star: on to the next odd level (+2 from even):
+        sec                         ;  level |= 1
+        rol level
   .endif
 @next1: inc level
         lda level
@@ -173,24 +165,18 @@ fl_over:
         bcc :+
         sta maxlevel
 :       jmp level_loop
-game_over:
-        lda #0                      ; lost
-        .byte $2C                   ; (bit abs: skips the lda #1)
 game_won:
-        lda #1
-        pha
-        jsr update_hiscore
-        jsr blank_palette           ; the load is dark (A on the stack)
-        pla
-        jmp go_menu                 ; the menus' image, and its win/lose screen (disc.s)
-update_hiscore:
-        lda hiscore
+        ldx #1                      ; won (lost: X = 0, the lives, from fl_over)
+game_over:
+        lda hiscore                 ; the hi-score (its one caller, inlined)
         cmp score
         lda hiscore+1
         sbc score+1
         bcs :+
         mov16 hiscore, score
-:       rts
+:       jsr blank_palette           ; the load is dark (blank_palette keeps X)
+        txa                         ; A = 0 lost, 1 won
+        jmp go_menu                 ; the menus' image, and its win/lose screen (disc.s)
 
 ; ---------------------------------------------------------------- sound data
         PLACEH "CODE", "KRNCODE"    ; with sound_tick: bank 7 on the Model B, main RAM on the Master

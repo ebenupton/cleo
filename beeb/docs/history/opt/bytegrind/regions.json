@@ -1,0 +1,1042 @@
+[
+ {
+  "id": "b000",
+  "file": "src/logic.s",
+  "lo": 1,
+  "hi": 110,
+  "hot": 152.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b000.txt"
+ },
+ {
+  "id": "b001",
+  "file": "src/logic.s",
+  "lo": 111,
+  "hi": 219,
+  "hot": 96.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b001.txt"
+ },
+ {
+  "id": "b002",
+  "file": "src/logic.s",
+  "lo": 220,
+  "hi": 307,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b002.txt"
+ },
+ {
+  "id": "b003",
+  "file": "src/logic.s",
+  "lo": 308,
+  "hi": 417,
+  "hot": 1552.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b003.txt"
+ },
+ {
+  "id": "b004",
+  "file": "src/logic.s",
+  "lo": 418,
+  "hi": 508,
+  "hot": 531.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b004.txt"
+ },
+ {
+  "id": "b005",
+  "file": "src/logic.s",
+  "lo": 509,
+  "hi": 618,
+  "hot": 351.3,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b005.txt"
+ },
+ {
+  "id": "b006",
+  "file": "src/logic.s",
+  "lo": 619,
+  "hi": 728,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b006.txt"
+ },
+ {
+  "id": "b007",
+  "file": "src/logic.s",
+  "lo": 729,
+  "hi": 838,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b007.txt"
+ },
+ {
+  "id": "b008",
+  "file": "src/logic.s",
+  "lo": 839,
+  "hi": 948,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b008.txt"
+ },
+ {
+  "id": "b009",
+  "file": "src/logic.s",
+  "lo": 949,
+  "hi": 1058,
+  "hot": 205.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b009.txt"
+ },
+ {
+  "id": "b010",
+  "file": "src/logic.s",
+  "lo": 1059,
+  "hi": 1168,
+  "hot": 452.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b010.txt"
+ },
+ {
+  "id": "b011",
+  "file": "src/logic.s",
+  "lo": 1169,
+  "hi": 1276,
+  "hot": 750.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b011.txt"
+ },
+ {
+  "id": "b012",
+  "file": "src/logic.s",
+  "lo": 1277,
+  "hi": 1386,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b012.txt"
+ },
+ {
+  "id": "b013",
+  "file": "src/logic.s",
+  "lo": 1387,
+  "hi": 1461,
+  "hot": 345.1,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b013.txt"
+ },
+ {
+  "id": "b014",
+  "file": "src/logic.s",
+  "lo": 1462,
+  "hi": 1571,
+  "hot": 235.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b014.txt"
+ },
+ {
+  "id": "b015",
+  "file": "src/logic.s",
+  "lo": 1572,
+  "hi": 1681,
+  "hot": 331.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b015.txt"
+ },
+ {
+  "id": "b016",
+  "file": "src/logic.s",
+  "lo": 1682,
+  "hi": 1791,
+  "hot": 607.2,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b016.txt"
+ },
+ {
+  "id": "b017",
+  "file": "src/logic.s",
+  "lo": 1792,
+  "hi": 1901,
+  "hot": 311.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b017.txt"
+ },
+ {
+  "id": "b018",
+  "file": "src/logic.s",
+  "lo": 1902,
+  "hi": 2011,
+  "hot": 170.1,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b018.txt"
+ },
+ {
+  "id": "b019",
+  "file": "src/logic.s",
+  "lo": 2012,
+  "hi": 2121,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b019.txt"
+ },
+ {
+  "id": "b020",
+  "file": "src/logic.s",
+  "lo": 2122,
+  "hi": 2230,
+  "hot": 605.3,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b020.txt"
+ },
+ {
+  "id": "b021",
+  "file": "src/logic.s",
+  "lo": 2231,
+  "hi": 2331,
+  "hot": 1207.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b021.txt"
+ },
+ {
+  "id": "b022",
+  "file": "src/logic.s",
+  "lo": 2332,
+  "hi": 2441,
+  "hot": 956.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b022.txt"
+ },
+ {
+  "id": "b023",
+  "file": "src/logic.s",
+  "lo": 2442,
+  "hi": 2524,
+  "hot": 311.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b023.txt"
+ },
+ {
+  "id": "b024",
+  "file": "src/logic.s",
+  "lo": 2525,
+  "hi": 2634,
+  "hot": 503.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b024.txt"
+ },
+ {
+  "id": "b025",
+  "file": "src/logic.s",
+  "lo": 2635,
+  "hi": 2744,
+  "hot": 108.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b025.txt"
+ },
+ {
+  "id": "b026",
+  "file": "src/logic.s",
+  "lo": 2745,
+  "hi": 2854,
+  "hot": 131.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b026.txt"
+ },
+ {
+  "id": "b027",
+  "file": "src/logic.s",
+  "lo": 2855,
+  "hi": 2964,
+  "hot": 92.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b027.txt"
+ },
+ {
+  "id": "b028",
+  "file": "src/logic.s",
+  "lo": 2965,
+  "hi": 3074,
+  "hot": 206.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b028.txt"
+ },
+ {
+  "id": "b029",
+  "file": "src/logic.s",
+  "lo": 3075,
+  "hi": 3184,
+  "hot": 138.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b029.txt"
+ },
+ {
+  "id": "b030",
+  "file": "src/logic.s",
+  "lo": 3185,
+  "hi": 3274,
+  "hot": 39.2,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b030.txt"
+ },
+ {
+  "id": "b031",
+  "file": "src/logic.s",
+  "lo": 3275,
+  "hi": 3384,
+  "hot": 95.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b031.txt"
+ },
+ {
+  "id": "b032",
+  "file": "src/logic.s",
+  "lo": 3385,
+  "hi": 3460,
+  "hot": 14.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b032.txt"
+ },
+ {
+  "id": "b033",
+  "file": "src/logic.s",
+  "lo": 3461,
+  "hi": 3557,
+  "hot": 31.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b033.txt"
+ },
+ {
+  "id": "b034",
+  "file": "src/logic.s",
+  "lo": 3558,
+  "hi": 3667,
+  "hot": 120.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b034.txt"
+ },
+ {
+  "id": "b035",
+  "file": "src/logic.s",
+  "lo": 3668,
+  "hi": 3774,
+  "hot": 539.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b035.txt"
+ },
+ {
+  "id": "b036",
+  "file": "src/logic.s",
+  "lo": 3775,
+  "hi": 3818,
+  "hot": 0.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b036.txt"
+ },
+ {
+  "id": "b037",
+  "file": "src/game.s",
+  "lo": 1,
+  "hi": 106,
+  "hot": 108.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b037.txt"
+ },
+ {
+  "id": "b038",
+  "file": "src/game.s",
+  "lo": 107,
+  "hi": 207,
+  "hot": 115.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b038.txt"
+ },
+ {
+  "id": "b039",
+  "file": "src/menu.s",
+  "lo": 1,
+  "hi": 96,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b039.txt"
+ },
+ {
+  "id": "b040",
+  "file": "src/menu.s",
+  "lo": 97,
+  "hi": 199,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b040.txt"
+ },
+ {
+  "id": "b041",
+  "file": "src/menu.s",
+  "lo": 200,
+  "hi": 309,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b041.txt"
+ },
+ {
+  "id": "b042",
+  "file": "src/menu.s",
+  "lo": 310,
+  "hi": 410,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b042.txt"
+ },
+ {
+  "id": "b043",
+  "file": "src/menu.s",
+  "lo": 411,
+  "hi": 497,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b043.txt"
+ },
+ {
+  "id": "b044",
+  "file": "src/menu.s",
+  "lo": 498,
+  "hi": 576,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b044.txt"
+ },
+ {
+  "id": "b045",
+  "file": "src/menu.s",
+  "lo": 577,
+  "hi": 686,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b045.txt"
+ },
+ {
+  "id": "b046",
+  "file": "src/menu.s",
+  "lo": 687,
+  "hi": 773,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b046.txt"
+ },
+ {
+  "id": "b047",
+  "file": "src/menu.s",
+  "lo": 774,
+  "hi": 846,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b047.txt"
+ },
+ {
+  "id": "b048",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 1,
+  "hi": 110,
+  "hot": 10.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b048.txt"
+ },
+ {
+  "id": "b049",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 111,
+  "hi": 209,
+  "hot": 2912.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b049.txt"
+ },
+ {
+  "id": "b050",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 210,
+  "hi": 309,
+  "hot": 999.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b050.txt"
+ },
+ {
+  "id": "b051",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 310,
+  "hi": 390,
+  "hot": 49.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b051.txt"
+ },
+ {
+  "id": "b052",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 391,
+  "hi": 492,
+  "hot": 1740.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b052.txt"
+ },
+ {
+  "id": "b053",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 493,
+  "hi": 571,
+  "hot": 934.3,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b053.txt"
+ },
+ {
+  "id": "b054",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 572,
+  "hi": 660,
+  "hot": 8894.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b054.txt"
+ },
+ {
+  "id": "b055",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 661,
+  "hi": 769,
+  "hot": 2088.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b055.txt"
+ },
+ {
+  "id": "b056",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 770,
+  "hi": 878,
+  "hot": 1803.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b056.txt"
+ },
+ {
+  "id": "b057",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 879,
+  "hi": 983,
+  "hot": 1133.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b057.txt"
+ },
+ {
+  "id": "b058",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 984,
+  "hi": 1082,
+  "hot": 1434.3,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b058.txt"
+ },
+ {
+  "id": "b059",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 1083,
+  "hi": 1171,
+  "hot": 249.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b059.txt"
+ },
+ {
+  "id": "b060",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 1172,
+  "hi": 1245,
+  "hot": 32.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b060.txt"
+ },
+ {
+  "id": "b061",
+  "file": "beebgame/src/engine/frame.s",
+  "lo": 1246,
+  "hi": 1313,
+  "hot": 193.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b061.txt"
+ },
+ {
+  "id": "b062",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 1,
+  "hi": 107,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b062.txt"
+ },
+ {
+  "id": "b063",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 108,
+  "hi": 217,
+  "hot": 1149.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b063.txt"
+ },
+ {
+  "id": "b064",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 218,
+  "hi": 321,
+  "hot": 4443.1,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b064.txt"
+ },
+ {
+  "id": "b065",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 322,
+  "hi": 429,
+  "hot": 52618.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b065.txt"
+ },
+ {
+  "id": "b066",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 430,
+  "hi": 539,
+  "hot": 7239.3,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b066.txt"
+ },
+ {
+  "id": "b067",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 540,
+  "hi": 640,
+  "hot": 18218.1,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b067.txt"
+ },
+ {
+  "id": "b068",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 641,
+  "hi": 750,
+  "hot": 163.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b068.txt"
+ },
+ {
+  "id": "b069",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 751,
+  "hi": 860,
+  "hot": 255.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b069.txt"
+ },
+ {
+  "id": "b070",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 861,
+  "hi": 970,
+  "hot": 346.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b070.txt"
+ },
+ {
+  "id": "b071",
+  "file": "beebgame/src/engine/tiles.s",
+  "lo": 971,
+  "hi": 1003,
+  "hot": 109.3,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b071.txt"
+ },
+ {
+  "id": "b072",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 1,
+  "hi": 84,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b072.txt"
+ },
+ {
+  "id": "b073",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 85,
+  "hi": 187,
+  "hot": 349.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b073.txt"
+ },
+ {
+  "id": "b074",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 188,
+  "hi": 297,
+  "hot": 382.2,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b074.txt"
+ },
+ {
+  "id": "b075",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 298,
+  "hi": 394,
+  "hot": 458.9,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b075.txt"
+ },
+ {
+  "id": "b076",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 395,
+  "hi": 496,
+  "hot": 465.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b076.txt"
+ },
+ {
+  "id": "b077",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 497,
+  "hi": 574,
+  "hot": 339.4,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b077.txt"
+ },
+ {
+  "id": "b078",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 575,
+  "hi": 656,
+  "hot": 1458.2,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b078.txt"
+ },
+ {
+  "id": "b079",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 657,
+  "hi": 754,
+  "hot": 5920.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b079.txt"
+ },
+ {
+  "id": "b080",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 755,
+  "hi": 864,
+  "hot": 853.1,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b080.txt"
+ },
+ {
+  "id": "b081",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 865,
+  "hi": 974,
+  "hot": 876.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b081.txt"
+ },
+ {
+  "id": "b082",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 975,
+  "hi": 1048,
+  "hot": 77.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b082.txt"
+ },
+ {
+  "id": "b083",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 1049,
+  "hi": 1153,
+  "hot": 125.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b083.txt"
+ },
+ {
+  "id": "b084",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 1154,
+  "hi": 1260,
+  "hot": 112.1,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b084.txt"
+ },
+ {
+  "id": "b085",
+  "file": "beebgame/src/engine/kernel.s",
+  "lo": 1261,
+  "hi": 1289,
+  "hot": 734.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b085.txt"
+ },
+ {
+  "id": "b086",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 1,
+  "hi": 79,
+  "hot": 8290.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b086.txt"
+ },
+ {
+  "id": "b087",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 80,
+  "hi": 179,
+  "hot": 12500.2,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b087.txt"
+ },
+ {
+  "id": "b088",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 180,
+  "hi": 286,
+  "hot": 37575.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b088.txt"
+ },
+ {
+  "id": "b089",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 287,
+  "hi": 382,
+  "hot": 9445.1,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b089.txt"
+ },
+ {
+  "id": "b090",
+  "file": "beebgame/src/engine/sprloops.s",
+  "lo": 383,
+  "hi": 471,
+  "hot": 18856.7,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b090.txt"
+ },
+ {
+  "id": "b091",
+  "file": "beebgame/src/engine/gather.s",
+  "lo": 1,
+  "hi": 102,
+  "hot": 2722.5,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b091.txt"
+ },
+ {
+  "id": "b092",
+  "file": "beebgame/src/engine/gather.s",
+  "lo": 103,
+  "hi": 183,
+  "hot": 577.2,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b092.txt"
+ },
+ {
+  "id": "b093",
+  "file": "beebgame/src/engine/macros.s",
+  "lo": 1,
+  "hi": 95,
+  "hot": 361.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b093.txt"
+ },
+ {
+  "id": "b094",
+  "file": "beebgame/src/engine/macros.s",
+  "lo": 96,
+  "hi": 195,
+  "hot": 579.8,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b094.txt"
+ },
+ {
+  "id": "b095",
+  "file": "beebgame/src/engine/macros.s",
+  "lo": 196,
+  "hi": 299,
+  "hot": 2245.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b095.txt"
+ },
+ {
+  "id": "b096",
+  "file": "beebgame/src/engine/menus.s",
+  "lo": 1,
+  "hi": 109,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b096.txt"
+ },
+ {
+  "id": "b097",
+  "file": "beebgame/src/engine/menus.s",
+  "lo": 110,
+  "hi": 137,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b097.txt"
+ },
+ {
+  "id": "b098",
+  "file": "beebgame/src/engine/lowram.s",
+  "lo": 1,
+  "hi": 104,
+  "hot": 1078.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b098.txt"
+ },
+ {
+  "id": "b099",
+  "file": "beebgame/src/engine/lowram.s",
+  "lo": 105,
+  "hi": 132,
+  "hot": 498.9,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b099.txt"
+ },
+ {
+  "id": "b100",
+  "file": "beebgame/src/engine/boot.s",
+  "lo": 1,
+  "hi": 75,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b100.txt"
+ },
+ {
+  "id": "b101",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 1,
+  "hi": 101,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b101.txt"
+ },
+ {
+  "id": "b102",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 102,
+  "hi": 206,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b102.txt"
+ },
+ {
+  "id": "b103",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 207,
+  "hi": 316,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b103.txt"
+ },
+ {
+  "id": "b104",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 317,
+  "hi": 426,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b104.txt"
+ },
+ {
+  "id": "b105",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 427,
+  "hi": 536,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b105.txt"
+ },
+ {
+  "id": "b106",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 537,
+  "hi": 646,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b106.txt"
+ },
+ {
+  "id": "b107",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 647,
+  "hi": 741,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b107.txt"
+ },
+ {
+  "id": "b108",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 742,
+  "hi": 836,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b108.txt"
+ },
+ {
+  "id": "b109",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 837,
+  "hi": 946,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b109.txt"
+ },
+ {
+  "id": "b110",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 947,
+  "hi": 1041,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b110.txt"
+ },
+ {
+  "id": "b111",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 1042,
+  "hi": 1151,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b111.txt"
+ },
+ {
+  "id": "b112",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 1152,
+  "hi": 1244,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b112.txt"
+ },
+ {
+  "id": "b113",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 1245,
+  "hi": 1343,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b113.txt"
+ },
+ {
+  "id": "b114",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 1344,
+  "hi": 1453,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b114.txt"
+ },
+ {
+  "id": "b115",
+  "file": "beebgame/src/ldprog.s",
+  "lo": 1454,
+  "hi": 1486,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b115.txt"
+ },
+ {
+  "id": "b116",
+  "file": "beebgame/src/loader.s",
+  "lo": 1,
+  "hi": 110,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b116.txt"
+ },
+ {
+  "id": "b117",
+  "file": "beebgame/src/loader.s",
+  "lo": 111,
+  "hi": 220,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b117.txt"
+ },
+ {
+  "id": "b118",
+  "file": "beebgame/src/loader.s",
+  "lo": 221,
+  "hi": 328,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b118.txt"
+ },
+ {
+  "id": "b119",
+  "file": "beebgame/src/loader.s",
+  "lo": 329,
+  "hi": 438,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b119.txt"
+ },
+ {
+  "id": "b120",
+  "file": "beebgame/src/loader.s",
+  "lo": 439,
+  "hi": 547,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b120.txt"
+ },
+ {
+  "id": "b121",
+  "file": "beebgame/src/loader.s",
+  "lo": 548,
+  "hi": 606,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b121.txt"
+ },
+ {
+  "id": "b122",
+  "file": "beebgame/src/disc.s",
+  "lo": 1,
+  "hi": 83,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b122.txt"
+ },
+ {
+  "id": "b123",
+  "file": "beebgame/src/disc.s",
+  "lo": 84,
+  "hi": 169,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b123.txt"
+ },
+ {
+  "id": "b124",
+  "file": "beebgame/src/disc.s",
+  "lo": 170,
+  "hi": 254,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b124.txt"
+ },
+ {
+  "id": "b125",
+  "file": "beebgame/src/disc.s",
+  "lo": 255,
+  "hi": 325,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b125.txt"
+ },
+ {
+  "id": "b126",
+  "file": "beebgame/src/low.s",
+  "lo": 1,
+  "hi": 107,
+  "hot": 2453.9,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b126.txt"
+ },
+ {
+  "id": "b127",
+  "file": "beebgame/src/low.s",
+  "lo": 108,
+  "hi": 122,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b127.txt"
+ },
+ {
+  "id": "b128",
+  "file": "beebgame/src/mirror.s",
+  "lo": 1,
+  "hi": 103,
+  "hot": 1950.6,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b128.txt"
+ },
+ {
+  "id": "b129",
+  "file": "beebgame/src/init.s",
+  "lo": 1,
+  "hi": 104,
+  "hot": 0.0,
+  "path": "/Users/ebenupton/cleo/beeb/build/bytegrind/regions/b129.txt"
+ }
+]

@@ -34,34 +34,29 @@ game_main:
   .endif
 title_loop:
         jsr title_menu
-        cmp #MENU_HELP
-        bne new_game
+        beq new_game                ; A = 0 start, 1 help: Z from menu_list's lda msel
         jsr help_screen
-        jmp title_loop
+        bne title_loop              ; (always: help_screen returns Z = 0)
 new_game:
-        stz level
-  .if BHW
-        sta score                   ; A = 0 (the stz)
-        sta score+1
-  .else
         stz score
+  .if BHW
+        sta score+1                 ; A = 0 (the stz)
+  .else
         stz score+1
   .endif
         lda #3
         sta lives
         sta health
-        lda maxlevel
+        lda maxlevel                ; 0: level 0, A = 0 for the store below
         beq :+
         jsr level_select
         asl
-        sta level
-:       pha                         ; (A: go_game's)
-        jsr blank_palette           ; the load is dark: the menu's screen is overwritten
-        pla
+:       sta level
+        jsr blank_palette           ; the load is dark (go_game takes nothing in A)
         jmp go_game                 ; the game's image, and its level loop (disc.s)
 menu_over:
         jsr winlose
-        jmp title_loop
+        bne title_loop              ; (always: winlose returns Z = 0)
 
 ; ---------------------------------------------------------------- text
 ; drawtext: ptr -> 0-terminated string, A = x (px, even), X = y (px, multiple of 4)
@@ -80,10 +75,24 @@ drawtext:
         sta w16b                    ;  draw_glyph_rows starts with lda tx)
         lda #>font_blank
         sta w16b+1
-        jsr draw_glyph_rows
-        beq @space                  ; Z = 1: draw_glyph_rows returns from its cpx #8
-:       jsr glyph_index
-        jsr draw_glyph
+        bne @rows                   ; (always: the font is in bank 7)
+:       jsr glyph_index             ; glyph A's rows: the font is in the overlay beside
+  .if BHW                           ; this code (font_art, banks.s), read in place
+        ldx #0                      ; through w16b (X is dead: draw_glyph_rows sets it
+        stx w16b+1                  ; before reading it)
+  .else
+        stz w16b+1
+  .endif
+        asl
+        asl
+        asl
+        rol w16b+1                  ; C = 0: the byte it shifts out was 0
+        adc #<font_art
+        sta w16b
+        lda w16b+1
+        adc #>font_art
+        sta w16b+1                  ; glyph rows
+@rows:  jsr draw_glyph_rows
 @space: lda tx
         adc #7                      ; C = 1 on every way in: cmp #' ' equal, or the cpx #8
                                     ; draw_glyph_rows returns from
@@ -117,20 +126,7 @@ glyph_index:
 :       sbc #('0'-30)               ; C = 1 from the bcs: -'0'+30 in one subtraction
         rts
 
-; draw glyph A at (tx, ty) : 8x8 px -> 4 chars x 2 char rows.  The font is in the
-; overlay beside this code (font_art, banks.s), so the rows are read in place
-; through w16b.
-draw_glyph:
-        stza w16b+1
-        asl
-        asl
-        asl
-        rol w16b+1                  ; C = 0: the byte it shifts out was 0
-        adc #<font_art
-        sta w16b
-        lda w16b+1
-        adc #>font_art
-        sta w16b+1                  ; glyph rows
+; draw the glyph rows at w16b at (tx, ty) : 8x8 px -> 4 chars x 2 char rows
 draw_glyph_rows:
         lda tx
         lsr
@@ -232,11 +228,13 @@ menu_begin:
 ; menu_show: display buffer 0 (build sections, flip)
 menu_show:
         stz curbuf                  ; (A is dead: build_sections loads it)
-        jsr menu_sections           ; the kernel's (engine.s)
-    .if .not BHW
+    .if BHW
+        sta NEXTSECT                ; A = 0 (the stz).  Before the build: the vsync reads
+    .else                           ;  it only for a flip, and flipreq is 0 until below
         stz NEXTBUF                 ; (the Master: its handler's flip reads it)
-    .endif
         stz NEXTSECT
+    .endif
+        jsr menu_sections           ; the kernel's (engine.s)
         inc flipreq                 ; 0 -> 1: every way in has waited for it to clear
 :       lda flipreq
         bne :-
@@ -338,14 +336,14 @@ unpack: tax
         sta w16b+1
         lda tp_rows,x
         sta prows
-        lda #0
-        sta pspan+1
         lda tp_cols,x
         asl
         asl
-        asl
-        rol pspan+1                 ; (C = 0 before: 8 * 40 columns at most)
+        asl                         ; (8 * 40 columns at most: the high byte is the carry)
         sta pspan
+        lda #0
+        rol
+        sta pspan+1
         lda #<TBUF
         sta tp
         lda #>TBUF
@@ -366,8 +364,7 @@ unpack: tax
         iny
         dex
         bne @lit
-        tya                         ; the stream on by Y too
-        clc
+        tya                         ; the stream on by Y too (C = 0: the cmp #$80)
         adc w16b
         sta w16b
         bcc @adv
@@ -409,28 +406,29 @@ text_centred:
 ; menu_list: menuptr -> table of string pointers (word), A = count, X = first y,
 ; mstep = row step, mclear = clear the items' area first; returns A = selected index
 menu_list:
-        ldy menuptr                 ; the table's address into the two loads below: the
+        ldy menuptr                 ; the table's address into the one load below: the
         sty @mt0+1                  ; overlay is in sideways RAM, so the pointer needs
-        sty @mt1+1                  ; no zero page
-        ldy menuptr+1
+        ldy menuptr+1               ; no zero page
         sty @mt0+2
-        sty @mt1+2
         sta mcount
         stx mtop
-        stz msel
         lda #$FF
         sta lastkeys
         jsr clear_items
         ldx #0
+        stx msel                    ; (not stz: on the Model B that is lda #0 / sta)
 @it:    stx tmp3
         txa
         asl
         tay
+        iny                         ; Y = 2i + 1: the high byte, then the low
+        ldx #1
 @mt0:   lda $FFFF,y                 ; (menuptr, patched in above)
-        sta ptr
-        iny
-@mt1:   lda $FFFF,y
-        sta ptr+1
+        sta ptr,x
+        dey
+        dex
+        bpl @mt0
+        ldx tmp3                    ; the index again, for item_y
         jsr item_y                  ; X = the index still: A = X = its y
         jsr text_centred
         ldx tmp3
@@ -443,10 +441,9 @@ menu_list:
         sta tmp
         and #K_UP
         beq :+
-        lda msel
-        beq :+
-        dec msel
-        bpl @move                   ; always: msel < mcount <= 8
+        dec msel                    ; 0 -> $FF and back: nothing to move up to
+        bpl @move                   ; msel < mcount <= 8: from 1..7 always taken
+        inc msel
 :       lda tmp
         and #K_DOWN
         beq :+
@@ -496,8 +493,7 @@ blank_str:  .byte "_                 _", 0
 ; if mclear: clear the items' area below the logo, char row mtop/4 to the last (640
 ; bytes each, buffer 0's rows)
 clear_items:
-        lda mclear
-        beq @done
+
         lda mtop
         lsr
         lsr
@@ -576,26 +572,23 @@ title_menu:
 
 help_screen:
         jsr menu_begin
-        ldx #0
-@l:     stx tmp3
-        txa
-        asl
-        tay
+        ldy #10                     ; Y = 2i, the last line first: no two lines share a
+@l:     sty tmp3                    ; char row, so the order leaves the same page
         lda helptab,y
         sta ptr
         lda helptab+1,y
         sta ptr+1
         tya                         ; y = i*10+16, the last line at 66: laid out for
-        asl                         ; the Model B's 84 px of window (Y = 2i, C = 0 from
-        adc tmp3                    ; the asl above): i*5
-        adc #8+HELP_DY/2
-        asl                         ; (i*5+8)*2 = i*10+16 (+ HELP_DY)
+        asl                         ; the Model B's 84 px of window: 2i*4 + 2i (C = 0
+        asl                         ; from the asls)
+        adc tmp3
+        adc #16+HELP_DY             ; i*10+16 (+ HELP_DY)
         tax
         jsr text_centred
-        ldx tmp3
-        inx
-        cpx #6
-        bne @l
+        ldy tmp3
+        dey
+        dey
+        bpl @l
         jsr menu_show
         lda #$FF
         sta lastkeys
@@ -620,16 +613,16 @@ level_select:
         tax
         inx
         stx tmp                     ; n
-        ; top y = (VISLINES/2 - 8 - (n-1)*12)/2, down to a multiple of 4
-        asl
+        ; top y = (VISLINES/2 - 8 - (n-1)*12)/2, down to a multiple of 4: halved first,
+        ; K/2 - (n-1)*6, with $7C for the lsr's empty bit 7 (K = VISLINES/2 - 8 is even)
+        .assert ((VISLINES/2 - 8) & 1) = 0, error, "level_select halves K first"
         asl
         sta tmp2
         asl
-        adc tmp2                    ; (n-1)*12 (C=0: (n-1)*8 <= 56)
+        adc tmp2                    ; (n-1)*6 (C=0: (n-1)*4 <= 28)
         eor #$FF
-        adc #(VISLINES/2 - 8 + 1)   ; K - (n-1)*12 (C=0 from the adc)
-        lsr
-        and #$FC
+        adc #(VISLINES/2 - 8)/2 + 1 ; K/2 - (n-1)*6 (C=0 from the adc)
+        and #$7C
         tax
         lda tmp
         jmp menu_list
@@ -641,9 +634,8 @@ winlose:
         jsr music_stop              ; the win/lose screen is silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "winlose picks the piece as TP_LOSE - mtop"
-        lda #0
-        sta spx+1
-        sta spy+1
+        sta spx+1                   ; A = 0: menu_begin ends in clear_ring, which
+        sta spy+1                   ;  stores A = 0 throughout
         lda mtop                    ; YOU WIN at 4, YOU LOSE at 8: big Cleo (24) is then
         eor #1                      ;  centred between the words and the score -- the
         asl                         ;  lose frames' ink starts 6 px into the piece, the
@@ -657,8 +649,8 @@ winlose:
         lda #TP_YOU
         jsr draw_piece              ; (leaves spx, spx+1, spy, spy+1 alone)
         lda spx
-        clc
-        adc #80-34                  ; WIN at 82 / LOSE at 80; C = 0
+        adc #80-34-1                ; C = 1 from draw_piece (blit's last sbc found no
+                                    ;  borrow): WIN at 82 / LOSE at 80; C = 0
         sta spx
         lda #TP_LOSE+1
         sbc mtop                    ; C = 0: TP_LOSE - mtop = TP_WIN / TP_LOSE
@@ -670,24 +662,24 @@ winlose:
         sta ptr+1
 SCORE_Y = 64+WL_DY                  ; 84 px of window: under big Cleo (24..55)
 HISCORE_Y = 76+WL_DY                ; (a glyph row is a multiple of 4)
-        lda #12
+        mov16 t16, score            ; (drawtext leaves t16 alone)
         ldx #SCORE_Y
-        jsr drawtext
-        mov16 t16, score
-        lda #84                     ; align the score column with the hi-score below
-        ldx #SCORE_Y
+@srow:  lda #12                     ; a row: the label, then its value at 84 (the score
+        jsr drawtext                ;  column aligned with the hi-score's)
+        lda #84
+        ldx ty                      ; the row's y: drawtext leaves ty
         jsr draw_number
+        ldx ty                      ; (draw_number's stx ty wrote the same y)
+        cpx #HISCORE_Y
+        beq @sdone                  ; both rows drawn
         lda #<str_hiscore
         sta ptr
         lda #>str_hiscore
         sta ptr+1
-        lda #12
-        ldx #HISCORE_Y
-        jsr drawtext
         mov16 t16, hiscore
-        lda #84
         ldx #HISCORE_Y
-        jsr draw_number
+        bne @srow                   ; (always: HISCORE_Y > 0)
+@sdone:
         lda #$FF
         sta lastkeys
         sta mcount                  ; the frame last drawn  (menu_list's variables: this
