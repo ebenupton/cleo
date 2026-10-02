@@ -2828,12 +2828,12 @@ ob_rsnake:                          ; in place: Y = obj (reloaded after the call
         txa                         ; the frame is still in X
         jsr addsprite               ; (Y kept)
         clc
-        lda ox                      ; ox += D, and @basket draws 60 there: ox is dead
-        adc O_DL,y                  ;  after this (ob_rsnake and os_oxy set it afresh)
-        sta ox
+        lda ox                      ; spx = ox + D: the pot flies too (@basket draws 60
+        adc O_DL,y                  ;  at spx, which it otherwise takes to be ox)
+        sta spx
         lda ox+1
         adc O_DH,y
-        sta ox+1
+        sta spx+1
         jmp @basket
 
 

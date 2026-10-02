@@ -11,6 +11,11 @@ const builds = [[dA, lA], [dB, lB]];
 const M = await Promise.all(builds.map(([disc, labels]) => openB({ level: +lvS, disc, labels })));
 M.forEach((m, i) => { m.cyBank = loadBanks(dbgPath(builds[i][1]))?.byName.get("BUF_CY") ?? 6; });
 const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjssllllllllllllllllllllllllllllljljljljljss";
+// SEED=n: seeded random keys instead of the pattern -- with throws (DOWN) and fire, which
+// the pattern never presses (a boomerang-only path once got past the sweep that way)
+let _rng = (+(process.env.SEED ?? 0)) >>> 0, _k = 0, _hold = 0, _kf = -1;
+const RK = (f) => { if (f !== _kf) { _kf = f; if (_hold-- <= 0) { _rng = (_rng * 1103515245 + 12345) >>> 0; const r = _rng >>> 16; _k = [0, 1, 2, 2|4, 1|4, 4, 8, 2|8, 1|8, 16][r % 10]; _hold = 2 + (r >> 4) % 25; } } return _k; };
+const KEYAT = (f) => process.env.SEED ? RK(f) : KK(PAT[f % PAT.length]);
 const KK = (c) => ({ s: 0, r: 2, l: 1, j: 4 })[c] ?? 0;
 const RING = [0x0A80, 0x4680], RINGBYTES = 23 * 640, BAR = [0x0300, 0x0800];
 const window = (m, bf) => [m.A.BUF_CXH !== undefined ? m.cpu.readmem(m.A.BUF_CX + bf) | (m.cpu.readmem(m.A.BUF_CXH + bf) << 8)
@@ -19,7 +24,7 @@ const window = (m, bf) => [m.A.BUF_CXH !== undefined ? m.cpu.readmem(m.A.BUF_CX 
 let bad = 0, badFrames = 0;
 for (let f = 0; f < +nS; f++) {
   for (const m of M) {
-    m.bank(7, () => { m.cpu.writemem(m.A.keys, KK(PAT[f % PAT.length])); m.cpu.writemem(m.A.hurt, 1); m.cpu.writemem(m.A.health, 3); });
+    m.bank(7, () => { m.cpu.writemem(m.A.keys, KEYAT(f)); m.cpu.writemem(m.A.hurt, 1); m.cpu.writemem(m.A.health, 3); });
     await m.runTo(m.A.frame_top, 7);
   }
   let fb = 0;

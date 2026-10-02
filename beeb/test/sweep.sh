@@ -4,7 +4,8 @@
 #   sh test/sweep.sh REF [jobs=7]
 #   each level, the Master: the visible window and the scene, 400 frames, and 200 after
 #     the level ends and loads again (wincmp.mjs); the Model B: both buffers' windows
-#     and the bar, 300 frames (bwincmp.mjs), and on Watford and Solidisk boards
+#     and the bar, 300 frames (bwincmp.mjs), and on Watford and Solidisk boards; and
+#     each level on both machines with seeded random keys, throws and all (SEED=7, 500)
 #   the menus, frame-synchronised (menusync.mjs), on both machines
 #   the frame period through a load from the menu (loadsync2.mjs): Master, 8271, 1770
 #   on Watford and Solidisk boards, a whole session's stores into sideways RAM, each
@@ -20,6 +21,8 @@ jobs() {
         echo "node test/wincmp.mjs $REF/cleo.ssd $REF/master/labels.txt $NEW/cleo.ssd $NEW/master/labels.txt $l 400 > $OUT/master_L$l.txt"
         echo "RELOAD=1 node test/wincmp.mjs $REF/cleo.ssd $REF/master/labels.txt $NEW/cleo.ssd $NEW/master/labels.txt $l 200 > $OUT/master_reload_L$l.txt"
         echo "node test/bwincmp.mjs $REF/cleo.ssd $REF/modelb/labels.txt $NEW/cleo.ssd $NEW/modelb/labels.txt $l 300 > $OUT/modelb_L$l.txt"
+        echo "SEED=7 node test/wincmp.mjs $REF/cleo.ssd $REF/master/labels.txt $NEW/cleo.ssd $NEW/master/labels.txt $l 500 > $OUT/master_keys_L$l.txt"
+        echo "SEED=7 node test/bwincmp.mjs $REF/cleo.ssd $REF/modelb/labels.txt $NEW/cleo.ssd $NEW/modelb/labels.txt $l 500 > $OUT/modelb_keys_L$l.txt"
     done
     for b in watford solidisk; do
         echo "BBOARD=$b node test/bwincmp.mjs $REF/cleo.ssd $REF/modelb/labels.txt $NEW/cleo.ssd $NEW/modelb/labels.txt 8 300 > $OUT/modelb_$b.txt"
