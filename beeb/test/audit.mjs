@@ -9,7 +9,7 @@ const nm = (pc) => { let best = null; for (const [n2, a] of names) if (a <= pc &
 const byPc = new Map();
 cpu.debugWrite.add((addr) => {
   if (addr >= 0x8000 && addr < 0xc000) {
-    const b = cpu.readmem(0xf4), k = (b << 24) | cpu.pc;
+    const b = cpu.readmem((A.romsel_cpy ?? 0xf4)), k = (b << 24) | cpu.pc;
     if (!byPc.has(k)) byPc.set(k, 0); byPc.set(k, byPc.get(k) + 1);
   }
   return false;

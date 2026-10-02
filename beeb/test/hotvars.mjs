@@ -64,7 +64,7 @@ for (const level of levels) {
   const poke = (a, v) => (machine === "master" ? M.wr(a, v) : M.bank(7, () => cpu.writemem(a, v)));
   const exec = new Map();
   const hook = cpu.debugInstruction.add((pc) => {
-    const k = pc >= 0x8000 && pc < 0xC000 ? cpu.readmem(0xF4) * 0x10000 + pc : pc;
+    const k = pc >= 0x8000 && pc < 0xC000 ? cpu.readmem((A.romsel_cpy ?? 0xf4)) * 0x10000 + pc : pc;
     exec.set(k, (exec.get(k) ?? 0) + 1);
     return false;
   });
@@ -75,7 +75,7 @@ for (const level of levels) {
   hook.remove();
   // a socket's code bank (4..7) from PBANK, then each instruction decoded in its bank
   const bankOf = (sock) => { for (let b = 0; b < 4; b++) if (cpu.readmem(A.PBANK + b) === sock) return b + 4; return -1; };
-  const was = cpu.readmem(0xF4);
+  const was = cpu.readmem((A.romsel_cpy ?? 0xf4));
   for (const [k, n] of exec) {
     const pc = k % 0x10000, sock = Math.floor(k / 0x10000), paged = pc >= 0x8000 && pc < 0xC000;
     if (paged) cpu.writemem(0xFE30, sock);

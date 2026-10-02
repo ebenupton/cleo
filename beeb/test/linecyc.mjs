@@ -63,7 +63,7 @@ for (const level of levels) {
     const now = cyc();
     if (last) { last[1] += now - lastC; }
     let bank = -1;
-    if (pc >= 0x8000 && pc < 0xc000) { const s = cpu.readmem(0xf4); if (!sockBank.has(s)) sockBank.set(s, bankOf(s)); bank = sockBank.get(s); }
+    if (pc >= 0x8000 && pc < 0xc000) { const s = cpu.readmem((A.romsel_cpy ?? 0xf4)); if (!sockBank.has(s)) sockBank.set(s, bankOf(s)); bank = sockBank.get(s); }
     if (IDLE.has(pc) && bank === -1 || IDLE.has(pc) && bank === 7) { last = null; lastC = now; return false; }
     const k = `${bank}|${pc}`;
     let rec = st.get(k); if (!rec) st.set(k, (rec = [0, 0]));

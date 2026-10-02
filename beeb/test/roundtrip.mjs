@@ -19,7 +19,7 @@ async function boot(disc, labels) {
   const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   const bankOf = (n) => P[banks.byName.get(n) - 4];
-  const at = (n) => cpu.pc === A[n] && cpu.readmem(0xf4) === bankOf(n) && imgOk(cpu, A, banks, A[n]);
+  const at = (n) => cpu.pc === A[n] && cpu.readmem((A.romsel_cpy ?? 0xf4)) === bankOf(n) && imgOk(cpu, A, banks, A[n]);
   async function to(n, budget = 6000) {
     const h = cpu.debugInstruction.add(() => at(n));
     try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at(n)) { await s.runFor(1); return; } } } finally { h.remove(); }

@@ -17,7 +17,7 @@ async function boot(disc, labels) {
   const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   const banks = loadBanks(dbgPath(labels)), mb = banks.byName.get("menu_keys");   // the menus' bank (and image)
-  const at = () => cpu.pc === A.menu_keys && cpu.readmem(0xf4) === P[mb - 4] && imgOk(cpu, A, banks, A.menu_keys);
+  const at = () => cpu.pc === A.menu_keys && cpu.readmem((A.romsel_cpy ?? 0xf4)) === P[mb - 4] && imgOk(cpu, A, banks, A.menu_keys);
   async function next() {
     const h = cpu.debugInstruction.add(() => at());
     try { for (let i = 0; i < 4000; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }

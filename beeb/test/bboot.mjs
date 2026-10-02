@@ -18,7 +18,7 @@ const cpu = s._machine.processor;
 // boot loader takes the lowest four it finds, or says why not with fewer
 if (process.env.BBOARD) boardEmu(cpu, process.env.BBOARD);   // a Watford or Solidisk board (bopen.mjs)
 if (process.env.BSWRAM) { const SW = process.env.BSWRAM.split(",").map(Number); cpu.model.swram = Array.from({ length: 16 }, (_, i) => SW.includes(i)); }
-const where = () => { const pc = cpu.pc, b = cpu.readmem(0xf4); let best = null; for (const [a, n] of names) if (a <= pc && (best === null || a > best[0])) best = [a, n]; return `pc ${pc.toString(16)} bank ${b} (${best ? best[1] + "+" + (pc - best[0]).toString(16) : "?"})`; };
+const where = () => { const pc = cpu.pc, b = cpu.readmem((A.romsel_cpy ?? 0xf4)); let best = null; for (const [a, n] of names) if (a <= pc && (best === null || a > best[0])) best = [a, n]; return `pc ${pc.toString(16)} bank ${b} (${best ? best[1] + "+" + (pc - best[0]).toString(16) : "?"})`; };
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 let t = 0;
 const step = async (sec, label) => { for (let i = 0; i < sec * 20; i++) { await s.runFor(100_000); } t += sec; console.log(`t=${t}s ${label}: ${where()} title_res=${cpu.readmem(A.title_res)} MUSON=${cpu.readmem(A.MUSON)}`); };

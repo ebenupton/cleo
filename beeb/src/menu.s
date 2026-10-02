@@ -22,10 +22,12 @@ game_main:
         lda #0
         sta hiscore
         sta hiscore+1
+        sta hiscore+2
         sta maxlevel
   .else
         stz hiscore
         stz hiscore+1
+        stz hiscore+2
         stz maxlevel
   .endif
   .if ALLLEVELS
@@ -41,8 +43,10 @@ new_game:
         stz score
   .if BHW
         sta score+1                 ; A = 0 (the stz)
+        sta score+2
   .else
         stz score+1
+        stz score+2
   .endif
         lda #3
         sta lives
@@ -662,7 +666,7 @@ winlose:
         sta ptr+1
 SCORE_Y = 64+WL_DY                  ; 84 px of window: under big Cleo (24..55)
 HISCORE_Y = 76+WL_DY                ; (a glyph row is a multiple of 4)
-        mov16 t16, score            ; (drawtext leaves t16 alone)
+        stz t16                     ; the score's BCD (score+0: drawtext leaves t16 alone)
         ldx #SCORE_Y
 @srow:  lda #12                     ; a row: the label, then its value at 84 (the score
         jsr drawtext                ;  column aligned with the hi-score's)
@@ -676,7 +680,8 @@ HISCORE_Y = 76+WL_DY                ; (a glyph row is a multiple of 4)
         sta ptr
         lda #>str_hiscore
         sta ptr+1
-        mov16 t16, hiscore
+        lda #hiscore-score          ; the hi-score's (score+3)
+        sta t16
         ldx #HISCORE_Y
         bne @srow                   ; (always: HISCORE_Y > 0)
 @sdone:
@@ -762,18 +767,30 @@ shr24x: txa                         ; Z from X (A dead at the caller)
         bne :-
 :       rts
 
-; draw_number: t16 = value, prints value*100 as digits at (A = x, X = y) : up to 6 digits + "00"
+; draw_number: t16 = 0 the score, 3 the hi-score (BCD, ones first); prints it *100 as
+; digits at (A = x, X = y): five digits + "00", leading zeros suppressed
 draw_number:
         sta tx
         stx ty
-        ; convert t16 to decimal (5 digits, leading zeros suppressed) into numbuf
-        ldx #4
-@d:
-        jsr div10_16                ; (X kept: Y is its count)
-        ora #'0'                    ; A = the remainder (= q1)
+        ldy t16
+        ldx #4                      ; numbuf 4..0: each byte's low nibble, then its high
+@d:     lda score,y
+        and #$0F
+        ora #'0'
         sta numbuf,x
         dex
-        bpl @d
+        bmi @z                      ; five: the top byte's high nibble is not shown
+        lda score,y
+        lsr
+        lsr
+        lsr
+        lsr
+        ora #'0'
+        sta numbuf,x
+        iny
+        dex
+        bpl @d                      ; (always: X = 3 or 1 here)
+@z:
         ; suppress leading zeros (keep at least one)
         ldy #$FF
 :       iny

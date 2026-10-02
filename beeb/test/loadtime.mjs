@@ -16,11 +16,11 @@ function hook(cpu, A, cyc, inBank7) {
   });
 }
 if (kind === "modelb") {
-  const B = await openB({ level: lv, disc, labels, onSession: ({ cpu, A, cyc, PB }) => hook(cpu, A, cyc, () => cpu.readmem(0xf4) === PB(7)) });
+  const B = await openB({ level: lv, disc, labels, onSession: ({ cpu, A, cyc, PB }) => hook(cpu, A, cyc, () => cpu.readmem((A.romsel_cpy ?? 0xf4)) === PB(7)) });
   B.bank(7, () => B.cpu.writemem(B.A.exiting, 1));
   await B.runTo(B.A.level_init, 7, 60000);
 } else {
-  const H = await open({ disc, labels, level: lv, onSession: (H) => hook(H.cpu, H.A, () => H.cyc(), () => H.cpu.readmem(0xf4) === 7) });
+  const H = await open({ disc, labels, level: lv, onSession: (H) => hook(H.cpu, H.A, () => H.cyc(), () => H.cpu.readmem((H.A.romsel_cpy ?? 0xf4)) === 7) });
   H.wr(H.A.exiting, 1);
   await H.runTo(H.A.level_init, 400_000_000);
 }

@@ -15,7 +15,7 @@ for (let L = l0; L <= (l1 ?? l0); L++) {
   let rd;
   if (machine === "master") {
     const H = await open({ disc, labels, level: L });
-    rd = (b, a) => { const was = H.rd(0xf4); H.wr(0xfe30, b); const v = H.rd(a); H.wr(0xfe30, was); return v; };
+    rd = (b, a) => { const was = H.rd((H.A.romsel_cpy ?? 0xf4)); H.wr(0xfe30, b); const v = H.rd(a); H.wr(0xfe30, was); return v; };
   } else {
     const B = await openB({ level: L, disc, labels });
     rd = (b, a) => B.bank(b, () => B.cpu.readmem(a));

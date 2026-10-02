@@ -17,7 +17,7 @@ if (machine === "master") {
 } else {
   const B = await openB({ level: LEVEL, disc, labels });
   cpu = B.cpu; A = B.A; cyc = B.cyc; const B7 = B.PB(7);
-  step = () => B.runTo(A.frame_top, 7); inB7 = () => cpu.readmem(0xf4) === B7;
+  step = () => B.runTo(A.frame_top, 7); inB7 = () => cpu.readmem((A.romsel_cpy ?? 0xf4)) === B7;
   var wr = (a, v) => B.bank(7, () => cpu.writemem(a, v));
 }
 let t0 = -1, t1 = -1, isr = 0, isrAt = -1, isrAll = 0, wait = 0, lastPc = -1, lastC = 0;

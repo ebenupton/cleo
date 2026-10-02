@@ -11,8 +11,8 @@ const { s, cpu, A, bank, cyc, runTo, PB } = await openB({ level: LEVEL, ...(proc
 // work = frame_top .. the flip request (render_frame's end): everything but the peg wait
 let t0 = -1, work = [], isr = 0, isrs = [], isrAt = -1;
 const meter = cpu.debugInstruction.add((pc, op) => {
-  if (pc === A.frame_top && cpu.readmem(0xf4) === B7) { t0 = cyc(); isr = 0; }
-  else if (pc === A.render_done && cpu.readmem(0xf4) === B7 && t0 >= 0) { work.push(cyc() - t0 - isr); isrs.push(isr); t0 = -1; }
+  if (pc === A.frame_top && cpu.readmem((A.romsel_cpy ?? 0xf4)) === B7) { t0 = cyc(); isr = 0; }
+  else if (pc === A.render_done && cpu.readmem((A.romsel_cpy ?? 0xf4)) === B7 && t0 >= 0) { work.push(cyc() - t0 - isr); isrs.push(isr); t0 = -1; }
   else if (pc === A.irq_handler) isrAt = cyc();
   else if (isrAt >= 0 && op === 0x40) { isr += cyc() - isrAt; isrAt = -1; }
   return false;

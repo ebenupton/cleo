@@ -168,12 +168,16 @@ fl_over:
 game_won:
         ldx #1                      ; won (lost: X = 0, the lives, from fl_over)
 game_over:
-        lda hiscore                 ; the hi-score (its one caller, inlined)
-        cmp score
+        lda hiscore                 ; the hi-score (its one caller, inlined): BCD
+        cmp score                   ;  compares as binary does
         lda hiscore+1
         sbc score+1
+        lda hiscore+2
+        sbc score+2
         bcs :+
         mov16 hiscore, score
+        lda score+2
+        sta hiscore+2
 :       jsr blank_palette           ; the load is dark (blank_palette keeps X)
         txa                         ; A = 0 lost, 1 won
         jmp go_menu                 ; the menus' image, and its win/lose screen (disc.s)

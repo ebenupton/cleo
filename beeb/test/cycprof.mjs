@@ -66,7 +66,7 @@ for (const level of levels) {
       if (pc !== ((from + 2) & 0xffff)) { rec[1]++; rec[2]++; if ((pc & 0xff00) !== ((from + 2) & 0xff00)) rec[2]++; if (PD && pend7) pdAdd(`b ${from} ${pc}`); }
     }
     let bank = -1;
-    if (pc >= 0x8000 && pc < 0xc000) { const s = cpu.readmem(0xf4); if (!sockBank.has(s)) sockBank.set(s, bankOf(s)); bank = sockBank.get(s); }
+    if (pc >= 0x8000 && pc < 0xc000) { const s = cpu.readmem((A.romsel_cpy ?? 0xf4)); if (!sockBank.has(s)) sockBank.set(s, bankOf(s)); bank = sockBank.get(s); }
     const k = `${bank}|${pc}`;
     let rec = st.get(k); if (!rec) st.set(k, (rec = [0, 0, 0]));
     rec[0]++;

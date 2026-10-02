@@ -19,7 +19,7 @@ async function one(machine, level) {
   const sock7 = machine === "master" ? 7 : M.PB(7);
   const n = new Map();
   const hook = cpu.debugInstruction.add((pc) => {
-    if (pc === A.drawsprite && cpu.readmem(0xf4) === sock7) n.set(cpu.a, (n.get(cpu.a) ?? 0) + 1);
+    if (pc === A.drawsprite && cpu.readmem((A.romsel_cpy ?? 0xf4)) === sock7) n.set(cpu.a, (n.get(cpu.a) ?? 0) + 1);
     return false;
   });
   for (let f = 0; f < frames; f++) {

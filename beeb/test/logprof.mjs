@@ -30,7 +30,7 @@ for (const LEVEL of lvs.split(",").map(Number)) {
   } else {
     const B = await openB({ level: LEVEL, disc, labels });
     cpu = B.cpu; A = B.A; cyc = B.cyc; const B7 = B.PB(7);
-    step = () => B.runTo(A.frame_top, 7); inB7 = () => cpu.readmem(0xf4) === B7; wr = (a, v) => B.bank(7, () => cpu.writemem(a, v));
+    step = () => B.runTo(A.frame_top, 7); inB7 = () => cpu.readmem((A.romsel_cpy ?? 0xf4)) === B7; wr = (a, v) => B.bank(7, () => cpu.writemem(a, v));
   }
   let on = false, isr = false, lastC = 0, stack = [], lastK = null, lastPcX = -1;   // stack: [node, return address]
   const meter = cpu.debugInstruction.add((pc, op) => {

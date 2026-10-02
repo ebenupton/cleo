@@ -247,8 +247,6 @@ exiting:  .res 1
 level:    .res 1
 lives:    .res 1
 health:   .res 1
-score:    .res 2
-hiscore:  .res 2
 maxlevel: .res 1
 lastkeys: .res 1
 logicvs:  .res 1
@@ -290,7 +288,6 @@ t16:      .res 2
 t16b:     .res 2
 dpx:      .res 2                  ; player step count etc
 hx:       .res 2                  ; rx used for hit direction
-q1x:      .res 1
 rise:     .res 2
 grow:     .res 1                  ; bucket walk: gy << gridsh
         .zeropage
@@ -1157,8 +1154,13 @@ game_frame:
         jsr tilexy
         bcc @dbgt
         jsr maptile
+        tax                         ; (the readout: BCD)
+        lda #0
         sta score
-        stz score+1
+        sta score+1
+        sta score+2
+        tay
+        jsr dbg_bcd
 @dbgt:
   .endif
         lda health
@@ -1201,23 +1203,13 @@ player_hit:
         lda #0                      ; shows obj*100 + otype of whatever hit us, and
         sta score                   ; addscore is a no-op so it stays until the next hit
         sta score+1
+        sta score+2
         ldx obj
-        beq @dh1
-@dh0:   lda score
-        clc
-        adc #100
-        sta score
-        bcc @dh2
-        inc score+1
-@dh2:   dex
-        bne @dh0
-@dh1:   lda otype
-        clc
-        adc score
-        sta score
-        bcc @dh3
-        inc score+1
-@dh3:
+        ldy #1                      ; obj hundreds
+        jsr dbg_bcd
+        ldx otype
+        ldy #0                      ; and otype ones
+        jsr dbg_bcd
   .endif
         mov16 evframe, frame
         lda #1                      ; bar_touch, inlined
@@ -2244,16 +2236,22 @@ boomready:
         rts
 @no:    clc
         rts
-addscore:                           ; A = points
+addscore:                           ; A = points, BCD; X and Y kept
   .if .defined(DBGHIT) .or .defined(DBGTILE)
         rts                         ; (debug: the score is a readout)
   .endif
-        clc
+        sed                         ; (every interrupt clears D for itself: low.s, and the
+        clc                         ;  65C02 by its own)
         adc score
         sta score
-        bcc :+
-        inc score+1
-:       jmp bar_touch
+        lda score+1
+        adc #0
+        sta score+1
+        lda score+2
+        adc #0
+        sta score+2
+        cld
+        jmp bar_touch
 
 ; ---------------------------------------------------------------- STAR (0)
 ; Cleo's two tests on a star -- the collect (RNGTAB quad 0) and box_safe's (quad 64,
@@ -2689,7 +2687,7 @@ ob_rsnake:                          ; in place: Y = obj (reloaded after the call
         clc
         adc #129                    ; 192-r: the byte form of -(r&63)-64
         sta O_AL,y
-@norst: ; rise = (A*A >> 3) - 28 while the snake is up.
+@norst: ; rise = (A*A >> 3) - 28 while the snake is up: baked (risetab).
         ; The reference skips when A <= -16 (CleoApp.run 2865: bipush -16, if_icmple),
         ; so it is up for A >= -15.
                                     ; A = the counter on both ways in
@@ -2697,21 +2695,15 @@ ob_rsnake:                          ; in place: Y = obj (reloaded after the call
         cmp #113                    ; -15 -> 113: at -16 the rise is +4 and the tall
         bcc @nowarm                 ; frame's tail shows 4 px under the basket; at -15
                                     ; it is 0 and the snake is flush with its bottom
-@calc:  eor #$80                    ; A = the counter again (the cmp kept the biased A)
-        bpl @sq
-        eor #$FF
-        adc #0                      ; C = 1: the cmp #113 fell through (inca is 6 bytes)
-@sq:    jsr square                  ; returns A = t16, the low byte (X only: Y kept)
-        lsr t16+1                   ; rise = (A*A >> 3) - 28, the low byte shifted in A;
-        ror a                       ; |A| <= 16 here, so A*A <= 256 and the high byte
-        lsr a                       ; is 0 after one step: the rest are plain shifts
-        lsr a                       ; (t16 itself is dead after this)
-        sec
-        sbc #28
+        and #$1F                    ; (the bias is bit 7's: A & 31 is the counter's,
+        tax                         ;  -15..16 -> 17..31, 0..16)
+        lda risetab,x
         sta rise
-        lda t16+1
-        sbc #0
-        sta rise+1
+        ldx #0                      ; its high byte: the sign
+        ora #0
+        bpl :+
+        dex
+:       stx rise+1
         lda #1                      ; snake visible
         bne @vis                    ; always: A = 1
 @nowarm:
@@ -3433,7 +3425,7 @@ ob_switch:
         ldx #60
         jsr inrange2
         bcc @draw
-        lda #20
+        lda #$20                    ; (BCD)
         jsr addscore
         lda #SFX_POWER
         sta SFXREQ
@@ -3534,6 +3526,30 @@ bar_digit:
 bd_same:
         rts
 
+  .if .defined(DBGHIT) .or .defined(DBGTILE)
+; (debug) score += X, counted in the BCD byte score+Y (0 ones, 1 hundreds); X, Y
+; clobbered
+dbg_bcd:
+        txa
+        beq @r
+        sed
+@l:     tya
+        pha
+        sec                         ; + 1, carried up
+@c:     lda score,y
+        adc #0
+        sta score,y
+        iny
+        bcc @n
+        cpy #3
+        bcc @c
+@n:     pla
+        tay
+        dex
+        bne @l
+        cld
+@r:     rts
+  .endif
 bar_touch:
         lda #1
         sta BARDIRTY
@@ -3562,60 +3578,36 @@ redraw_hud:                         ; lives and stars inlined (redraw_hud was th
         ldx #82
         ldy #3
         jsr bar_digit               ; and falls into draw_score
-draw_score:                         ; 5 digits at 108..140
-        mov16 t16, score
-        ldx #8                      ; X = digit slot 8..4 (div10_16 keeps X)
-@d:     jsr div10_16                ; t16 /= 10 -> remainder
-        txa                         ; not phx/txa: on a 6502 that is txa/pha/txa
+draw_score:                         ; 5 digits at 108..140: the BCD score's nibbles,
+        ldx #8                      ; slots 8..4, the ones first
+@d:     stx q1                      ; the slot (bar_digit keeps q1)
+        lda #8
+        sec
+        sbc q1                      ; the digit's number, 0..4: its byte, and C = the high
+        lsr                         ;  nibble's
+        tay
+        lda score,y
+        bcc :+
+        lsr
+        lsr
+        lsr
+        lsr
+:       and #$0F
         pha
-        tay                         ; score digits are slots 4..8
+        lda q1
+        tay                         ; Y = the slot (the cache's)
         asl
         asl
-        asl                         ; C = 0: slot*4 < 128
+        asl                         ; C = 0: slot*8 < 128
         adc #76                     ; slot*8 + 76 = 108..140
         tax
-        lda q1
+        pla
         jsr bar_digit
-        plx
+        ldx q1
         dex
         cpx #4
         bcs @d
         rts
-; t16 = A * A (A unsigned 0..128): the red snake's
-square: sta q1
-        sta q1x
-        lda #0                      ; accumulator low byte lives in A; the high byte needs no
-                                    ; zero: eight 16-bit shifts push all its old bits out
-        ldx #8
-@l:     asl
-        rol t16+1
-        asl q1
-        bcc :+
-        clc
-        adc q1x
-        bcc :+
-        inc t16+1
-:       dex
-        bne @l
-        sta t16
-        rts
-        .segment "KRNCODE"          ; the kernel: the menus' too
-; t16 = t16 / 10 ; q1 = remainder (X kept)
-div10_16:
-        lda #0                      ; remainder lives in A for the whole loop
-        ldy #16                     ; Y, not X: draw_score keeps its slot in X
-@l:     asl t16
-        rol t16+1
-        rol a
-        cmp #10
-        bcc :+
-        sbc #10
-        inc t16
-:       dey
-        bne @l
-        sta q1
-        rts
-
         .segment "GAMECODE"
 ; ============================================================================
 ; bar_bg: the bar has a fixed home outside the ring, so it stays put however the
@@ -3650,6 +3642,24 @@ rnd:    lsr seed+1
 BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
 ; The map's row addresses (level_init) and inrange's limits: tables whose reads are
 ; hot, each in a page
+; The score and the hi-score: BCD, ones first, five digits shown (a sixth in the
+; top byte's high nibble is room).  Resident -- bank 7's last page, kept through
+; both images: the menus show them and set the hi-score; the game keeps them.
+; The red snake's rise above its basket, by its counter A & 31 (A = -15..16 while it
+; is up): (A*A >> 3) - 28, the reference's parabola (CleoApp.run), baked
+        .segment "GAMEDATA"
+risetab:
+        .repeat 32, i
+          .if i < 17
+        .byte <((i*i >> 3) - 28)
+          .else
+        .byte <(((32-i)*(32-i) >> 3) - 28)
+          .endif
+        .endrepeat
+        .segment "GAMEHI"
+score:     .res 3
+hiscore:   .res 3
+        .assert hiscore = score + 3, error, "draw_number: Y = 0 score, 3 hi-score"
         .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
 RNGTAB:    .res 88                  ; inrange's limits: the level file's header tail
         .assert RNGTAB = LV_HDR + 32, error, "RNGTAB: where the loader puts the header's tail"

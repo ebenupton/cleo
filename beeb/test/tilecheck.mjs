@@ -15,7 +15,7 @@ const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjsslllllllllllllllll
 const KEYS = { s: 0, r: 2, l: 1, j: 4 };
 const MAXREC = (A.RECCNT - A.SPRREC) / 20;
 let bad = 0, cells = 0, badf = 0;
-const bank = (b, f) => { const was = H.rd(0xf4); H.wr(0xf4, b); H.wr(0xfe30, b); const r = f(); H.wr(0xf4, was); H.wr(0xfe30, was); return r; };
+const bank = (b, f) => { const was = H.rd((A.romsel_cpy ?? 0xf4)); H.wr((A.romsel_cpy ?? 0xf4), b); H.wr(0xfe30, b); const r = f(); H.wr((A.romsel_cpy ?? 0xf4), was); H.wr(0xfe30, was); return r; };
 for (let f = 0; f < N; f++) {
   const pc = PAT[f % PAT.length]; const k = pc === "j" ? 6 : KEYS[pc];
   H.wr(A.keys, k); H.wr(A.hurt, 1); H.wr(A.health, 3);

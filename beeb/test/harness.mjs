@@ -6,12 +6,21 @@ import path from "node:path";
 export * from "../beebgame/test/lib/harness.mjs";
 
 // the game state a scene is of: the player, the frame, the level
+// The score as a number, whatever its encoding: BCD (3 bytes, ones first: hiscore
+// follows it at +3, since 2 Oct 2026) or binary (2 bytes) before
+function scoreValue(H, b) {
+  const A = H.A, r = (i) => H.rd(A.score + i);
+  let v;
+  if (A.hiscore - A.score === 3) { v = 0; for (let i = 2; i >= 0; i--) v = v * 100 + (r(i) >> 4) * 10 + (r(i) & 15); }
+  else v = r(0) | r(1) << 8;
+  b.writeUIntLE(v, 0, 3);
+}
 export class CleoHarness extends Harness {
   gameScene() {
     const A = this.A;
     return [["px", A.px, 2], ["py", A.py, 2], ["vx", A.vx, 2], ["vy", A.vy, 2],
             ["frame", A.frame, 2], ["health", A.health, 1], ["hurt", A.hurt, 1],
-            ["level", A.level, 1], ["score", A.score, 3]];
+            ["level", A.level, 1], ["score", A.score, 3, scoreValue]];
   }
 }
 
@@ -33,7 +42,7 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const H = new CleoHarness(s, A, banks);
   if (onSession) onSession(H);                   // (a tool's hooks, before anything runs)
-  const in7 = (f) => { const was = H.rd(0xf4); H.wr(0xfe30, 7); try { return f(); } finally { H.wr(0xfe30, was); } };
+  const in7 = (f) => { const was = H.rd((A.romsel_cpy ?? 0xf4)); H.wr(0xfe30, 7); try { return f(); } finally { H.wr(0xfe30, was); } };
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   await H.runTo(A.title_loop, 200_000_000);
   if (A.game_in !== undefined) {
@@ -65,7 +74,7 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
 // unconditional; zeroing 'hurt' itself would also strip her invulnerability and let a
 // hit zero 'control', which changes how many frames a run takes.
 export function patchBlink(H) {
-  const ROMSEL = 0xfe30, keep = H.rd(0xf4), A = H.A;
+  const ROMSEL = 0xfe30, A = H.A, keep = H.rd((A.romsel_cpy ?? 0xf4));
   H.wr(ROMSEL, 7);
   const hits = [];
   for (let a = 0x8000; a < 0xc000 - 8; a++)

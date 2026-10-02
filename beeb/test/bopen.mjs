@@ -31,12 +31,12 @@ export async function openB({ level = 0, model = process.env.BMODEL ?? "B-DFS1.2
   const P = cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   if (P.length < 4) throw new Error("B: fewer than four sideways RAM sockets");
   const PB = (b) => (b >= 4 && b <= 7 ? P[b - 4] : b);
-  const bank = (b, f) => { const was = cpu.readmem(0xf4); cpu.writemem(0xf4, PB(b)); cpu.writemem(0xfe30, PB(b)); const r = f(); cpu.writemem(0xf4, was); cpu.writemem(0xfe30, was); return r; };
+  const bank = (b, f) => { const was = cpu.readmem((A.romsel_cpy ?? 0xf4)); cpu.writemem((A.romsel_cpy ?? 0xf4), PB(b)); cpu.writemem(0xfe30, PB(b)); const r = f(); cpu.writemem((A.romsel_cpy ?? 0xf4), was); cpu.writemem(0xfe30, was); return r; };
   const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
   if (onSession) onSession({ s, cpu, A, bank, cyc, PB });   // (a tool's hooks, before the boot)
   async function runTo(pc, b, budget = 3000) {
     const pb = PB(b);
-    const at = (p) => p === pc && cpu.readmem(0xf4) === pb && imgOk(cpu, A, banks, pc);
+    const at = (p) => p === pc && cpu.readmem((A.romsel_cpy ?? 0xf4)) === pb && imgOk(cpu, A, banks, pc);
     const h = cpu.debugInstruction.add((p) => at(p));
     try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at(cpu.pc)) return; } }
     finally { h.remove(); }

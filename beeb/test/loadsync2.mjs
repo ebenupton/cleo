@@ -17,7 +17,7 @@ const cyc = () => cpu.currentCycles + cpu.cycleSeconds * 2_000_000;
 const HV = []; let forced = 0; { const opc = v.paintAndClear.bind(v); v.paintAndClear = function () { if (v.bitmapY >= 768) forced++; HV.push([cyc(), v.bitmapY >= 768]); return opc(); }; }
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 async function to(pc, bank, budget = 6000) {
-  const at = () => cpu.pc === pc && (bank === undefined || cpu.readmem(0xf4) === P[bank - 4]) && imgOk(cpu, A, banks, pc);
+  const at = () => cpu.pc === pc && (bank === undefined || cpu.readmem((A.romsel_cpy ?? 0xf4)) === P[bank - 4]) && imgOk(cpu, A, banks, pc);
   const h = cpu.debugInstruction.add(() => at());
   try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }
   throw new Error("not reached: " + pc.toString(16));
