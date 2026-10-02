@@ -2159,7 +2159,6 @@ os_switch:                          ; fa, fb, fc, fd: the low bytes
         OOUT fd, O_DL
 ob_none:                            ; (type 8, nothing to do: os_switch's rts)
         rts
-        .segment "LOWCODE"          ; (low RAM: room the game image has not)
 os_oxy: lda spx                     ; ox, oy: the object's position (the prologue's spx,
         sta ox                      ; spy)
         lda spx+1
@@ -2169,7 +2168,6 @@ os_oxy: lda spx                     ; ox, oy: the object's position (the prologu
         lda spy+1
         sta oy+1
         rts
-        .segment "GAMECODE"
 
 ; range check: rx > lo && rx < hi && ry > lo2 && ry < hi2 ; X = offset of the limit
 ; quad in RNGTAB (limits stored +128 so the test is an unsigned byte compare on r^$80,
@@ -3583,9 +3581,7 @@ draw_score:                         ; 5 digits at 108..140
         cpx #4
         bcs @d
         rts
-; t16 = t16 / 10 ; q1 = remainder (X kept)
-        .segment "KRNCODE"          ; the kernel: the menus' too
-; t16 = A * A (A unsigned 0..128): the red snake's (here for the game image's room)
+; t16 = A * A (A unsigned 0..128): the red snake's
 square: sta q1
         sta q1x
         lda #0                      ; accumulator low byte lives in A; the high byte needs no
@@ -3603,6 +3599,8 @@ square: sta q1
         bne @l
         sta t16
         rts
+        .segment "KRNCODE"          ; the kernel: the menus' too
+; t16 = t16 / 10 ; q1 = remainder (X kept)
 div10_16:
         lda #0                      ; remainder lives in A for the whole loop
         ldy #16                     ; Y, not X: draw_score keeps its slot in X
@@ -3648,15 +3646,16 @@ rnd:    lsr seed+1
 :       lda seed
         rts
 
-        .segment "LOWBSS"           ; (low RAM: the engine's segment, the game's bytes)
+        .segment "GAMEBSS"          ; the game image's variables (gamedata.s)
 BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
 ; The map's row addresses (level_init) and inrange's limits: tables whose reads are
-; hot, each in a page, outside the image's variables (so those end a page sooner)
+; hot, each in a page
         .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
 RNGTAB:    .res 88                  ; inrange's limits: the level file's header tail
         .assert RNGTAB = LV_HDR + 32, error, "RNGTAB: where the loader puts the header's tail"
 MROWL:     .res 128                 ; the row addresses' low bytes
-        .segment "GAMEHI"           ; bank 7's last page, after the kernel's KRNHW
+        .segment "GAMEBSS"
+        .align 128                  ; (GAMEBSS is page aligned: the half page is one page's)
 MROWH:     .res 128                 ; and their high bytes
         .assert >MROWL = >(MROWL+127) && >MROWH = >(MROWH+127), warning, "MROWL/MROWH cross a page: their reads +1"
 
