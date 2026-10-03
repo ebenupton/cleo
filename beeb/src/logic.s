@@ -363,6 +363,13 @@ getinfo:
 @out8:  lda #8                      ; outside the map
         rts
 
+; The map memo: the last tile getaltitude read (mapcol: it and the tiles above and
+; below it in its column) and where.  Cleo's queries -- the altitude under her, at
+; each pixel of her move across, through her fall, the tile attributes -- land in the
+; tile the one before them did more than half the time (test: 57%), and then skip the
+; tile arithmetic and the visit to bank 5.  It holds across frames: mok = 0 (none) at a
+; level's start and wherever the map is written (mark_pair: the vanishing block's and
+; the switch's tiles).
 ; getaltitude: A = altitude (signed) at pixel (qx, qy)  [qy modified; tp clobbered]
 ; It reads the tile at (qx, qy) and at most one of the tiles above and below it, so
 ; the three come from one visit to the map (mapcol) and the rest is arithmetic.  A
@@ -370,7 +377,30 @@ getinfo:
 getaltitude:
         lda qy+1                    ; tilexy's, in line, the row into X and the column
         cmp maph+1                  ; into Y
-        bcs @offj
+        bcs @offjj
+        ldx mok                     ; the same tile as the last read (mapmemo)?
+        beq @read
+        cmp mkyh
+        bne @read
+        lda qx+1
+        cmp mkxh
+        bne @read
+        lda qy
+        and #$F8
+        cmp mky
+        bne @read
+        lda qx
+        and #$F8
+        cmp mkx
+        bne @read
+        lda ma                      ; then its column's three tiles, as mapcol gave them
+        sta tp
+        lda mb
+        sta tp+1
+        lda mt
+        jmp @have
+@offjj: jmp @offj                   ; (off the map: out of reach of a branch)
+@read:  lda qy+1
         lsr
         sta q2
         lda qy
@@ -382,7 +412,7 @@ getaltitude:
         tax                         ; X = ty
         lda qx+1
         cmp mapw+1
-        bcs @offj
+        bcs @offjj
         lsr
         sta q2
         lda qx
@@ -397,7 +427,26 @@ getaltitude:
         lda MROWH,x
         sta mapptr+1
         jsr mapcol                  ; A = the tile, tp = the one above, tp+1 the one below
-        ALTOF
+        sta mt                      ; the memo: this tile, its column's two others, and
+        tay                         ;  where it is
+        lda tp
+        sta ma
+        lda tp+1
+        sta mb
+        lda qx
+        and #$F8
+        sta mkx
+        lda qx+1
+        sta mkxh
+        lda qy
+        and #$F8
+        sta mky
+        lda qy+1
+        sta mkyh
+        sta mok                     ; (qy+1 + 1 > 0: inside the map; any nonzero will do)
+        inc mok
+        tya
+@have:  ALTOF
         tax                         ; X = n3 (the alt byte)
         lda qy
         and #7
@@ -474,8 +523,27 @@ getaltitude:
 ; gettileattr: A = attribute byte for the tile at (qx,qy): bits0-2 push+3, bit7 kill ; 3 if outside
 gettileattr:
         lda qy+1                    ; tilexy's, in line (as getaltitude's): row into X,
-        cmp maph+1                  ; column into Y
-        bcs @out
+        cmp maph+1                  ; column into Y (gettileattr+2: A = qy+1 already,
+        bcs @out                    ;  which that caller has not stored: store it, the
+        sta qy+1                    ;  read below loads it again)
+        ldx mok                     ; the same tile as getaltitude's last read?
+        beq @read
+        cmp mkyh
+        bne @read
+        lda qx+1
+        cmp mkxh
+        bne @read
+        lda qy
+        and #$F8
+        cmp mky
+        bne @read
+        lda qx
+        and #$F8
+        cmp mkx
+        bne @read
+        lda mt
+        jmp @attr
+@read:  lda qy+1
         lsr
         sta q2
         lda qy
@@ -502,7 +570,7 @@ gettileattr:
         lda MROWH,x
         sta mapptr+1
         jsr mapbyte
-        tay
+@attr:  tay
         lda LV_ATTR0,y
         rts
 @out:   lda #3                      ; off the map
@@ -555,6 +623,9 @@ level_init:
         ; clear object state, then grid
         tya                         ; A = 0: maprow left Y = 0 (the last @mrow pass)
         sta BINOK                   ; the cached object list belongs to the old level
+        sta mok                     ; and the map memo to its map
+        sta dxl                     ; (and a level's start is no move to sweep)
+        sta dyl
         sta starclk                 ; the stars' clock: every phase from the level's start
         sta stars
         sta bent
@@ -1272,12 +1343,16 @@ player_dead:
         sta vy
         sta vy+1
         sta anim
+        sta dxl                     ; (a respawn is no move to sweep)
+        sta dyl
   .else
         stz vx
         stz vx+1
         stz vy
         stz vy+1
         stz anim
+        stz dxl
+        stz dyl
   .endif
         dec lives
         bne :+
@@ -1302,12 +1377,14 @@ player_dead:
         lda #26
         jmp addsprite
 
-; ---- the frame's vertical motion: the original's two steps exactly -- each its
-; gravity, vy = (vy + 80) * 31 >> 5, then its move, (vy + 128) >> 8 (MAXDWY0 down at
-; most) -- summed into dpx (MAXFALL down at most; X = dpx+1).  fall2: both steps with
-; gravity; move2: a jump's or a stand's, the first without it and the second with it
-; only if rising (the original's second step took @grav on vy < 0).  q5: the first
-; step's move.
+; ---- the frame's vertical motion: one update a frame, its velocity and its move the
+; original's two steps' exactly -- each its gravity, vy = (vy + 80) * 31 >> 5, then
+; its move, (vy + 128) >> 8 (MAXDWY0 down at most) -- summed into dpx (MAXFALL down
+; at most; X = dpx+1).  No position between them is kept: player_update makes the move
+; against the map (the altitude, looked at again until the move is made), and the
+; objects test the stretch it covered (dxl, dyl: csweep).  fall2: both with gravity;
+; move2: a jump's or a stand's, the first without it and the second with it only if
+; rising (the original's second step took @grav on vy < 0).  q5: the first move.
 MAXDWY0 = 8                         ; the original's fall a step at most
 fall2:  jsr gravity
         jsr step1
@@ -1319,7 +1396,6 @@ move2:  jsr step1
         bpl fstep2
 move2g: jsr gravity
 fstep2: jsr step1
-        sta pdy                     ; (the frame's middle is one step back: inrange2)
         ldx #$FF                    ; X = dpx+1: $FF up, 0 down
         clc
         adc q5                      ; the two moves (-40..16: a byte, signed)
@@ -1390,6 +1466,10 @@ player_update:
         sta anim                    ; A = 0: bactive, just tested
         inc firing                  ; 0 -> 1: firing was tested zero above
 @nothrow:
+        lda px                      ; where her move starts (dxl, dyl: at @hdone)
+        sta pxs
+        lda py
+        sta pys
         ; vertical velocity
         bmi16 vy, @grav
         lda alt
@@ -1705,7 +1785,14 @@ player_update:
         stz vx
         stz vx+1
   .endif
-@hdone:
+@hdone: lda px                      ; dxl, dyl: her move this frame, all of it (across;
+        sec                         ;  down: the fall, a slope's step), the stretch the
+        sbc pxs                     ;  objects' tests sweep next frame (csweep)
+        sta dxl
+        lda py
+        sec
+        sbc pys
+        sta dyl
         ; animation counters: two steps a frame (every test is of an even count)
         inc anim
         inc anim
@@ -1865,179 +1952,90 @@ player_update:
         ldy py+1
         sty spy+1
         jsr addsprite
-@boom:  ; ---- boomerang: its flight takes the frame's two steps (a homing spring
-        ; doubled would overshoot, and the catch is a 14-pixel box)
-        lda #2
-        sta q4
-@bl:    lda bactive
+@boom:  ; ---- boomerang: one flight step a frame.  Its move is made 8 px at most at a
+        ; time, stopping in the first solid, so it cannot fly through a wall; the catch,
+        ; like the objects' hits (bsweep), tests the box between where it was and where
+        ; it is -- no position between a frame's ends is tested.
+        lda #0
+        sta bdx                     ; its move this frame (none unless it flies)
+        sta bdy
+        lda bactive
         bne :+
         jmp @bdone
-:
-        sec                         ; ry = (py - by) + 8: one carry chain, not two
-        lda py
-        sbc by
-        tax
-        lda py+1
-        sbc by+1
-        sta ry+1
-        txa
-        clc
-        adc #8
-        sta ry
-        bcc @ry8
-        inc ry+1
-@ry8:   sec                         ; rx = px - bx after ry, so its high byte is still
-        lda px                      ; in A for the test and its low byte in Y
-        sbc bx
-        sta rx
-        tay
-        lda px+1
-        sbc bx+1
-        sta rx+1
-        ; caught?  rx in -7..7 iff rx+7 is 0..14 unsigned
-        cpy #$F9                    ; C = carry out of rx+7's low byte
-        adc #0                      ; A = high byte of rx+7
-        bne @nocatch
-        bcs @xin                    ; rx+1 was $FF: rx = -7..-1
-        cpy #8                      ; rx+1 was 0: rx = 0..248
-        bcs @nocatch
-@xin:   lda ry                      ; the same for ry, whose low byte less 8 is still in X
-        cmp #$F9
-        lda ry+1
-        adc #0                      ; A = high byte of ry+7
-        bne @nocatch
-        cpx #$F1                    ; low(ry+7) = X+15 < 15 iff X >= $F1
-        bcc @nocatch
-.if BHW
-        dec bactive                 ; bactive is 1 here (0/1 flag, nonzero on entry)
-.else
-        stz bactive
-.endif
-@nocatch:
-        lda bcnt
+:       lda bcnt
         cmp #8
-        bcc :+
-        jmp @bfly
-:
-        ; bvx = bvx*61>>6 + rx*2 ; bx += (bvx+128)>>8
-        lda bvx                     ; -3*bvx as bvx - 4*bvx: t16 = 4*bvx first
-        asl
-        sta t16
-        lda bvx+1
-        rol
-        asl t16
-        rol
-        sta t16+1                   ; t16 = 4*bvx
+        bcc @bfly
+        jmp @bcount                 ; hit or stopped: it no longer flies
+@bfly:  jsr brel                    ; the pull toward Cleo
+        ldx #0                      ; the two axes' velocities, and their moves
+        jsr bstep
+        sta bmx
+        ldx #2
+        jsr bstep
+        sta bmy
+@bm:    lda bmx                     ; a part of the move: 8 px at most each way
+        jsr clamp8
+        tax
+        eor #$FF                    ; bmx -= it
         sec
-        lda bvx
-        sbc t16
-        sta t16
-        lda bvx+1
-        sbc t16+1                   ; A = high byte of -3*bvx
-        ldx #6
-:       cmp #$80
-        ror
-        ror t16
-        dex
-        bne :-
-        tay                         ; Y, not X: X = 0 from the loop is the delta's sign
+        adc bmx
+        sta bmx
+        txa
         clc
-        lda bvx
-        adc t16
-        sta bvx
-        tya
-        adc bvx+1
-        sta bvx+1
-        asl16 rx
-        clc                         ; bvx += rx*2, its new low byte kept in Y
-        lda bvx
-        adc rx
-        sta bvx
-        tay
-        lda bvx+1
-        adc rx+1
-        sta bvx+1
-        cpy #$80                    ; C = bit 7 of bvx = carry out of (bvx + 128)
-        adc #0                      ; A = high byte of bvx + 128
+        adc bdx
+        sta bdx
+        txa
+        ldx #0
+        jsr bmove                   ; bx += it, and qx = bx
+        lda bmy
+        jsr clamp8
+        tax
+        eor #$FF
+        sec
+        adc bmy
+        sta bmy
+        txa
+        clc
+        adc bdy
+        sta bdy
+        txa
+        ldx #2
+        jsr bmove                   ; by += it, and qy = by
+        jsr getaltitude             ; in a solid: it stops there
         bpl :+
-        dex
-:       clc                         ; bx += the delta, and qx = bx for getaltitude
-        adc bx
-        sta bx
-        sta qx
-        txa
-        adc bx+1
-        sta bx+1
-        sta qx+1
-        lda bvy                     ; -3*bvy as bvy - 4*bvy: t16 = 4*bvy first
-        asl
-        sta t16
-        lda bvy+1
-        rol
-        asl t16
-        rol
-        sta t16+1                   ; t16 = 4*bvy
-        sec
-        lda bvy
-        sbc t16
-        sta t16
-        lda bvy+1
-        sbc t16+1                   ; A = high byte of -3*bvy
-        ldx #6
-:       cmp #$80
-        ror
-        ror t16
-        dex
-        bne :-
-        tay                         ; Y, not X: X = 0 from the loop is the delta's sign
-        clc
-        lda bvy
-        adc t16
-        sta bvy
-        tya
-        adc bvy+1
-        sta bvy+1
-        asl16 ry
-        clc                         ; bvy += ry*2, its new low byte kept in Y
-        lda bvy
-        adc ry
-        sta bvy
-        tay
-        lda bvy+1
-        adc ry+1
-        sta bvy+1
-        cpy #$80                    ; C = bit 7 of bvy: only the high byte of bvy+128 is used
-        adc #0
-        bpl :+                      ; X = 0 from the loop: sign-extend the delta into it
-        dex
-:       clc
-        adc by
-        sta by
-        sta qy
-        txa
-        adc by+1
-        sta by+1
-        sta qy+1
-        jsr getaltitude
-        bpl @bfly
         lda #8
         sta bcnt
-@bfly:  inc bcnt
-        lda bcnt
+        bne @bcount                 ; always
+:       lda bmx
+        ora bmy
+        bne @bm
+@bcount: lda bcnt                   ; two counts a frame: in flight 0, 2, 4, 6 and round
+        clc                         ;  again (its spin); hit or stopped, from 8 to 14, gone
+        adc #2
         cmp #8
         bne :+
-        stz bcnt                    ; (Model B: A = 0, and 0 fails cmp #14 as 8 does)
-:       cmp #14
+        lda #0
+:       sta bcnt
+        cmp #14
         bne :+
+        lda #0
+        sta bactive
+        beq @bdone                  ; always
+:       jsr brel                    ; caught?  The box it crossed meets Cleo's: rx, ry
+        ldx #4                      ;  in -7..7 (quad 4: a star's -8..8 band, open)
+        jsr bsweep
+        bcc @bdraw
+  .if BHW
+        dec bactive                 ; bactive is 1 here (0/1 flag, nonzero on entry)
+  .else
         stz bactive
-:       dec q4                      ; the second step
-        beq @bdraw
-        jmp @bl
+  .endif
 @bdraw: lda bactive
         beq @bdone
         mov16 spx, bx
         mov16 spy, by
-        lda bcnt                    ; C = 0: cmp #14 above failed (bcnt 14 clears bactive)
+        lda bcnt
+        clc
         adc #54
         lsr                         ; (bcnt + 54) >> 1 = bcnt/2 + 27
         jsr addsprite
@@ -2196,30 +2194,206 @@ inrange:
 @nc:    rts                         ; (C already 0)
 
 
-;---- inrange2: Cleo's test as the original made it, twice a frame a step apart --
-; where she is, then (missing) where her first step left her: ry + pdy, pdy being the
-; frame's second move (fall2).  Only up and down: a frame moves her at most 6 px
-; across, under every band's width, but up to 12 down, over the trampoline's 8.
-; X = the quad, kept; C set if inside; rx, ry and Y kept.
-inrange2:
-        jsr inrange
-        bcs @r
-        lda ry
-        pha
-        lda ry+1
-        pha
-        lda pdy
+;---- The swept tests: no position between a frame's ends is tested, only the
+; stretch between them.  span: does r .. r + swd (r: A low, Y high, signed) meet
+; (RNGTAB+o, RNGTAB+o+1) at X, open at both ends?  C = 1 if it does; X kept.
+span:   sta swl
+        sty swh
+        jsr rbias                   ; one end, biased
+        sta swa
+        lda swd                     ; the other: r + swd
+        ldy #0
+        ora #0
         bpl :+
-        dec ry+1                    ; (a negative move: the high byte's borrow first)
-:       adc ry                      ; (C = 0: inrange's miss)
+        dey
+:       clc
+        adc swl
+        pha
+        tya
+        adc swh
+        tay
+        pla
+        jsr rbias
+        cmp swa                     ; A the high end, swa the low
+        bcs :+
+        ldy swa
+        sta swa
+        tya
+:       cmp RNGTAB,x                ; high end > lo
+        beq @no
+        bcc @no
+        lda swa
+        cmp RNGTAB+1,x              ; low end < hi
+        bcs @no
+        sec
+        rts
+@no:    clc
+        rts
+; rbias: A = low, Y = high of a signed 16-bit r -> A = r clamped to -128..127, + 128
+; (as inrange compares: a value past either end stays past every limit)
+rbias:  cpy #$FF
+        beq @n
+        cpy #0
+        bne @far
+        cmp #$80                    ; 0..255: past 127 is 127
+        bcc @in
+@hi:    lda #$FF
+        rts
+@n:     cmp #$80                    ; -256..-1: under -128 is -128
+        bcs @in
+@lo:    lda #0
+        rts
+@far:   tya
+        bmi @lo
+        bpl @hi                     ; always
+@in:    eor #$80
+        rts
+; csweep: Cleo's test, over her last move (dxl, dyl: where she was is r + d, rx/ry
+; being the object less her): where she is, else the box between where she was and
+; where she is meets the quad's -- the corner a diagonal move cuts, the 8-px trampoline
+; band a 12-px fall would cross.  X and Y kept; C = 1 if inside.
+csweep: jsr inrange                 ; where she is: the hits, and quick
+        bcs @r
+        lda dxl
+        ora dyl
+        bne @go
+@r:     rts                         ; (C = 0: she did not move)
+@go:    sty swy
+        lda dyl
+        sta swe
+        lda dxl
+        bcc sweep                   ; always: C = 0 from inrange's miss
+; bsweep: the boomerang's hit test, over its last move (bdx, bdy: where it was is
+; r + bd, rx/ry being the object less the boomerang): the box between where it was and
+; where it is meets the quad's.  X and Y kept; C = 1 if it does.
+bsweep: sty swy
+        lda bdy
+        sta swe
+        lda bdx
+; sweep: rx over A, ry over swe (the move across and down), against quad X; Y back from
+; swy.  C = 1 if both meet it.
+sweep:  sta swd
+        lda rx
+        ldy rx+1
+        jsr span
+        bcc @n
+        inx
+        inx
+        lda swe
+        sta swd
+        lda ry
+        ldy ry+1
+        jsr span
+        dex
+        dex
+@n:     ldy swy
+        rts
+
+; bstep: the boomerang's flight on one axis, X = 0 (x) or 2 (y): bv -= bv/16 + bv/64
+; + bv/128 (the original's two steps of 61/64 in one), bv += 4*r (r: rx or ry, the
+; pull toward Cleo), A = the move, 2 * ((bv + 128) >> 8) (signed).  X kept.  (Against
+; the original's two steps, thrown on the flat: 108 px out to its 105, back the same
+; frame; its drift down settles at 10 px to its 9.)
+bstep:  lda bvx+1,x                 ; t16 = bv >> 4
+        sta t16+1
+        lda bvx,x
+        ldy #4
+:       pha
+        lda t16+1
+        cmp #$80
+        ror a
+        sta t16+1
+        pla
+        ror a
+        dey
+        bne :-
+        sta t16
+        ldy #3                      ; bv -= bv>>4, then >>6, then >>7
+@d:     sec
+        lda bvx,x
+        sbc t16
+        sta bvx,x
+        lda bvx+1,x
+        sbc t16+1
+        sta bvx+1,x
+        lda t16+1                   ; t16 >>= 2, then 1
+        cmp #$80
+        ror t16+1
+        ror t16
+        cpy #3
+        bne :+
+        lda t16+1
+        cmp #$80
+        ror t16+1
+        ror t16
+:       dey
+        bne @d
+        lda rx,x                    ; bv += 4*r
+        sta t16
+        lda rx+1,x
+        asl t16
+        rol a
+        asl t16
+        rol a
+        sta t16+1
+        clc
+        lda bvx,x
+        adc t16
+        sta bvx,x
+        lda bvx+1,x
+        adc t16+1
+        sta bvx+1,x
+        lda bvx,x                   ; A = 2 * ((bv + 128) >> 8): the original's step's
+        cmp #$80                    ;  move, twice -- as its two steps rounded it (a slow
+        lda bvx+1,x                 ;  pull stays put until it would move a pixel a step)
+        adc #0
+        asl a
+        rts
+; brel: rx = px - bx, ry = py - by + 8: Cleo less the boomerang (its pull, its catch)
+brel:   sec
+        lda px
+        sbc bx
+        sta rx
+        lda px+1
+        sbc bx+1
+        sta rx+1
+        sec
+        lda py
+        sbc by
+        tax
+        lda py+1
+        sbc by+1
+        sta ry+1
+        txa
+        clc
+        adc #8
         sta ry
         bcc :+
         inc ry+1
-:       jsr inrange
-        pla
-        sta ry+1
-        pla
-        sta ry
+:       rts
+; bmove: bx (X = 0) or by (X = 2) += A (signed), and qx/qy = it
+bmove:  ldy #0
+        ora #0
+        bpl :+
+        dey
+:       clc
+        adc bx,x
+        sta bx,x
+        sta qx,x
+        tya
+        adc bx+1,x
+        sta bx+1,x
+        sta qx+1,x
+        rts
+; clamp8: A (signed) to -8..8
+clamp8: bmi @n
+        cmp #9
+        bcc @r
+        lda #8
+        rts
+@n:     cmp #<-8
+        bcs @r
+        lda #<-8
 @r:     rts
 
 ; boomerang-relative position: rx = spx - bx ; ry = spy - by  (spx/spy: the object's draw pos)
@@ -2311,7 +2485,7 @@ ob_star1:
         lda q2
         bne @tryboom                ; Cleo far: the collect cannot pass
         ldx #0
-        jsr inrange2
+        jsr csweep
         bcs @collect
 @tryboom:
         lda bactive
@@ -2325,7 +2499,7 @@ ob_star1:
 :       sta q2                      ; (label kept unused: the anonymous count)
 @tbr:   jsr boomrel
         ldx #4
-        jsr inrange
+        jsr bsweep
         bcc @phase
 @collect:
         lda #1
@@ -2383,7 +2557,7 @@ ob_tramp:                           ; A (O_AL) its spring's count: 2, 4 .. 10, t
 :       lda health
         beq @draw
         ldx #8
-        jsr inrange2
+        jsr csweep
         bcc @draw
         lda vy+1                    ; bmi16 vy and beq16 vy from one load
         bmi @draw
@@ -2397,7 +2571,7 @@ ob_tramp:                           ; A (O_AL) its spring's count: 2, 4 .. 10, t
         lda spy                     ; on its surface, 6 px into the band, where the
         sbc #6                      ;  original's step-a-time test found her: a frame's
                                     ;  two steps may carry her deeper or through it
-                                    ;  (C = 1: inrange2's, the bcc @draw not taken)
+                                    ;  (C = 1: csweep's, the bcc @draw not taken)
         sta py
         lda spy+1
         sbc #0
@@ -2483,7 +2657,7 @@ ob_snake:                           ; in place: Y = obj throughout (reloaded aft
         lda health
         beq @boom
         ldx #12
-        jsr inrange2
+        jsr csweep
         bcc @boom
         lda O_CL,y
         cmp #4
@@ -2519,7 +2693,7 @@ ob_snake:                           ; in place: Y = obj throughout (reloaded aft
         bcc @draw
         jsr boomrel
         ldx #16
-        jsr inrange
+        jsr bsweep
         bcc @draw
         lda O_CL,y
         cmp #4
@@ -2713,7 +2887,7 @@ ob_rsnake:                          ; in place: Y = obj (reloaded after the call
         bcc @hitp
         jsr boomrel
         ldx #20
-        jsr inrange
+        jsr bsweep
         bcc @hitp
         lda #4
         jsr addscore
@@ -2755,7 +2929,7 @@ ob_rsnake:                          ; in place: Y = obj (reloaded after the call
         sta ry+1
         ldy obj
         ldx #24
-        jsr inrange2
+        jsr csweep
         bcc @draw
         lda hurt
         bne @draw
@@ -2966,7 +3140,7 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         pha
         jsr boomrel
         ldx #28
-        jsr inrange
+        jsr bsweep
         pla                         ; pla/sta do not touch carry
         sta ry+1
         pla
@@ -2994,14 +3168,17 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         lda health
         beq @draw
         ldx #32
-        jsr inrange2
+        jsr csweep
         bcc @draw
-        lda ry                      ; a stomp if she was above it a step back (ry +
-        clc                         ;  pdy > 4): a frame's fall (12) can take her from
-        adc pdy                     ;  over it to level with it, where the original's
-        tax                         ;  first step found her on top (pdy >= 0 falling)
-        lda ry+1
-        adc #0
+        lda ry                      ; a stomp if she was above it where her last move
+        clc                         ;  started (ry + dyl > 4): a frame's fall (12) can
+        adc dyl                     ;  take her from over it to level with it
+        tax
+        lda dyl                     ; (dyl's sign into the high byte)
+        and #$80
+        beq :+
+        lda #$FF
+:       adc ry+1
         bmi @nostomp
         bne :+
         cpx #5
@@ -3017,7 +3194,7 @@ ob_bat:                             ; Y = obj.  C and D (O_CL/CH, O_DL/DH: the v
         lda hurt
         bne @draw
         ldx #36
-        jsr inrange2
+        jsr csweep
         bcc @draw
         mov16 hx, rx
         jsr player_hit
@@ -3191,7 +3368,7 @@ ob_walker:                          ; in place: Y = obj throughout (reloaded aft
         lda health
         beq @boom
         ldx #40
-        jsr inrange2
+        jsr csweep
         bcc @boom
         lda hurt
         bne @boom
@@ -3202,7 +3379,7 @@ ob_walker:                          ; in place: Y = obj throughout (reloaded aft
         bcc @draw
         jsr boomrel
         ldx #44
-        jsr inrange
+        jsr bsweep
         bcc @draw
         bit bvx+1
         bmi @bleft
@@ -3282,7 +3459,7 @@ ob_spike:
         adc #130                    ; (fa+1)*2 biased by $80
         sta RNGTAB+49
         ldx #48
-        jsr inrange2
+        jsr csweep
         bcc @draw
         lda hurt
         bne @draw
@@ -3327,7 +3504,7 @@ ob_powerup:                         ; in place: A (O_AL) the pickup's progress; 
         cpx #2
         bcs @draw
         ldx #52
-        jsr inrange2
+        jsr csweep
         bcc @draw
         lda #3
         sta health
@@ -3362,7 +3539,7 @@ ob_vanish:
         bne @count
         ; rx > -16 && rx <= 0 && ry == 16 && vy == 0
         ldx #56
-        jsr inrange2
+        jsr csweep
         bcc @ret
         lda vy
         ora vy+1
@@ -3411,6 +3588,8 @@ ob_vanish:
 ; mark tiles (A, X) and (A+1, X) dirty, in that order: the vanishing block's and the
 ; switch's pairs.  mark_dirty keeps its tmp = A, tmp2 = X.  A, X, Y clobbered.
 mark_pair:
+        ldy #0                      ; the map has changed: no map memo (getaltitude)
+        sty mok                     ;  (Y is free: mark_dirty takes A and X)
         jsr mark_dirty
         ldx tmp
         inx
@@ -3423,7 +3602,7 @@ ob_switch:
         lda fd
         bne @draw
         ldx #60
-        jsr inrange2
+        jsr csweep
         bcc @draw
         lda #$20                    ; (BCD)
         jsr addscore
@@ -3638,13 +3817,39 @@ rnd:    lsr seed+1
 :       lda seed
         rts
 
-        .segment "GAMEBSS"          ; the game image's variables (gamedata.s)
-BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
 ; The map's row addresses (level_init) and inrange's limits: tables whose reads are
-; hot, each in a page
-; The score and the hi-score: BCD, ones first, five digits shown (a sixth in the
-; top byte's high nibble is room).  Resident -- bank 7's last page, kept through
-; both images: the menus show them and set the hi-score; the game keeps them.
+; hot, each in a page.
+        .segment "GAMEBSS"
+BARCACHE:  .res 16                  ; bar_bg resets it, bar_digit keeps it
+; (the small variables in the room before MROWH's half page)
+mok:       .res 1                   ; the map memo (getaltitude): 0 for none; where it is
+mkx:       .res 1                   ;  (the tile's qx & $F8, qx+1, qy & $F8, qy+1); the
+mkxh:      .res 1                   ;  tile, and the tiles above and below it
+mky:       .res 1
+mkyh:      .res 1
+mt:        .res 1
+ma:        .res 1
+mb:        .res 1
+pxs:       .res 1                   ; Cleo's px, py at her move's start (player_update),
+pys:       .res 1                   ;  and her move that frame, across and down: the
+dxl:       .res 1                   ;  stretch csweep tests
+dyl:       .res 1
+bdx:       .res 1                   ; the boomerang's move this frame (bsweep's stretch)
+bdy:       .res 1
+bmx:       .res 1                   ; and what of it is still to make (8 px at a time)
+bmy:       .res 1
+swd:       .res 1                   ; span's: the stretch, its low end, r, and Y kept
+swa:       .res 1
+swl:       .res 1
+swh:       .res 1
+swy:       .res 1
+swe:       .res 1                   ; (sweep's: the move down)
+        .align 128                  ; (GAMEBSS is page aligned: MROWH in one page, and
+MROWH:     .res 128                 ;  LV_OBJST on the next; the row addresses' high bytes)
+        .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
+RNGTAB:    .res 88                  ; inrange's limits: the level file's header tail
+        .assert RNGTAB = LV_HDR + 32, error, "RNGTAB: where the loader puts the header's tail"
+MROWL:     .res 128                 ; the row addresses' low bytes
 ; The red snake's rise above its basket, by its counter A & 31 (A = -15..16 while it
 ; is up): (A*A >> 3) - 28, the reference's parabola (CleoApp.run), baked
         .segment "GAMEDATA"
@@ -3656,17 +3861,13 @@ risetab:
         .byte <(((32-i)*(32-i) >> 3) - 28)
           .endif
         .endrepeat
+; The score and the hi-score: BCD, ones first, five digits shown (a sixth in the
+; top byte's high nibble is room).  Resident -- bank 7's last page, kept through
+; both images: the menus show them and set the hi-score; the game keeps them.
         .segment "GAMEHI"
 score:     .res 3
 hiscore:   .res 3
         .assert hiscore = score + 3, error, "draw_number: Y = 0 score, 3 hi-score"
-        .segment "GAMELVL"          ; $8220-$82FF: bank 7 below the image's variables
-RNGTAB:    .res 88                  ; inrange's limits: the level file's header tail
-        .assert RNGTAB = LV_HDR + 32, error, "RNGTAB: where the loader puts the header's tail"
-MROWL:     .res 128                 ; the row addresses' low bytes
-        .segment "GAMEBSS"
-        .align 128                  ; (GAMEBSS is page aligned: the half page is one page's)
-MROWH:     .res 128                 ; and their high bytes
         .assert >MROWL = >(MROWL+127) && >MROWH = >(MROWH+127), warning, "MROWL/MROWH cross a page: their reads +1"
 
         .segment "GAMECODE"      

@@ -22,9 +22,6 @@ LV_BOBJ:    .res 256                ; an entry per object per grid cell it cover
 LV_BNEXT:   .res 256                ; to 255 of them
 LV_BINSTAR: .res BINMAX
 LV_BINOTH:  .res BINMAX
-; (logic.s inrange2's: after the hot arrays)
-pdy:       .res 1                   ; Cleo's last frame's second move (fall2): her
-                                    ;  middle, from where she is (inrange2)
         .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"
 
 ; ---------------------------------------------------------------- bank 7: the menus' image

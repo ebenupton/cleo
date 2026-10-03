@@ -470,26 +470,24 @@ HDR_STARTX, HDR_STARTY, HDR_EXITX, HDR_EXITY, HDR_SPECIAL = 2, 3, 4, 5, 8
 # saw her feet).
 RNGTAB = bytes([
     112, 144, 112, 148,     # 0: <-16, 16, <-16, 20
-    113, 143, 120, 136,     # 4: <-15, 15, <-8, 8 (the boomerang's: x 7 wider each side, below)
+    120, 136, 120, 136,     # 4: <-8, 8, <-8, 8 (the boomerang's on a star; and its catch)
     119, 145, 128, 136,     # 8: <-9, 17, 0, 8
     112, 144, 104, 140,     # 12: <-16, 16, <-24, 12
-    113, 143, 112, 132,     # 16: <-15, 15, <-16, 4 (the boomerang's: x 7 wider each side, below)
-    109, 147, 110, 130,     # 20: <-19, 19, <-18, 2 (the boomerang's: x 7 wider each side, below)
+    120, 136, 112, 132,     # 16: <-8, 8, <-16, 4 (the boomerang's)
+    116, 140, 110, 130,     # 20: <-12, 12, <-18, 2 (the boomerang's)
     118, 138, 120, 144,     # 24: <-10, 10, <-8, 16
-    109, 147, 116, 140,     # 28: <-19, 19, <-12, 12 (the boomerang's: x 7 wider each side, below)
+    116, 140, 116, 140,     # 28: <-12, 12, <-12, 12 (the boomerang's)
     112, 144, 116, 144,     # 32: <-16, 16, <-12, 16
     116, 140, 0, 255,       # 36: <-12, 12, <-128, 127
     112, 144, 104, 148,     # 40: <-16, 16, <-24, 20
-    111, 145, 112, 136,     # 44: <-17, 17, <-16, 8 (the boomerang's: x 7 wider each side, below)
+    118, 138, 112, 136,     # 44: <-10, 10, <-16, 8 (the boomerang's)
     120, 128, 104, 136,     # 48: <-8, 0, <-24, 8 (+49: ob_health sets it)
     112, 144, 104, 140,     # 52: <-16, 16, <-24, 12
     112, 129, 143, 145,     # 56: <-16, 1, 15, 17
     112, 144, 104, 140,     # 60: <-16, 16, <-24, 12
-    # The boomerang's hit bands (4, 16, 20, 28, 44) are 7 px wider each side across
-    # than the original's: it flies up to 14 px a step, two steps a frame, and is
-    # tested once a frame -- a band at least 28 across cannot be stepped over, as
-    # the original's two tests a frame did not let it.  (Its height moves slowly:
-    # widening that would hit what it flies over.)
+    # The boomerang's hit bands (4, 16, 20, 28, 44) are the original's: they are
+    # tested against the box the boomerang crossed in its last move (logic.s
+    # bsweep), so it cannot fly through one between frames.
     # Guard bands: not "close enough to collect" but "the drawn rectangles touch"
     # this frame -- where Cleo and the boomerang are when the objects run, grown by
     # the most each moves before it is drawn: Cleo 6 across and 14 up or down, the
