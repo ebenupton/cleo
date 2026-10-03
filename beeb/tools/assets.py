@@ -479,7 +479,10 @@ RNGTAB = bytes([
     116, 140, 116, 140,     # 28: <-12, 12, <-12, 12 (the boomerang's)
     112, 144, 116, 144,     # 32: <-16, 16, <-12, 16
     116, 140, 0, 255,       # 36: <-12, 12, <-128, 127
-    112, 144, 104, 148,     # 40: <-16, 16, <-24, 20
+    120, 136, 114, 140,     # 40: <-8, 8, <-14, 12: the mask and the mummy -- the biggest
+                            #  box where every Cleo frame (0-26) overlaps every frame of
+                            #  both (67-84) by a pixel; the original's (-16, 16, -24, 20)
+                            #  hit with no pixels touching at 58% of its offsets
     118, 138, 112, 136,     # 44: <-10, 10, <-16, 8 (the boomerang's)
     120, 128, 104, 136,     # 48: <-8, 0, <-24, 8 (+49: ob_health sets it)
     112, 144, 104, 140,     # 52: <-16, 16, <-24, 12
