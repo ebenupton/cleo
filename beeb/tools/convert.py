@@ -316,103 +316,15 @@ for cid, orig in enumerate(compact):
         continue
     blackened[cid] = rep
 
-# Wall texture is occasionally used as foreground filler (the feet of ramps):
-# blackening those cells would punch a hole in the level.  They are found by
-# their neighbourhood (a non-solid backdrop tile boxed in by solid ones) and
-# given a twin compact tile that keeps its texture -- same image as before,
-# same collision, so nothing about the level changes but the look.
-def _solid(orig):
-    return any((alt[orig * 8 + c] >> 4) < 8 for c in range(8))
-
-hole_cells = {}                 # (lv, sub) -> {(y, x): orig}
-twin_of = {}                    # orig -> compact id of the texture-keeping twin
-for (lv, sub), L in levels.items():
-    m = L['map']
-    h, w = m.shape
-    cells = {}
-    for y in range(1, h - 1):
-        for x in range(1, w - 1):
-            o = int(m[y, x])
-            if o < 0 or orig2compact[o] not in blackened or _solid(o) \
-                    or o in PIXEL_TILES:
-                continue
-            nb = [int(m[y + 1, x]), int(m[y, x - 1]), int(m[y, x + 1])]
-            if sum(_solid(n) for n in nb if n >= 0) >= 3 - 0 and \
-                    sum(_solid(n) for n in nb if n >= 0) >= 3:
-                cells[(y, x)] = o
-    if cells:
-        hole_cells[(lv, sub)] = cells
-        for o in set(cells.values()):
-            twin_of.setdefault(o, None)
-
-# Isolated black cells read as holes punched in the foreground: blackening a tile's
-# backdrop can leave a small patch of all-black tiles inside a wall or a floor.  A
-# hole is a 4-connected patch of cells whose tiles blacken to all black, at most four
-# cells (1x1 up to 2x2), that touches neither the map's edge nor any other black, with
-# textured tiles beside it -- so a black cell under the black sky beside a doorway is
-# backdrop, not a hole.  Each of its cells gets back the tile that was there, as it
-# was before blackening (a texture-keeping twin, as for the ramps' feet above): nothing
-# is invented.  A cell whose tile was black to begin with stays as it was.
-def _after(cid):                    # a tile's image once the backdrops are blackened
-    return blackened.get(cid, tile_preview[cid])
-def _black(cid):
-    return bool(np.all(_after(cid) == 0))
-def _textured(cid):
-    a = _after(cid)
-    return not (np.all(a == 0) or np.all(a == CYAN_COL))
-restored = 0
-for (lv, sub), L in levels.items():
-    m = L['map']
-    h, w = m.shape
-    keep = hole_cells.get((lv, sub), {})          # (the ramps' feet keep their texture)
-    cid_at = lambda y, x: orig2compact[int(m[y, x])] if int(m[y, x]) >= 0 else None
-    black = np.zeros((h, w), bool)
-    for y in range(h):
-        for x in range(w):
-            c = cid_at(y, x)
-            black[y, x] = c is not None and (y, x) not in keep and _black(c)
-    seen = np.zeros_like(black)
-    cells = {}
-    for y in range(h):
-        for x in range(w):
-            if not black[y, x] or seen[y, x]:
-                continue
-            comp, stack, edge = [], [(y, x)], False
-            seen[y, x] = True
-            while stack:                            # the whole patch, however big
-                cy, cx = stack.pop(); comp.append((cy, cx))
-                for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-                    ny, nx = cy + dy, cx + dx
-                    if not (0 <= ny < h and 0 <= nx < w):
-                        edge = True; continue
-                    if black[ny, nx] and not seen[ny, nx]:
-                        seen[ny, nx] = True; stack.append((ny, nx))
-            if len(comp) > 4 or edge:
-                continue
-            textured = any((cy + dy, cx + dx) not in comp and 0 <= cy + dy < h and 0 <= cx + dx < w
-                           and (cid_at(cy + dy, cx + dx) is not None)
-                           and ((cy + dy, cx + dx) in keep or _textured(cid_at(cy + dy, cx + dx)))
-                           for cy, cx in comp for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)))
-            if not textured:
-                continue
-            for cy, cx in comp:
-                o = int(m[cy, cx])
-                if orig2compact[o] in blackened:      # blackened: its own art back
-                    cells[(cy, cx)] = o
-    if cells:
-        restored += len(cells)
-        hole_cells.setdefault((lv, sub), {}).update(cells)
-        for o in set(cells.values()):
-            twin_of.setdefault(o, None)
-for o in sorted(twin_of):
-    twin_of[o] = len(compact)
-    compact.append(o)                       # same original id: same alt class
-    tile_preview.append(tile_preview[orig2compact[o]].copy())   # unblackened
+# No backdrop cell gets its art back.  The original drew every backdrop the same dark
+# speckle, so a backdrop cell boxed in by solid tiles (a ramp's foot, a scaffold
+# bracket's triangle, a frame's inside) showed the backdrop through, as the backdrop
+# all round it did.  With the backdrops black, the same cell is black: giving it its
+# speckle back (texture-keeping twins, until 3 Oct 2026) drew magenta-tinged blocks
+# under the ramps and dots inside the frames that read as background left uncleared.
 for cid, rep in blackened.items():
     tile_preview[cid] = rep
-print('blackened %d tiles; %d texture-keeping twins for %d cells (%d of them holes given back their own tile)'
-      % (len(blackened), len(twin_of),
-         sum(len(c) for c in hole_cells.values()), restored))
+print('blackened %d tiles' % len(blackened))
 
 tiles_bytes = []
 for cid in range(len(compact)):
@@ -558,7 +470,6 @@ tiles_bytes = [tiles_bytes[o] for o in _order]
 tile_class = [tile_class[o] for o in _order]
 tile_solid = {_newid[c]: v for c, v in tile_solid.items()}
 orig2compact = {t: _newid[c] for t, c in orig2compact.items()}
-twin_of = {t: _newid[c] for t, c in twin_of.items()}
 print('tiles: %d with data, %d solid' % (NDATA, len(compact) - NDATA))
 # tiles are ordered by original id; but put the 'special' animation tiles in known places:
 # we just record their compact ids for the game code
@@ -613,8 +524,6 @@ for (lv, sub) in sorted(levels, key=_src):
     fl = (m == 427)                  # the original randomises tile 427 at level start
     m[fl] = 426 + rng.randint(0, 4, size=int(fl.sum()))
     cm = np.vectorize(lambda t: orig2compact[t])(m)
-    for (hy, hx), ho in hole_cells.get((lv, sub), {}).items():
-        cm[hy, hx] = twin_of[ho]     # keep the texture: ramps' feet, and holes (above)
     maps[(lv, sub)] = cm
 maps = {k: maps[k] for k in levels}      # (the game's order again: the stream's was the original's)
 
