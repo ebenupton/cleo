@@ -180,11 +180,15 @@ def strip_dunes(m):
     print('PARALLAX: %d dune cells -> sky' % n)
     return m
 
+# The game's order of the original's maps: (level, sub) -> the source level it takes.
+# Levels 1 and 5, the first and third large indoor maps, swapped (their bonus maps, the
+# subs 1, stay); menu.s's names and starbake.json's plans follow the maps.
+LEVEL_SOURCE = {(1, 0): 5, (5, 0): 1}
 levels = {}
 used = set()
 for lv in range(8):
     for sub in (0, 1):
-        L = parse_level(lv, sub)
+        L = parse_level(LEVEL_SOURCE.get((lv, sub), lv), sub)
         if PARALLAX and lv == 0:
             L['map'] = strip_dunes(L['map'])
         levels[(lv, sub)] = L
@@ -599,7 +603,12 @@ def name_of(lv, sub):
 # ----------------------------------------------------------------------------
 SOLID_CYAN, SOLID_BLACK = 254, 255   # reserved ids, identical in both sets
 maps = {}
-for (lv, sub), L in levels.items():
+# One stream of random sand for all the maps, taken in the ORIGINAL's order of the
+# maps (LEVEL_SOURCE), not the game's: a map's sand is then the map's own, whichever
+# level it is played as, and reordering levels leaves every other map's bytes alone.
+_src = lambda k: (LEVEL_SOURCE.get(k, k[0]), k[1])
+for (lv, sub) in sorted(levels, key=_src):
+    L = levels[(lv, sub)]
     m = L['map'].copy()
     fl = (m == 427)                  # the original randomises tile 427 at level start
     m[fl] = 426 + rng.randint(0, 4, size=int(fl.sum()))
@@ -607,6 +616,7 @@ for (lv, sub), L in levels.items():
     for (hy, hx), ho in hole_cells.get((lv, sub), {}).items():
         cm[hy, hx] = twin_of[ho]     # keep the texture: ramps' feet, and holes (above)
     maps[(lv, sub)] = cm
+maps = {k: maps[k] for k in levels}      # (the game's order again: the stream's was the original's)
 
 def tileset_of(lv, sub):
     return lv & 1
