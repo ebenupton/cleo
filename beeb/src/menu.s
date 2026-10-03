@@ -609,24 +609,31 @@ level_select:
         sta menuptr
         lda #>levelnames
         sta menuptr+1
-        lda #12
-        sta mstep
         lda #1
         sta mclear
         pla                         ; max = n-1
         tax
         inx
         stx tmp                     ; n
-        ; top y = (VISLINES/2 - 8 - (n-1)*12)/2, down to a multiple of 4: halved first,
-        ; K/2 - (n-1)*6, with $7C for the lsr's empty bit 7 (K = VISLINES/2 - 8 is even)
-        .assert ((VISLINES/2 - 8) & 1) = 0, error, "level_select halves K first"
+        ; the items 12 px apart, or 8 when that would not fit the window (all eight on
+        ; the Model B's 84 px: 92 tall at 12)
         asl
-        sta tmp2
         asl
-        adc tmp2                    ; (n-1)*6 (C=0: (n-1)*4 <= 28)
-        eor #$FF
-        adc #(VISLINES/2 - 8)/2 + 1 ; K/2 - (n-1)*6 (C=0 from the adc)
-        and #$7C
+        sta tmp3                    ; (n-1)*4
+        asl
+        adc tmp3                    ; (n-1)*12 (C = 0: (n-1)*8 <= 56)
+        ldy #12
+        cmp #VISLINES/2 - 8 + 1     ; the list's height less a glyph's, against the window's
+        bcc :+
+        lda tmp3
+        asl                         ; (n-1)*8
+        ldy #8
+:       sty mstep
+        ; top y = (VISLINES/2 - 8 - (n-1)*step) / 2, down to a multiple of 4 (a glyph row's)
+        eor #$FF                    ; (C = 0 both ways in: the bcc, or the asl of < 128)
+        adc #VISLINES/2 - 8 + 1
+        lsr
+        and #$FC
         tax
         lda tmp
         jmp menu_list
