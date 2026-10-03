@@ -488,7 +488,7 @@ menu_list:
         sty ptr+1
         tax
         jsr item_y
-        lda #8
+        lda #(WINPX-CURSORLEN*8)/2  ; centred, as text_centred puts the items
         jmp drawtext
 item_y: lda mtop                    ; X = item index -> A = X = its y
         cpx #0
@@ -500,6 +500,8 @@ item_y: lda mtop                    ; X = item index -> A = X = its y
 :       tax
         rts
 cursor_str: .byte ">                 <", 0
+CURSORLEN = * - cursor_str - 1
+        .assert ((WINPX-CURSORLEN*8)/2) .mod 2 = 0, error, "drawtext's x must be even"
 blank_str:  .byte "_                 _", 0
 
 ; if mclear: clear the items' area below the logo, char row mtop/4 to the last (640
