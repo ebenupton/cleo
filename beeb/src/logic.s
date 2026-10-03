@@ -1234,11 +1234,10 @@ game_frame:
         jsr dbg_bcd
 @dbgt:
   .endif
-        lda health
-        bne :+
-        lda hurt
-        bne @nokill
-:       mov16 qx, px
+        lda health                  ; dead: nothing hits.  (It was health <> 0 OR hurt = 0:
+        beq @nokill                 ;  a fall off the map leaves health 0 with hurt clear,
+                                    ;  and a kill tile under her then took 0 to 255, alive.)
+        mov16 qx, px                ; (alive, a kill tile hits through the invulnerability)
         clc
         lda py
         adc #12
