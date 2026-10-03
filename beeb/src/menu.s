@@ -824,13 +824,13 @@ h5:         .byte "STARS TO OPEN", 0
 h6:         .byte "BONUS LEVEL", 0
 levelnames: .word l0, l1, l2, l3, l4, l5, l6, l7
 l0:         .byte "CITY GATES", 0
-l1:         .byte "CHEOPS", 0
+l1:         .byte "NEFERTITI", 0             ; (levels 1 and 7: the maps swapped, convert.py)
 l2:         .byte "VINEYARDS", 0
 l3:         .byte "CHEFREN", 0
 l4:         .byte "CITADELS", 0
 l5:         .byte "TUTANKHAMUN", 0
 l6:         .byte "ALEXANDRIA", 0
-l7:         .byte "NEFERTITI", 0
+l7:         .byte "CHEOPS", 0
 str_score:  .byte "SCORE", 0
 str_hiscore:.byte "HISCORE", 0
 

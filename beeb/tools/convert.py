@@ -180,11 +180,15 @@ def strip_dunes(m):
     print('PARALLAX: %d dune cells -> sky' % n)
     return m
 
+# The game's order of the original's maps: (level, sub) -> the source level it takes.
+# Levels 1 and 7, the first and last large indoor maps, swapped (their bonus maps, the
+# subs 1, stay); menu.s's names follow the maps.
+LEVEL_SOURCE = {(1, 0): 7, (7, 0): 1}
 levels = {}
 used = set()
 for lv in range(8):
     for sub in (0, 1):
-        L = parse_level(lv, sub)
+        L = parse_level(LEVEL_SOURCE.get((lv, sub), lv), sub)
         if PARALLAX and lv == 0:
             L['map'] = strip_dunes(L['map'])
         levels[(lv, sub)] = L
