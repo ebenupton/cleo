@@ -136,31 +136,39 @@ draw_glyph_rows:
         lsr
         sta w16
         stz w16+1
+        lda ty                      ; any game pixel row: tfine = ty & 3, the glyph's
+        and #3                      ;  rows (a game pixel, two lines, each) start that
+        sta tfine                   ;  far into its char row and run on into the next
         lda ty
         lsr
         lsr
         clc                         ; (ringaddr7 adds the carry in: ty's bit 1 is out)
         jsr ringaddr7               ; sp = first char (row 0)
         ldx #0                      ; glyph row 0..7
-@row:   cpx #4
-        bne :++                     ; past the fold's own anonymous label
-        lda sp                      ; second char row: one row on
-        adc #(<ROWBYTES) - 1        ; C = 1: cpx #4 found X = 4
+@row:   txa                         ; tline = the glyph row's place from the first char
+        clc                         ;  row's top: the next char row at 4 and 8
+        adc tfine
+        sta tline
+        cmp #4
+        beq @next
+        cmp #8
+        bne @put
+@next:  lda sp                      ; one char row on (C = 1: the cmp found it equal)
+        adc #(<ROWBYTES) - 1
         .assert (<ROWBYTES) <> 0, error, "the carry-in add needs a nonzero low byte"
         sta sp
         lda sp+1
         adc #>ROWBYTES
         ringup sp
         sta sp+1
-:
-        txa
+@put:   txa
         tay
         lda (w16b),y
         sta tmp                     ; row bits
-        txa
+        lda tline
         asl
         and #7
-        sta tmp2                    ; ra
+        sta tmp2                    ; ra: its line in the char row
         lda sp
         sta tp
         lda sp+1
@@ -615,8 +623,10 @@ level_select:
         tax
         inx
         stx tmp                     ; n
-        ; the items 12 px apart, or 8 when that would not fit the window (all eight on
-        ; the Model B's 84 px: 92 tall at 12)
+        sta tmp2
+        asl tmp2                    ; (n-1)*2
+        ; the items 12 px apart, or 10 when that would not fit the window (all eight on
+        ; the Model B's 84 px: 92 tall at 12, 78 at 10)
         asl
         asl
         sta tmp3                    ; (n-1)*4
@@ -625,15 +635,14 @@ level_select:
         ldy #12
         cmp #VISLINES/2 - 8 + 1     ; the list's height less a glyph's, against the window's
         bcc :+
-        lda tmp3
-        asl                         ; (n-1)*8
-        ldy #8
+        sbc tmp2                    ; C = 1: (n-1)*12 - (n-1)*2 = (n-1)*10
+        ldy #10
+        clc
 :       sty mstep
-        ; top y = (VISLINES/2 - 8 - (n-1)*step) / 2, down to a multiple of 4 (a glyph row's)
-        eor #$FF                    ; (C = 0 both ways in: the bcc, or the asl of < 128)
+        ; top y = (VISLINES/2 - 8 - (n-1)*step) / 2 (text goes on any pixel row)
+        eor #$FF                    ; (C = 0 both ways in)
         adc #VISLINES/2 - 8 + 1
         lsr
-        and #$FC
         tax
         lda tmp
         jmp menu_list
@@ -842,6 +851,8 @@ str_score:  .byte "SCORE", 0
 str_hiscore:.byte "HISCORE", 0
 
         .segment "MNUBSS"
+tfine:     .res 1                   ; draw_glyph_rows: ty & 3, and the row's place
+tline:     .res 1
 numbuf:    .res 8
 menuptr:   .res 2                  ; menu_list's table (read through its own operands)
 tchar:     .res 1                  ; drawtext's place in the string
