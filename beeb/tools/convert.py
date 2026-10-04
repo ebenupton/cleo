@@ -322,15 +322,33 @@ for cid, orig in enumerate(compact):
 # everywhere; with the backdrops black that cell would be a black notch in the ramp,
 # and its own speckle, brighter than the ramp's body, dithers magenta-heavy (the
 # palette has no neutral or brown pairs) beside the body's black-and-yellow.  So the
-# cell takes the image of a ramp-body tile beside it (RAMP_BODY: left, right, then
-# above; else an adjacent foot's), in a twin compact tile with its own collision --
+# cell takes a rock image: a plain-rock tile beside it (RAMP_ROCK: left, right, then
+# above); else what the original puts where the same eight neighbours occur elsewhere
+# (a slope tile beside it would bring the slope's edge); else an adjacent foot's.  It
+# goes in a twin compact tile with its own collision --
 # nothing about the level changes but the look.  Only cells that blacken to all black
 # count: a scaffold brace's tip keeps its pixels (PIXEL_TILES) and is not a foot.
 # (Small enclosed black patches -- a frame's inside, a bracket's triangle -- are no
 # longer given their speckle back: they are backdrop, and black.)
-RAMP_BODY = {496, 497, 498, 503, 504, 505}
+RAMP_ROCK = {497, 504}            # the ramp body's plain rock (498, 503 carry the slope's edge)
 def _solid(orig):
     return any((alt[orig * 8 + c] >> 4) < 8 for c in range(8))
+
+_NB8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+def _same_place(m, y, x, feet):
+    """The tile the original puts, in any map, at a cell whose eight neighbours are this
+    one's (its fellow feet match anything); the most used if several, None if nowhere."""
+    pat = [None if (y + dy, x + dx) in feet else int(m[y + dy, x + dx]) for dy, dx in _NB8]
+    found = {}
+    for L2 in levels.values():
+        mm = L2['map']; h2, w2 = mm.shape
+        for yy in range(1, h2 - 1):
+            for xx in range(1, w2 - 1):
+                if all(p is None or int(mm[yy + dy, xx + dx]) == p for p, (dy, dx) in zip(pat, _NB8)):
+                    t = int(mm[yy, xx])
+                    if orig2compact[t] not in blackened:        # a real tile, not another foot
+                        found[t] = found.get(t, 0) + 1
+    return max(sorted(found), key=lambda t: found[t]) if found else None
 
 foot_cells = {}                 # (lv, sub) -> {(y, x): (orig, donor orig)}
 twin_of = {}                    # (orig, donor) -> compact id of the twin
@@ -363,16 +381,20 @@ for (lv, sub), L in levels.items():
                 for cy, cx in comp):
             feet += comp
     donor = {}
+    for (y, x) in feet:                         # plain rock beside it
+        for dy, dx in ((0, -1), (0, 1), (-1, 0)):
+            if int(m[y + dy, x + dx]) in RAMP_ROCK:
+                donor[(y, x)] = int(m[y + dy, x + dx]); break
+    for (y, x) in feet:                         # what the original does in the same place
+        if (y, x) not in donor:
+            t = _same_place(m, y, x, set(feet))
+            if t is not None:
+                donor[(y, x)] = t
     for _ in range(4):                          # a foot beside feet takes theirs
         for (y, x) in feet:
-            if (y, x) in donor:
-                continue
             for dy, dx in ((0, -1), (0, 1), (-1, 0)):
-                n = int(m[y + dy, x + dx])
-                if n in RAMP_BODY:
-                    donor[(y, x)] = n; break
-                if (y + dy, x + dx) in donor:
-                    donor[(y, x)] = donor[(y + dy, x + dx)]; break
+                if (y, x) not in donor and (y + dy, x + dx) in donor:
+                    donor[(y, x)] = donor[(y + dy, x + dx)]
     for c in feet:
         assert c in donor, 'level %d.%d: ramp foot at %s has no ramp-body tile beside it' % (lv, sub, c[::-1])
     if feet:
