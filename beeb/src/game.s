@@ -73,7 +73,7 @@ clamp_window:
 ;          straight on and ends by turning them on, so nothing before it may
 ;          wait on a vsync.
 ; The map's size, and the camera's range from it, are set here for the engine
-; (mapw, maph, maxwx, maxwy, maplw, maplh); both buffers are rendered dark
+; (mapw, maph, maxwx, maxwy, maplw); both buffers are rendered dark
 ; before the palette comes back, then the frame loop runs until the logic sets
 ; `exiting`.
 ; ----------------------------------------------------------------------------
@@ -93,7 +93,6 @@ level_loop:
         dex
         bne :-
         ldx LV_HDR+HDR_LH
-        stx maplh
 :       asl maph
         rol maph+1
         dex
