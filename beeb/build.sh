@@ -7,10 +7,13 @@
 #   sh build.sh                 # build/cleo.ssd
 #   TILEMIRROR=1 sh build.sh    # the tile blitter's mirrored tiles too (no level needs them)
 #   NFLAT=n sh build.sh         # n flat tiles a level (default 4: L4B needs all four)
+# A build without ALLLEVELS also copies the disc to the repository's root (../cleo.ssd),
+# the copy kept in git.
 set -e
 cd "$(dirname "$0")"
 [ -f beebgame/tools/build.sh ] || { echo "beebgame is missing: git submodule update --init"; exit 1; }
 export GAME_MAIN=src/main.s GAME_SRC=src DISC_TITLE=CLEO DISC_OUT=build/cleo.ssd GAME_NAME=Cleo
 export GAME_MUSIC="python3 beebgame/tools/midi2snd.py assets/v500/thm.mid build/MUSIC"
 export GAME_ASSETS="python3 tools/assets.py"
-exec sh beebgame/tools/build.sh
+sh beebgame/tools/build.sh
+[ -n "$ALLLEVELS" ] || cp build/cleo.ssd ../cleo.ssd

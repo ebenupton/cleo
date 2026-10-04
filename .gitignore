@@ -2,6 +2,7 @@ beeb/build/
 /gx/
 /v500/
 *.ssd
+!/cleo.ssd
 beeb/profile/
 .DS_Store
 *.jar
