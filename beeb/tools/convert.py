@@ -296,7 +296,8 @@ wall_pal = np.array([_wallish(c) for c in til_rgb0])
 for _o in (70, 71, 102):        # speckle families with bright highlight dots
     for _v in np.unique(til_idx[_o * 8:_o * 8 + 8, :]):
         wall_pal[int(_v)] = True
-PIXEL_TILES = {32, 33, 402, 403, 434, 435}   # EXIT letters; flower head and stem
+PIXEL_TILES = {32, 33, 402, 403, 434, 435,   # EXIT letters; flower head and stem;
+               239, 374}                     # the scaffold braces' tips (6 brown px on near-black)
 WALL_TILES = {297}                           # lone floating block the colour rule misses
 
 blackened = {}                  # compact id -> tile image with its backdrop black
@@ -316,15 +317,76 @@ for cid, orig in enumerate(compact):
         continue
     blackened[cid] = rep
 
-# No backdrop cell gets its art back.  The original drew every backdrop the same dark
-# speckle, so a backdrop cell boxed in by solid tiles (a ramp's foot, a scaffold
-# bracket's triangle, a frame's inside) showed the backdrop through, as the backdrop
-# all round it did.  With the backdrops black, the same cell is black: giving it its
-# speckle back (texture-keeping twins, until 3 Oct 2026) drew magenta-tinged blocks
-# under the ramps and dots inside the frames that read as background left uncleared.
+# A ramp's foot: the original filled the cell under a ramp's last step, boxed in by
+# solid tiles, with backdrop speckle.  It showed the backdrop through there as
+# everywhere; with the backdrops black that cell would be a black notch in the ramp,
+# and its own speckle, brighter than the ramp's body, dithers magenta-heavy (the
+# palette has no neutral or brown pairs) beside the body's black-and-yellow.  So the
+# cell takes the image of a ramp-body tile beside it (RAMP_BODY: left, right, then
+# above; else an adjacent foot's), in a twin compact tile with its own collision --
+# nothing about the level changes but the look.  Only cells that blacken to all black
+# count: a scaffold brace's tip keeps its pixels (PIXEL_TILES) and is not a foot.
+# (Small enclosed black patches -- a frame's inside, a bracket's triangle -- are no
+# longer given their speckle back: they are backdrop, and black.)
+RAMP_BODY = {496, 497, 498, 503, 504, 505}
+def _solid(orig):
+    return any((alt[orig * 8 + c] >> 4) < 8 for c in range(8))
+
+foot_cells = {}                 # (lv, sub) -> {(y, x): (orig, donor orig)}
+twin_of = {}                    # (orig, donor) -> compact id of the twin
+for (lv, sub), L in levels.items():
+    m = L['map']
+    h, w = m.shape
+    # a foot is a patch of up to four such cells (a ramp's last steps can leave two
+    # or three), each with solid tiles or the patch below, left and right of it
+    cand = set()
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            o = int(m[y, x])
+            if o >= 0 and orig2compact[o] in blackened and not _solid(o) \
+                    and o not in PIXEL_TILES and np.all(blackened[orig2compact[o]] == 0):
+                cand.add((y, x))
+    feet, seen = [], set()
+    for c in sorted(cand):
+        if c in seen:
+            continue
+        comp, stack = [], [c]; seen.add(c)
+        while stack:
+            cy, cx = stack.pop(); comp.append((cy, cx))
+            for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                n = (cy + dy, cx + dx)
+                if n in cand and n not in seen:
+                    seen.add(n); stack.append(n)
+        if len(comp) <= 4 and all(
+                all((ny, nx) in comp or (int(m[ny, nx]) >= 0 and _solid(int(m[ny, nx])))
+                    for ny, nx in ((cy + 1, cx), (cy, cx - 1), (cy, cx + 1)))
+                for cy, cx in comp):
+            feet += comp
+    donor = {}
+    for _ in range(4):                          # a foot beside feet takes theirs
+        for (y, x) in feet:
+            if (y, x) in donor:
+                continue
+            for dy, dx in ((0, -1), (0, 1), (-1, 0)):
+                n = int(m[y + dy, x + dx])
+                if n in RAMP_BODY:
+                    donor[(y, x)] = n; break
+                if (y + dy, x + dx) in donor:
+                    donor[(y, x)] = donor[(y + dy, x + dx)]; break
+    for c in feet:
+        assert c in donor, 'level %d.%d: ramp foot at %s has no ramp-body tile beside it' % (lv, sub, c[::-1])
+    if feet:
+        foot_cells[(lv, sub)] = {c: (int(m[c]), donor[c]) for c in feet}
+        for v in foot_cells[(lv, sub)].values():
+            twin_of.setdefault(v, None)
+for (o, d) in sorted(twin_of):
+    twin_of[(o, d)] = len(compact)
+    compact.append(o)                       # the foot's own id: its collision, alt class
+    tile_preview.append(tile_preview[orig2compact[d]].copy())   # the ramp body's image
 for cid, rep in blackened.items():
     tile_preview[cid] = rep
-print('blackened %d tiles' % len(blackened))
+print('blackened %d tiles; %d ramp-foot twins for %d cells'
+      % (len(blackened), len(twin_of), sum(len(c) for c in foot_cells.values())))
 
 tiles_bytes = []
 for cid in range(len(compact)):
@@ -470,6 +532,7 @@ tiles_bytes = [tiles_bytes[o] for o in _order]
 tile_class = [tile_class[o] for o in _order]
 tile_solid = {_newid[c]: v for c, v in tile_solid.items()}
 orig2compact = {t: _newid[c] for t, c in orig2compact.items()}
+twin_of = {t: _newid[c] for t, c in twin_of.items()}
 print('tiles: %d with data, %d solid' % (NDATA, len(compact) - NDATA))
 # tiles are ordered by original id; but put the 'special' animation tiles in known places:
 # we just record their compact ids for the game code
@@ -524,6 +587,8 @@ for (lv, sub) in sorted(levels, key=_src):
     fl = (m == 427)                  # the original randomises tile 427 at level start
     m[fl] = 426 + rng.randint(0, 4, size=int(fl.sum()))
     cm = np.vectorize(lambda t: orig2compact[t])(m)
+    for (hy, hx), od in foot_cells.get((lv, sub), {}).items():
+        cm[hy, hx] = twin_of[od]     # a ramp's foot: the body's image, its own collision
     maps[(lv, sub)] = cm
 maps = {k: maps[k] for k in levels}      # (the game's order again: the stream's was the original's)
 
