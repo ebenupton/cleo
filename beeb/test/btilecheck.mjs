@@ -14,7 +14,10 @@ const rd = a => cpu.readmem(a);
 const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjssllllllllllllllllllllllllllllljljljljljss";
 const KEYS = { s: 0, r: 2, l: 1, j: 6 };
 const MAXREC = (A.RECCNT - A.SPRREC) / 20;
-const RING = [0x0A80, 0x4680], RB = 23 * 640;
+// the display's layout, from the build's defs_ld.inc (harness loadLabels); the literals
+// are for a build from before it carried them
+const RINGROWS = A.RINGROWS ?? 23, ROWBYTES = A.ROWBYTES ?? 640, VISROWS = A.VISROWS ?? 21, MAP5 = A.MAP5 ?? 0x9C00;
+const RING = [A.RING_A ?? 0x0A80, A.RING_B ?? 0x4680], RB = A.RINGBYTES ?? RINGROWS * ROWBYTES;
 let bad = 0, cells = 0, badf = 0, mc = 0; const MR = (process.env.MIR ?? '0,0').split(',').map(Number);
 for (let f = 0; f < N; f++) {
   bank(7, () => { cpu.writemem(A.keys, KEYS[PAT[f % PAT.length]]); cpu.writemem(A.hurt, 1); cpu.writemem(A.health, 3); });
@@ -28,12 +31,12 @@ for (let f = 0; f < N; f++) {
     const recs = bank(7, () => { const r = []; for (const b2 of [0, 1]) for (let i = 0; i < rd(A.RECCNT + b2); i++) { const b = A.SPRREC + (b2 * MAXREC + i) * 10;
       r.push([rd(b + 5) | (rd(b + 6) << 8), rd(b + 7), rd(b + 8), rd(b + 9) & 0x7f]); } return r; });
     const near = (x, y) => recs.some(([rx, ry, w, h]) => x >= rx - 2 && x <= rx + w + 2 && y >= ry - 2 && y <= ry + h + 2);
-    const map = bank(5, () => { const m = []; for (let r = 0; r < 12; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(rd(0x9C00 + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
-    for (let r = 0; r < 21; r++) for (let c = 0; c < 80; c++) {
+    const map = bank(5, () => { const m = []; for (let r = 0; r < 12; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(rd(MAP5 + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
+    for (let r = 0; r < VISROWS; r++) for (let c = 0; c < 80; c++) {
       const x = cx + c, y = cy + r;
       if (near(x, y)) continue;
       const id = map[(y >> 1) - (cy >> 1)][(x >> 2) - (cx >> 2)];
-      const a = RING[bf] + (((y % 23) * 640 + x * 8) % RB);
+      const a = RING[bf] + (((y % RINGROWS) * ROWBYTES + x * 8) % RB);
       const o = id * 64 + (y & 1) * 32 + (x & 3) * 8;
       cells++; if (id >= MR[0] && id < MR[1]) mc++;
       for (let l = 0; l < 8; l++) if (rd(a + l) !== exp[o + l]) { fb++; if (bad + fb <= 5) console.log(`f${f} buf${bf} cell (${x},${y}) id ${id} line ${l}: ${rd(a+l).toString(16)} want ${exp[o+l].toString(16)}`); break; }

@@ -17,7 +17,11 @@ let _rng = (+(process.env.SEED ?? 0)) >>> 0, _k = 0, _hold = 0, _kf = -1;
 const RK = (f) => { if (f !== _kf) { _kf = f; if (_hold-- <= 0) { _rng = (_rng * 1103515245 + 12345) >>> 0; const r = _rng >>> 16; _k = [0, 1, 2, 2|4, 1|4, 4, 8, 2|8, 1|8, 16][r % 10]; _hold = 2 + (r >> 4) % 25; } } return _k; };
 const KEYAT = (f) => process.env.SEED ? RK(f) : KK(PAT[f % PAT.length]);
 const KK = (c) => ({ s: 0, r: 2, l: 1, j: 4 })[c] ?? 0;
-const RING = [0x0A80, 0x4680], RINGBYTES = 23 * 640, BAR = [0x0300, 0x0800];
+// the display's layout, from the reference build's defs_ld.inc (harness loadLabels);
+// the literals are for a build from before it carried them
+const L = M[0].A, RINGROWS = L.RINGROWS ?? 23, ROWBYTES = L.ROWBYTES ?? 640, VISROWS = L.VISROWS ?? 21;
+const RING = [L.RING_A ?? 0x0A80, L.RING_B ?? 0x4680], RINGBYTES = L.RINGBYTES ?? RINGROWS * ROWBYTES;
+const BAR = [L.BARADDR ?? 0x0300, (L.BARADDR ?? 0x0300) + (L.BARROWS ?? 2) * ROWBYTES];
 const window = (m, bf) => [m.A.BUF_CXH !== undefined ? m.cpu.readmem(m.A.BUF_CXL + bf) | (m.cpu.readmem(m.A.BUF_CXH + bf) << 8)
                                                      : m.cpu.readmem(m.A.BUF_CXL + 2 * bf) | (m.cpu.readmem(m.A.BUF_CXL + 2 * bf + 1) << 8),
                            m.bank(m.cyBank, () => m.cpu.readmem(m.A.BUF_CY + bf))];
@@ -32,8 +36,8 @@ for (let f = 0; f < +nS; f++) {
     const [cx, cy] = window(M[0], bf), [cx2, cy2] = window(M[1], bf);
     if (cx !== cx2 || cy !== cy2) { fb++; continue; }
     if (cx & 0x8000) continue;                          // an invalid buffer: nothing shown
-    for (let r = 0; r < 21; r++) for (let c = 0; c < 80; c++) {
-      const a = RING[bf] + ((((cy + r) % 23) * 640 + (cx + c) * 8) % RINGBYTES);
+    for (let r = 0; r < VISROWS; r++) for (let c = 0; c < 80; c++) {
+      const a = RING[bf] + ((((cy + r) % RINGROWS) * ROWBYTES + (cx + c) * 8) % RINGBYTES);
       for (let l = 0; l < 8; l++) if (M[0].cpu.readmem(a + l) !== M[1].cpu.readmem(a + l)) {
         fb++; if (bad + fb <= 3) console.log(`f${f} buf${bf} row ${r} col ${c}`); break;
       }

@@ -6,23 +6,24 @@
         .segment "GAMEDATA"
 alt_tab:                           ; alt class -> eight altitudes (global)
         .incbin "alt.bin"
-digits_art:                        ; the HUD's ten digits, 16 bytes each: a nibble per
-        .incbin "digits.bin"      ; byte column and two game rows (assets.py)
-digtop:     .incbin "digtab.bin", 0, 16   ; a nibble's top scanline byte
-digbot:     .incbin "digtab.bin", 16, 16  ; and its bottom one
+digits_art:                        ; the HUD's ten digits, DIGIT_PACKED bytes each: a
+        .incbin "digits.bin"      ; nibble per byte column and two game rows (assets.py)
+DIGTAB_N = 16                      ; a nibble's values: each one's screen bytes
+digtop:     .incbin "digtab.bin", 0, DIGTAB_N          ; a nibble's top scanline byte
+digbot:     .incbin "digtab.bin", DIGTAB_N, DIGTAB_N   ; and its bottom one
         .include "sprgeom.inc"      ; the sprites' geometry by shape (assets.py): the
                                     ; engine's prologue reads it
-        .segment "GAMEBSS"
-; the object state arrays, laid out as logic.s names them: O_STAMP + k*OBJN, then
+        .segment "GAMEOBJ"          ; (page aligned, after GAMEBSS and GAMEROWH: the cfg)
+; the object state arrays, laid out as logic.s names them: O_STAMP + k*OBJ_MAX, then
 ; the grid heads and chains and the cached bin walk lists.  level_init's clear runs
-; 2560 bytes from LV_OBJST, which stays inside these.
-LV_OBJST:   .res 16*OBJN
-LV_GRID:    .res 128
-LV_BOBJ:    .res 256               ; an entry per object per grid cell it covers: up
-LV_BNEXT:   .res 256               ; to 255 of them
+; OBJCLR_PAGES pages from LV_OBJST, which stays inside these.
+LV_OBJST:   .res 16*OBJ_MAX
+LV_GRID:    .res GRIDN
+LV_BOBJ:    .res BINLINKS          ; an entry per object per grid cell it covers: up
+LV_BNEXT:   .res BINLINKS          ; to 255 of them
 LV_BINSTAR: .res BINMAX
 LV_BINOTH:  .res BINMAX
-        .assert 16*OBJN + 128 + 512 + 2*BINMAX >= 2560, error, "level_init's clear overruns the arrays"
+        .assert 16*OBJ_MAX + GRIDN + 2*BINLINKS + 2*BINMAX >= OBJCLR_PAGES*256, error, "level_init's clear overruns the arrays"
 
 ; ---------------------------------------------------------------- bank 7: the menus' image
         .segment "MNUDATA"

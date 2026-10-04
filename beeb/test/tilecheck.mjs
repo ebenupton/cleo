@@ -14,6 +14,9 @@ const A = H.A;
 const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjssllllllllllllllllllllllllllllljljljljljss";
 const KEYS = { s: 0, r: 2, l: 1, j: 4 };
 const MAXREC = (A.RECCNT - A.SPRREC) / 20;
+// the display's layout, from the build's defs_ld.inc (harness loadLabels); the literals
+// are for a build from before it carried them
+const RINGBASE = A.RINGBASE ?? 0x3000, RINGCHARS = A.RINGCHARS ?? 2560, VISROWS = A.VISROWS ?? 30, MAP5 = A.MAP5 ?? 0x9C00;
 let bad = 0, cells = 0, badf = 0;
 const bank = (b, f) => { const was = H.rd((A.romsel_cpy ?? 0xf4)); H.wr((A.romsel_cpy ?? 0xf4), b); H.wr(0xfe30, b); const r = f(); H.wr((A.romsel_cpy ?? 0xf4), was); H.wr(0xfe30, was); return r; };
 for (let f = 0; f < N; f++) {
@@ -30,13 +33,12 @@ for (let f = 0; f < N; f++) {
     recs.push([H.rd(b + 5) | (H.rd(b + 6) << 8), H.rd(b + 7), H.rd(b + 8), H.rd(b + 9) & 0x7f]); } } });
   const near = (x, y) => recs.some(([rx, ry, w, h]) => x >= rx - 2 && x <= rx + w + 2 && y >= ry - 2 && y <= ry + h + 2);
   let fb = 0;
-  const MAP = 0x9C00;                       // MAP5
-  const map = bank(5, () => { const m = []; for (let r = 0; r < 16; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(H.rd(MAP + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
-  for (let r = 0; r < 30; r++) for (let c = 0; c < 80; c++) {
+  const map = bank(5, () => { const m = []; for (let r = 0; r < 16; r++) { const row = []; for (let t = 0; t < 22; t++) row.push(H.rd(MAP5 + (((cy >> 1) + r) * stride) + (cx >> 2) + t)); m.push(row); } return m; });
+  for (let r = 0; r < VISROWS; r++) for (let c = 0; c < 80; c++) {
     const x = cx + c, y = cy + r;
     if (near(x, y)) continue;
     const id = map[(y >> 1) - (cy >> 1)][(x >> 2) - (cx >> 2)];
-    const a = 0x3000 + (((y * 80 + x) % 2560) * 8);
+    const a = RINGBASE + (((y * 80 + x) % RINGCHARS) * 8);
     const o = id * 64 + (y & 1) * 32 + (x & 3) * 8;
     cells++;
     for (let l = 0; l < 8; l++) if (H.rd(a + l) !== exp[o + l]) { fb++; if (bad + fb <= 5) console.log(`f${f} cell (${x},${y}) id ${id} line ${l}: ${H.rd(a+l).toString(16)} want ${exp[o+l].toString(16)}`); break; }

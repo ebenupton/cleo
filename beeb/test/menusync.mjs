@@ -23,9 +23,12 @@ async function boot(disc, labels) {
     try { for (let i = 0; i < 4000; i++) { await s.runFor(20000); if (at()) return; } } finally { h.remove(); }
     throw new Error("menu_keys not reached");
   }
-  return { s, cpu, next };
+  return { s, cpu, A, next };
 }
 const X = await boot(dA, lA), Y = await boot(dB, lB);
+// the menus' clear, CLEAR0 to $8000 (the reference build's defs_ld.inc, harness
+// loadLabels; the literal is for a build from before it carried it)
+const C0 = X.A.CLEAR0 ?? (kind === "master" ? 0x3000 : 0x0800);
 let bad = 0;
 for (let k = 0; k < N; k++) {
   for (const M of [X, Y]) {
@@ -42,10 +45,10 @@ for (let k = 0; k < N; k++) {
                                      // whatever file was read last)
       const was = [X, Y].map((M) => M.cpu.readmem(0xfe34));
       [X, Y].forEach((M, i) => M.cpu.writemem(0xfe34, (was[i] & ~4) | shadow));
-      for (let a = 0x3000; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;
+      for (let a = C0; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;
       [X, Y].forEach((M, i) => M.cpu.writemem(0xfe34, was[i]));
     }
-  } else for (let a = 0x0800; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;   // the B: mirrors and rings
+  } else for (let a = C0; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;   // the B: mirrors and rings
   // the bar's memory is not the menus' (they leave it in place and show two black ring
   // rows there instead): compare the painted picture as well, which is what is seen
   { const fa = X.s._completeFb8, fb = Y.s._completeFb8; for (let i = 0; i < fa.length; i += 4) if (fa[i] !== fb[i] || fa[i+1] !== fb[i+1] || fa[i+2] !== fb[i+2]) { n++; } }

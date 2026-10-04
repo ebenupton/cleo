@@ -428,15 +428,34 @@ def star_class(cm, x, y):
 #                  fc clamped to [0, e0*16] and fd to [0, e1*16].  So it stays in its
 #                  own rectangle however far the player runs.  Plus the bat_off wobble.
 #   7,9,10,12      static;  11 vanish animates as tiles, not a sprite
-TYPE_IDS = {1: (43, 45), 2: (46, 53), 3: (54, 60), 4: (61, 66), 5: (67, 75),
-            6: (76, 84), 7: (85, 92), 9: (93, 96), 10: (97, 97), 12: (100, 102)}
+# The object types (an object's first byte; logic.s process_object's table) and the
+# sprite ids (the original's dim order: each animation's first frame and its frames;
+# the pairs are right then left where a frame has a facing).  assets.py writes both
+# into assets.inc (OT_*, SPR_*) for logic.s.
+OT = dict(STAR=0, TRAMP=1, SNAKE=2, RSNAKE=3, BAT=4, MASK=5, MUMMY=6, SPIKE=7, NONE=8,
+          FLAME=9, POWERUP=10, VANISH=11, SWITCH=12)
+NSPRITE = 103                       # the original's sprites, dim's entries
+SPR_IDS = [('CLEO_RUN0', 0, 8), ('CLEO_STAND', 8, 2), ('CLEO_IDLE1', 10, 2), ('CLEO_IDLE2', 12, 2),
+           ('CLEO_THROW0', 14, 6), ('CLEO_JUMP', 20, 2), ('CLEO_MID', 22, 2), ('CLEO_FALL', 24, 2),
+           ('CLEO_DEAD', 26, 1), ('BOOM0', 27, 7), ('STAR0', 34, 6), ('SPARKLE0', 40, 3),
+           ('TRAMP0', 43, 3), ('SNAKE0', 46, 8), ('RSNAKE0', 54, 6), ('BASKET', 60, 1),
+           ('BAT0', 61, 6), ('MASK0', 67, 9), ('MUMMY0', 76, 9), ('SPIKE0', 85, 8),
+           ('FLAME0', 93, 4), ('POWERUP', 97, 1), ('PICKUP0', 98, 2), ('SWITCH0', 100, 3)]
+SPR = {n: a for n, a, c in SPR_IDS}
+SPR_N = {n: c for n, a, c in SPR_IDS}
+assert all(a + c <= NSPRITE for n, a, c in SPR_IDS)
+_span = lambda n: (SPR[n], SPR[n] + SPR_N[n] - 1)
+TYPE_IDS = {OT['TRAMP']: _span('TRAMP0'), OT['SNAKE']: _span('SNAKE0'), OT['RSNAKE']: (SPR['RSNAKE0'], SPR['BASKET']),
+            OT['BAT']: _span('BAT0'), OT['MASK']: _span('MASK0'), OT['MUMMY']: _span('MUMMY0'),
+            OT['SPIKE']: _span('SPIKE0'), OT['FLAME']: _span('FLAME0'), OT['POWERUP']: _span('POWERUP'),
+            OT['SWITCH']: _span('SWITCH0')}
 
 def _sprite_boxes():
     """id -> (dx0, dx1, dy0, dy1): the drawn rectangle about the reference point."""
     idx, _rgb, tr = load_indexed('spr.png')
     dim = open(os.path.join(SRC, 'dim'), 'rb').read()
     out = {}
-    for i in range(103):
+    for i in range(NSPRITE):
         x, y, w, h, rx, ry = struct.unpack('BBBBbb', dim[i * 6:i * 6 + 6])
         im = idx[y:y + h, x:x + w]
         ys, xs = np.where(im != tr)
@@ -791,8 +810,8 @@ def pack_tiles(lv, sub):
 # ----------------------------------------------------------------------------
 spr_idx, spr_rgb, spr_tr = load_indexed('spr.png')
 dim = open(os.path.join(SRC, 'dim'), 'rb').read()
-DIM = [struct.unpack('BBBBbb', dim[i * 6:i * 6 + 6]) for i in range(103)]
-FULLRES = set(range(103))          # every sprite full-res (2 stored rows per game px)
+DIM = [struct.unpack('BBBBbb', dim[i * 6:i * 6 + 6]) for i in range(NSPRITE)]
+FULLRES = set(range(NSPRITE))      # every sprite full-res (2 stored rows per game px)
 SKIP = {102}                       # BONUS LEVEL banner is drawn as text instead
 crops = []
 for i, (x, y, w, h, rx, ry) in enumerate(DIM):
@@ -808,8 +827,8 @@ for i, (x, y, w, h, rx, ry) in enumerate(DIM):
 # powerup.  The 4-bit sprites' fifteen patterns had turned those reds pale and dark;
 # with the powerup's box (below) this undoes it.  Only reds (within 15 degrees): the
 # snake's browns and the highlights keep theirs.
-PW_ID, RED_HUE = 97, 0.3 * -60
-RED_IDS = [PW_ID] + list(range(54, 60))
+PW_ID, RED_HUE = SPR['POWERUP'], 0.3 * -60
+RED_IDS = [PW_ID] + list(range(SPR['RSNAKE0'], SPR['RSNAKE0'] + SPR_N['RSNAKE0']))
 spr_rgb = spr_rgb.copy()
 _red_free = [k for k in range(len(spr_rgb)) if k != spr_tr and k not in set(np.unique(spr_idx).tolist())]
 _red_map = {}
@@ -832,7 +851,7 @@ for _i in RED_IDS:
     crops[_i] = (_hue_rotated(crops[_i][0]),) + tuple(crops[_i][1:])
 images = []   # list of (idx array, full)
 entry = []    # per logical sprite: (image index, mirror, refx, refy)
-for i in range(103):
+for i in range(NSPRITE):
     if i in SKIP:
         entry.append(None); continue
     im, rx, ry = crops[i]
@@ -857,7 +876,7 @@ for i in range(103):
 # cobra (54..59, y follows a parabola) and the bats (61..66, flying) are not tile-aligned,
 # so shifting them would move the art for no saving.
 snapped = []
-for i in range(34, 40):
+for i in range(SPR['STAR0'], SPR['STAR0'] + SPR_N['STAR0']):
     e = entry[i]
     if e is None:
         continue
@@ -977,7 +996,7 @@ FIELD = 14                      # px: the widest frame, hotspot at px 6
 box_art = []
 box_alpha = []
 for f in range(6):
-    j, mirror, rx, ry = entry[34 + f]
+    j, mirror, rx, ry = entry[SPR['STAR0'] + f]
     im = images[j][0]
     h, w = im.shape
     W = (w + 1) // 2
@@ -1205,9 +1224,13 @@ def bar_icon(dstx, spr_id, y0=0, crop_h=None, crop_w=None, sub_scan=0, fit=False
                     for xx in range(w):
                         if dstx + xx < 160 and op[xx]:
                             bar16[s, dstx + xx] = rgb[xx]
-bar_icon(3, 0, y0=4, crop_h=8, crop_w=14)             # cleo head: native, two game px up
-bar_icon(31, 97, fit=True)                            # heart: resampled onto the 16-line grid
-bar_icon(59, 34, fit=True)                            # star: resampled onto the 16-line grid (full star fits)
+# the HUD's digits (logic.s redraw_hud; assets.inc HUD_X_*): each count's icon sits
+# HUD_ICON_DX game px left of its first digit
+HUD_X_LIVES, HUD_X_HEALTH, HUD_X_STARS, HUD_X_SCORE = 18, 46, 74, 108
+HUD_ICON_DX = 15
+bar_icon(HUD_X_LIVES - HUD_ICON_DX, SPR['CLEO_RUN0'], y0=4, crop_h=8, crop_w=14)   # cleo head: native, two game px up
+bar_icon(HUD_X_HEALTH - HUD_ICON_DX, SPR['POWERUP'], fit=True)   # heart: resampled onto the 16-line grid
+bar_icon(HUD_X_STARS - HUD_ICON_DX, SPR['STAR0'], fit=True)      # star: resampled onto the 16-line grid (full star fits)
 barcol = dither(bar16, np.ones((16, 160), bool), full=False)   # 16 lines x 160
 barpk = packcol(barcol)     # 16 x 80
 barbytes = bytearray()
@@ -1268,41 +1291,45 @@ for (name, x, y, w, h, full) in pieces:
     tpreview.append(col)
 
 
+# the menus' run-length stream (menu.s unpack; assets.inc RLE_*): a byte n < RLE_RUN is
+# n+1 literals; RLE_RUN..RLE_END-1 a run of n - RLE_RUNBIAS copies of the next byte
+# (3..129); RLE_END the end
+RLE_RUN, RLE_RUNBIAS, RLE_END = 0x80, 0x7D, 0xFF
+
+
 def title_rle(b):
-    """the menus' run-length stream (menu.s unpack): n < $80, n+1 literals; $80..$FE,
-    n-$7D copies of the next byte (3..129); $FF, the end"""
     out, lit, i = bytearray(), bytearray(), 0
     def flush():
         while lit:
-            k = lit[:128]
+            k = lit[:RLE_RUN]
             out.append(len(k) - 1)
             out.extend(k)
-            del lit[:128]
+            del lit[:RLE_RUN]
     while i < len(b):
         j = i
-        while j < len(b) and b[j] == b[i] and j - i < 129:
+        while j < len(b) and b[j] == b[i] and j - i < RLE_END - RLE_RUNBIAS - 1:
             j += 1
-        if j - i >= 3:
+        if j - i >= RLE_RUN - RLE_RUNBIAS:
             flush()
-            out += bytes([j - i + 0x7D, b[i]])
+            out += bytes([j - i + RLE_RUNBIAS, b[i]])
             i = j
         else:
             lit.append(b[i])
             i += 1
     flush()
-    out.append(0xFF)
+    out.append(RLE_END)
     return bytes(out)
 
 
 def title_unrle(s):
     out, i = bytearray(), 0
-    while s[i] != 0xFF:
+    while s[i] != RLE_END:
         n = s[i]
-        if n < 0x80:
+        if n < RLE_RUN:
             out += s[i + 1:i + 2 + n]
             i += n + 2
         else:
-            out += bytes([s[i + 1]]) * (n - 0x7D)
+            out += bytes([s[i + 1]]) * (n - RLE_RUNBIAS)
             i += 2
     return bytes(out)
 

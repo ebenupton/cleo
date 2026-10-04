@@ -35,8 +35,10 @@ function cmp(what, k, painted) {
   if (painted) {                     // in play: the picture (the ring's hidden rows are a
     const fa = X.s._completeFb8, fb = Y.s._completeFb8;   // layout's choice: wincmp.mjs)
     for (let i = 0; i < fa.length; i += 4) if (fa[i] !== fb[i] || fa[i + 1] !== fb[i + 1] || fa[i + 2] !== fb[i + 2]) n++;
-  } else if (kind === "master") { for (let a = 0x3000; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++; }
-  else for (let a = 0x0800; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;
+  } else {                           // the menus' clear to $8000: CLEAR0 (the build's
+    const c0 = X.A.CLEAR0 ?? (kind === "master" ? 0x3000 : 0x0800);   // defs_ld.inc; the literals
+    for (let a = c0; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;   // for an older build)
+  }
   stops++;
   if (n) { bad++; if (bad <= 12) console.log(`  ${what} ${k}: ${n} bytes differ`); }
 }

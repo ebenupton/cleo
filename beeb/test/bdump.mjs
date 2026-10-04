@@ -12,6 +12,9 @@ const B = await openB({ level: LEVEL, disc: process.env.BDISC ?? "build/cleo.ssd
 const zp = ["px","py","vx","vy","anim","ev_frame","facing","running","firing","hurt","control","bx","by","bvx","bvy","bcnt","bactive","bounce","stars","exiting","lives","health","score","frame","wx","wy","last_keys","gridsh"];
 const two = new Set(["px","py","vx","vy","ev_frame","bx","by","bvx","bvy","score","frame","wx","wy"]);
 const NOBJ = cpu.readmem(A.nobj), OBJN = 149;
+// the display: from the bar to $8000 (the build's defs_ld.inc, harness loadLabels; the
+// literal is for a build from before it carried it)
+const DISP0 = A.BARADDR ?? 0x300, DISPN = 0x8000 - DISP0;
 const fnv = (a, n) => { let h = 2166136261; for (let i = 0; i < n; i++) { h ^= cpu.readmem(a + i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; };
 let rng = seed0 >>> 0; const rnd = () => (rng = (Math.imul(rng, 1103515245) + 12345) >>> 0, rng >>> 16);
 let keys = 0, hold = 0; const keyset = [0, 1, 2, 2|4, 1|4, 4, 16, 2|16, 1|16, 8];
@@ -22,14 +25,14 @@ for (let f = 0; f < frames; f++) {
   let o = `f=${f} k=${keys}`;
   for (const n of zp) { const a = A[n]; o += ` ${n}=${two.has(n) ? cpu.readmem(a) | (cpu.readmem(a + 1) << 8) : cpu.readmem(a)}`; }
   bank(7, () => { for (let k = 0; k < 16; k++) { const arr = []; for (let i = 0; i < NOBJ; i++) arr.push(cpu.readmem(A.LV_OBJST + k * OBJN + i)); o += ` O${k}=${arr.join(",")}`; } });
-  o += ` disp=${fnv(0x300, 0x7d00).toString(16)}`;
+  o += ` disp=${fnv(DISP0, DISPN).toString(16)}`;
   const r = cpu.video.regs; o += ` crtc=${r[0]},${r[4]},${r[6]},${r[7]},${r[8]},${r[9]},${r[12]},${r[13]}`;
   lines.push(o);
   if (f === shot || (every && f % every === 0)) {
     // the picture: at the game's next vsync interrupt (its vsyncs counter moves), as the
     // headless BeebEm harness does, so both show the same field
     { const v0 = cpu.readmem(A.vsyncs); for (let n = 0; n < 400 && cpu.readmem(A.vsyncs) === v0; n++) await s.runFor(2000); }
-    const d = Buffer.alloc(0x7d00); for (let i = 0; i < 0x7d00; i++) d[i] = cpu.readmem(0x300 + i);
+    const d = Buffer.alloc(DISPN); for (let i = 0; i < DISPN; i++) d[i] = cpu.readmem(DISP0 + i);
     writeFileSync(`${out}_f${f}.dispram`, d); writeFileSync(`${out}_f${f}.png`, await s.screenshotActive());
   }
 }

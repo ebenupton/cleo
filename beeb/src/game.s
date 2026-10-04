@@ -61,7 +61,7 @@ level_loop:
         ldx level
         ; the level: X = level index 0..15 (even = main, odd = bonus)
         jsr load_level_b           ; the disc: everything into the banks (disc.s)
-        lda #8                     ; mapw = 8 << lw ; maph = 8 << lh
+        lda #TILEPX                ; mapw = TILEPX << lw ; maph = TILEPX << lh
         sta mapw
         sta maph
         zero mapw+1, maph+1
@@ -144,7 +144,7 @@ fl_over:
   .endif
 @next1: inc level
         lda level
-        cmp #16
+        cmp #NLEVELS
         beq game_won
         lsr
         cmp max_level
@@ -170,13 +170,48 @@ game_over:
 
 ; ---------------------------------------------------------------- sound data
         PLACEH "MRAMCODE", "KRNCODE"    ; with sound_tick: bank 7 on the Model B, main RAM on the Master
-; sfx steps: byte0 = channel/period latch ($80 | ch<<5 | lo4), byte1 = period hi (data byte), byte2 = volume ($90|ch<<5|att), duration
+; A sound effect (engine.s sound_tick): SFX steps, then SFX_END.  A step is the chip's
+; two latch bytes and the data byte between them (hw.inc SN_*) -- the channel's tone
+; latch with the period's low 4 bits, the period's high 6 bits, its volume latch with
+; the attenuation -- and the frames to hold them.  Every effect plays on tone channel
+; 2; the throw on the noise channel (3, SN_NOISE), whose 3 low bits pick the noise.
+.macro SFX ch, lo4, hi, att, dur
+        .byte SN_LATCH | (ch << SN_CHSHIFT) | lo4, hi, SN_LATCH | SN_VOL | (ch << SN_CHSHIFT) | att, dur
+.endmacro
+SFX_CH = 2
 sfx_tab: .word sfx_jump, sfx_star, sfx_throw, sfx_hit, sfx_kill, sfx_power, sfx_die
-sfx_jump:  .byte $C0|8, 12, $D0, 2,  $C0|4, 9, $D2, 2,  $C0|0, 7, $D4, 2,  $C0|8, 5, $D6, 3, $FF
-sfx_star:  .byte $C0|0, 4, $D0, 2,  $C0|0, 3, $D0, 3,  $C0|0, 3, $D6, 3, $FF
-sfx_throw: .byte $E0|4, 0, $F2, 2,  $E0|5, 0, $F5, 3,  $E0|5, 0, $F9, 3, $FF
-sfx_hit:   .byte $C0|0, 40, $D0, 4, $C0|0, 48, $D2, 4, $C0|0, 60, $D5, 5, $FF
-sfx_kill:  .byte $C0|0, 6, $D0, 2,  $C0|0, 9, $D1, 2,  $C0|0, 12, $D3, 3, $C0|0, 16, $D6, 3, $FF
-sfx_power: .byte $C0|0, 6, $D0, 3,  $C0|0, 5, $D0, 3,  $C0|0, 4, $D0, 3,  $C0|0, 3, $D0, 6, $FF
-sfx_die:   .byte $C0|0, 12, $D0, 6, $C0|0, 16, $D1, 6, $C0|0, 22, $D2, 8, $C0|0, 30, $D4, 10, $C0|0, 40, $D7, 12, $FF
+sfx_jump:  SFX SFX_CH, 8, 12, 0, 2
+           SFX SFX_CH, 4, 9, 2, 2
+           SFX SFX_CH, 0, 7, 4, 2
+           SFX SFX_CH, 8, 5, 6, 3
+           .byte SFX_END
+sfx_star:  SFX SFX_CH, 0, 4, 0, 2
+           SFX SFX_CH, 0, 3, 0, 3
+           SFX SFX_CH, 0, 3, 6, 3
+           .byte SFX_END
+sfx_throw: SFX SN_NOISE, 4, 0, 2, 2
+           SFX SN_NOISE, 5, 0, 5, 3
+           SFX SN_NOISE, 5, 0, 9, 3
+           .byte SFX_END
+sfx_hit:   SFX SFX_CH, 0, 40, 0, 4
+           SFX SFX_CH, 0, 48, 2, 4
+           SFX SFX_CH, 0, 60, 5, 5
+           .byte SFX_END
+sfx_kill:  SFX SFX_CH, 0, 6, 0, 2
+           SFX SFX_CH, 0, 9, 1, 2
+           SFX SFX_CH, 0, 12, 3, 3
+           SFX SFX_CH, 0, 16, 6, 3
+           .byte SFX_END
+sfx_power: SFX SFX_CH, 0, 6, 0, 3
+           SFX SFX_CH, 0, 5, 0, 3
+           SFX SFX_CH, 0, 4, 0, 3
+           SFX SFX_CH, 0, 3, 0, 6
+           .byte SFX_END
+sfx_die:   SFX SFX_CH, 0, 12, 0, 6
+           SFX SFX_CH, 0, 16, 1, 6
+           SFX SFX_CH, 0, 22, 2, 8
+           SFX SFX_CH, 0, 30, 4, 10
+           SFX SFX_CH, 0, 40, 7, 12
+           .byte SFX_END
+        .assert sfx_star - sfx_jump = 4*SFXSTEP_LEN + 1, error, "an sfx step is SFXSTEP_LEN bytes"
 

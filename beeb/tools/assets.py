@@ -45,7 +45,8 @@ os.makedirs(OUT, exist_ok=True)
 def out(name, data):
     open(os.path.join(OUT, name), 'wb').write(bytes(data))
 
-VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the Model B's: VISROWS 30 / 21 (engine.s)
+VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the Model B's: VISROWS 30 / 21 x 8
+                                    #   (engine/defs.s VISLINES: the packer runs before the assembler)
 
 # ---------------------------------------------------------------- the banks' fixed shape
 # Code sits at the bottom of banks 4, 5 and 6 (each entered at $8000) and the mask
@@ -60,15 +61,23 @@ VISLINES_ALL = (240, 168)           # the windows' lines, the Master's and the M
 # on the Model B, at most on the Master), so the build stops if they move.
 B4_CODE_END = 0x838C                        # the row loop and blitters (SPR4CODE)
 B5_CODE_END = 0x841B                        # the same, the gather and its shape (MAP5BSS)
-B4_DATA = (B4_CODE_END, 0xBC00)             # bank 4: images, between the row loop and the
-                                            #   expansion tables and SWAPTAB ($BC00-$BFFF)
-B5_DATA = (B5_CODE_END, 0x9C00)                  # bank 5: all its sprites, one run, between the row
+B4_DATA_END = 0xBC00                        # the top 1K of banks 4 and 5: the expansion tables
+                                            #   and SWAPTAB (defs.inc L0TAB; the cfg's B4T, B5T)
+MAP_LEN = 0x2000                            # the map: a fixed 8K below the tables
+MAP5 = B4_DATA_END - MAP_LEN                #   ($9C00; defs.inc LV_MAP)
+B4_DATA = (B4_CODE_END, B4_DATA_END)        # bank 4: images, between the row loop and the tables
+B5_DATA = (B5_CODE_END, MAP5)               # bank 5: all its sprites, one run, between the row
                                             #   loop + gather and the map: the resident part
                                             #   (SPRC's bank-5 part) at the bottom, the level's above it
-MAP5 = 0x9C00                               # the map: a fixed 8K below the tables ($BC00)
 B5_TOP = MAP5                               #   (the end of bank 5's sprites)
 TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page aligned),
                                             #   above the code (the cfgs' B6X), to the end
+STAGE_LEN = 0x4000                          # a shared file's stage: 16K on either machine (defs.inc STAGE)
+IMGTAB_LEN = 5                              # img_tab's entry: file, offset (2), length (2)
+WINPX, BINPX = 160, 64                      # the window's width in game px (engine.s WINPX); the
+                                            #   collision grid's cell (logic.s: 8 tiles)
+OT, SPR, SPR_N = m.OT, m.SPR, m.SPR_N       # the object types and the sprite ids (convert.py)
+NSTARF = SPR_N['STAR0']                     # a star's spin frames: a baked star is a box each
 
 # ---------------------------------------------------------------- Cleo's sprites
 # The sprite ids (the engine's directory: BOXID0 images, then BOXN boxes; ids from
@@ -78,18 +87,18 @@ TILES_BASE, B6X = m.B_TILES, m.B_TILES_END  # bank 6: the tiles from here (page 
 # trampolines at rest, NSTAR slots of six for its baked stars and PWMAX for its health
 # powerups, each slot the level's own art, baked by the loader (below).
 TRMAX, NSTAR, PWMAX = 13, 8, 2
-BOXID0, BOXN = 103, 12 + TRMAX + 6 * NSTAR + PWMAX
+NBOXART = 2 * NSTARF                        # the box stars' images: six frames on sky, six on black
+BOXID0, BOXN = m.NSPRITE, NBOXART + TRMAX + NSTARF * NSTAR + PWMAX
 assert BOXID0 + 2 * BOXN <= 256                 # (the boxes' "still" aliases are ids too)
 NDIR = BOXID0 + BOXN                        # directory entries
-NBOXART = 12                                # the box stars' images
 # The split between resident and staged, which is the game's to choose: the resident
 # sprites (SPRC) are loaded once, to fixed places in banks 4 and 5 (assets.inc
 # SPRC_BASE, SPRC5_BASE); the staged ones (SPRX) are staged at each level load and
 # the level's own subset copied to where its placement list says.  Cleo's resident
 # set: what (nearly) every level draws.
-RESIDENT_IDS = list(range(46))              # Cleo, the boomerang, the stars and their
-                                            # collect animation (0..42), 43..45
-ALWAYS_IDS = range(43)                      # the ids a level draws whatever its objects
+RESIDENT_IDS = list(range(SPR['TRAMP0'] + SPR_N['TRAMP0']))   # Cleo, the boomerang, the stars and their
+                                            # collect animation (0..42), the trampoline 43..45
+ALWAYS_IDS = range(SPR['TRAMP0'])           # the ids a level draws whatever its objects
 
 # ---------------------------------------------------------------- the shared files
 # The resident sprites are one file (SPRC), everything else -- the enemies, the box
@@ -101,7 +110,7 @@ NIMG = len(m.images)
 # the placement lists and the directory template use
 def item_index(kind, j):
     return {'img': 0, 'box': NIMG, 'tr': NIMG + NBOXART, 'sb': NIMG + NBOXART + TRMAX,
-            'pw': NIMG + NBOXART + TRMAX + 6 * NSTAR}[kind] + j
+            'pw': NIMG + NBOXART + TRMAX + NSTARF * NSTAR}[kind] + j
 BAKED = ('tr', 'sb', 'pw')
 PW_RECT = (-m.PW_LEFT, 2 * m.PW_WC - m.PW_LEFT, m.PW_TOP, m.PW_TOP + m.PW_H)   # the powerup's box about (8x, 8y)
 # The level's baked boxes: every trampoline's rest state, and the stars the
@@ -123,7 +132,7 @@ def level_bakes(lv, sub):
     tr, st, by, at = {}, {}, {}, {}
     slot = {}                           # (trampolines whose boxes come out the same share one)
     for oi, (t, x, y, e) in enumerate(L['objs']):
-        if t == 1:
+        if t == OT['TRAMP']:
             b = m.bake_tramp_rest(cm, x, y)
             if b is not None and (b in slot or len(slot) < TRMAX):
                 if b not in slot:
@@ -131,7 +140,7 @@ def level_bakes(lv, sub):
                 tr[oi] = slot[b]
     pw, pslot = {}, {}                  # the health powerups: every one, always
     for oi, (t, x, y, e) in enumerate(L['objs']):
-        if t == 10:
+        if t == OT['POWERUP']:
             b = m.bake_powerup(cm, x, y)
             assert b is not None, ('%s: a powerup the baker cannot make' % m.name_of(lv, sub), x, y)
             if b not in pslot:
@@ -140,7 +149,7 @@ def level_bakes(lv, sub):
     assert len(pslot) <= PWMAX, (lv, sub, len(pslot))
     PWOF[(lv, sub)] = pw
     want = CHOSEN.get((lv, sub), [])
-    pos = {(x, y): oi for oi, (t, x, y, e) in enumerate(L['objs']) if t == 0}
+    pos = {(x, y): oi for oi, (t, x, y, e) in enumerate(L['objs']) if t == OT['STAR']}
     for xy in want:                     # (in the plan's order: the costliest first)
         oi = pos.get(xy)
         if oi is None or m.star_class(cm, *xy) != 0 or len(st) >= NSTAR:
@@ -149,7 +158,7 @@ def level_bakes(lv, sub):
         if fr is not None:
             st[oi] = len(st)
             for f, b in enumerate(fr):
-                by[('sb', st[oi] * 6 + f)] = b; at[('sb', st[oi] * 6 + f)] = xy
+                by[('sb', st[oi] * NSTARF + f)] = b; at[('sb', st[oi] * NSTARF + f)] = xy
     _bakes[(lv, sub)] = (tr, st, by, at)
     return _bakes[(lv, sub)]
 CUR = [None]                                # the level being placed (its baked items' bytes)
@@ -196,19 +205,24 @@ sprc5 = _pack(c6, C5_BASE)
 for j in c4: common_bank[j] = 4
 for j in c6: common_bank[j] = 5
 COMMON_END = B4_DATA[0] + len(sprc4)
-assert COMMON_END <= B4_DATA[1] and C5_BASE + C5_LEN <= B5_DATA[1] and MAP5 + 0x2000 <= 0xBC00
+assert COMMON_END <= B4_DATA[1] and C5_BASE + C5_LEN <= B5_DATA[1] and MAP5 + MAP_LEN <= B4_DATA_END
 sprc = sprc4 + sprc5
 out('SPRC', sprc)
 sprx, img_tab = bytearray(), bytearray()
 for j in range(NIMG):
     if j in common_addr:
-        img_tab += bytes(5); continue        # (never placed: resident)
+        img_tab += bytes(IMGTAB_LEN); continue   # (never placed: resident)
     o, n = len(sprx), len(m.img_bytes[j]); sprx += m.img_bytes[j]
     img_tab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])   # file 0 (SPRX), offset, length
 for k in range(NBOXART):                    # the box stars' boxes
     o, n = len(sprx), len(m.box_bytes[k]); sprx += m.box_bytes[k]
     img_tab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])
+assert len(img_tab) == IMGTAB_LEN * (NIMG + NBOXART)
 BAKEITEM0 = NIMG + NBOXART                  # the baked slots: made by the loader (ldprog.s bake)
+# bake_geom (ldprog.s bake): a kind's shape, BG_LEN bytes -- byte columns, lines, dx (16
+# bit), dty, its overlay's offset in SPRX (16 bit), skip (start the first tile row at its
+# bottom char row)
+BG_WC, BG_LINES, BG_DX, BG_DTY, BG_OV, BG_SKIP, BG_LEN = 0, 1, 2, 4, 5, 7, 8
 bake_geom = bytearray()                  # tiles where the object stands (its tile in the
 for k_ in m.BAKE_KINDS:                 # placement entry's mask field; skip: the first tile
     wc, lines, dx, dty, ov = k_[:5]     # row from its bottom char row)
@@ -216,9 +230,10 @@ for k_ in m.BAKE_KINDS:                 # placement entry's mask field; skip: th
     o = len(sprx); sprx += ov
     assert lines <= 32 and len(ov) == 2 * wc * lines
     bake_geom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, skip])
-bake_kind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)] + [m.PW_KIND] * PWMAX)
+assert len(bake_geom) == BG_LEN * len(m.BAKE_KINDS)
+bake_kind = bytes([0] * TRMAX + [1 + k % NSTARF for k in range(NSTAR * NSTARF)] + [m.PW_KIND] * PWMAX)
 # (no img_tab entries: place_walk bakes them before it looks)
-assert len(sprx) <= 0x4000                  # STAGE's 16K
+assert len(sprx) <= STAGE_LEN
 out('SPRX', sprx)
 out('img_tab.bin', img_tab)
 print('sprites: SPRC %d bytes (bank 4 $%04X-$%04X, bank 5 $%04X-$%04X), SPRX %d bytes'
@@ -226,7 +241,9 @@ print('sprites: SPRC %d bytes (bank 4 $%04X-$%04X, bank 5 $%04X-$%04X), SPRX %d 
 
 # the directory template: a directory entry less its pointer, which holds the item
 # index and its kind until the level's placement fills in the pointer and the bank-5
-# flag (pack_level)
+# flag (pack_level).  The flags are the engine's (engine/defs.s SPF_*): mirrored, every
+# scanline stored, the copy blitter
+SPF_MIRROR, SPF_FULLRES, SPF_COPY = 1, 2, 8
 sprdir = bytearray()
 for i in range(BOXID0):
     e = m.entry[i]
@@ -239,20 +256,20 @@ for i in range(BOXID0):
     rx += m.img_shift[j]
     if mirror:
         rx = (2 * W - 1) - rx
-    if i < 27 and not rx & 1:               # convert.py: Cleo's refx parity rule
+    if i < SPR['BOOM0'] and not rx & 1:     # convert.py: Cleo's refx parity rule
         rx -= 1
-    sprdir += bytes([item_index('img', j), 0, W, hh, rx & 255, ry & 255, 1 if mirror else 0, hh])   # (a byte a row)
+    sprdir += bytes([item_index('img', j), 0, W, hh, rx & 255, ry & 255, SPF_MIRROR if mirror else 0, hh])   # (a byte a row)
 for k in range(NBOXART):
-    lo, wc = m.box_geom[k % 6]
-    sprdir += bytes([item_index('box', k), 1, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
+    lo, wc = m.box_geom[k % NSTARF]
+    sprdir += bytes([item_index('box', k), 1, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, SPF_FULLRES | SPF_COPY, m.BOX_H * 2])
 for k in range(TRMAX):
     sprdir += bytes([item_index('tr', k), 3, m.TRAMP_REST_WC, m.TRAMP_H, (m.TRAMP_HOT - 2 * m.TRAMP_REST_LO) & 255,
-                     (-8) & 255, 2 | 8, m.TRAMP_H * 2])
-for k in range(NSTAR * 6):
-    lo, wc = m.box_geom[k % 6]
-    sprdir += bytes([item_index('sb', k), 4, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, 2 | 8, m.BOX_H * 2])
+                     (-8) & 255, SPF_FULLRES | SPF_COPY, m.TRAMP_H * 2])
+for k in range(NSTAR * NSTARF):
+    lo, wc = m.box_geom[k % NSTARF]
+    sprdir += bytes([item_index('sb', k), 4, wc, m.BOX_H, (6 - 2 * lo) & 255, 8, SPF_FULLRES | SPF_COPY, m.BOX_H * 2])
 for k in range(PWMAX):                      # the powerup at rest: the box from (8x - PW_LEFT, 8y)
-    sprdir += bytes([item_index('pw', k), 5, m.PW_WC, m.PW_H, m.PW_LEFT, (-m.PW_TOP) & 255, 2 | 8, m.PW_H * 2])
+    sprdir += bytes([item_index('pw', k), 5, m.PW_WC, m.PW_H, m.PW_LEFT, (-m.PW_TOP) & 255, SPF_FULLRES | SPF_COPY, m.PW_H * 2])
 assert len(sprdir) == NDIR * 8
 
 # ---------------------------------------------------------------- placing for the loops
@@ -310,7 +327,7 @@ def chunk_items(keys_img, ws):
 # 2-3, one byte (the first row's nibble high).  DIGTAB gives a nibble's top and
 # bottom scanline bytes (logic.s bar_digit).
 def _digits():
-    LM = 0xCC                               # the left game px's dots: bits 7, 6, 3, 2
+    LM = 0xCC                               # the left game px's dots: bits 7, 6, 3, 2 (hw.inc MODE1_DOTS_L)
     pats, packed = [], bytearray()
     def code(t, b, right):
         key = (((t << 2) if right else t) & LM, ((b << 2) if right else b) & LM)
@@ -364,17 +381,19 @@ with open(os.path.join(OUT, 'title.inc'), 'w') as f:
 
 # ---------------------------------------------------------------- per-level helpers
 
-SPRITES_OF = {0: 1, 1: 1, 2: 1, 3: 2, 4: 1, 5: 1, 6: 1, 7: 1, 8: 0, 9: 1, 10: 1, 11: 0, 12: 1}
+SPRITES_OF = {OT['STAR']: 1, OT['TRAMP']: 1, OT['SNAKE']: 1, OT['RSNAKE']: 2, OT['BAT']: 1, OT['MASK']: 1,
+              OT['MUMMY']: 1, OT['SPIKE']: 1, OT['NONE']: 0, OT['FLAME']: 1, OT['POWERUP']: 1,
+              OT['VANISH']: 0, OT['SWITCH']: 1}   # the sprites a type draws at most
 def cellbox(t, x, y, e):                    # level_init's gx0, gx1, gy, gy1, in cells
     m0 = lambda v: max(v, 0)
     gx0, gx1, gy, gy1 = m0(x - 1) >> 3, x >> 3, y >> 3, (y + 1) >> 3
-    if t == 0: gy, gy1 = m0(y - 1) >> 3, y >> 3
-    elif t == 1: gx0, gx1, gy = m0(x - 2) >> 3, (x + 1) >> 3, (y + 1) >> 3; gy1 = gy
-    elif t in (2, 5, 6): gx1 = (x + e[0]) >> 3
-    elif t == 3: gy = m0(y - 4) >> 3
-    elif t == 4: gy, gx1, gy1 = m0(y - 1) >> 3, (x + e[0]) >> 3, (y + e[1]) >> 3
-    elif t == 9: gy, gy1 = m0(y - 2) >> 3, y >> 3
-    elif t == 11: gy1 = gy
+    if t == OT['STAR']: gy, gy1 = m0(y - 1) >> 3, y >> 3
+    elif t == OT['TRAMP']: gx0, gx1, gy = m0(x - 2) >> 3, (x + 1) >> 3, (y + 1) >> 3; gy1 = gy
+    elif t in (OT['SNAKE'], OT['MASK'], OT['MUMMY']): gx1 = (x + e[0]) >> 3
+    elif t == OT['RSNAKE']: gy = m0(y - 4) >> 3
+    elif t == OT['BAT']: gy, gx1, gy1 = m0(y - 1) >> 3, (x + e[0]) >> 3, (y + e[1]) >> 3
+    elif t == OT['FLAME']: gy, gy1 = m0(y - 2) >> 3, y >> 3
+    elif t == OT['VANISH']: gy1 = gy
     return gx0, gx1, gy, gy1
 
 def place_sprites(lv, sub):
@@ -394,8 +413,8 @@ def place_sprites(lv, sub):
     imgs = sorted(set(m.entry[i][0] for i in ids if m.entry[i] is not None) - set(COMMON))   # (placed per level)
     # the box stars' art by each star's class (convert.py star_class: 1 on sky, the
     # first six boxes; 2 on black, the second six -- logic.s boxbase), not by the set
-    classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == 0)
-    bxs = (list(range(0, 6)) if 1 in classes else []) + (list(range(6, 12)) if 2 in classes else [])
+    classes = set(m.star_class(cm, x, y) for (t, x, y, e) in L['objs'] if t == OT['STAR'])
+    bxs = (list(range(0, NSTARF)) if 1 in classes else []) + (list(range(NSTARF, NBOXART)) if 2 in classes else [])
     R5BASE = C5_BASE + C5_LEN               # above the resident part, up to the map
     regions = {'r4': [COMMON_END, B4_DATA[1]], 'r6': [R5BASE, B5_DATA[1]]}   # (r6: bank 5's)
     mirrored = set(m.entry[i][0] for i in ids if m.entry[i] is not None and m.entry[i][1])
@@ -458,54 +477,60 @@ def settle_level(level, img_addr, img_bank, regions):
     return img_addr, c0, c1
 
 # ---------------------------------------------------------------- one level
-# Cleo's fields in the level header (logic.s level_init): the start and exit, in tiles,
-# and the special tiles' ids (the vanishing blocks, the flowers)
+# Cleo's fields in the level header (logic.s level_init; assets.inc HDR_*): the start
+# and exit, in tiles, and the special tiles' ids (the vanishing blocks, the flowers)
 HDR_STARTX, HDR_STARTY, HDR_EXITX, HDR_EXITY, HDR_SPECIAL = 2, 3, 4, 5, 8
-# logic.s RNGTAB: in_range's limit quads (lo, hi, lo2, hi2, each +128: rx > lo && rx <
-# hi && ry > lo2 && ry < hi2), every level's header tail -- the loader puts it at LV_HDR
-# + 32, in its page ($82), where in_range's hot reads need it.  Append new quads, never
-# insert: callers hold fixed offsets (ldx #n), and a quad put in mid-table once shifted
-# every later one under them (the bat read Cleo's band, the vanishing platforms never
-# saw her feet).
-RNGTAB = bytes([
-    112, 144, 112, 148,     # 0: <-16, 16, <-16, 20
-    120, 136, 120, 136,     # 4: <-8, 8, <-8, 8 (the boomerang's on a star; and its catch)
-    119, 145, 128, 136,     # 8: <-9, 17, 0, 8
-    112, 144, 104, 140,     # 12: <-16, 16, <-24, 12
-    120, 136, 112, 132,     # 16: <-8, 8, <-16, 4 (the boomerang's)
-    116, 140, 110, 130,     # 20: <-12, 12, <-18, 2 (the boomerang's)
-    118, 138, 120, 144,     # 24: <-10, 10, <-8, 16
-    116, 140, 116, 140,     # 28: <-12, 12, <-12, 12 (the boomerang's)
-    112, 144, 116, 144,     # 32: <-16, 16, <-12, 16
-    116, 140, 0, 255,       # 36: <-12, 12, <-128, 127
-    120, 136, 114, 140,     # 40: <-8, 8, <-14, 12: the mask and the mummy -- the biggest
-                            #  box where every Cleo frame (0-26) overlaps every frame of
-                            #  both (67-84) by a pixel; the original's (-16, 16, -24, 20)
-                            #  hit with no pixels touching at 58% of its offsets
-    118, 138, 112, 136,     # 44: <-10, 10, <-16, 8 (the boomerang's)
-    120, 128, 104, 136,     # 48: <-8, 0, <-24, 8 (+49: ob_health sets it)
-    112, 144, 104, 140,     # 52: <-16, 16, <-24, 12
-    112, 129, 143, 145,     # 56: <-16, 1, 15, 17
-    112, 144, 104, 140,     # 60: <-16, 16, <-24, 12
-    # The boomerang's hit bands (4, 16, 20, 28, 44) are the original's: they are
-    # tested against the box the boomerang crossed in its last move (logic.s
-    # bsweep), so it cannot fly through one between frames.
+# logic.s RNGTAB: in_range's limit quads (lo, hi, lo2, hi2, each + RQ_BIAS: rx > lo &&
+# rx < hi && ry > lo2 && ry < hi2), every level's header tail -- the loader puts it at
+# LV_HDR + HDR_LEN, in its page ($82), where in_range's hot reads need it.  Each quad's
+# offset reaches logic.s as RQ_<name> (assets.inc), so a quad may be added anywhere; a
+# guard band's boomerang quad follows its Cleo one (RQ_BOOMOFF: logic.s box_safe).
+RQ_BIAS = 128
+RQ_BOOMOFF = 4
+RNGTAB_LEN = 88                             # the room logic.s keeps for it
+RNGTAB_QUADS = [
+    ('STAR',        (-16, 16, -16, 20)),    # the collect
+    ('BOOM_STAR',   (-8, 8, -8, 8)),        # the boomerang's on a star; and its catch
+    ('TRAMP',       (-9, 17, 0, 8)),
+    ('SNAKE',       (-16, 16, -24, 12)),
+    ('BOOM_SNAKE',  (-8, 8, -16, 4)),       # the boomerang's
+    ('BOOM_RSNAKE', (-12, 12, -18, 2)),     # the boomerang's
+    ('RSNAKE',      (-10, 10, -8, 16)),
+    ('BOOM_BAT',    (-12, 12, -12, 12)),    # the boomerang's
+    ('BAT_STOMP',   (-16, 16, -12, 16)),
+    ('BAT',         (-12, 12, -128, 127)),
+    ('WALKER',      (-8, 8, -14, 12)),      # the mask and the mummy -- the biggest box where
+                                            #  every Cleo frame (0-26) overlaps every frame of
+                                            #  both (67-84) by a pixel; the original's (-16, 16,
+                                            #  -24, 20) hit with no pixels touching at 58% of
+                                            #  its offsets
+    ('BOOM_WALKER', (-10, 10, -16, 8)),     # the boomerang's
+    ('SPIKE',       (-8, 0, -24, 8)),       # (+1: ob_spike sets the x limit by its height)
+    ('POWERUP',     (-16, 16, -24, 12)),
+    ('VANISH',      (-16, 1, 15, 17)),
+    ('SWITCH',      (-16, 16, -24, 12)),
+    # The boomerang's hit bands (BOOM_*) are the original's: they are tested against
+    # the box the boomerang crossed in its last move (logic.s bsweep), so it cannot fly
+    # through one between frames.
     # Guard bands: not "close enough to collect" but "the drawn rectangles touch"
     # this frame -- where Cleo and the boomerang are when the objects run, grown by
     # the most each moves before it is drawn: Cleo 6 across and 14 up or down, the
     # boomerang 30 each way (a frame is two of the original's steps).
-    99, 153, 99, 166,       # 64: Cleo      <-29, 25, <-29, 38
-    81, 174, 88, 173,       # 68: boomerang <-47, 46, <-40, 45
+    ('GUARD_STAR',  (-29, 25, -29, 38)),    # Cleo
+    ('GUARD_BSTAR', (-47, 46, -40, 45)),    # the boomerang
     # trampoline guard bands (its box (-16..8, 8..16) grown by the disturber's box,
     # which the star bands imply is Cleo x(-15,13) y(-11,16), boomerang x(-9,10) y(-6,7),
     # and by the frame's move, as above)
-    99, 163, 87, 150,       # 72: Cleo      <-29, 35, <-41, 22
-    81, 184, 76, 157,       # 76: boomerang <-47, 56, <-52, 29
+    ('GUARD_TRAMP', (-29, 35, -41, 22)),    # Cleo
+    ('GUARD_BTRAMP', (-47, 56, -52, 29)),   # the boomerang
     # the health powerup's baked box (-6..6, 4..14) grown the same way
-    101, 153, 89, 154,      # 80: Cleo      <-27, 25, <-39, 26
-    83, 174, 78, 161,       # 84: boomerang <-45, 46, <-50, 33
-])
-assert len(RNGTAB) <= 88, 'RNGTAB has outgrown its memory (logic.s RNGTAB)'
+    ('GUARD_PW',    (-27, 25, -39, 26)),    # Cleo
+    ('GUARD_BPW',   (-45, 46, -50, 33)),    # the boomerang
+]
+RQ = {n: 4 * i for i, (n, q) in enumerate(RNGTAB_QUADS)}
+RNGTAB = bytes(v + RQ_BIAS for n, q in RNGTAB_QUADS for v in q)
+assert all(RQ['GUARD_B' + g] == RQ['GUARD_' + g] + RQ_BOOMOFF for g in ('STAR', 'TRAMP', 'PW'))
+assert len(RNGTAB) <= RNGTAB_LEN, 'RNGTAB has outgrown its memory (logic.s RNGTAB)'
 def pack_level(lv, sub):
     L = m.levels[(lv, sub)]
     name = m.name_of(lv, sub)
@@ -520,7 +545,7 @@ def pack_level(lv, sub):
         lut[c] = t
     mapb = lut[cm].tobytes()
     h, w = cm.shape
-    specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]
+    specials = [m.special['VANISH0'] + i for i in range(8)] + [m.special['FLOWER0'] + i for i in range(4)]   # (HDR_SPECIAL's 12)
 
     # ---- tables: the header's game fields (the rest is the engine's: levelfile), as
     # logic.s level_init reads them
@@ -534,12 +559,12 @@ def pack_level(lv, sub):
     # (the walk's first cell, then each cell's chain, the later object first --
     # convert.py parse_level puts the powerups last)
     for pi, (t, x, y, ex) in enumerate(L['objs']):
-        if t != 10:
+        if t != OT['POWERUP']:
             continue
         b0, b1, c0, c1 = 8 * x + PW_RECT[0], 8 * x + PW_RECT[1], 8 * y + PW_RECT[2], 8 * y + PW_RECT[3]
-        pc = cellbox(10, x, y, [0, 0, 0])
+        pc = cellbox(OT['POWERUP'], x, y, [0, 0, 0])
         for qi, o in enumerate(L['objs']):
-            if o[0] in (0, 10) or not any(x0 < b1 and b0 < x1 and y0 < c1 and c0 < y1 for (x0, x1, y0, y1) in m.enemy_reach([o])):
+            if o[0] in (OT['STAR'], OT['POWERUP']) or not any(x0 < b1 and b0 < x1 and y0 < c1 and c0 < y1 for (x0, x1, y0, y1) in m.enemy_reach([o])):
                 continue
             qc = cellbox(o[0], o[1], o[2], (list(o[3]) + [0, 0, 0])[:3])
             assert (qc[2], qc[0]) > (pc[2], pc[0]) or ((qc[2], qc[0]) == (pc[2], pc[0]) and qi < pi), \
@@ -547,20 +572,20 @@ def pack_level(lv, sub):
     _tr, _st, _by, _at = level_bakes(lv, sub)
     for oi, (t, x, y, ex) in enumerate(L['objs']):
         e = (list(ex) + [0, 0, 0])[:3]
-        if t == 0:
+        if t == OT['STAR']:
             e[0] = m.star_class(cm, x, y)
-            e[0] = {0: 0, 1: BOXID0, 2: BOXID0 + 6}[e[0]]   # its six boxes' first id: the sky's,
+            e[0] = {0: 0, 1: BOXID0, 2: BOXID0 + NSTARF}[e[0]]   # its six boxes' first id: the sky's,
             if oi in _st:                   # the black's, or its own (baked)
-                e[0] = BOXID0 + 12 + TRMAX + 6 * _st[oi]
+                e[0] = BOXID0 + NBOXART + TRMAX + NSTARF * _st[oi]
             e[1] = 1 if m.star_reachable(x, y, reach) else 0
-        elif t == 10:                       # its baked box's id (logic.s ob_powerup), and
-            e[0] = BOXID0 + 12 + TRMAX + 6 * NSTAR + PWOF[(lv, sub)][oi]   # can an enemy reach it
-            b = m.TYPE_BOX[10]
+        elif t == OT['POWERUP']:            # its baked box's id (logic.s ob_powerup), and
+            e[0] = BOXID0 + NBOXART + TRMAX + NSTARF * NSTAR + PWOF[(lv, sub)][oi]   # can an enemy reach it
+            b = m.TYPE_BOX[OT['POWERUP']]
             selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
             e[1] = 1 if m.box_reachable(PW_RECT, x, y, reach, skip=selfbox) else 0
-        elif t == 1:
-            e[0] = BOXID0 + 12 + _tr[oi] if oi in _tr else 0
-            b = m.TYPE_BOX[1]
+        elif t == OT['TRAMP']:
+            e[0] = BOXID0 + NBOXART + _tr[oi] if oi in _tr else 0
+            b = m.TYPE_BOX[OT['TRAMP']]
             selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
             e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
         objs.append([t, x, y] + e)
@@ -573,11 +598,11 @@ def pack_level(lv, sub):
     def star_cols(x):                   # a star's byte columns at each of the spin's 12 steps
         cs = []
         for a_ in range(12):
-            im_, rx_, ry_ = m.crops[34 + (a_ >> 1)]
+            im_, rx_, ry_ = m.crops[SPR['STAR0'] + (a_ >> 1)]
             cs.append((((8 * x - rx_) & 1) + im_.shape[1] + 1) // 2)
         return cs
     placed = []                         # (x px, y px, cols, phase)
-    for i in sorted((i for i, o in enumerate(objs) if o[0] == 0), key=lambda i: (objs[i][1], objs[i][2])):
+    for i in sorted((i for i, o in enumerate(objs) if o[0] == OT['STAR']), key=lambda i: (objs[i][1], objs[i][2])):
         x, y = objs[i][1], objs[i][2]
         cs = star_cols(x)
         near = [p_ for p_ in placed if abs(p_[0] - 8 * x) < 160 and abs(p_[1] - 8 * y) < 120]
@@ -594,19 +619,19 @@ def pack_level(lv, sub):
     # frame either can show, a star's sparkle too -- is marked disturbable (e1), so
     # it is redrawn every frame (still a copy, never erased) rather than kept
     def area(t, x, y):
-        if t == 10:                     # the powerup: its box, all it draws at rest
+        if t == OT['POWERUP']:          # the powerup: its box, all it draws at rest
             return (8 * x + PW_RECT[0], 8 * x + PW_RECT[1], 8 * y + PW_RECT[2], 8 * y + PW_RECT[3])
-        ids = range(34, 43) if t == 0 else range(43, 46)
+        ids = range(SPR['STAR0'], SPR['TRAMP0']) if t == OT['STAR'] else range(SPR['TRAMP0'], SPR['TRAMP0'] + SPR_N['TRAMP0'])   # (a star's spin and sparkle)
         bs = [m._SPRBOX[i] for i in ids if i in m._SPRBOX]
-        ox = 8 * x + (4 if t == 1 else 0)
+        ox = 8 * x + (4 if t == OT['TRAMP'] else 0)
         r = (ox + min(b[0] for b in bs), ox + max(b[1] for b in bs), 8 * y + min(b[2] for b in bs), 8 * y + max(b[3] for b in bs))
-        if t == 1:                      # (and the rest box itself)
+        if t == OT['TRAMP']:            # (and the rest box itself)
             bx = ox - m.TRAMP_HOT + 2 * m.TRAMP_REST_LO
             r = (min(r[0], bx), max(r[1], bx + 2 * m.TRAMP_REST_WC), min(r[2], 8 * y + 8), max(r[3], 8 * y + 8 + m.TRAMP_H))
         else:
             r = (min(r[0], 8 * x - 6), max(r[1], 8 * x + 8), min(r[2], 8 * y - 8), max(r[3], 8 * y + 4))
         return r
-    stat = [(i, area(o[0], o[1], o[2])) for i, o in enumerate(objs) if o[0] in (0, 1, 10)]
+    stat = [(i, area(o[0], o[1], o[2])) for i, o in enumerate(objs) if o[0] in (OT['STAR'], OT['TRAMP'], OT['POWERUP'])]
     meet = lambda p, q: p[0] < q[1] and q[0] < p[1] and p[2] < q[3] and q[2] < p[3]
     for i, ri in stat:
         if objs[i][3] and any(j != i and meet(ri, rj) for j, rj in stat):
@@ -628,15 +653,15 @@ def pack_level(lv, sub):
     # (both machines' windows: one bound, so the tables it sizes lie alike on both)
     rects = set()
     for vl in VISLINES_ALL:
-        maxwx, maxwy = w * 8 - 160, h * 8 - vl // 2
+        maxwx, maxwy = w * 8 - WINPX, h * 8 - vl // 2
         for wx in range(0, maxwx + 1, 2):
             for wy in range(0, maxwy + 1):
-                rects.add((wx >> 6, (wx + 159) >> 6, wy >> 6, (wy + vl // 2 - 1) >> 6))
+                rects.add((wx // BINPX, (wx + WINPX - 1) // BINPX, wy // BINPX, (wy + vl // 2 - 1) // BINPX))
     MAXSPR, BINMAX = 0, 0
     for (rx0, rx1, ry0, ry1) in rects:
         hit = [t for (t, (gx0, gx1, gy, gy1)) in boxes if gx0 <= rx1 and gx1 >= rx0 and gy <= ry1 and gy1 >= ry0]
-        MAXSPR = max(MAXSPR, sum(SPRITES_OF[t] for t in hit) + 2)
-        BINMAX = max(BINMAX, sum(1 for t in hit if t == 0), sum(1 for t in hit if t != 0))
+        MAXSPR = max(MAXSPR, sum(SPRITES_OF[t] for t in hit) + 2)   # (+ Cleo and the boomerang)
+        BINMAX = max(BINMAX, sum(1 for t in hit if t == OT['STAR']), sum(1 for t in hit if t != OT['STAR']))
 
     # ---- sprites: which images, and where each goes (place_sprites), then where in
     # each region: the order and padding that cost the sprite loops least (sprpack)
@@ -783,6 +808,28 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
     f.write('MAP5 = $%04X\n' % MAP5)
     f.write('B4_CODE_END = $%04X\nB5_CODE_END = $%04X\n' % (B4_CODE_END, B5_CODE_END))
+    f.write('B4_DATA_END = $%04X\n' % B4_DATA_END)      # the expansion tables (defs.inc L0TAB)
+    f.write('TILES = $%04X\n' % TILES_BASE)             # bank 6's tiles (convert.py B_TILES)
+    f.write('IMGTAB_LEN = %d\n' % IMGTAB_LEN)
+    f.write('%s\n' % '\n'.join('BG_%s = %d' % kv for kv in (('WC', BG_WC), ('LINES', BG_LINES), ('DX', BG_DX),
+                                                          ('DTY', BG_DTY), ('OV', BG_OV), ('SKIP', BG_SKIP), ('LEN', BG_LEN))))
+    # the game's: its header fields, in_range's quads, the object types, the sprite ids
+    f.write('HDR_STARTX = %d\nHDR_STARTY = %d\nHDR_EXITX = %d\nHDR_EXITY = %d\nHDR_SPECIAL = %d\n'
+            % (HDR_STARTX, HDR_STARTY, HDR_EXITX, HDR_EXITY, HDR_SPECIAL))
+    f.write('RNGTAB_LEN = %d\nRQ_BIAS = %d\nRQ_BOOMOFF = %d\n' % (RNGTAB_LEN, RQ_BIAS, RQ_BOOMOFF))
+    f.write('%s\n' % '\n'.join('RQ_%s = %d' % (n, o) for n, o in RQ.items()))
+    f.write('STARBAND_LO = %d\nSTARBAND_HI = %d\n' % dict(RNGTAB_QUADS)['GUARD_STAR'][:2])   # (logic.s po_star)
+    f.write('%s\n' % '\n'.join('OT_%s = %d' % kv for kv in OT.items()))
+    f.write('%s\n' % '\n'.join('SPR_%s = %d' % (n, a) for n, a, c in m.SPR_IDS))
+    f.write('%s\n' % '\n'.join('SPR_%s_N = %d' % (n[:-1], c) for n, a, c in m.SPR_IDS if c > 1 and n.endswith('0')))
+    f.write('BINPX = %d\n' % BINPX)                     # the collision grid's cell (logic.s)
+    # the HUD (convert.py: the bar's icons sit by them) and its digits (_digits above);
+    # the menus' run-length code (convert.py title_rle)
+    f.write('HUD_X_LIVES = %d\nHUD_X_HEALTH = %d\nHUD_X_STARS = %d\nHUD_X_SCORE = %d\n'
+            % (m.HUD_X_LIVES, m.HUD_X_HEALTH, m.HUD_X_STARS, m.HUD_X_SCORE))
+    f.write('DIGIT_W = 8\nDIGIT_PACKED = 16\n')
+    f.write('RLE_RUN = $%02X\nRLE_RUNBIAS = $%02X\nRLE_END = $%02X\n' % (m.RLE_RUN, m.RLE_RUNBIAS, m.RLE_END))
+    f.write('GLYPHW = 8\nGLYPHH = 8\n')                # the font's glyphs (convert.py font)
 print('MAXSPR %d BINMAX %d; img_tab %d entries' % (MAXSPR, BINMAX, len(img_tab) // 5))
 out('nibtab.bin', m.NIBTAB)             # the engine's L0TAB, L1TAB, NMASK (banks.s)
 out('bake_geom.bin', bytes(bake_geom))   # the baker's tables (ldprog.s)
