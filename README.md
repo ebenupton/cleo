@@ -1,110 +1,81 @@
-# Cleo — a BBC Master 128 port
+# Cleo for the BBC Micro
 
-*Cleo* is a scrolling platformer written for J2ME phones by High Energy Magic in 2004.
-This repository ports it to the BBC Master 128: the whole game — eight worlds with
-their bonus levels, all thirteen object types, the boomerang, the tune — running in
-MODE 2 on a 2 MHz 6502 with smooth vertical scrolling, double buffering and a status
-bar, from a single 200K disc image.
+*Cleo* is a scrolling platformer written for J2ME phones by High Energy Magic in 2004.  This
+repository ports it to the BBC Model B (with 64K of sideways RAM) and the BBC Master 128: all
+sixteen levels -- eight worlds, each with its bonus level -- the thirteen object types, the
+boomerang and the tune, in MODE 1 with smooth scrolling, from one 200K disc image that runs
+on either machine.
 
 <p align="center">
-  <img src="docs/img/title.png" width="48%" alt="Title screen">
-  <img src="docs/img/level0.png" width="48%" alt="City Gates">
+  <img src="docs/img/title.png" width="48%" alt="The title screen (Master 128)">
+  <img src="docs/img/select.png" width="48%" alt="The level select, all eight worlds">
 </p>
+<p align="center">
+  <img src="docs/img/l0_master.png" width="48%" alt="City Gates, Master 128 (120-px window)">
+  <img src="docs/img/l0_modelb.png" width="48%" alt="City Gates, Model B (84-px window)">
+</p>
+<p align="center">
+  <img src="docs/img/l6_master.png" width="48%" alt="Chefren, an indoor level, on the Master 128">
+</p>
+
+(Screenshots from the emulator's framebuffer, taken from the disc in this repository; the
+Model B's window is 84 game pixels tall to the Master's 120, the one visible difference
+between the machines.)
 
 ## Playing it
 
-Boot `beeb/cleo_latest.ssd` on a Master 128 — SHIFT+BREAK, or `*RUN CLEO` — or drop it
-on [jsbeeb](https://bbc.godbolt.org) with the Master model selected.
+Boot `cleo.ssd` (SHIFT+BREAK; `!BOOT` runs the loader) on either machine, or load it into
+[jsbeeb](https://bbc.godbolt.org) or BeebEm as a Master 128 or a Model B.
+
+- **Master 128**: as it comes.
+- **Model B**: four 16K banks of sideways RAM in any sockets, written through ROMSEL or by a
+  Watford or Solidisk write-select board, and an 8271 or Acorn 1770 DFS.  The loader finds
+  the banks, tells you if it cannot, and patches the game for the ones it finds.
 
 | key | action |
 |---|---|
-| `Z` / `X` (or cursor left/right) | run |
-| `RETURN` (or `SPACE`, cursor up) | jump |
-| `/` (or cursor down) | throw the boomerang |
-| `ESCAPE` | pause menu |
+| `Z` / `X`, or cursor left / right | run |
+| `RETURN`, `SPACE`, or `:` / cursor up | jump |
+| `/`, or cursor down | throw the boomerang |
 
-Collect every star in a level to open its bonus level. Menus use the cursor keys and
-`RETURN`; the help screen's first line reads *Z X TO RUN* in the game's Egyptian font.
+Menus: cursor up and down move, `RETURN` (or cursor right) selects.  Collect every star in a
+level to open its bonus level; a level finished with stars left goes straight to the next
+world.  Once you have reached a world the level select offers it.  There is no pause.
 
 ## Building
 
-You need Python 3 with `Pillow` and `numpy` and [cc65](https://cc65.github.io) (`ca65`,
-`ld65`, `od65`).  The original game's data comes with the repository, unzipped from
-the JARs into `beeb/assets/` (`v500/` for the build, `gx/` for reference); the engine
-is a submodule (`git clone --recurse-submodules`, or `git submodule update --init`).
+You need Python 3 with Pillow and numpy, and [cc65](https://cc65.github.io) (`ca65`, `ld65`,
+`od65`).  The original game's data is in the repository, unzipped from the JARs into
+`beeb/assets/` (`v500/`, the build's input; `gx/`, for reference).  The engine is a submodule.
 
 ```sh
+git submodule update --init   # beebgame, in beeb/beebgame
 cd beeb
-python3 tools/convert.py   # levels, tiles, sprites, bar, title -> build/   (run this by hand)
-./build.sh                 # tune, assemble, link, disc image -> build/cleo.ssd
+sh build.sh                   # the tune, the assets, both machines, one disc: build/cleo.ssd
 ```
 
-`build.sh` does not run the converter, so re-run `convert.py` after touching anything in
-the asset pipeline.
+A plain build also copies the disc to this directory's `cleo.ssd`, the copy kept in git.
+Knobs: `NFLAT=n sh build.sh` (flat tiles a level, default 4), `ALLLEVELS=1 sh build.sh` (a
+test build with every world on the level select, which takes every bonus level and does not
+overwrite `cleo.ssd`).
 
-Build variants, all off by default and all leaving the standard build byte-identical:
+## What is where
 
-```
-DITHER=cpc python3 beeb/tools/convert.py   # 1x2 dither to the CPC's 27 colours
-KERNEL=1x2 python3 beeb/tools/convert.py   # ordered dither with a 1x2 (or 2x2) kernel
-MODE=1 python3 beeb/tools/convert.py && MODE1=1 ./build.sh   # a MODE 1 build
-```
-
-The MODE 1 build keeps the memory layout (a byte is still two game pixels, now as a
-2x2 block of C/M/Y/K screen pixels chosen per game pixel) but loses the spare bits the MODE 2 engine
-signals with. Sprite transparency comes from a mask plane instead: one bit per game
-pixel, four columns' pairs packed into a byte, decoded by four page tables (`MASKTAB0..3`,
-one per column phase, no shifting) into the AND mask for a data byte. No periodic-cell
-flag in the tiles, a four-dot SWAPTAB for mirroring, a CMYK palette, and the font,
-digits and bar spans live in bank 6 behind the box stars because the masks take the
-room in bank 4. The assembler checks that the assets were converted for the mode it is
-building.
-
-## How it works, briefly
-
-* **Picture.** MODE 2, 160×256, 8 colours. Each square game pixel becomes one MODE 2
-  screen pixel wide and two scanlines tall, and the original's colours are approximated
-  with a 2×4 ordered dither chosen to be stable under the 2-game-pixel horizontal scroll
-  step.
-* **Scrolling.** Each 20K screen buffer is a 32-row ring; horizontal scrolling moves the
-  CRTC start address by whole characters, vertical scrolling is per scanline using a
-  vertical rupture — the frame is split into short CRTC frames (status bar, partial top
-  row, playfield, partial bottom row, blanking) re-programmed from a VIA timer chain that
-  re-phases itself every vsync.
-* **Double buffering** between main and shadow RAM (ACCCON), with unchanged sprites kept
-  in place rather than erased and redrawn.
-* **Memory.** Engine below 12K, game logic and menus in HAZEL, all data in the four
-  sideways RAM banks (sprites + font, tiles ×2, current level + title pack) and the
-  4K ANDY RAM, loaded by a small WD1770 driver after abandoning the MOS.
-* **Logic** is a line-by-line port of the original's `run()` with its integer arithmetic
-  intact, stepping at 25 Hz with frame skipping.
-
-The technical write-up is in [`beeb/README.md`](beeb/README.md); the notes on how the
-J2ME engine and its data formats were reverse-engineered are in
-[`beeb/docs/REVERSE_ENGINEERING.md`](beeb/docs/REVERSE_ENGINEERING.md).
-
-## Tools
-
-Everything under `beeb/tools/`:
-
-| tool | purpose |
-|---|---|
-| `convert.py` | asset pipeline: level packs, tile banks, sprites, bar, title, previews |
-| `mkdfs.py` | builds the DFS disc image and the sector table the loader uses |
-| `midi2snd.py` | reduces `thm.mid` to a three-voice SN76489 note stream |
-| `tile_editor.py` | hand-fix individual dithered tiles |
-| `javadis.py` | Java class-file disassembler (no JVM required) |
-| `profile.mjs`, `annotate_profile.py` | cycle-level profiler driving the jsbeeb core from Node, and a source annotator that draws a per-line cycle bar chart |
-| `spawncheck.mjs`, `spritelog.mjs`, `barfrag.mjs` | scripted headless test runs: spawn points, sprite lists, framebuffer-vs-memory checks |
+- `beeb/` -- the port: the game's 6502 sources, the asset pipeline, the tests and the build
+  (`beeb/README.md` is the developer's index).
+- `beeb/beebgame/` -- the engine, [beebgame](https://github.com/ebenupton/beebgame), as a
+  submodule: display, blitters, disc driver and loader, level file format.
+- `beeb/docs/` -- `DESIGN.md` (the game's design) and `REVERSE_ENGINEERING.md` (what was
+  learned from the J2ME original, for the next port); `history/` keeps earlier plans.
+- `cleo.ssd` -- the disc, as last built.
 
 ## Status
 
-Playable start to finish. Not carried over from the phone version: saved progress and
-hi-scores (kept in RAM only), the curtain wipe between screens and the "BONUS LEVEL"
-banner sprite (drawn as text). The rendering runs at 12–25 fps depending on how much is
-moving; the logic is fixed-rate so the game plays the same regardless.
+Everything in the original's levels plays.  Not ported: the hi-score's persistence (it lives
+in RAM, cleared at power-on), the curtain "wipe" between screens, and the BONUS LEVEL banner
+sprite (the words appear only on the help page).
 
 ## Credits
 
-Original game © 2004 High Energy Magic. BBC Master port and tools in this repository by
-Eben Upton with Claude; see the commit history for the blow-by-blow.
+*Cleo* was written by High Energy Magic (2004).  The port's engine is beebgame; the tests run
+on jsbeeb (Matt Godbolt) and a headless build of BeebEm's core; the assembler is cc65.
