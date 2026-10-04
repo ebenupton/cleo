@@ -9,12 +9,6 @@
         lda src+1
         sta dst+1
 .endmacro
-.macro mov16i dst, imm
-        lda #<(imm)
-        sta dst
-        lda #>(imm)
-        sta dst+1
-.endmacro
 .macro add16 dst, src
         clc
         lda dst
@@ -38,15 +32,6 @@
         adc #>(imm)
         sta dst+1
   .endif
-.endmacro
-.macro sub16 dst, src
-        sec
-        lda dst
-        sbc src
-        sta dst
-        lda dst+1
-        sbc src+1
-        sta dst+1
 .endmacro
 .macro sub16i dst, imm
         sec
@@ -73,69 +58,6 @@
         sbc bb+1
         sta dst+1
 .endmacro
-.macro asr16 var
-        lda var+1
-        cmp #$80
-        ror var+1
-        ror var
-.endmacro
-.macro asl16 var
-        asl var
-        rol var+1
-.endmacro
-.macro neg16 var
-        sec
-        lda #0
-        sbc var
-        sta var
-        lda #0
-        sbc var+1
-        sta var+1
-.endmacro
-; sign-extend 8-bit A into dst
-.macro sx16 dst
-        sta dst
-        and #$80
-        beq :+
-        lda #$FF
-:       sta dst+1
-.endmacro
-; branch if var > imm (signed 16)
-.macro bgt16i var, imm, label
-        lda var                    ; var > imm is var >= imm+1: ble16i's bias form
-        cmp #<((imm)+1)
-        lda var+1
-        eor #$80
-        sbc #(>((imm)+1) ^ $80)
-        bcs label
-.endmacro
-; branch if var < imm (signed 16)
-.macro blt16i var, imm, label
-        lda var
-        cmp #<(imm)
-        lda var+1
-        eor #$80                   ; bias both sides by $8000 and compare unsigned:
-        sbc #(>(imm) ^ $80)        ; the bias on the constant is free at assembly time
-        bcc label
-.endmacro
-; branch if var >= imm (signed 16)
-.macro bge16i var, imm, label
-        lda var
-        cmp #<(imm)
-        lda var+1
-        eor #$80
-        sbc #(>(imm) ^ $80)
-        bcs label
-.endmacro
-; branch if var <= imm (signed 16)
-.macro ble16i var, imm, label
-        lda var                    ; var <= imm is var < imm+1, so this is blt16i's
-        cmp #<((imm)+1)            ; bias form: one instruction and no V fixup
-        lda var+1
-        eor #$80
-        sbc #(>((imm)+1) ^ $80)
-        bcc label
-.endmacro
 ; branch if a > b (both 16-bit vars)
 .macro bgt16 aa, bb, label
         lda bb
@@ -144,15 +66,6 @@
         sbc aa+1
 :      bmi label                   ; no V fixup: every caller compares x positions (a map
                                     ; x < 2048, or one plus C>>1), never 2^15 apart
-.endmacro
-.macro blt16 aa, bb, label
-        lda aa
-        cmp bb
-        lda aa+1
-        sbc bb+1
-        bvc :+
-        eor #$80
-:      bmi label
 .endmacro
 .macro bge16 aa, bb, label
         lda aa
@@ -183,11 +96,6 @@
         lda var
         ora var+1
         beq label
-.endmacro
-.macro bne16 var, label
-        lda var
-        ora var+1
-        bne label
 .endmacro
 
 ; ---------------------------------------------------------------- object arrays (bank 7)
@@ -1192,27 +1100,6 @@ game_frame:
         lda #>(-1280)
         sta vy+1
 :                                  ; kill tile under player
-  .ifdef DBGTILE                   ; debug build: the score shows the tile byte under
-        mov16 qx, px               ; Cleo's feet (its id in the level's tile set;
-        clc                        ; 254 cyan, 255 black), refreshed every step
-        lda py
-        adc #12
-        sta qy
-        lda py+1
-        adc #0
-        sta qy+1
-        jsr tilexy
-        bcc @dbgt
-        jsr map_tile
-        tax                        ; (the readout: BCD)
-        lda #0
-        sta score
-        sta score+1
-        sta score+2
-        tay
-        jsr dbg_bcd
-@dbgt:
-  .endif
         lda health                 ; dead: nothing hits.  (It was health <> 0 OR hurt = 0:
         beq @nokill                ;  a fall off the map leaves health 0 with hurt clear,
                                     ;  and a kill tile under her then took 0 to 255, alive.)
@@ -1230,12 +1117,6 @@ game_frame:
         lsr                        ; C = facing
         ror                        ; A = facing << 7: player_hit tests only hx+1's sign
         sta hx+1                   ; facing left -> hx negative -> vx = +768
-  .ifdef DBGHIT
-        lda #250                   ; the readout shows 25009 for a kill tile (obj and
-        sta obj                    ; otype are free here: the walk is over for this step)
-        lda #9
-        sta otype
-  .endif
         jsr player_hit
 @nokill:
         lda health
@@ -1248,18 +1129,6 @@ game_frame:
 ; player_hit: knock back. hx = relative x of the enemy (sign used)
 ; ============================================================================
 player_hit:
-  .ifdef DBGHIT                    ; debug build (DBGHIT=1 sh build.sh): the score
-        lda #0                     ; shows obj*100 + otype of whatever hit us, and
-        sta score                  ; add_score is a no-op so it stays until the next hit
-        sta score+1
-        sta score+2
-        ldx obj
-        ldy #1                     ; obj hundreds
-        jsr dbg_bcd
-        ldx otype
-        ldy #0                     ; and otype ones
-        jsr dbg_bcd
-  .endif
         mov16 ev_frame, frame
         lda #1                     ; bar_touch, inlined
         sta bar_dirty
@@ -1605,7 +1474,7 @@ player_update:
         sta vx                     ; 3vx low, straight into vx: no add16 at the end
         tya
         adc vx+1                   ; A = 3vx high (vx+1 not written yet)
-        cmp #$80                   ; asr16 x3, high byte held in A
+        cmp #$80                   ; 3vx >> 3 signed: C = the sign (A >= $80), rolled in
         ror
         ror vx
         cmp #$80
@@ -2329,9 +2198,6 @@ boom_ready:
 @no:    clc
         rts
 add_score:                         ; A = points, BCD; X and Y kept
-  .if .defined(DBGHIT) .or .defined(DBGTILE)
-        rts                        ; (debug: the score is a readout)
-  .endif
         sed                        ; (every interrupt clears D for itself: low.s, and the
         clc                        ;  65C02 by its own)
         adc score
@@ -2423,9 +2289,6 @@ ob_star1:
         lda #1
         sta O_CL,y
         dec stars
-  .if .defined(DBGHIT) .or .defined(DBGTILE)
-        jsr bar_touch              ; (debug: add_score stops short of it)
-  .endif
         jsr add_score              ; A = 1 still; it ends in jmp bar_touch (Y kept)
         lda #SFX_STAR
         sta sfx_req
@@ -2625,7 +2488,7 @@ ob_snake:                          ; in place: Y = obj throughout (reloaded afte
         lda #SFX_KILL
         sta sfx_req
         bne @boom                  ; always: A = SFX_KILL (5), Z = 0
-@draw:  ldx O_BL,y                 ; B <= -128: not drawn (ble16i's bias form)
+@draw:  ldx O_BL,y                 ; B <= -128: not drawn (as B < -127, biased)
         cpx #<(-127)
         lda O_BH,y
         eor #$80
@@ -2726,7 +2589,7 @@ ob_snake:                          ; in place: Y = obj throughout (reloaded afte
         adc #0                     ; C = 1: + 1
         sta O_BH,y
         rts
-@c5:    ldx O_BL,y                 ; B <= -128: to @coll (ble16i's bias form; X is
+@c5:    ldx O_BL,y                 ; B <= -128: to @coll (as B < -127, biased; X is
         cpx #<(-127)               ;  dead after @adv, as @c4's tax already assumes)
         lda O_BH,y
         eor #$80
@@ -2870,7 +2733,7 @@ ob_rsnake:                         ; in place: Y = obj (reloaded after the calls
         lda #60
         jmp add_sprite
 @knocked:                          ; (in place: C and D the flight)
-        lda O_CL,y                 ; C > -256 (bgt16i's bias form), or done
+        lda O_CL,y                 ; C > -256 (as C >= -255, biased), or done
         cmp #<(-255)
         lda O_CH,y
         eor #$80
@@ -3618,30 +3481,6 @@ bar_digit:
 bd_same:
         rts
 
-  .if .defined(DBGHIT) .or .defined(DBGTILE)
-; (debug) score += X, counted in the BCD byte score+Y (0 ones, 1 hundreds); X, Y
-; clobbered
-dbg_bcd:
-        txa
-        beq @r
-        sed
-@l:     tya
-        pha
-        sec                        ; + 1, carried up
-@c:     lda score,y
-        adc #0
-        sta score,y
-        iny
-        bcc @n
-        cpy #3
-        bcc @c
-@n:     pla
-        tay
-        dex
-        bne @l
-        cld
-@r:     rts
-  .endif
 bar_touch:
         lda #1
         sta bar_dirty

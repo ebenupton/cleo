@@ -5,7 +5,6 @@
 # (tools/assets.py, which runs tools/convert.py over the original game's data:
 # assets/v500, the contents of CleoV500.jar).
 #   sh build.sh                 # build/cleo.ssd
-#   TILEMIRROR=1 sh build.sh    # the tile blitter's mirrored tiles too (no level needs them)
 #   NFLAT=n sh build.sh         # n flat tiles a level (default 4: L4B needs all four)
 # A build without ALLLEVELS also copies the disc to the repository's root (../cleo.ssd),
 # the copy kept in git.

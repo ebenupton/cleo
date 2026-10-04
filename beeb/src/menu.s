@@ -7,9 +7,6 @@
 ; ============================================================================
         .segment "MNUCODE"      
 
-MENU_START = 0                     ; title_menu's result
-MENU_HELP  = 1
-
 ; ---------------------------------------------------------------- the game loop's top
 ; start-up comes here (disc.s go_title), and the game's image comes back to menu_over when a game ends (A = 0 lost, 1 won), with the stack
 ; reset: every way out of here is go_game.

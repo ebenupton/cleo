@@ -141,45 +141,6 @@ def parse_level(lv, sub):
     return dict(lw=lw, lh=lh, w=w, h=h, map=m, start=(sx, sy), exit=(ex, ey), objs=objs)
 
 
-# PARALLAX=1: level 0's sand dunes become sky, for the parallax experiment (engine.s
-# draws its own background into the sky under -D PARALLAX).  A dune is a region of
-# sand-only tiles (the two faces and the sky-edge silhouettes) that the sky can reach
-# in the rows above the ground band; the row bound keeps the flood out of the pits,
-# whose sand walls are the same tiles.
-PARALLAX = os.environ.get('PARALLAX', '0') == '1'
-_DUNE_SKY = (136, 238, 255)
-_DUNE_SAND = {(255, 204, 85), (187, 119, 51), (221, 170, 85)}
-_DUNE_MAXROW = 22
-_DUNE_SKYTILE = 4                    # a pure-sky tile
-def strip_dunes(m):
-    from collections import deque
-    tidx, trgb, _ = load_indexed('til.png')
-    def kind(t):
-        c = {tuple(int(v) for v in trgb[i]) for i in np.unique(tidx[t * 8:t * 8 + 8])}
-        return 'sky' if c == {_DUNE_SKY} else 'sand' if c <= _DUNE_SAND | {_DUNE_SKY} else 'other'
-    kinds = {int(t): kind(int(t)) for t in np.unique(m) if t >= 0}
-    h, w = m.shape
-    seen = np.zeros((h, w), bool)
-    q = deque()
-    for y in range(h):
-        for x in range(w):
-            if m[y, x] >= 0 and kinds[int(m[y, x])] == 'sky':
-                seen[y, x] = True
-                q.append((y, x))
-    m = m.copy()
-    n = 0
-    while q:
-        y, x = q.popleft()
-        for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
-            if (0 <= ny <= min(h - 1, _DUNE_MAXROW) and 0 <= nx < w and not seen[ny, nx]
-                    and m[ny, nx] >= 0 and kinds[int(m[ny, nx])] == 'sand'):
-                seen[ny, nx] = True
-                m[ny, nx] = _DUNE_SKYTILE
-                n += 1
-                q.append((ny, nx))
-    print('PARALLAX: %d dune cells -> sky' % n)
-    return m
-
 # The game's order of the original's maps: (level, sub) -> the source level it takes.
 # Levels 1 and 5, the first and third large indoor maps, swapped (their bonus maps, the
 # subs 1, stay); menu.s's names and starbake.json's plans follow the maps.
@@ -189,8 +150,6 @@ used = set()
 for lv in range(8):
     for sub in (0, 1):
         L = parse_level(LEVEL_SOURCE.get((lv, sub), lv), sub)
-        if PARALLAX and lv == 0:
-            L['map'] = strip_dunes(L['map'])
         levels[(lv, sub)] = L
         used |= set(int(t) for t in np.unique(L['map']))
 used |= set(range(366, 374))   # vanishing block animation
@@ -634,22 +593,16 @@ for (lv, sub), cm in maps.items():
 #                        the zero (its fill byte is the header's +31, which the loader
 #                        patches in); it has no slot
 #   1 .. NTILES          full tiles, slot = id + TOFF (the first slot clear of the code)
-#   half0 .. mir0-1      half tiles: one char row stored (32 bytes, from HALFPAGE),
+#   half0 .. half0+NHALF-1  half tiles: one char row stored (32 bytes, from HALFPAGE),
 #                        the other a fill or the same row again; three runs --
 #                        top row fills (to half1), bottom row fills (to half2), both
 #                        rows the stored one
-#   mir0 .. mir0+NMIR-1  a full tile drawn mirrored left-right from the slot in
-#                        MIRTAB: only as many as the bank needs, the least used first
-#                        (TILEMIRROR builds only; none otherwise)
 #   FLAT0 .. 253         flat tiles, NFLAT of them: two bytes alternating down every
 #                        char (FLATTAB)
 #   254, 255             the solids, cyan and black (FLATTAB's last two pairs): the
 #                        level's other solid, where it has both
 # So NFLAT + 3 ids are fills (id 0, the flats, the two solids) and cost no bank 6
 # room; the rest are the tiles.
-# The mirror is exact: the dither is per game pixel with no position term, so a
-# game pixel's 2x2 dots move as a unit -- reverse the chars and swap the byte's
-# two pixels, ((b & $33) << 2) | ((b & $CC) >> 2).
 # ----------------------------------------------------------------------------
 # NFLAT, the flat tiles a level may have, is a build parameter (NFLAT=n sh build.sh;
 # 4 by default): each is two bytes of FLATTAB in bank 6 in place of 64 in the tile run,
@@ -659,13 +612,7 @@ for (lv, sub), cm in maps.items():
 NFLAT = int(os.environ.get('NFLAT', '4'))
 FLAT0 = SOLID_CYAN - NFLAT          # the flats, then the two solids at the top
 assert 0 < NFLAT < 64, NFLAT
-MAXMIR = 24
 TILE_CHUNK = 256                    # tiles in a set file: 16K, what either machine stages
-def mirror_byte(b):
-    return ((b & 0x33) << 2) | ((b & 0xCC) >> 2)
-def mirror_tile(t):
-    t = bytes(t)
-    return bytes(mirror_byte(t[cr * 32 + (3 - c) * 8 + l]) for cr in range(2) for c in range(4) for l in range(8))
 # ONE tile set: every distinct tile any level uses, once, in files of at most 256
 # (16K, what either machine stages at a time) cut by who uses a tile -- outdoor levels
 # only, both, indoor levels only -- so a level stages only its side's file and the
@@ -712,9 +659,8 @@ def _flat_pair_row(row):            # a char row (4 chars) of one 2-byte dither
 # its code, at the same slots on both.  The Model B's gather computes a tile's address
 # pair from its id; the Master's is a table (LV_PAGE0, B['page0'], the file's last two
 # sectors) of the same pairs, so the one row loop reads both.
-TILEMIRROR = os.environ.get('TILEMIRROR') == '1'   # (cpu.inc: the blitter's mirrored tiles)
 B_TILES, B_TILES_END = 0x8600, 0xC000       # bank 6: the tiles' page origin (defs.inc TILES), to the end
-TOFF = 4 if TILEMIRROR else 2               # id k's slot: k + TOFF, the first tile clear of the
+TOFF = 2                                    # id k's slot: k + TOFF, the first tile clear of the
                                             # code and its variables (engine.s asserts it; assets.inc)
 def _layout(stored, hlist, halfpair, base, end, loc, name='', demoted=0):
     slot = {k: i + 1 + TOFF for i, k in enumerate(stored)}     # (id 0, the solid, has none)
@@ -791,37 +737,15 @@ def pack_tiles(lv, sub):
     halfpair = bytes(p[0] for p in pal8) + bytes(p[1] for p in pal8)   # bank 6's: 16 bytes
     hpairsec = halfpair + hlow
     assert len(flats) <= NFLAT, (lv, sub, len(flats))
-    # mirrors (TILEMIRROR only): only while the bank is short, the least used first; a
-    # mirror's source stays a stored tile
-    need = lambda nt: B_TILES + (nt + 1 + TOFF) * 64 + len(hlist) * 32 + len(halfpair) > B_TILES_END
-    bypat = {}
-    for k in fulls:
-        bypat.setdefault(k[0], []).append(k)
-    mirrored = {}                   # key -> its source key
-    cand = sorted((k for k in fulls if mirror_tile(k[0]) != k[0] and mirror_tile(k[0]) in bypat),
-                  key=lambda k: (use[k], loc(k)))
-    for k in (cand if TILEMIRROR else []):  # (without it a level must fit: asserted below)
-        if not need(len(fulls) - len(mirrored)):
-            break
-        if k in mirrored.values():
-            continue
-        srcs = [x for x in bypat[mirror_tile(k[0])] if x not in mirrored]
-        if srcs:
-            mirrored[k] = srcs[0]
-    assert len(mirrored) <= MAXMIR
-    stored = sorted((k for k in fulls if k not in mirrored), key=loc)
-    mirs = sorted(mirrored, key=lambda k: loc(mirrored[k]))
-    NT, NHALF, NMIR = len(stored), len(hlist), len(mirs)
+    stored = sorted(fulls, key=loc)   # (every stored tile must fit the bank: _layout asserts it)
+    NT, NHALF = len(stored), len(hlist)
     idof = {k: i + 1 for i, k in enumerate(stored)}
     half0 = NT + 1
     half1 = half0 + len(halves['top'])
     half2 = half1 + len(halves['bot'])
     for i, h in enumerate(hlist):
         idof[h[0]] = half0 + i
-    mir0 = half0 + NHALF
-    for i, k in enumerate(mirs):
-        idof[k] = mir0 + i
-    assert mir0 + NMIR <= FLAT0, (lv, sub, mir0 + NMIR)
+    assert half0 + NHALF <= FLAT0, (lv, sub, half0 + NHALF)
     for i, (k, fp) in enumerate(flats):
         idof[k] = FLAT0 + i
     for k, cs in groups.items():
@@ -833,27 +757,25 @@ def pack_tiles(lv, sub):
     pos = lambda k: files.index(loc(k)[0])
     halflist = b''.join(bytes([loc(h[0])[1], h[1] | pos(h[0]) << 1]) for h in hlist)
     lw = 8 - levels[(lv, sub)]['lw']
-    # the layout: the stored tiles at slot = id, a mirror by its source's slot
+    # the layout: the stored tiles at slot = id + TOFF
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc, name_of(lv, sub), demoted)
     assert all(B['slot'][k] == idof[k] + TOFF for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
     B['shape'] = dict(ntiles=NT, map_shr=lw, nhalf=NHALF, half0=half0, half1=half1, half2=half2,
-                      halfpage=B['HALFPAGE'] >> 8, halfoff=B['HALFOFF'], mir0=mir0, nmir=NMIR,
+                      halfpage=B['HALFPAGE'] >> 8, halfoff=B['HALFOFF'],
+                      mir0=half0 + NHALF, nmir=0,   # (the format's: the removed mirrored tiles' first id and count)
                       solidfill=0x0F if sol0 == 1 else 0x00)    # (beebgame levelfile.Shape)
-    B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)
+    B['mir'] = b''                  # (the format's MIRTAB section, empty)
     assert B['HALFOFF'] + NHALF <= 64, (lv, sub, 'the halves outgrow HLOW (gather.s)')
     # and the Master's LV_PAGE0 for these slots: per id, the pair the Model B's gather
-    # computes -- a mirror is kind 3 at its source's slot (an id no tile has -- the
-    # rows past the map's end are read too, whatever lies there -- is a black fill:
-    # $40, FLATTAB's last pair; a high byte with bit 7 clear is a fill, the row loop's bpl)
+    # computes (an id no tile has -- the rows past the map's end are read too, whatever
+    # lies there -- is a black fill: $40, FLATTAB's last pair; a high byte with bit 7
+    # clear is a fill, the row loop's bpl)
     blo, bhi = bytearray([2 * (NFLAT + 1)] * 256), bytearray([0x40] * 256)
     bhi[0] = 0                      # id 0: the solid, a zero high byte (the row loop's beq)
     for k in stored:
         s_, a_ = idof[k], B['slot'][k]
         blo[s_], bhi[s_] = (a_ & 3) << 6, (B_TILES >> 8) + (a_ >> 2)
-    for i, k in enumerate(mirs):
-        s_ = B['slot'][mirrored[k]]
-        blo[mir0 + i], bhi[mir0 + i] = ((s_ & 3) << 6) | 3, (B_TILES >> 8) + (s_ >> 2)
     for i, h in enumerate(hlist):
         t, kk = half0 + i, B['HALFOFF'] + i
         bhi[t] = ((B['HALFPAGE'] >> 8) + (kk >> 3)) & 0x7F   # (its page less $80: a half's mark)
@@ -862,7 +784,7 @@ def pack_tiles(lv, sub):
         blo[FLAT0 + j], bhi[FLAT0 + j] = 2 * j, 0x40
     B['page0'] = bytes(blo + bhi)
     return dict(local=local, B=B, flat=flattab, halves=halflist, hpair=hpairsec,
-                ntiles=NT, nhalf=NHALF, nmir=NMIR, nflat=len(flats), usage=usage)
+                ntiles=NT, nhalf=NHALF, nflat=len(flats), usage=usage)
 
 # ----------------------------------------------------------------------------
 # Sprites

@@ -26,7 +26,6 @@ build reads) and `assets/gx/` (the GX edition's, for reference).
 
     git submodule update --init # the engine, beebgame, in beebgame/
     sh build.sh                 # the tune, the assets, both machines, one disc: build/cleo.ssd
-    TILEMIRROR=1 sh build.sh    # the same with the tile blitter's mirrored tiles (unused)
 
 ## Testing
 
