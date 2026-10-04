@@ -49,14 +49,7 @@ clamp_window:
         lda maxwy+1
         sta wy+1
         rts
-  .if BHW
-@wy0:   lda #0                      ; A dead: the caller's setbank reloads it
-        sta wy
-        sta wy+1
-  .else
-@wy0:   stz wy
-        stz wy+1
-  .endif
+@wy0:   zero wy, wy+1               ; A dead: the caller's setbank reloads it
 @wyok:  rts
 
 ; ---------------------------------------------------------------- game
@@ -71,14 +64,7 @@ level_loop:
         lda #8                      ; mapw = 8 << lw ; maph = 8 << lh
         sta mapw
         sta maph
-  .if BHW
-        lda #0
-        sta mapw+1
-        sta maph+1
-  .else
-        stz mapw+1
-        stz maph+1
-  .endif
+        zero mapw+1, maph+1
         ldx LV_HDR+HDR_LW
         stx maplw
 :       asl mapw

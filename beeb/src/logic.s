@@ -667,12 +667,8 @@ level_init:
   .if (>LV_OBJS) & 1
         inc t16+1                   ; an odd page: the bit the seed's >> 2 dropped
   .endif
-  .if BHW
-        ldx #0                      ; X is free until jsr @x8: (t16,x) is (t16), Y kept
-        lda (t16,x)
-  .else
-        lda (t16)                   ; lda (t16), Y kept: it is still obj
-  .endif
+        ldazx t16                   ; lda (t16), Y kept: it is still obj (X is free
+                                    ;  until jsr @x8: the Model B's (t16,x))
         sta otype
         sta O_TYPE,y                ; Y is still obj (sty obj at @ol; nothing since has touched Y)
         ldy #5                      ; the record's bytes 5..1 into q5..q1 (adjacent in zero
@@ -767,12 +763,7 @@ level_init:
         sta gy1
         lda q2
         beq :+
-  .if ::BHW
-        sec                         ; A-1; the carry is dead (lsr follows)
-        sbc #1
-  .else
-        dec a
-  .endif
+        deca                        ; A-1; the carry is dead (lsr follows)
 :       lsr
         lsr
         lsr
@@ -788,12 +779,7 @@ level_init:
         lsr
         sta gx0
         lda q1
-  .if ::BHW
-        clc                         ; A+1; the carry is dead (lsr follows)
-        adc #1
-  .else
-        inc a
-  .endif
+        inca                        ; A+1; the carry is dead (lsr follows)
         lsr
         lsr
         lsr
@@ -1108,14 +1094,7 @@ game_frame:
         sta BINR+2
         lda gy1
         sta BINR+3
-  .if BHW
-        lda #0                      ; one zero for both
-        sta NSTARL
-        sta NOTHL
-  .else
-        stz NSTARL
-        stz NOTHL
-  .endif
+        zero NSTARL, NOTHL
 @rows:  lda gx0
         sta gx
         lda gy                      ; row base = gy << gridsh, once per row
@@ -1335,38 +1314,15 @@ player_dead:
         mov16 evframe, frame
         lda #3
         sta health
-  .if BHW
-        lda #0                      ; one zero for eight stores: dec lives keeps A
-        sta vx
-        sta vx+1
-        sta vy
-        sta vy+1
-        sta anim
-        sta dxl                     ; (a respawn is no move to sweep)
-        sta dyl
-  .else
-        stz vx
-        stz vx+1
-        stz vy
-        stz vy+1
-        stz anim
-        stz dxl
-        stz dyl
-  .endif
+        zero vx, vx+1, vy, vy+1, anim, dxl, dyl   ; (a respawn is no move to sweep;
+                                    ;  the Model B's one zero serves the three below too:
+                                    ;  dec lives keeps A)
         dec lives
         bne :+
         inc exiting                 ; 0 here (the loop leaves on nonzero): game over
         rts                         ; handled by caller (lives == 0)
 :
-  .if BHW
-        sta facing                  ; A = 0 still
-        sta running
-        sta firing
-  .else
-        stz facing
-        stz running
-        stz firing
-  .endif
+        sta0 facing, running, firing   ; A = 0 still
         lda #1
         sta hurt
         sta control
@@ -1567,18 +1523,7 @@ player_update:
         sbc #0
         bpl @push
 @fell:  mov16 evframe, frame
-  .if BHW
-        lda #0
-        sta health
-        sta control
-        sta vx
-        sta vx+1
-  .else
-        stz health
-        stz control
-        stz vx
-        stz vx+1
-  .endif
+        zero health, control, vx, vx+1
         jsr bar_touch
         lda #SFX_DIE
         sta SFXREQ
@@ -1776,14 +1721,7 @@ player_update:
         txa                         ; dpx+1, still in X: N for @hstep
         jmp @hstep
 @wall:
-  .if BHW
-        lda #0                      ; one zero for both (A is dead: @hdone reloads)
-        sta vx
-        sta vx+1
-  .else
-        stz vx
-        stz vx+1
-  .endif
+        zero vx, vx+1               ; (A is dead: @hdone reloads)
 @hdone: lda px                      ; dxl, dyl: her move this frame, all of it (across;
         sec                         ;  down: the fall, a slope's step), the stretch the
         sbc pxs                     ;  objects' tests sweep next frame (csweep)
@@ -1803,18 +1741,7 @@ player_update:
         ; launch boomerang
         mov16 bx, px
         mov16 by, py
-  .if BHW
-        lda #0                      ; one zero for the four clears
-        sta bvx
-        sta bvy
-        sta bvy+1
-        sta bcnt
-  .else
-        stz bvx
-        stz bvy
-        stz bvy+1
-        stz bcnt
-  .endif
+        zero bvx, bvy, bvy+1, bcnt
         lda #>3584
         ldx facing                  ; X is dead (written before any read below)
         beq @bdir
@@ -1826,12 +1753,8 @@ player_update:
         bne @animdone               ; always: SFX_THROW <> 0
 :       cmp #12
         bne @animdone
-  .if BHW
-        dec firing                  ; 1 -> 0 (firing is only ever 0 or 1): Z = 1
-  .else
-        stz firing                  ; Z = 1 from the cmp #12 (stz keeps the flags)
-  .endif
-        beq @animdone
+        stz01 firing                ; 1 -> 0 (firing is only ever 0 or 1): Z = 1 on both
+        beq @animdone               ;  (the Model B's dec; the cmp #12, which stz keeps)
 @notfiring:
         ldx running                 ; A = anim still
         beq :+
@@ -2024,11 +1947,7 @@ player_update:
         ldx #4                      ;  in -7..7 (quad 4: a star's -8..8 band, open)
         jsr bsweep
         bcc @bdraw
-  .if BHW
-        dec bactive                 ; bactive is 1 here (0/1 flag, nonzero on entry)
-  .else
-        stz bactive
-  .endif
+        stz01 bactive               ; bactive is 1 here (0/1 flag, nonzero on entry)
 @bdraw: lda bactive
         beq @bdone
         mov16 spx, bx
@@ -2103,8 +2022,8 @@ process_object:
         sbc py+1
         sta ry+1
 @call:                              ; tail dispatch: the handler returns to our caller
-  .if ::BHW                         ; jmpx less its pha/pla: every handler loads A before
-        lda @tlo,x                  ; reading it
+  .if ::BHW                         ; jmp (abs,x) by hand, through jv (the 6502 has no
+        lda @tlo,x                  ;  such form); A is clobbered: every handler loads it first
         sta jv
         lda @thi,x
         sta jv+1
@@ -2588,12 +2507,7 @@ ob_tramp:                           ; A (O_AL) its spring's count: 2, 4 .. 10, t
         lsr                         ; bounce frame 0..2: the masked frames, ids 43..45
         jmp addsprite
 @rest:
-  .if BHW
-        ldx #0
-        stx q2                      ; (box_safe's Cleo test: rx, ry are hers)
-  .else
-        stz q2                      ; (box_safe's Cleo test: rx, ry are hers)
-  .endif
+        stzx q2                     ; (box_safe's Cleo test: rx, ry are hers; A live)
         ldx #72                     ; box_safe: Cleo's RNGTAB quad (the boomerang's is +4)
                                     ; (no clc: q2 = 0, so box_safe's inrange sets C first)
         ; fall through

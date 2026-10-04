@@ -18,18 +18,7 @@ game_main:
         sta seed
         lda #$12
         sta seed+1
-  .if BHW
-        lda #0
-        sta hiscore
-        sta hiscore+1
-        sta hiscore+2
-        sta maxlevel
-  .else
-        stz hiscore
-        stz hiscore+1
-        stz hiscore+2
-        stz maxlevel
-  .endif
+        zero hiscore, hiscore+1, hiscore+2, maxlevel
   .if ALLLEVELS
         lda #7                      ; (a test build: every main level on the chooser)
         sta maxlevel
@@ -41,13 +30,7 @@ title_loop:
         bne title_loop              ; (always: help_screen returns Z = 0)
 new_game:
         stz score
-  .if BHW
-        sta score+1                 ; A = 0 (the stz)
-        sta score+2
-  .else
-        stz score+1
-        stz score+2
-  .endif
+        sta0 score+1, score+2       ; A = 0 (the Model B's stz)
         lda #3
         sta lives
         sta health
@@ -81,12 +64,9 @@ drawtext:
         sta w16b+1
         bne @rows                   ; (always: the font is in bank 7)
 :       jsr glyph_index             ; glyph A's rows: the font is in the overlay beside
-  .if BHW                           ; this code (font_art, banks.s), read in place
-        ldx #0                      ; through w16b (X is dead: draw_glyph_rows sets it
-        stx w16b+1                  ; before reading it)
-  .else
-        stz w16b+1
-  .endif
+        stzx w16b+1                 ; this code (font_art, banks.s), read in place
+                                    ;  through w16b (A live; X is dead: draw_glyph_rows
+                                    ;  sets it before reading it)
         asl
         asl
         asl
