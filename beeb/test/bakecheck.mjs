@@ -1,7 +1,13 @@
-// The loader's baked boxes (beebgame ldprog.s bake) against the packer's (tools/assets.py,
-// convert.py bake_box): every level's baked items, byte for byte, in the banks after
-// the level's load, on either machine.
-//   node test/bakecheck.mjs master|modelb [disc] [labels] [levels=0-15]
+// The loader's baked boxes against the packer's: build/<machine>/bakes.json (written by
+// tools/assets.py: for each level its baked items -- kind, index, (x, y), (bank,
+// address), the bytes) is checked byte for byte in the banks after the level's load,
+// on either machine.  Each level in the range is opened afresh (harness.mjs open on the
+// Master, bopen.mjs openB on the Model B) at its first frame_top; the bytes are read
+// with the item's bank paged (Master: ROMSEL written straight; Model B: openB's bank()).
+//   node test/bakecheck.mjs master|modelb [disc=build/cleo.ssd] [labels=build/<machine>/labels.txt] [levels=0-15]
+// (levels: "a-b" or a single "a")
+// Output: a line per wrong item (bytes differing, the first offset), a line per level,
+// a total; exit 1 if any item is wrong.
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";

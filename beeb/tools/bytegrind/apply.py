@@ -1,29 +1,48 @@
 #!/usr/bin/env python3
-"""The byte grind's applier: the surveyors' candidates, applied in batches to the tree
-and kept only when the batch builds, is smaller (code and data on both machines, the
-load-time program and the boot loader: smaller on one, larger on neither), behaves
-exactly as the base did (gate()) and is no slower in play (test/linecyc.mjs's frame
-totals: at most TOL cycles a frame above the last kept state, CAP above the base).
-A failing batch is bisected.  At the end the whole sweep runs against the base; a
-failure is bisected over the kept edits (replayed from HEAD) and the edit that breaks
-it dropped, until the sweep passes.  Every attempt is recorded in <work>/applied.json.
+"""Apply the byte grind's candidate edits to the tree, keeping only what pays.
+
+The surveyors' candidates (a workflow journal, JSON lines, each result holding a region and
+its candidates: file, lo, original, proposal, confidence, bytes_modelb, bytes_master) are
+sorted by confidence then claimed saving and tried in batches of BATCH non-overlapping
+edits.  A batch is kept when the tree builds, is smaller (the code and data segments of
+both machines plus LDPROG and the boot loader: smaller on one and larger on neither),
+behaves exactly as the base did (gate(): statecmp, bwincmp, wincmp, menusync on levels 2,
+8 and 13) and is no slower in play (test/linecyc.mjs's frame totals: at most TOL cycles a
+frame above the last kept state and CAP above the base).  A failing batch is bisected.
+A candidate that moves bank 4 or 5's code end is built again with the ends re-read
+(build()).  Every attempt is recorded in <work>/applied.json (outcome: kept, build,
+behaviour, slower, no smaller, grows, stale, anon, sweep).
+
+At the end the whole sweep (the checks in SWEEP, against <work>/ref) runs; a failure is
+bisected over the kept edits replayed from HEAD, the edit that breaks it is dropped, and
+the sweep runs again, up to 12 rounds.
+
+Usage (from beeb/):
     python3 tools/bytegrind/apply.py <journal.jsonl> <work> [batch=8]
-<work> holds the base build: base.ssd, base_master/, base_modelb/, ref/ (test/snapshot.sh)."""
+<work> holds the base build: base.ssd, base_master/ and base_modelb/ (labels.txt each),
+and ref/ (test/snapshot.sh's snapshot of the base).  The tree is left built, with the kept
+edits applied; tools/assets.py may have new code ends.
+"""
 import json, os, re, subprocess, sys, time
 BEEB = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 journal, WORK = sys.argv[1:3]
 WORK = os.path.abspath(WORK)
 BATCH = int(sys.argv[3]) if len(sys.argv) > 3 else 8
 LEVELS = [2, 8, 13]
+# cycles a frame: the most a kept batch may add over the last kept state, and over the base
 TOL, CAP = 4, 8
 LOG = os.path.join(WORK, 'applied.json')
 record = json.load(open(LOG)) if os.path.exists(LOG) else []
 
 def say(*a):
+    """Print with a time stamp, unbuffered."""
     print(time.strftime('%H:%M:%S'), *a, flush=True)
 
 # ---- the candidates (the workflow's journal: each surveyor's {region, candidates})
 def load_cands():
+    """Every candidate in the journal, each given id '<region>:<index>', the first of a
+    duplicated id kept.  A result may sit at any depth of a journal entry: the entry is
+    walked for a dict with 'region' and a 'candidates' list."""
     out = []
     for line in open(journal):
         try:
@@ -31,7 +50,7 @@ def load_cands():
         except ValueError:
             continue
         stack = [e]
-        while stack:            # the result may sit at any depth of the journal entry
+        while stack:
             x = stack.pop()
             if isinstance(x, dict):
                 if 'candidates' in x and 'region' in x and isinstance(x['candidates'], list):
@@ -51,24 +70,33 @@ allc = load_cands()
 done = {x['id'] for x in record}
 CONF = {'high': 0, 'medium': 1, 'low': 2}
 def SAVED(c, k):
+    """The candidate's claimed saving under key k as an int, 0 if missing or unreadable."""
     try:
         return int(c.get(k, 0) or 0)
     except (TypeError, ValueError):
         return 0
 cands = [c for c in allc if c['id'] not in done]
+# high confidence first, then the claimed saving, the Model B's weighted double
 cands.sort(key=lambda c: (CONF.get(str(c.get('confidence', 'low')).lower(), 2), -(2 * SAVED(c, 'bytes_modelb') + SAVED(c, 'bytes_master'))))
 say('%d candidates (%d already recorded)' % (len(cands), len(done)))
 
+# a line that defines an anonymous label
 ANON = re.compile(r'^:(\s|$)')
 def lines_of(t):
+    """A candidate's text as lines, without a trailing newline."""
     return t.rstrip('\n').split('\n')
 def fpath(f):
+    """The file a candidate names, looked for as given and under src/, beebgame/src/ and
+    beebgame/src/engine/; None if nowhere."""
     for c in (f, 'src/' + f, 'beebgame/src/' + f, 'beebgame/src/engine/' + f):
         if os.path.exists(os.path.join(BEEB, c)):
             return os.path.join(BEEB, c)
     return None
 def locate(c):
-    """The candidate's line range in the file now, or None if stale."""
+    """Where the candidate's original text is in its file now: (path, lo, hi), 1-based and
+    inclusive, trailing whitespace ignored -- at its claimed line, or at its one match in
+    the file.  None if the file is missing, the original is empty, or it matches nowhere or
+    more than once (stale)."""
     path = fpath(c.get('file', ''))
     if not path:
         return None
@@ -85,15 +113,21 @@ def locate(c):
         return path, hits[0] + 1, hits[0] + n
     return None
 def anon_ok(c):
+    """True if the proposal defines as many anonymous labels as the original: a change in
+    their count would retarget every :+/:- branch around the edit."""
     a = sum(1 for l in lines_of(c['original']) if ANON.match(l))
     b = sum(1 for l in lines_of(c['proposal']) if ANON.match(l))
     return a == b
 
 def run(cmd, timeout=3600):
+    """Run a shell command in beeb/: (return code, its output, stdout and stderr together)."""
     p = subprocess.run(cmd, shell=True, cwd=BEEB, capture_output=True, text=True, timeout=timeout)
     return p.returncode, p.stdout + p.stderr
 
 def apply(batch):
+    """Replace each candidate's lines (its '_at') with its proposal, a file's edits applied
+    bottom up so the line numbers hold.  Returns {path: the file's text before}, for
+    restore()."""
     prev, by = {}, {}
     for c in batch:
         path, lo, hi = c['_at']
@@ -106,13 +140,16 @@ def apply(batch):
         open(path, 'w').write('\n'.join(src))
     return prev
 def restore(prev):
+    """Write the files' previous texts back."""
     for path, text in prev.items():
         open(path, 'w').write(text)
 
 ASSETS = os.path.join(BEEB, 'tools', 'assets.py')
+# the files that hold each sprite bank's code-end assert
 BANKFILES = {4: os.path.join(BEEB, 'beebgame/src/engine/sprloops.s'), 5: os.path.join(BEEB, 'beebgame/src/engine/gather.s')}
 def bank_ends():
-    """The Model B's bank 4 and 5 code ends from the last link (SPR4CODE; MAP5BSS)."""
+    """The Model B's bank 4 and 5 code ends from the last link's labels.txt: the end of
+    SPR4CODE, and of MAP5BSS."""
     a = {}
     for l in open(os.path.join(BEEB, 'build', 'modelb', 'labels.txt')):
         p = l.split()
@@ -120,10 +157,12 @@ def bank_ends():
             a[p[2].lstrip('.')] = int(p[1], 16)
     return {4: a['__SPR4CODE_RUN__'] + a['__SPR4CODE_SIZE__'], 5: a['__MAP5BSS_RUN__'] + a['__MAP5BSS_SIZE__']}
 def build(batch):
-    """Build.  The Model B's sprite banks' code must end exactly at B4/B5_CODE_END
-    (assets.py): when an edit moves either, probe -- one build with those two asserts
-    made warnings, the true ends read from its labels -- then set them and build again.
-    Returns (ok, the assets.py text to restore on rejection)."""
+    """Build the tree.  The Model B's sprite banks' code must end exactly at B4_CODE_END and
+    B5_CODE_END (tools/assets.py; sprloops.s and gather.s assert it): when the build fails
+    with that message, it is probed -- one build with the two asserts made warnings, the
+    true ends read from its labels -- then assets.py is given those ends and built again,
+    up to three more times (the packer's placement should move nothing else, but it is
+    checked).  Returns (ok, assets.py's text before, to restore on rejection)."""
     before = open(ASSETS).read()
     rc, out = run('./build.sh')
     if rc == 0:
@@ -146,7 +185,7 @@ def build(batch):
     for b in (4, 5):
         s = re.sub(r'B%d_CODE_END = 0x[0-9A-Fa-f]+' % b, 'B%d_CODE_END = 0x%04X' % (b, ends[b]), s)
     open(ASSETS, 'w').write(s)
-    for _ in range(3):          # (the packer's placement can move nothing else, but check)
+    for _ in range(3):
         rc, out = run('./build.sh')
         if rc == 0:
             return True, before
@@ -164,9 +203,10 @@ def build(batch):
     return False, before
 
 SEGS = ('GAMECODE', 'GAMEDATA', 'ENGCODE', 'KRNCODE', 'KRNDATA', 'MNUCODE', 'MNUDATA', 'MUSCODE', 'TILCODE',
-        'TIL6ENT', 'SPR4CODE', 'SPR5CODE', 'MAP5CODE', 'LOWCODE', 'BOOT', 'DRV1770', 'DRV8271', 'CODE', 'TABLES')
+        'TIL6ENT', 'SPR4CODE', 'SPR5CODE', 'MAP5CODE', 'LOWCODE', 'BOOT', 'DRV1770', 'DRV8271', 'CODE', 'MRAMBSS')
 def sizes():
-    """Bytes per machine: the code and data segments, LDPROG, and the shared LOADER."""
+    """Bytes per machine from the last build: the SEGS segments' sizes (labels.txt's
+    __<seg>_SIZE__), plus LDPROG's file and the shared LOADER's."""
     out = {}
     loader = os.path.getsize(os.path.join(BEEB, 'build', 'LOADER'))
     for m in ('modelb', 'master'):
@@ -188,7 +228,9 @@ GATE = (['node test/statecmp.mjs %s/base.ssd %s/base_master/labels.txt build/cle
          'node test/menusync.mjs master %s/base.ssd %s/base_master/labels.txt build/cleo.ssd build/master/labels.txt' % (B, B),
          'node test/menusync.mjs modelb %s/base.ssd %s/base_modelb/labels.txt build/cleo.ssd build/modelb/labels.txt' % (B, B)])
 def gate():
-    """Behaviour identical to the base on both machines; the frame totals."""
+    """Run the GATE checks and both machines' linecyc profiles at once.  Returns (True if
+    every check passed and reported identical, {machine: cycles a frame}); a missing
+    profile counts as 1e9."""
     procs = [(cmd, subprocess.Popen(cmd, shell=True, cwd=BEEB, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)) for cmd in GATE]
     lp = []
     for m in ('modelb', 'master'):
@@ -212,7 +254,7 @@ def gate():
         tot[m] = json.load(open(f))['total'] if os.path.exists(f) else 1e9
     return same, tot
 
-# ---- the reference: the tree as it stands (built, gated: it must match the base)
+# ---- the reference: the tree as it stands, built and gated (it must match the base)
 ok, _ = build([])
 assert ok, 'the tree does not build'
 same, ref = gate()
@@ -223,6 +265,9 @@ base_sz = dict(ref_sz)
 say('reference: Model B %s / Master %s cycles a frame; %d / %d bytes' % (ref['modelb'], ref['master'], ref_sz['modelb'], ref_sz['master']))
 
 def judge(t, sz):
+    """Compare a gated batch's cycles t and sizes sz with the reference: (fast, small, the
+    cycle deltas dB and dM, the bytes saved sB and sM).  fast: within TOL of the reference
+    and CAP of the base on both machines; small: no larger on either and smaller on one."""
     dB, dM = t['modelb'] - ref['modelb'], t['master'] - ref['master']
     sB, sM = ref_sz['modelb'] - sz['modelb'], ref_sz['master'] - sz['master']
     fast = dB <= TOL and dM <= TOL and t['modelb'] <= base_cyc['modelb'] + CAP and t['master'] <= base_cyc['master'] + CAP
@@ -230,6 +275,10 @@ def judge(t, sz):
     return fast, small, dB, dM, sB, sM
 
 def try_batch(batch):
+    """Apply, build, size and gate a batch; keep it (the reference moves to it) or restore
+    the tree and bisect.  A single rejected candidate is recorded with its reason; a batch
+    that is not smaller and whose every candidate claimed no saving is recorded whole.
+    Returns the number of candidates kept."""
     global ref, ref_sz
     for c in batch:
         c['_at'] = locate(c)
@@ -280,6 +329,10 @@ def try_batch(batch):
     return try_batch(batch[:h]) + try_batch(batch[h:])
 
 def grind(queue):
+    """Work through the queue in batches: a candidate that claims growth, is stale, or changes
+    the anonymous label count is recorded and skipped; up to BATCH candidates whose edits
+    are at least two lines apart in a file go in a batch, the rest wait for the next.
+    Returns the number kept."""
     kept = 0
     while queue:
         batch, rest, used = [], [], {}
@@ -323,13 +376,15 @@ SWEEP['menus_modelb'] = 'node test/menusync.mjs modelb {R}/cleo.ssd {R}/modelb/l
 SWEEP['load_master'] = 'node test/loadsync2.mjs master build/cleo.ssd build/master/labels.txt'
 SWEEP['load_8271'] = 'node test/loadsync2.mjs modelb build/cleo.ssd build/modelb/labels.txt'
 SWEEP['load_1770'] = 'BMODEL=B1770 node test/loadsync2.mjs modelb build/cleo.ssd build/modelb/labels.txt'
+# the result lines the checks print when they pass
 PASS = ('window identical; scene identical', 'windows identical', 'menus: identical', ' 0 irregular', 'every store to the bank paged')
 def checks(names):
-    """Run the named sweep checks on the build as it stands; the names that fail."""
+    """Run the named sweep checks against <work>/ref, all at once; returns the names whose
+    last result line is not a PASS line."""
     R = os.path.join(WORK, 'ref')
     procs = [(n, subprocess.Popen(SWEEP[n].replace('{R}', R), shell=True, cwd=BEEB, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)) for n in names]
     bad = []
-    for n, p in procs:   # (17 at a time would swamp the machine: the Popen list runs all)
+    for n, p in procs:
         out = p.communicate()[0]
         rl = [l for l in out.split('\n') if re.match(r'^L[0-9]|^B L|.*menus:|.*frames from|^board |.*Error', l)]
         r = rl[-1] if rl else ''
@@ -337,14 +392,16 @@ def checks(names):
             bad.append(n); say('  %s: %s' % (n, (r or 'no result')[-160:]))
     return bad
 def checks_all(names):
+    """checks() in groups of eight (the whole sweep at once would swamp the machine)."""
     bad = []
     for i in range(0, len(names), 8):
         bad += checks(names[i:i + 8])
     return bad
 def replay(k, final=False):
-    """HEAD (both repos) plus the first k kept edits, built.  An edit that no longer
-    places (it leaned on a dropped one) is skipped -- and, on the final replay, recorded
-    as dropped with it."""
+    """Both repositories back to HEAD (tools/assets.py and src/ here; all of beebgame), then
+    the first k kept edits applied and the tree built.  An edit that no longer places (it
+    leaned on a dropped one) is skipped -- and, on the final replay, recorded as dropped
+    with it.  Returns whether the build succeeded."""
     run('git checkout -- tools/assets.py src')
     run('git -C beebgame checkout -- .')
     keptc = [x for x in record if x['outcome'] == 'kept']
@@ -365,7 +422,8 @@ for rnd in range(12):
         say('sweep: all %d checks pass' % len(SWEEP))
         break
     keptc = [x for x in record if x['outcome'] == 'kept']
-    lo, hi = 0, len(keptc)          # prefix lo passes (HEAD), prefix hi fails
+    # bisect over the kept edits: the prefix of lo passes (HEAD does), the prefix of hi fails
+    lo, hi = 0, len(keptc)
     while hi - lo > 1:
         mid = (lo + hi) // 2
         if not replay(mid):

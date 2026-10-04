@@ -1,16 +1,33 @@
 #!/usr/bin/env python3
-"""The cycle grind's regions: contiguous runs of hot source lines, from test/linecyc.mjs's
-profiles of both machines, each annotated line by line with its cycles and executions
-a frame on the Model B and the Master.  A macro's body line ("file:a > macros.s:b")
-counts at both its call and its definition.
-    python3 tools/cycgrind/regions.py <lc_modelb.json> <lc_master.json> <outdir> [cover=0.97] [maxlines=150]"""
+"""Cut the cycle grind's regions: the hot runs of source lines, annotated.
+
+From test/linecyc.mjs's profiles of both machines, a line is hot at 2 or more cycles a
+frame (the machines summed); hot lines within 25 lines of each other form a group, which is
+widened by 12 lines each way and cut into pieces of at most maxlines.  The pieces are
+ranked by their cycles a frame and kept from the top until they cover the given fraction of
+all the pieces' cycles.  Every line is annotated with its cycles and executions a frame on
+the Model B and the Master (blank where it never ran).  A line inside a macro expansion is
+reported by linecyc as "caller:a > macros.s:b" and is charged to both locations; a location
+starting '?' (no source line) is skipped.  Cleo's files are named without their "src/" in
+the debug info and are found under it.
+
+Output: <outdir>/r<nn>.txt, one a kept region, with a header line giving its share of the
+profiled total, and <outdir>/index.json (total_modelb, total_master, regions: id, file, lo,
+hi, cyc, path).  Prints the coverage and the first 60 regions.
+
+Usage (from beeb/):
+    python3 tools/cycgrind/regions.py <lc_modelb.json> <lc_master.json> <outdir> [cover=0.97]
+                                      [maxlines=150]
+"""
 import json, os, re, sys
 from collections import defaultdict
 BEEB = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 lb, lm, out = sys.argv[1:4]
 cover = float(sys.argv[4]) if len(sys.argv) > 4 else 0.97
 maxlines = int(sys.argv[5]) if len(sys.argv) > 5 else 150
-cost = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0])          # (file, line) -> [cyB, exB, cyM, exM]
+# (file, line) -> [Model B cycles, executions, Master cycles, executions] a frame
+cost = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0])
+# each profile's total cycles a frame
 tot = [0.0, 0.0]
 for k, path in enumerate((lb, lm)):
     d = json.load(open(path))
@@ -24,7 +41,9 @@ for k, path in enumerate((lb, lm)):
                 continue
             c = cost[(m.group(1), int(m.group(2)))]
             c[2 * k] += r['cy']; c[2 * k + 1] += r['ex']
-def real(f):                                      # (the debug info drops Cleo's "src/")
+def real(f):
+    """The profile's file name as a path under beeb/ (the debug info drops Cleo's "src/"),
+    or None if neither spelling exists."""
     for c in (f, 'src/' + f):
         if os.path.exists(os.path.join(BEEB, c)):
             return c
@@ -54,7 +73,8 @@ for f, lines in by_file.items():
         continue
     for g in groups:
         lo, hi = max(1, g[0] - 12), min(len(src), g[-1] + 12)
-        for a in range(lo, hi + 1, maxlines):           # split long runs
+        # a long run is split into pieces of maxlines
+        for a in range(lo, hi + 1, maxlines):
             b = min(hi, a + maxlines - 1)
             cyc = sum(lines.get(ln, [0, 0, 0, 0])[0] + lines.get(ln, [0, 0, 0, 0])[2] for ln in range(a, b + 1))
             regions.append(dict(file=f, lo=a, hi=b, cyc=cyc))

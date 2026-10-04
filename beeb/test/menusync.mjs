@@ -1,11 +1,21 @@
 // Title and menus, build against build, FRAME-SYNCHRONISED: both machines boot through
-// the real title and are compared at the same arrival at menu_keys -- the menus' once-a-
-// frame wait, where the page is drawn and settled -- so a build that draws faster is not
-// a difference, as it would be sampled at fixed cycle counts.  DOWN and RETURN are
-// pressed at fixed arrivals to walk into a second page.
+// the real title (SHIFT-BREAK, no patches) and are compared at the same arrival at
+// menu_keys -- the menus' once-a-frame wait, in the menus' bank and image (game.dbg,
+// ld_img), where the page is drawn and settled -- so a build that draws faster is not
+// a difference, as it would be sampled at fixed cycle counts.  DOWN is held from the
+// 12th arrival to the 15th and RETURN from the 24th to the 27th: the help page, a
+// second screen.  40 arrivals; the first two are not compared (the first page may
+// still be settling: a changed file size moves the disc load, and with it that
+// frame's timing).
 //   node test/menusync.mjs master <discA> <labelsA> <discB> <labelsB>
 //   node test/menusync.mjs modelb <discA> <labelsA> <discB> <labelsB>
-// Compared: the ring memory (not the bar: the menus leave it alone) and the painted frame.
+// Compared at each stop: main RAM from CLEAR0 (the first build's defs_ld.inc: $3000
+// on the Master, $0800 on the Model B) to $8000 -- the rings; on the Master read with
+// ACCCON X clear (main RAM, buffer 0: the menus show buffer 0 only, and shadow RAM is
+// a load's stage) -- and jsbeeb's painted frame (RGB), since the bar's memory is below
+// CLEAR0 and the menus show two black ring rows there.
+// Output: the first three differing stops, then "<machine> menus: identical on 40
+// frames | DIFFER on <n>/40 frames"; exit 1 on a difference.
 import { findJsbeeb, loadLabels, loadBanks, imgOk, dbgPath } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
@@ -16,7 +26,7 @@ async function boot(disc, labels) {
   const cpu = s._machine.processor, A = loadLabels(labels);
   const P = kind === "master" ? [4, 5, 6, 7] : cpu.model.swram.map((r, i) => (r ? i : -1)).filter((i) => i >= 0).slice(0, 4);
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
-  const banks = loadBanks(dbgPath(labels)), mb = banks.byName.get("menu_keys");   // the menus' bank (and image)
+  const banks = loadBanks(dbgPath(labels)), mb = banks.byName.get("menu_keys");   // the menus' bank (the image: imgOk)
   const at = () => cpu.pc === A.menu_keys && cpu.readmem((A.romsel_cpy ?? 0xf4)) === P[mb - 4] && imgOk(cpu, A, banks, A.menu_keys);
   async function next() {
     const h = cpu.debugInstruction.add(() => at());
@@ -26,31 +36,32 @@ async function boot(disc, labels) {
   return { s, cpu, A, next };
 }
 const X = await boot(dA, lA), Y = await boot(dB, lB);
-// the menus' clear, CLEAR0 to $8000 (the reference build's defs_ld.inc, harness
-// loadLabels; the literal is for a build from before it carried it)
+// the menus' clear, CLEAR0 to $8000 (the first build's defs_ld.inc, harness
+// loadLabels; the literals are for a build from before it carried it)
 const C0 = X.A.CLEAR0 ?? (kind === "master" ? 0x3000 : 0x0800);
 let bad = 0;
 for (let k = 0; k < N; k++) {
   for (const M of [X, Y]) {
     if (k === 12) M.s.keyDown(40); if (k === 15) M.s.keyUp(40);
     if (k === 24) M.s.keyDown(13); if (k === 27) M.s.keyUp(13);
-    await M.next(); await M.s.runFor(1);            // step past the break
+    await M.next(); await M.s.runFor(1);            // off the break (jsbeeb runs the stopped chunk out)
   }
   if (k < 2) continue;               // the first page may still be settling: a changed file
                                      // size moves the disc load, and with it that frame's timing
   let n = 0;
-  if (kind === "master") {           // the bar ($2B00) and buffer 0's screen, main RAM -- not
-    for (const shadow of [0]) {      // the code below it, nor shadow RAM: the menus show buffer
-                                     // 0 only, and shadow is a load's stage (what it holds is
-                                     // whatever file was read last)
+  if (kind === "master") {           // buffer 0's ring, main RAM $3000-$7FFF (ACCCON X clear)
+    for (const shadow of [0]) {      // -- not the code below it, nor shadow RAM: the menus
+                                     // show buffer 0 only, and shadow is a load's stage (what
+                                     // it holds is whatever file was read last)
       const was = [X, Y].map((M) => M.cpu.readmem(0xfe34));
       [X, Y].forEach((M, i) => M.cpu.writemem(0xfe34, (was[i] & ~4) | shadow));
       for (let a = C0; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;
       [X, Y].forEach((M, i) => M.cpu.writemem(0xfe34, was[i]));
     }
   } else for (let a = C0; a < 0x8000; a++) if (X.cpu.readmem(a) !== Y.cpu.readmem(a)) n++;   // the B: mirrors and rings
-  // the bar's memory is not the menus' (they leave it in place and show two black ring
-  // rows there instead): compare the painted picture as well, which is what is seen
+  // the bar's memory is below CLEAR0 and not the menus' (they leave it in place and
+  // show two black ring rows there instead): compare the painted picture as well,
+  // which is what is seen
   { const fa = X.s._completeFb8, fb = Y.s._completeFb8; for (let i = 0; i < fa.length; i += 4) if (fa[i] !== fb[i] || fa[i+1] !== fb[i+1] || fa[i+2] !== fb[i+2]) { n++; } }
   if (n) { bad++; if (bad <= 3) console.log(`  menu frame ${k}: ${n} display bytes differ`); }
 }

@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
-"""The cycle grind's applier: the surveyors' candidates, applied in batches to the tree
-and kept only when the batch builds, behaves exactly as the base did (statecmp on the
-Master, bwincmp on the Model B: game state and the visible window, frame by frame)
-and is no slower (test/linecyc.mjs's frame totals on both machines).  A failing batch
-is bisected.  Every attempt is recorded in <work>/applied.json.
+"""Apply the cycle grind's candidate edits to the tree, keeping only what is faster.
+
+The surveyors' candidates (a workflow journal, JSON lines, each entry's result holding a
+region and its candidates: file, lo, original, proposal, saving_modelb, saving_master,
+bytes_modelb) are sorted by claimed saving (the Model B's weighted double) and tried in
+batches of BATCH non-overlapping edits.  A batch is kept when the tree builds, behaves
+exactly as the base did (gate(): statecmp on the Master, bwincmp on the Model B -- game
+state and the visible window frame by frame -- on levels 2, 8 and 13) and is faster by
+better(): 2 dB + dM < 0 with neither machine more than 15 cycles a frame slower, from
+test/linecyc.mjs's frame totals.  A failing batch is bisected.  An edit that moves bank 4
+or 5's code end is built again with the end stepped until the asserts pass (build()).
+Every attempt is recorded in <work>/applied.json (outcome: kept, build, behaviour, slower,
+stale, anon).
+
+REPLAY=1 in the environment first puts both repositories back to HEAD, re-applies the
+record's kept candidates in order, and forgets its build rejections so they are tried again
+(an interrupted run leaves a batch half tested).
+
+Usage (from beeb/):
     python3 tools/cycgrind/apply.py <journal.jsonl> <work> <base_dir> [batch=10]
-<base_dir> holds the base build: base.ssd, base_master/labels.txt, base_modelb/labels.txt."""
+<base_dir> holds the base build: base.ssd, base_master/labels.txt, base_modelb/labels.txt.
+The tree is left built, with the kept edits applied; tools/assets.py may have new code ends.
+"""
 import json, os, re, subprocess, sys, time
 BEEB = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 journal, WORK, BASE = sys.argv[1:4]
@@ -16,9 +32,11 @@ LOG = os.path.join(WORK, 'applied.json')
 record = json.load(open(LOG)) if os.path.exists(LOG) else []
 
 def say(*a):
+    """Print with a time stamp, unbuffered."""
     print(time.strftime('%H:%M:%S'), *a, flush=True)
 
-# ---- the candidates
+# ---- the candidates: each given id '<region>:<index>'; those recorded are skipped (under
+# REPLAY, the build rejections are not)
 cands = []
 for line in open(journal):
     try:
@@ -37,11 +55,16 @@ score = lambda c: 2 * max(0, c.get('saving_modelb', 0)) + max(0, c.get('saving_m
 cands.sort(key=lambda c: -score(c))
 say('%d candidates to try (%d already recorded)' % (len(cands), len(done)))
 
+# a line that defines an anonymous label
 ANON = re.compile(r'^:(\s|$)')
 def lines_of(t):
+    """A candidate's text as lines, without a trailing newline."""
     return t.rstrip('\n').split('\n')
 def locate(c):
-    """The candidate's line range in the file now (1-based lo, hi), or None if stale."""
+    """Where the candidate's original text is in its file now: (path, lo, hi), 1-based and
+    inclusive, trailing whitespace ignored -- at its claimed line, or at its one match in
+    the file.  The file is looked for as named and under src/.  None if the file is missing
+    or the text matches nowhere or more than once (stale)."""
     path = os.path.join(BEEB, c['file'])
     if not os.path.exists(path):
         path = os.path.join(BEEB, 'src', c['file'])
@@ -58,19 +81,25 @@ def locate(c):
         return path, hits[0] + 1, hits[0] + n
     return None
 def anon_ok(c):
+    """True if the proposal defines as many anonymous labels as the original: a change in
+    their count would retarget every :+/:- branch around the edit."""
     a = sum(1 for l in lines_of(c['original']) if ANON.match(l))
     b = sum(1 for l in lines_of(c['proposal']) if ANON.match(l))
     return a == b
 
 def run(cmd, timeout=1800):
+    """Run a shell command in beeb/: (return code, its output, stdout and stderr together)."""
     p = subprocess.run(cmd, shell=True, cwd=BEEB, capture_output=True, text=True, timeout=timeout)
     return p.returncode, p.stdout + p.stderr
 
 def git_snapshot():
+    """The texts of the files in `tracked` (unused: tracked stays empty)."""
     return {p: open(os.path.join(BEEB, p)).read() for p in tracked}
 tracked = set()
 def apply(batch):
-    """Apply a batch (each located now); returns the files' previous texts to restore."""
+    """Replace each candidate's lines (its '_at') with its proposal, a file's edits applied
+    bottom up so the line numbers hold.  Returns {path: the file's text before}, for
+    restore()."""
     prev, by = {}, {}
     for c in batch:
         path, lo, hi = c['_at']
@@ -83,16 +112,19 @@ def apply(batch):
         open(path, 'w').write('\n'.join(src))
     return prev
 def restore(prev):
+    """Write the files' previous texts back."""
     for path, text in prev.items():
         open(path, 'w').write(text)
 
 ASSETS = os.path.join(BEEB, 'tools', 'assets.py')
 def build(batch):
-    """Build.  The Model B's sprite banks must end their code exactly at B4_CODE_END and
-    B5_CODE_END (assets.py; the sprite loops are in both banks, the gather in bank 5):
-    while either assert fails, step that bank's constant through the batch's claimed
-    byte change, then outward from it, rebuilding each time.
-    Returns (ok, the assets.py text to restore on rejection)."""
+    """Build the tree.  The Model B's sprite banks' code must end exactly at B4_CODE_END and
+    B5_CODE_END (tools/assets.py; sprloops.s asserts bank 4's, gather.s bank 5's -- the
+    sprite loops are in both banks, the gather in bank 5): while either assert fails, that
+    bank's constant is stepped through the batch's claimed byte change for sprloops.s,
+    gather.s and macros.s edits, then outward from it by 1, 2, ... 47 either way,
+    rebuilding each time, 120 builds at most.  Returns (ok, assets.py's text before, to
+    restore on rejection)."""
     before = open(ASSETS).read()
     claim = sum(c.get('bytes_modelb', 0) for c in batch if c['file'].endswith(('sprloops.s', 'gather.s', 'macros.s')))
     tries = {4: [claim] + [x for k in range(1, 48) for x in (claim + k, claim - k)],
@@ -118,7 +150,9 @@ def build(batch):
     return False, before
 
 def gate():
-    """Behaviour identical to the base on both machines; the frame totals."""
+    """Run the behaviour checks (statecmp on the Master, bwincmp on the Model B, each LEVELS
+    level) and both machines' linecyc profiles at once.  Returns (True if every check passed
+    and reported identical, {machine: cycles a frame, or None without a profile})."""
     procs = []
     for lv in LEVELS:
         procs.append(subprocess.Popen('node test/statecmp.mjs %s/base.ssd %s/base_master/labels.txt build/cleo.ssd build/master/labels.txt 300 1 %d' % (BASE, BASE, lv),
@@ -142,8 +176,8 @@ def gate():
         tot[m] = json.load(open(f))['total'] if os.path.exists(f) else None
     return same, tot
 
-# ---- REPLAY=1: the tree back to HEAD (both repos), then the record's kept candidates
-# re-applied in order (an interrupted run leaves a batch half tested)
+# ---- REPLAY=1: the tree back to HEAD (both repositories), then the record's kept
+# candidates re-applied in order, and the build rejections forgotten
 if os.environ.get('REPLAY'):
     run('git checkout -- tools/assets.py src')
     run('git -C beebgame checkout -- .')
@@ -166,7 +200,7 @@ if os.environ.get('REPLAY'):
     say('replayed %d kept candidates; the build rejections will be tried again' % len(keptc))
     json.dump(record, open(LOG, 'w'), indent=1)
 
-# ---- the reference: the tree as it stands (built, and gated: it must match the base)
+# ---- the reference: the tree as it stands, built and gated (it must match the base)
 ok, _ = build([])
 assert ok, 'the tree does not build'
 same, ref = gate()
@@ -174,11 +208,15 @@ assert same, 'the tree does not match the base'
 say('reference: Model B %s, Master %s cycles a frame' % (ref['modelb'], ref['master']))
 
 def better(t):
+    """Compare a gated batch's cycles t with the reference: (faster, dB, dM), faster when
+    2 dB + dM < 0 and neither machine is more than 15 cycles a frame slower."""
     dB, dM = t['modelb'] - ref['modelb'], t['master'] - ref['master']
     return 2 * dB + dM < 0 and dB <= 15 and dM <= 15, dB, dM
 
 def try_batch(batch, depth=0):
-    """Apply, build and gate a batch; keep it or bisect it.  Returns the number kept."""
+    """Apply, build and gate a batch; keep it (the reference moves to it) or restore the
+    tree and bisect.  A single rejected candidate is recorded with its reason.  Returns the
+    number of candidates kept."""
     global ref
     for c in batch:
         c['_at'] = locate(c)
@@ -215,6 +253,9 @@ def try_batch(batch, depth=0):
     h = len(batch) // 2
     return try_batch(batch[:h], depth + 1) + try_batch(batch[h:], depth + 1)
 
+# ---- the grind: a stale candidate or one that changes the anonymous label count is
+# recorded and skipped; up to BATCH candidates whose edits are at least two lines apart in
+# a file go in a batch, the rest wait for the next
 kept = 0
 queue = cands[:]
 while queue:

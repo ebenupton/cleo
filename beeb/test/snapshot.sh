@@ -1,8 +1,10 @@
 #!/bin/sh
-# Keep the current build as a reference for test/sweep.sh: the disc, and each
-# machine's labels, debug info and constants (the harness finds game.dbg and
-# defs_ld.inc beside the labels).
+# Keep the current build as a reference for test/sweep.sh and test/perfcmp.sh: the
+# disc, and each machine's labels, debug info and constants (labels.txt, game.dbg,
+# defs_ld.inc: the harness finds the last two beside the labels).  A reference must
+# carry the labels of its own disc -- every check opens each build with its own.
 #   sh test/snapshot.sh DIR
+# Output: DIR/cleo.ssd, DIR/modelb/..., DIR/master/...; exit 2 without a DIR.
 set -e
 cd "$(dirname "$0")/.."
 [ -n "$1" ] || { echo "usage: sh test/snapshot.sh DIR"; exit 2; }

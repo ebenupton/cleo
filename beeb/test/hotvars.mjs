@@ -1,14 +1,23 @@
 // Which variables the code touches, and how often: every executed instruction is
-// counted (by address and the bank paged at the time), then its opcode decoded for the
-// data address it names -- absolute, zero page, indexed, indirect -- and the count
-// credited to the variable there (the build's game.dbg names it, bank by bank).  Run
-// over the usual key script with the player held unhurt; reported per frame.
+// counted (by address and the socket paged at the time), then its opcode decoded for
+// the data address it names -- absolute, zero page, indexed, indirect (the 65C02's
+// (zp) too) -- and the count credited to the variable there (the build's game.dbg
+// names it: labels with their banks, equates for zero page).  An indirect access also
+// credits the pointer's high byte.  Absolute addresses below $100 or at $FC00 up (I/O)
+// are skipped.  Opened by harness.mjs open (Master) or bopen.mjs openB (Model B) for
+// each level in turn; each frame is a break at frame_top with 'keys' from the fixed
+// pattern PAT (s idle, r RIGHT, l LEFT, j UP) and hurt = 1, health = 3 written there.
+// A sideways PC's bank is the code bank (4..7) of the socket paged, from PBANK; the
+// decoding pages each socket in turn afterwards.
 //
 //   node test/hotvars.mjs master|modelb <disc> <labels> [levels=0,4,8] [frames=200] [rows=40]
 //
 // An absolute access costs a cycle and a byte more than a zero-page one.  The report
-// has the non-indexed absolute accesses, hottest first -- the scalars zero page would
-// speed up -- and zero page's own traffic, coldest first: the candidates to trade.
+// has the non-indexed absolute accesses a frame, hottest first (the scalars zero page
+// would speed up), the indexed ones (arrays, up to 15 rows), zero page's own traffic
+// by address coldest first (the candidates to trade), and the zero-page addresses
+// never touched.  A name is the nearest symbol at or below within 255 bytes, with its
+// segment.
 import { open, loadBanks, dbgPath } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";

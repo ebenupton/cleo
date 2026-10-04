@@ -1,8 +1,14 @@
-// How often each sprite id is drawn a frame, per level: every entry to draw_sprite (bank
-// 7, A = the id) over the usual key script with the player unhurt.  The packer weighs
-// its placements by these (tools/assets.py, tools/drawfreq.json: this tool writes it,
-// both machines averaged -- their windows differ).
+// How often each sprite id is drawn a frame, per level: every entry to draw_sprite
+// (bank 7, A = the id) over the usual key script with the player unhurt, on both
+// machines (their windows differ), the two averaged.  The packer weighs its
+// placements by these (tools/assets.py reads tools/drawfreq.json, which this writes
+// by default -- into the tree).  Each level is opened afresh on each machine
+// (harness.mjs open, bopen.mjs openB); each frame is a break at frame_top with 'keys'
+// from the fixed pattern PAT (s idle, r RIGHT, l LEFT, j UP) and hurt = 1, health = 3
+// written there.
 //   node test/drawfreq.mjs [frames=300] [out=tools/drawfreq.json]
+// Output: out = {level: {id: draws a frame (3 decimals)}} for levels 0-15; progress on
+// stderr; the build is build/cleo.ssd with build/<machine>/labels.txt.
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { writeFileSync } from "node:fs";

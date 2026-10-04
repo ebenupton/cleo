@@ -1,16 +1,23 @@
 // Compare bench.mjs runs across builds.   node test/benchcmp.mjs <a.json> <b.json> ...
+// (two or more; a run is named by its parent directory, or its file name when the
+// directory is "."; all must have the same number of samples)
 //
 // Reports two separate things, because they mean different things:
-//   SCENE    -- do all builds agree on the fingerprint at this location?  If not, they
-//               were measured with the world in different states and the cycle figures
-//               are not comparable at all.  This is the property a harness can and must
-//               make invariant to code size and placement.
+//   SCENE    -- do all builds agree on fp0, fpRun, f0 and vx at this location?  If
+//               not, they were measured with the world in different states and the
+//               cycle figures are not comparable at all.  This is the property a
+//               harness can and must make invariant to code size and placement.
 //   CYCLES   -- the spread in render work where the scene DOES agree.  This is not
 //               expected to be zero: a taken 6502 branch costs an extra cycle when its
 //               target lies on another page, and an indexed access costs one when it
 //               crosses a page, so relocating code genuinely changes the count.  What
 //               matters is that the spread is that size (tens of cycles) and not the
 //               size of a different scene (thousands).
+// Output: a line per location (scene same/DIFFER, jump and run spread, f0); the SCENE
+// count and the mismatching locations; for each later file against the first, over
+// the matching locations, the signed deltas of jump and run work (median, mean), the
+// locations that moved, and the instruction and logic deltas; the CYCLES spread.
+// Exit 0 only when every location's scene matches.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 const files = process.argv.slice(2);

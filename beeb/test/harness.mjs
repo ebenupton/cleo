@@ -1,13 +1,15 @@
-// Cleo's harness: beebgame's (beebgame/test/lib/harness.mjs) with Cleo's scene and the
-// way into a level through Cleo's own title.
+// Cleo's harness: beebgame's (beebgame/test/lib/harness.mjs: Harness, runTo, the meter,
+// the fingerprint) with Cleo's scene and the way into a level through Cleo's own title.
+// Exports everything beebgame's does, plus open(), patchBlink() and ALLOW_DAMAGE.
 import { Harness, findJsbeeb, loadLabels, loadBanks, dbgPath } from "../beebgame/test/lib/harness.mjs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 export * from "../beebgame/test/lib/harness.mjs";
 
-// the game state a scene is of: the player, the frame, the level
-// The score as a number, whatever its encoding: BCD (3 bytes, ones first: hi_score
-// follows it at +3, since 2 Oct 2026) or binary (2 bytes) before
+// the game state a scene is of: the player, the frame, the level.
+// The score as a number, whatever its encoding: BCD (3 bytes, ones first, when
+// hi_score follows it at +3 -- the current layout) or binary (2 bytes) in a build
+// from before
 function scoreValue(H, b) {
   const A = H.A, r = (i) => H.rd(A.score + i);
   let v;
@@ -25,10 +27,17 @@ export class CleoHarness extends Harness {
 }
 
 // ---- bring a build up to a level, with every game-visible patch applied -----------
-// HARNESS_ALLOW_DAMAGE=1 stops the driver pinning 'hurt', so enemies can actually
-// connect.  Knockback states (an object's C and D carrying a 16-bit throw offset, say)
-// are unreachable otherwise, and a field's range measured without them is not its range.
-// Health stays pinned either way: a death leaves the frame loop and the run just hangs.
+// open(): a jsbeeb Master booted from the disc with SHIFT-BREAK, run to title_loop
+// (bank 7, the menus' image); `jsr title_menu` patched to `lda #0; nop` (A = 0: start
+// a game); run to game_in (the game's image in bank 7); `ldx level` in level_loop
+// turned into `ldx #level`; run to level_init; scan_keys made an rts ('keys' is only
+// what a tool writes); patchBlink; run to frame_top; the meter installed.  Returns the
+// CleoHarness (H.A labels and defs_ld.inc constants, H.rd/wr, H.runTo(pc, budget),
+// H.meter, H.fingerprint()).  onSession(H) runs before the boot, for a tool's hooks.
+// ALLOW_DAMAGE (HARNESS_ALLOW_DAMAGE=1) is exported for drivers that pin 'hurt': with
+// it set they should not, so enemies can connect (knockback states are unreachable
+// otherwise); health stays pinned either way, a death leaving the frame loop.  Nothing
+// in this file reads it.
 export const ALLOW_DAMAGE = !!process.env.HARNESS_ALLOW_DAMAGE;
 export async function open({ disc, labels, level, quiet = true, onSession = null }) {
   const { MachineSession } = await import(pathToFileURL(findJsbeeb()));
@@ -37,16 +46,17 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
   if (!banks || banks.byName.get("frame_top") === undefined) throw new Error(`${labels}: no game.dbg beside it with the banks -- rebuild?`);
   // boot through the loader; the title is patched to start a game at once (the menus'
   // image), and the level set as the game's image comes in, as bopen.mjs does for the
-  // Model B
+  // Model B.  Each runTo budget is in cycles (harness.mjs Harness.runTo).
   const s = new MachineSession("Master");
   await s.initialise(); await s.boot(30); s.loadDisc(path.resolve(disc));
   const H = new CleoHarness(s, A, banks);
   if (onSession) onSession(H);                   // (a tool's hooks, before anything runs)
+  // f() with bank 7 paged (ROMSEL only: the copy at romsel_cpy is left as the game had it)
   const in7 = (f) => { const was = H.rd((A.romsel_cpy ?? 0xf4)); H.wr(0xfe30, 7); try { return f(); } finally { H.wr(0xfe30, was); } };
   s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
   await H.runTo(A.title_loop, 200_000_000);
   if (A.game_in !== undefined) {
-    in7(() => {                                  // jsr title_menu -> lda #0 (start game); nop
+    in7(() => {                                  // jsr title_menu -> lda #0 (A = 0: start); nop
       H.wr(A.title_loop, 0xa9); H.wr(A.title_loop + 1, 0); H.wr(A.title_loop + 2, 0xea);
     });
     await H.runTo(A.game_in, 200_000_000);       // the game's image is in: its level_loop
@@ -54,14 +64,14 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
     H.wr(A.title_loop + 5, 0xea);                //  image, the menus called from the loop)
     H.wr(A.title_loop + 3, 0xa9); H.wr(A.title_loop + 4, 0);
   });
-  in7(() => {                                    // ldx level -> ldx #level
+  in7(() => {                                    // ldx level ($A6 zp) -> ldx #level ($A2)
     let ok = false;
     for (let a = A.level_loop; a < A.level_loop + 24; a++)
       if (H.rd(a) === 0xa6 && H.rd(a + 1) === (A.level & 255)) { H.wr(a, 0xa2); H.wr(a + 1, level); ok = true; break; }
     if (!ok) throw new Error("ldx level not found in level_loop");
   });
   await H.runTo(A.level_init, 200_000_000);
-  in7(() => H.wr(A.scan_keys, 0x60));            // inputs come from the harness only
+  in7(() => H.wr(A.scan_keys, 0x60));            // scan_keys -> rts: 'keys' is the harness's only
   const blink = patchBlink(H);
   if (blink !== 1 && !quiet) console.error(`WARNING: blink test matched ${blink} sites (expected 1)`);
   await H.runTo(A.frame_top, 40_000_000);        // from here on, everything is frames
@@ -69,10 +79,15 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
   return H;
 }
 
-// While 'hurt' is set the player is drawn only when (frame & 3) == 0, so a naive
-// measurement sees a 3/4-absent player.  Patch 'lda hurt' to 'lda #0' so the draw is
-// unconditional; zeroing 'hurt' itself would also strip her invulnerability and let a
-// hit zero 'control', which changes how many frames a run takes.
+// While 'hurt' is set the player is drawn only on some frames (the flashing), so a
+// measurement with hurt pinned sees a part-absent player.  This looks through bank 7
+// for the byte pattern `lda hurt; beq +4; lda frame; and #3; bne` (zero-page lda,
+// $A5) and turns each `lda hurt` into `lda #0` so the draw is unconditional; zeroing
+// 'hurt' itself would strip her invulnerability and let a hit zero 'control', which
+// changes how many frames a run takes.  Returns the number of sites patched (open
+// warns unless quiet when it is not 1).  The current logic.s spells the test
+// `ldy hurt; beq; tax; lda frame; and #1; bne` (logic.s @spr), which this pattern
+// does not match: with hurt pinned she is drawn every other frame.
 export function patchBlink(H) {
   const ROMSEL = 0xfe30, A = H.A, keep = H.rd((A.romsel_cpy ?? 0xf4));
   H.wr(ROMSEL, 7);

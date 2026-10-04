@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
-"""The byte grind's regions: every code file of both machines cut into regions of at
-most MAXLINES lines (at a global label or a blank line where one is near the limit),
-each line annotated with its cycles and executions a frame on the Model B and the
-Master from test/linecyc.mjs's profiles (0 = not run in play: menus, loads, cold
-paths).  A macro's body line ("file:a > macros.s:b") counts at both its call and its
-definition.
-    python3 tools/bytegrind/regions.py <lc_modelb.json> <lc_master.json> <outdir> [maxlines=110]"""
+"""Cut the byte grind's regions: every source file of both machines, in pieces, annotated.
+
+Each file in FILES is cut into regions of at most MAXLINES lines, the cut backed off from
+the limit to a global label (or, failing one, a blank line) in the last third of the piece.
+A region with no code or data line in it is dropped.  Every line is annotated with its
+cycles and executions a frame on the Model B and the Master from test/linecyc.mjs's two
+profiles (blank where the line never ran in the profile: menus, loads, cold paths -- not
+proof of dead code).  A line inside a macro expansion is reported by linecyc as
+"caller:a > macros.s:b" and is charged to both locations.
+
+Output: <outdir>/b<nnn>.txt, one a region, with a header line giving its cycles a frame in
+play (both machines summed), and <outdir>/index.json listing them (id, file, lo, hi, hot,
+path).  Prints the region count and the count by file.
+
+Usage (from beeb/):
+    python3 tools/bytegrind/regions.py <lc_modelb.json> <lc_master.json> <outdir> [maxlines=110]
+"""
 import json, os, re, sys
 from collections import defaultdict
 BEEB = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,6 +26,8 @@ FILES = ['src/logic.s', 'src/game.s', 'src/menu.s', 'beebgame/src/engine/frame.s
          'beebgame/src/engine/macros.s', 'beebgame/src/engine/menus.s', 'beebgame/src/engine/lowram.s',
          'beebgame/src/engine/boot.s', 'beebgame/src/engine.s', 'beebgame/src/ldprog.s', 'beebgame/src/loader.s',
          'beebgame/src/disc.s', 'beebgame/src/low.s', 'beebgame/src/mirror.s', 'beebgame/src/init.s']
+# (file, line) -> [Model B cycles, executions, Master cycles, executions] a frame; the
+# profiles name files without their directory, resolved against FILES
 cost = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0])
 for k, path in enumerate((lb, lm)):
     for loc, r in json.load(open(path))['lines'].items():
@@ -27,6 +39,7 @@ for k, path in enumerate((lb, lm)):
                 c = cost[(f, int(m.group(2)))]
                 c[2 * k] += r['cy']; c[2 * k + 1] += r['ex']
 os.makedirs(out, exist_ok=True)
+# an instruction, a data directive, or a line starting with a label
 CODE = re.compile(r'^\s+[a-z]{3}\b|^\s+\.(byte|word|res|lobytes|hibytes)|^[A-Za-z_@:]')
 index = []
 for f in FILES:
@@ -35,7 +48,9 @@ for f in FILES:
     cuts, a = [], 1
     while a <= n:
         b = min(n, a + MAXL - 1)
-        if b < n:   # back off to a global label (or a blank line) in the last third
+        if b < n:
+            # back off to a global label (the region ends before it), else to a blank line
+            # (the region ends at it), searching down from the limit through the last third
             for ln in range(b, a + 2 * MAXL // 3, -1):
                 if re.match(r'^[A-Za-z_][A-Za-z0-9_]*:', src[ln - 1]):
                     b = ln - 1; break

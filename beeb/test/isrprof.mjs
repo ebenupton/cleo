@@ -1,13 +1,24 @@
-// Where the interrupt's time goes: every instruction executed between the handler's
-// entry and its RTI, its cycles by source line and by routine (the nearest global
-// label), over N frames of bwork2.mjs's key script; and interrupts a vsync by kind.
+// Where the interrupt's time goes: every instruction executed between irq_handler and
+// its RTI (the RTI counted as 6), its cycles by source line (the build's game.dbg, as
+// cycprof.mjs maps it; a sideways PC is taken to be bank 7's) and by routine (the
+// nearest label at or below, cheap and linker symbols excluded), over N frames of
+// bwork2.mjs's key script (seed 1: nine key sets, no FIRE, held 4-43 frames); and the
+// interrupts a vsync by kind -- a "step" wrote CRTC R13 (a chain step), anything else
+// is "vsync" -- a step split into entry to its first CRTC data write, that to the R13
+// write, R13 to the RTI.  Opened by harness.mjs open (Master) or bopen.mjs openB
+// (Model B); each frame is a break at frame_top with 'keys' written there; hurt and
+// health are not pinned.
 //   node test/isrprof.mjs master|modelb <disc> <labels> [level=0] [frames=200] [rows=30]
+// Output: cycles of interrupt a vsync, interrupts a vsync and each's mean; a line per
+// kind; the 14 costliest routines; the <rows> costliest lines (cycles a vsync).  A
+// vsync is 40000 cycles of the run.
 import { open, dbgPath, loadLabels } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";
 const [machine, disc, labels, lvA = "0", frA = "200", rowsA = "30"] = process.argv.slice(2);
 const level = +lvA, frames = +frA, rows = +rowsA;
-// ---- the build's lines: address -> "file:line" per segment (so per bank), from the spans
+// ---- the build's lines: address -> "file:line" per segment (so per bank), from the
+// spans (as cycprof.mjs)
 const dbgFile = dbgPath(labels);
 const dbg = readFileSync(dbgFile, "utf8");
 const files = new Map(), segs = new Map(), spans = new Map();
@@ -42,8 +53,9 @@ const glob = Object.entries(A).filter(([n]) => !n.startsWith("@") && !n.startsWi
 const routine = (pc) => { let r = "?"; for (const [n, a] of glob) { if (a > pc) break; r = n; } return r; };
 const byLine = new Map(), byRoutine = new Map();
 let inIsr = false, lastPc = -1, lastC = 0, total = 0, count = 0, t0c = 0;
-// per interrupt: its kind (a chain step writes R13) and its phases: entry to the first
-// CRTC write, first CRTC write to R13's, R13's to the RTI
+// per interrupt: its kind (a chain step writes R13; else "vsync") and a step's phases:
+// entry to the first CRTC data write, that to R13's, R13's to the RTI.  The CRTC
+// stores are seen as the instruction after them runs (sta abs / sty abs to $FE00/$FE01).
 let iEnt = 0, iFirst = -1, iR13 = -1, iKind = "vsync", lastIdx = -1;
 const kinds = { step: { n: 0, c: 0, pre: 0, mid: 0, post: 0 }, vsync: { n: 0, c: 0 } };
 const CRTC_IDX = 0xfe00, CRTC_DAT = 0xfe01;

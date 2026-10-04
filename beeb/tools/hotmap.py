@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""Draw test/hotmap.mjs's result over the level's map: the map (its tiles as the
-converter renders them) with every object's sprite composited at its place, the
-sweep's paths faint, and a semi-transparent heat layer -- the fraction of the frames
-whose window was centred in each cell that missed the vsync peg -- with each miss
-marked, its colour by how far over it ran.  A long map is cut into strips.
-    python3 tools/hotmap.py <hotmap.json> <out.png> [cell=16] [strip=512] [scale=2]"""
+"""Draw test/hotmap.mjs's result over the level's map.
+
+The picture: the map, its tiles as convert.py renders them, a game pixel a pixel; every
+object's first sprite frame at its place; a heat layer by cell -- blue where frames had
+their window centred and none missed the vsync peg, yellow to red by the share that did --
+each miss dotted, its colour by how far over the peg it ran; and the sweep's paths faint.
+A long map is cut into strips, stacked, with a key at the top.
+
+Input: the JSON hotmap.mjs writes (machine, level, vis, V, starts, frames: each frame
+[px, py, wx, wy, work], work the frame's cycles).  Output: a PNG.
+
+Usage (from beeb/):
+    python3 tools/hotmap.py <hotmap.json> <out.png> [cell=16] [strip=512] [scale=2]
+"""
 import io, contextlib, json, os, sys
 import numpy as np
 from PIL import Image, ImageDraw
@@ -23,8 +31,8 @@ h, w = L['map'].shape
 # ---- the map, a game pixel a pixel (every other scanline of the tiles' 16)
 col = m.render_map(L, 0, 0, w, h)[0::2]
 img = Image.fromarray(m.col_to_rgb(col)).convert('RGBA')
-# ---- the objects: each type's first frame at its reference point (the engine's: x*8,
-# y*8; a trampoline 4 px in)
+# ---- the objects: each type's first frame at its reference point (the engine's: x*8, y*8;
+# a trampoline 4 px in).  The rising snake shows its basket (60)
 FIRST = {0: 34, 1: 43, 2: 46, 3: 60, 4: 61, 5: 67, 6: 76, 7: 85, 9: 93, 10: 97, 12: 100}
 for (t, x, y, e) in L['objs']:
     sid = FIRST.get(t)
@@ -38,7 +46,8 @@ for (t, x, y, e) in L['objs']:
     oy = 8 * y - ry
     img.alpha_composite(Image.fromarray(rgba), (int(ox), int(oy))) if 0 <= ox < w * 8 and 0 <= oy < h * 8 else None
 W, H = img.size
-# ---- the heat: by the window's centre, per cell
+# ---- the heat: visits and misses by the cell the window's centre falls in; a miss is a
+# frame over three vsyncs' worth of V
 V, vis = d['V'], d['vis']
 cw, ch = (W + CELL - 1) // CELL, (H + CELL - 1) // CELL
 visits = np.zeros((ch, cw)); misses = np.zeros((ch, cw))
@@ -62,7 +71,7 @@ for i in range(ch):
             else:
                 hd.rectangle([j * CELL, i * CELL, (j + 1) * CELL - 1, (i + 1) * CELL - 1], fill=(0, 160, 255, 40))
 img.alpha_composite(heat)
-# the sweep's paths (the windows' centres), faint
+# ---- the sweep's paths (the windows' centres), faint; a jump between runs is not drawn
 pd = ImageDraw.Draw(img)
 fr = d['frames']
 for k in range(1, len(fr)):

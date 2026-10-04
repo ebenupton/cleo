@@ -1,20 +1,28 @@
 """Bank 7's pads (beebgame/src/pads.inc: PADB_xx, PADM_xx), chosen together over a
 profile.  All of bank 7's code moves with the kernel's start, so when that moves
 (the driver slot's size, the kernel's code) the pads that kept the hot loops in a
-page are wrong.  ENGCODE is cut at the pads into regions; a pad moves every region
-before it on the Model B (its bank 7 code ends at the kernel) and every region after
-it on the Master (pinned to the Model B's start, so it also moves with the Model B's
-pads).  Each region's cost -- the page crossings of its taken branches and of the
-indexed reads of its data -- is tabulated for every move, then the best pads are
-found for each change in the Model B's bytes (the Master's pads cost it nothing).
+page are wrong.  ENGCODE is cut at the pads into regions (NAMES: a pad's key and the
+routine it precedes, sorted into the Model B's address order; BB, the pad before
+render_frame, is the Model B's only and must be last); a pad moves every region
+before it on the Model B (its bank 7 code ends at the kernel: the regions run from
+__B7_START__) and every region after it on the Master (pinned to the Model B's start,
+so it also moves with the Model B's pads).  Each region's cost -- the page crossings
+of its taken branches and of the indexed reads of its data, from cycprof's PHASEDUMP
+(build/pd_<machine>.json), the spin-waits' own branches left out -- is tabulated for
+every move mod 256, then the best pads are found by dynamic programming for each net
+change in the Model B's bytes from bytes_lo to bytes_hi (a pad may grow to LIM = 64 or
+shrink to 0; the Master's pads cost it nothing).
     for m in master modelb; do PHASEDUMP=build/pd_$m.json node test/cycprof.mjs $m build/cleo.ssd build/$m/labels.txt; done
-    python3 test/padopt.py [bytes_lo=-8] [bytes_hi=8]"""
+    python3 test/padopt.py [bytes_lo=-8] [bytes_hi=8]
+(both bounds or neither)
+Output: the current crossings a frame in bank 7 on each machine, then a line per byte
+change: the two machines' costs and each pad as "<key> <Model B>/<Master>"."""
 import json, re, sys
 
 LO, HI = (int(sys.argv[1]), int(sys.argv[2])) if len(sys.argv) > 2 else (-8, 8)
 LIM = 64                                    # the largest pad tried
-# the pads in ENGCODE's order, each before its routine (BB: before render_frame, the
-# Model B's only; the code after it is render_frame)
+# the pads, each before its routine (BB: before render_frame, the Model B's only; the
+# code after it is render_frame); sorted into ENGCODE's order below
 NAMES = [('MS', 'match_sprites'), ('SP', 'draw_sprites'), ('EO', 'erase_old'),
          ('DS', 'draw_sprite'), ('CP', 'copy_partial'), ('BB', 'render_frame')]
 
@@ -52,7 +60,8 @@ def region(a, bd):
 
 
 def tables(m, bd, L):
-    """f[r][s]: region r's crossings a frame when it moves up s bytes (mod 256)"""
+    """f[r][s]: region r's crossings a frame when it moves up s bytes (mod 256); other:
+    the crossings of branches and reads outside the regions, which no pad moves"""
     spins = [L[x] for x in ('wait_flip', 'fl_wait') if x in L]      # idle, not cost
     d = json.load(open('build/pd_%s.json' % m))
     F = d['frames']
@@ -88,7 +97,8 @@ fM, oM = tables('master', BM, LM)
 g = lambda f, r, e: f[r][e % 256]
 print('now: Model B %.1f, Master %.1f cycles a frame in bank 7 crossings' % (
     sum(g(fB, r, 0) for r in range(n)) + oB, sum(g(fM, r, 0) for r in range(n - 1)) + oM))
-# the Model B, from the kernel down: e_n = 0, e_{r-1} = e_r - d_r (e: the move up)
+# the Model B, from the kernel down: e_n = 0, e_{r-1} = e_r - d_r (e: the move up,
+# d: the change to the pad after the region); best[r][e] = (cost, the pad changes)
 best = {n: {0: (0.0, [])}}
 for r in range(n - 1, -1, -1):
     best[r] = {}
@@ -100,7 +110,7 @@ for r in range(n - 1, -1, -1):
                 best[r][e] = (v, [d] + path)
 
 
-def master(e0):                     # from the game's move, which the Master's shares
+def master(e0):                     # from the game's move (-e0 bytes), which the Master's first region shares
     cur = {e0: (g(fM, 0, e0), [])}
     for r in range(1, n):
         nxt = {}

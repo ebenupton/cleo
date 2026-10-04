@@ -1,6 +1,15 @@
-// Every store into sideways RAM ($8000-$BFFF) during play, by PC + selected bank.
-// These are the sites whose WRITE bank must be right on a Solidisk/Watford board.
+// Every store into sideways RAM ($8000-$BFFF) during play, counted by PC and the socket
+// paged when it happened (romsel_cpy): the sites whose write bank has to be right on a
+// Solidisk/Watford write-select board (beebgame/test/lib/boards.mjs checks the rule;
+// this lists the stores).  Opened by bopen.mjs openB on a jsbeeb Model B at the level's
+// first frame_top; each frame is a break at frame_top with bank 7 paged, 'keys' written
+// there from a seeded random script (LCG seed 7: one of ten key sets -- idle, LEFT,
+// RIGHT, RIGHT+UP, LEFT+UP, UP, FIRE, RIGHT+FIRE, LEFT+FIRE, DOWN -- held 4-43 frames).
+// hurt/health are not pinned, so she can be hit.  The counting is jsbeeb's debugWrite
+// hook, which sees every store, the interrupt handler's included.
 //   node test/audit.mjs [frames=300] [level=4]
+// Output: a line per (socket, pc), most stores first: stores a frame, the socket, the
+// PC and the nearest label at or below it (bank-blind: the labels of every bank).
 import { openB } from "./bopen.mjs";
 const B = await openB({ level: parseInt(process.argv[3] ?? "4") }); const { cpu, A } = B;
 const frames = parseInt(process.argv[2] ?? "300");

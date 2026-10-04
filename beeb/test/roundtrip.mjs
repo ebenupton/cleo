@@ -1,12 +1,28 @@
 // Whole sessions, build against build: the title, a game, lost (the lose screen and big
-// Cleo's frames), the title again, a second game, won (level 15 ended: the win screen),
-// the title again -- each swap of bank 7's image with a disc load between.  Both builds
-// run the same script and are compared at every stop: menu_keys in the menus, frame_top
-// in play (the painted picture; in the menus the ring as the CPU sees it, on the
-// Master main RAM from $3000).  (Before bank 7's images the win/lose score showed one
-// digit: draw_number lost its index to div10_16 -- those stops differ from such a build.)
+// Cleo's frames), the title again, a second game, won (level 15 ended with no star
+// left: the win screen), the title again -- each swap of bank 7's image with a disc
+// load between.  Both builds boot through the real title (SHIFT-BREAK, no patches) and
+// run the same script: RETURN (jsbeeb key 13) starts a game; a game is ended by
+// writing lives = 0 (or level = 15 and stars = 0) and exiting = 1.  They are compared
+// at every stop from the third on: menu_keys in the menus (the menus' bank and image:
+// game.dbg, ld_img), frame_top in play (bank 7), with hurt = 1 and health = 3 written
+// before each play frame.  Stops: title 6, game 30, lose 40, title 6, game 30, win 40,
+// title 6 = 144 compared.
 //   node test/roundtrip.mjs master|modelb <discA> <labelsA> <discB> <labelsB> [pngdir]
-// BBOARD=watford|solidisk emulates a write-select board on the Model B (bopen.mjs).
+// BBOARD=watford|solidisk emulates a write-select board on the Model B (boards.mjs);
+// BMODEL=B1770 for the 1770 machine.
+// Compared: in play the painted picture (jsbeeb's frame, RGB: the ring's hidden rows
+// are a layout's choice, see wincmp.mjs); in the menus main RAM from CLEAR0 (the first
+// build's defs_ld.inc) to $8000 as the CPU sees it.  pngdir gets <stop>_A.ppm and
+// <stop>_B.ppm (P6) at the end of each stop.
+// Output: the first twelve differing stops, then "<machine> round trip: identical at
+// <n> stops | DIFFERS at <n>/<stops> stops"; exit 1 on a difference.
+// Known limit: to() steps off a break with runFor(1), and jsbeeb then runs the rest of
+// the interrupted 20000-cycle chunk, so the state writes that follow a stop land
+// wherever the CPU has got to -- lives and level are zero page, but exiting and stars
+// are bank 7's, and when another bank is paged at that moment the forced game over is
+// lost and the next menu stop times out ("menu_keys not reached"; seen on both
+// machines, 4 Oct 2026).
 import { findJsbeeb, loadLabels, loadBanks, imgOk, dbgPath } from "./harness.mjs";
 import { boardEmu } from "./bopen.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path"; import { writeFileSync } from "node:fs";
@@ -33,7 +49,7 @@ let bad = 0, stops = 0;
 function cmp(what, k, painted) {
   let n = 0;
   if (painted) {                     // in play: the picture (the ring's hidden rows are a
-    const fa = X.s._completeFb8, fb = Y.s._completeFb8;   // layout's choice: wincmp.mjs)
+    const fa = X.s._completeFb8, fb = Y.s._completeFb8;   // layout's choice: wincmp.mjs); RGBA, alpha skipped
     for (let i = 0; i < fa.length; i += 4) if (fa[i] !== fb[i] || fa[i + 1] !== fb[i + 1] || fa[i + 2] !== fb[i + 2]) n++;
   } else {                           // the menus' clear to $8000: CLEAR0 (the build's
     const c0 = X.A.CLEAR0 ?? (kind === "master" ? 0x3000 : 0x0800);   // defs_ld.inc; the literals

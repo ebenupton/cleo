@@ -1,11 +1,22 @@
-// Where every CRTC register write (and, on the Master, every ACCCON write) lands in
-// the frame: for each store to $FE01 (or $FE34, or the palette's $FE21: register 21), the register, the value and the
-// 6845's position when the store happens -- row, scanline, character -- over N frames
-// of the usual key script.  Two builds' logs, compared write by write, show whether
-// a change to the interrupt handler moved the chain's timing: the rupture's registers
-// have deadlines within the first scanline or two of a section.
+// Where every CRTC register write lands in the frame (and, on the Master, every
+// ACCCON write): for each store to $FE01 (the register selected by the last $FE00
+// write), to $FE34 (logged as register 99, value = bit 0, D) and to the palette $FE21
+// (logged as register 21), the frame, register, value and the 6845's position when
+// the store happens -- vertical counter (row), scanline, horizontal counter -- over N
+// frames of the usual key script.  Two builds' logs, compared write by write, show
+// whether a change moved the chain's timing: the rupture's registers have deadlines
+// within the first scanline or two of a section.  Opened by harness.mjs open (Master)
+// or bopen.mjs openB (Model B); each frame is a break at frame_top, with 'keys' from
+// the fixed pattern PAT (s idle, r RIGHT, l LEFT, j UP) and hurt = 1, health = 3
+// written there.  The stores are seen by wrapping cpu.writemem, from the level's
+// first frame_top on.
 //   node test/crtctime.mjs master|modelb <disc> <labels> [level=0] [frames=60] > log
 //   node test/crtctime.mjs cmp <logA> <logB>
+// Log: a line a write, "frame reg value row scanline hchar".  cmp: the writes in
+// order; one differing in frame, register, value, row or scanline is reported (the
+// first five) and skipped; for the rest a histogram of the character shift (B - A)
+// and the worst; exit 1 if any differ.  Lines that are not six numbers are ignored
+// (jsbeeb's boot chatter).
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";

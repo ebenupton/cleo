@@ -1,15 +1,27 @@
 // Which stars to bake (tools/assets.py STARPLAN): play each level file with bwork2.mjs's
-// seeded key script, find the frames whose work misses the peg (3 vsyncs less the
-// interrupt), and charge every masked star drawn in them its draw and erase cycles.
-// Writes tools/starbake.json: by level file, the vsync's usable cycles V and every frame
-// that misses the peg with a star in it: its work and each star's tile and cycles --
-// what assets.py needs to choose the stars that save the most vsyncs.
+// seeded key script (nine key sets, no FIRE, held 4-43 frames; health = 3 so the walk
+// stays in the level, hurt not pinned), find the frames whose work misses the peg (3
+// vsyncs of V = 40000 less the interrupt's cycles a vsync over the run), and charge
+// every masked star drawn in them its draw and erase cycles: a draw_sprite entry with
+// A in 34..39 (the STAR0 frames), its cycles to its return, keyed by (spx, spy) >> 3;
+// an erase as the call_bank inside erase_old whose record (rp: id, x, y) is such a
+// star, keyed the same.  Work is the cycles from frame_top to render_done less the
+// interrupt handler (irq_handler to its RTI + 6) and the flip wait's spin (the five
+// bytes from wait_flip).  Opened by bopen.mjs openB (or harness.mjs open with
+// machine=master) for each level and seed; each frame is a break at frame_top with
+// 'keys' written there; a level that ends stops that seed's run (what was measured
+// stands).
 //   node test/starplan.mjs [frames=600] [seeds=1,2] [machine=modelb]
+// SDISC/SLABELS: another build (both or neither); NOWRITE=1: report only.
+// Output: a line per level file -- frames missing the peg, vsyncs lost, the eight
+// costliest stars "(tx,ty) cycles" -- and tools/starbake.json {level: {V, frames:
+// [[work, [[tx, ty, cycles]...]]...]}} for the frames that missed with a star in them:
+// what assets.py needs to choose the stars that save the most vsyncs.
 import { openB } from "./bopen.mjs";
 import { open } from "./harness.mjs";
 import { writeFileSync } from "node:fs";
 const [fr = "600", sd = "1,2", machine = "modelb"] = process.argv.slice(2);
-const MASKSTAR = (i) => i >= 34 && i <= 39;
+const MASKSTAR = (i) => i >= 34 && i <= 39;   // the STAR0 sprite frames (assets.py SPR_IDS): drawn masked, not baked
 const plan = {}, report = [];
 for (let lv = 0; lv < 16; lv++) {
   const cost = new Map(), kept = []; let miss = 0, total = 0, lvV = 0, lost = 0;
@@ -42,8 +54,8 @@ for (let lv = 0; lv < 16; lv++) {
     let keys = 0, hold = 0;
     for (let f = 0; f < +fr; f++) {
       if (hold-- <= 0) { keys = [0, 1, 2, 2|4, 1|4, 4, 8, 2|8, 1|8][rnd() % 9]; hold = 4 + rnd() % 40; }
-      wr(A.keys, keys); wr(A.health, 3);        // (kept alive: the walk stays in the level)
-      try { await step(); } catch (e) { break; } // (the level ended: what was measured stands)
+      wr(A.keys, keys); wr(A.health, 3);        // (kept alive: the walk stays in the level; hurt not pinned)
+      try { await step(); } catch (e) { break; } // (no frame_top in time -- the level ended: what was measured stands)
     }
     h.remove();
     const isrV = isrTot / ((cyc() - c0) / 40000), V = 40000 - isrV, budget = 3 * V;

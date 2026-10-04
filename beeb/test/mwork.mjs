@@ -1,15 +1,22 @@
-// Frame cost on the Master, frame-matched (bwork2.mjs's Model B measure on the Master):
-// cycles from frame_top to render_done, less the interrupts, over N frames of the same
-// seeded key script, so two builds whose logic agrees see the same frames even when
-// their sprite lists differ (the bench's scene fingerprints would not match).
+// Frame cost on the Master, frame-matched (bwork2.mjs's Model B measure on the
+// Master): the cycles from frame_top to render_done, less the interrupts (irq_handler
+// to its RTI), over N frames of the same seeded key script (nine key sets, no FIRE,
+// held 4-43 frames; hurt/health not pinned), so two builds whose logic agrees see the
+// same frames even when their sprite lists differ (the bench's scene fingerprints
+// would not match).  Opened by harness.mjs open; each frame is a break at frame_top
+// with 'keys' written there.  The flip wait at the top of render_frame is inside the
+// window.
 //   MDISC=disc MLABELS=labels MDUMP=file node test/mwork.mjs [frames=300] [seed=1] [level=0]
+// (defaults build/cleo.ssd, build/master/labels.txt; MDUMP writes each frame's work
+// as a JSON array, for a frame-by-frame comparison)
+// Output: "<n> frames: work median <n> p90 <n> max <n> cycles".
 import { open } from "./harness.mjs";
 import { writeFileSync } from "node:fs";
 const frames = parseInt(process.argv[2] ?? "300"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "0");
 const H = await open({ disc: process.env.MDISC ?? "build/cleo.ssd", labels: process.env.MLABELS ?? "build/master/labels.txt", level: LEVEL });
 const cpu = H.cpu, A = H.A, cyc = () => H.cyc();
 let t0 = -1, work = [], isr = 0, isrAt = -1;
-const irq = A.irq_handler ?? A.mirq;
+const irq = A.irq_handler ?? A.mirq;   // (mirq: the handler's name in an older build)
 const meter = cpu.debugInstruction.add((pc, op) => {
   if (pc === A.frame_top) { t0 = cyc(); isr = 0; }
   else if (pc === A.render_done && t0 >= 0) { work.push(cyc() - t0 - isr); t0 = -1; }

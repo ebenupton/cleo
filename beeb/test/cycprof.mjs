@@ -1,12 +1,25 @@
 // Where the frame pays for branches and page crossings: every executed instruction is
 // counted by its bank and address, and for each one the extra cycles it cost --
 //   a taken branch: +1, and +1 more when it lands in another page;
-//   an indexed or indirect read (abs,X  abs,Y  (zp),Y) that crosses a page: +1.
-// Then per source line (the build's game.dbg): the executions a frame, the branches
-// taken and not, the cycles a frame a taken branch spends over falling through (what
-// turning it round could save, before whatever the turning costs), and the page
-// crossings' cycles a frame.  Run over the usual key script with the player unhurt.
+//   an indexed or indirect read (abs,X  abs,Y  (zp),Y; BRA and bit abs,X on the
+//   Master's 65C02) that crosses a page: +1.  (Stores are not counted: an indexed
+//   store always pays the cycle.)
+// Then per source line (the build's game.dbg: the narrowest span holding the address,
+// a macro's body line as "file:line > macrofile:line"; the bank from the segment
+// name): the executions a frame, the branches taken and not, the cycles a frame a
+// taken branch spends over falling through (what turning it round could save, before
+// whatever the turning costs), and the page crossings' cycles a frame.  Opened by
+// harness.mjs open (Master) or bopen.mjs openB (Model B) for each level in turn; each
+// frame is a break at frame_top, with 'keys' from the fixed pattern PAT (s idle, r
+// RIGHT, l LEFT, j UP) and hurt = 1, health = 3 written there.  A sideways PC's bank
+// is the code bank (4..7) of the socket paged, from PBANK.
 //   node test/cycprof.mjs master|modelb <disc> <labels> [levels=0,2,4,6] [frames=150] [rows=40] [cross|taken|line=file:line,...]
+// Output: a total line (page-crossing cycles and branches taken a frame), then by
+// mode: "cross" the top rows by page-crossing cycles; "taken" the branches taken more
+// than not, by taken - not taken; "line=..." every site on the lines named.
+// PHASEDUMP=file: bank 7's taken branches (from, to) and the indexed reads (pc, base,
+// index), with their counts, for choosing where bank 7's code sits (test/blockopt.py
+// and test/padopt.py read it).
 import { open, loadBanks, dbgPath } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";
@@ -25,7 +38,8 @@ const RD_ABSX = new Set([0x1d, 0x3d, 0x5d, 0x7d, 0xbd, 0xdd, 0xfd, 0xbc].concat(
 const RD_ABSY = new Set([0x19, 0x39, 0x59, 0x79, 0xb9, 0xd9, 0xf9, 0xbe]);
 const RD_IZY = new Set([0x11, 0x31, 0x51, 0x71, 0xb1, 0xd1, 0xf1]);
 
-// ---- the build's lines: address -> "file:line" per segment (so per bank), from the spans
+// ---- the build's lines: address -> "file:line" per segment (so per bank), from the
+// spans; BANKSEG names a segment's bank (names not in this build are harmless)
 const dbgFile = dbgPath(labels);
 const dbg = readFileSync(dbgFile, "utf8");
 const files = new Map(), segs = new Map(), spans = new Map();
@@ -49,8 +63,9 @@ const where = { get: (k) => { const s = src.get(k), m = mac.get(k); return s ? (
 
 // ---- run
 const st = new Map();                                           // "bank|pc" -> [exec, taken, extra]
-// PHASEDUMP=file: bank 7's taken branches (from, to) and indexed reads (pc, base,
-// index) with their counts, for choosing where bank 7's code sits (tools: phase.py)
+// PHASEDUMP=file: bank 7's taken branches ("b from to") and the indexed reads ("r pc
+// base index", pc -1 outside bank 7) with their counts, for test/blockopt.py and
+// test/padopt.py
 const PD = process.env.PHASEDUMP, pd = new Map();
 const pdAdd = (k) => pd.set(k, (pd.get(k) ?? 0) + 1);
 for (const level of levels) {

@@ -1,10 +1,15 @@
-// The frame period across a real level load: boot through the real title (no patches),
-// wait for the menu, press RETURN to start the game, and time every CRTC frame until
-// play has run a while.  Reports each frame whose period is not a standard 312 lines
-// (39936 cycles, +-64 for the chain's re-phase) and any flyback forced for want of a
-// vsync.  The picture is in sync when the load begins.
+// The frame period across a real level load: boot through the real title (no patches:
+// SHIFT-BREAK, then 20 arrivals at menu_keys, the menus' once-a-frame wait, in the
+// menus' bank and image), press RETURN to start the game, and time every frame jsbeeb
+// paints (video.paintAndClear) until play has run a while (the first frame_top in bank
+// 7, then 60 more).  Reports each frame whose period is not a standard 312 lines
+// (39936 cycles, +-64 for the chain's re-phase) and any flyback jsbeeb forced for want
+// of a vsync (bitmapY reached 768).  The picture is in sync when the load begins.
 //   node test/loadsync2.mjs master|modelb <disc> <labels>
 // The Model B is the 8271 (B-DFS1.2), or BMODEL=B1770.
+// Output: "<machine>: <n> frames from RETURN into play, <n> forced flybacks, <n>
+// irregular: <period> [(forced)] at +<cycles>..." (the first eight); exit 0 always --
+// sweep.sh looks for " 0 irregular".
 import { findJsbeeb, loadLabels, loadBanks, imgOk, dbgPath } from "./harness.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path";
 const { MachineSession } = await import(pathToFileURL(findJsbeeb()));

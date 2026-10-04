@@ -1,6 +1,14 @@
-"""What each tile id of each level should draw, for test/tilecheck.mjs and
-test/btilecheck.mjs: per level (harness index 0..15), 256 ids x 64 bytes, the tile
-(solids as their fill).   python3 tools/tileids.py [outdir=build/tileids]"""
+"""Write what each tile id of each level should draw, for test/tilecheck.mjs and
+test/btilecheck.mjs.
+
+Runs convert.py (quietly) and pack_tiles for every level.  Per level file L0..L15 (index =
+level * 2 + sub, as the harness numbers them) writes <outdir>/L<n>.bin: 256 ids x 64 bytes,
+each id's tile bytes in the bank's layout, the two solids as their fill ($0F cyan, $00
+black) and the unused ids zero.
+
+Usage (from beeb/):
+    python3 tools/tileids.py [outdir=build/tileids]
+"""
 import os, sys, io, contextlib, importlib.util
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 spec = importlib.util.spec_from_file_location('conv', 'tools/convert.py')

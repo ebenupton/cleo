@@ -1,9 +1,13 @@
 #!/bin/sh
 # Frame cost of the current build against a snapshot (test/snapshot.sh REF), both
-# machines, levels 0 2 4 6: the Master's bench medians (jump / run scripts, cycles a
-# frame, scene-matched) and the Model B's frame-matched work medians (bwork2).
-# Negative is faster.
+# machines, each level in the list: the Master's bench (bench.mjs, 15 locations a
+# level, jump and run scripts: the median of the per-location deltas, new - REF, over
+# the scene-matched locations, from benchcmp.mjs) and the Model B's frame-matched work
+# (bwork2.mjs, 300 frames of seed 1 on each build: the median of the per-frame
+# deltas).  Negative is faster.  All the runs go in parallel; each build is opened with
+# its own labels (REF/<machine>/labels.txt, build/<machine>/labels.txt).
 #   sh test/perfcmp.sh REF [levels="0 2 4 6"]
+# Output: a line a level, "L<n>  Master jump <d> run <d>   Model B <d>".
 set -e
 cd "$(dirname "$0")/.."
 REF=$1; LV=${2:-"0 2 4 6"}

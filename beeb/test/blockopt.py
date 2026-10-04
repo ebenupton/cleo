@@ -1,14 +1,24 @@
 """The order of ENGCODE's blocks (each `.segment "ENGCODE"` in beebgame's engine/frame.s,
 then mirror.s and banks.s), chosen over a profile: every block ends in a jump, a
 return or data, so any order works, and all of bank 7's code moves with the kernel's
-start.  A block's cost -- the page crossings of its taken branches and of the indexed
-reads of its data -- is tabulated for every start, both machines (the Model B's
-blocks run on from ENGCODE's start as the Master's do, the total being fixed), then
-orders are searched from random starts, with a small charge for every block moved.
-draw_sprite and draw_dirty stay in order, and the other files' three blocks stay last.  The pads
-come after (test/padopt.py).
+start.  The blocks are the CH labels, in the order the Model B's labels.txt has them
+now, each from its label less its pad (pads.inc PADB_/PADM_<key>) to the next block's
+start, the last to ENGCODE's end (build/<machine>/map.txt).  A block's cost -- the page
+crossings of its taken branches and of the indexed reads of its data, from cycprof's
+PHASEDUMP, the spin-waits' own branches left out -- is tabulated for every start, both
+machines (the Model B's blocks run on from ENGCODE's start as the Master's do, the total
+being fixed), then orders are searched: a local search from the current order (the
+Master weighted W), and from 400 random starts with a charge of 0.3 for every block
+moved; draw_sprite and draw_dirty stay in order, and the other files' three blocks stay
+last.  The pads come after (test/padopt.py).
     for m in master modelb; do PHASEDUMP=build/pd_$m.json node test/cycprof.mjs $m build/cleo.ssd build/$m/labels.txt; done
-    python3 test/blockopt.py"""
+    python3 test/blockopt.py
+Output: the current cost, the cost outside the blocks, then up to seven orders: score,
+the Model B's and the Master's cycles a frame, the breaks from the current order, the
+block names.  Known limit: a CH label absent from labels.txt sorts to the end and trips
+the assert that the last three blocks are mirror_copy, mir_dirty and lv_reset; the
+current build has no render_core label (it is inlined into render_frame), so the
+script stops there."""
 import json, re, itertools
 def labels(m):
     d = {}
@@ -23,7 +33,7 @@ CH = [('match_sprites', 'MS'), ('add_sprite', None), ('draw_sprites', 'SP'), ('e
       ('copy_partial', 'CP'), ('render_frame', None), ('render_core', None), ('mark_dirty', None),
       ('draw_dirty', None), ('mirror_copy', None), ('mir_dirty', None), ('lv_reset', None)]
 _LB = labels('modelb')
-CH.sort(key=lambda c: _LB.get(c[0], 1 << 20))     # as they lie now
+CH.sort(key=lambda c: _LB.get(c[0], 1 << 20))     # as they lie now (a missing label sorts last)
 def extents(m):
     L = labels(m); pre = 'PADB_' if m == 'modelb' else 'PADM_'
     end = [int(x.split()[1], 16) + int(x.split()[3], 16) for x in open('build/%s/map.txt' % m) if x.startswith('ENGCODE ')][0]
@@ -70,6 +80,7 @@ n = len(CH)
 startB = min(s for s, _ in exB if s is not None); startM = min(s for s, _ in exM if s is not None)
 def cost(order):
     # the Model B: laid from startB (its total is fixed); the Master from startM
+    # (a block missing on a machine takes no room there)
     a, b, cb, cm = startB, startM, 0.0, 0.0
     for i in order:
         s, z = exB[i]
@@ -100,7 +111,7 @@ while improved:
 
 import random
 random.seed(2)
-K = n - 3                                   # the last three: other files, kept last
+K = n - 3                                   # the last three: other files (mirror.s, banks.s), kept last
 assert [c[0] for c in CH[K:]] == ['mirror_copy', 'mir_dirty', 'lv_reset']
 def disp(o): return sum(1 for i in range(n - 1) if o[i + 1] != o[i] + 1) + (o[0] != 0)
 FIX = [[c[0] for c in CH].index(x) for x in ('draw_sprite', 'draw_dirty', 'mirror_copy', 'mir_dirty', 'lv_reset')]

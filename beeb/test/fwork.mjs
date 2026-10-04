@@ -1,9 +1,17 @@
-// A frame's work on either machine, split: logic (frame_top to render_frame, the logic
-// steps) and render (render_frame to render_done), interrupts and the flip wait's spin
-// (render_frame's wait_flip: idle) excluded, over N frames
-// of bwork2.mjs's seeded key script; and the interrupts' cycles a vsync over the run.
-// For budgets: a peg of p vsyncs leaves p x (40,000 - ISR a vsync) for the work.
+// A frame's work on either machine, split: logic (frame_top to render_frame, the two
+// logic steps) and render (render_frame to render_done), the interrupts (irq_handler
+// to its RTI) and the flip wait's spin (the five bytes from wait_flip = render_frame:
+// idle) taken out, over N frames of bwork2.mjs's seeded key script; also the scroll
+// fill (validate's call, from its jsr to the return address, ISR excluded) and the
+// interrupts' cycles a vsync over the whole run.  For budgets: a peg of p vsyncs
+// leaves p x (40,000 - ISR a vsync) for the work.  Opened by harness.mjs open (Master)
+// or bopen.mjs openB (Model B); each frame is a break at frame_top with 'keys' written
+// there (LCG from the seed: nine key sets, no FIRE, held 4-43 frames); hurt/health are
+// not pinned.
 //   node test/fwork.mjs master|modelb <disc> <labels> [frames=300] [seed=1] [level=0] [dump.json]
+// Output: "<machine> L<n>: logic <med> render <med> work <med> (median); flip wait
+// <med>; scroll <med>; ISR <n> a vsync"; dump.json = {rows: [[logic, render, wait,
+// scroll] a frame], isrPerVsync}.
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { writeFileSync } from "node:fs";
@@ -21,8 +29,8 @@ if (machine === "master") {
   var wr = (a, v) => B.bank(7, () => cpu.writemem(a, v));
 }
 let t0 = -1, t1 = -1, isr = 0, isrAt = -1, isrAll = 0, wait = 0, lastPc = -1, lastC = 0;
-const WF0 = A.wait_flip, WF1 = A.wait_flip + 4;     // the flip wait's spin: idle, not work
-let vret = -1, vAt = 0, vIsr0 = 0, scroll = 0;        // the scroll fill: validate's call, ISR excluded
+const WF0 = A.wait_flip, WF1 = A.wait_flip + 4;     // the flip wait's spin (lda / bne, 4 bytes): idle, not work
+let vret = -1, vAt = 0, vIsr0 = 0, scroll = 0;        // the scroll fill: validate's call to its return, ISR excluded
 const rows = [];
 const meter = cpu.debugInstruction.add((pc, op) => {
   const now = cyc();

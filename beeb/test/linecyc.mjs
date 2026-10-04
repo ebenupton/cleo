@@ -1,11 +1,22 @@
 // What every source line costs: cycles and executions a rendered frame, in every bank
-// (the build's game.dbg, as cycprof.mjs maps it), over the usual key script with the
-// player unhurt.  An instruction's cycles are the time to the next one (an interrupt's
-// entry lands on the instruction it broke into).  The spin-waits are idle, not work,
-// and are left out: wait_flip and game.s fl_wait (the frame loop's vsync wait).
-// For the grinds (tools/cycgrind/ and tools/bytegrind/: regions.py, apply.py): JSON, by
-// "file:line", with the frame total.
+// (the build's game.dbg, as cycprof.mjs maps it: the narrowest span, a macro's body
+// line as "file:line > macrofile:line"), over the usual key script with the player
+// unhurt.  An instruction's cycles are the time to the next one (an interrupt's entry
+// is charged to the instruction it broke into; the handler's own instructions to their
+// lines).  The spin-waits are idle, not work, and are left out: the
+// five bytes from wait_flip (render_frame's flip spin -- and the lda bar_dirty after
+// it) and the twelve from game.s fl_wait (the vsync wait and the peg test that loops
+// back to it), in main RAM or bank 7.  Opened by harness.mjs open (Master) or
+// bopen.mjs openB (Model B) for each level in turn; each frame is a break at frame_top
+// with 'keys' from the fixed pattern PAT (s idle, r RIGHT, l LEFT, j UP) and hurt = 1,
+// health = 3 written there.  A sideways PC's bank is the code bank (4..7) of the
+// socket paged, from PBANK.
+// For the grinds (tools/cycgrind/ and tools/bytegrind/: regions.py, apply.py): JSON
+// by "file:line" (paths relative to beeb/), with the frame total.
 //   node test/linecyc.mjs master|modelb <disc> <labels> <out.json> [levels=0,2,4,8,9] [frames=150]
+// Output: out.json {machine, levels, frames, total, lines: {"file:line": {ex, cy,
+// banks}}} (ex, cy a frame, averaged over levels x frames) and one line: the cycles a
+// frame and the line count.
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { dbgPath } from "./harness.mjs";
@@ -57,7 +68,7 @@ for (const level of levels) {
   const cyc = machine === "master" ? () => M.cyc() : M.cyc;
   const bankOf = (sock) => { for (let b = 0; b < 4; b++) if (cpu.readmem(A.PBANK + b) === sock) return b + 4; return -1; };
   const sockBank = new Map();
-  const IDLE = new Set();                               // the spin-waits' addresses
+  const IDLE = new Set();                               // the spin-waits' addresses (not counted)
   for (const [lo, n] of [[A.wait_flip, 5], [A.fl_wait, 12]]) if (lo !== undefined) for (let a = lo; a < lo + n; a++) IDLE.add(a);
   let last = null, lastC = 0;
   const hook = cpu.debugInstruction.add((pc) => {

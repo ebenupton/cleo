@@ -1,17 +1,29 @@
-// The logic's cycles by routine: frame_top to render_frame (the two logic steps a
-// rendered frame), interrupts excluded, over N frames of fwork.mjs's seeded key
-// script.  Every jsr is followed (a routine's cycles are its own plus its callees'),
-// and the tree is printed to a depth, as cycles a rendered frame.
-// With FLAT=n, then the n source lines costing most (cycles and executions a frame).
+// The logic's cycles by routine: frame_top to the `jsr render_frame` (the two logic
+// steps a rendered frame), interrupts excluded (irq_handler to its RTI, the RTI's 6
+// counted), over N frames of fwork.mjs's seeded key script (nine key sets, no FIRE,
+// held 4-43 frames; hurt/health not pinned).  Every jsr is followed (a routine's
+// cycles are its own plus its callees'; an rts is recognised as the return address
+// coming up), and the tree is printed to a depth, as cycles a rendered frame,
+// children under 20 cycles a frame left out.  A routine is named by the nearest label
+// at or below its address in labels.txt (lower-case names preferred, po_/ob_ names
+// most).  Opened by harness.mjs open (Master) or bopen.mjs openB (Model B) for each
+// level in turn; each frame is a break at frame_top with 'keys' written there.
+// With FLAT=n, also the n blocks (the nearest label, cheap ones under their scope) and
+// the n source lines costing most (cycles and executions a frame; game.dbg's spans,
+// bank 7's segments by name).
 // With FULL=1, the whole frame: frame_top to render_done, the render too (the flip
 // wait's spin is wait_flip's own line: idle, not work).
 //   node test/logprof.mjs master|modelb <disc> <labels> [frames=300] [seed=1] [levels=0] [depth=3]
+// (levels: a comma list)
+// Output: the tree, "<cycles>  <name>  (x<calls>/frame)  own <cycles>" indented by
+// depth; before it the FLAT tables when asked.
 import { open, dbgPath } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 import { readFileSync } from "node:fs";
 const [machine, disc, labels, fr = "300", sd = "1", lvs = "0", dp = "3"] = process.argv.slice(2);
 const frames = +fr, DEPTH = +dp;
-// the label names, for jsr targets: the nearest label at or below
+// the label names, for jsr targets: labels.txt's "al <hex> .<name>" lines; at one
+// address a lower-case name beats an upper-case one, po_/ob_ names beat the rest
 const names = new Map();
 for (const l of readFileSync(labels, "utf8").split("\n")) {
   const p = l.split(/\s+/); if (p[0] === "al") { const a = parseInt(p[1], 16), n = p[2].replace(/^\./, ""); if (/^[a-z]/.test(n) && (!names.has(a) || /^[A-Z]/.test(names.get(a)))) { if (!names.has(a) || n.startsWith("po_") || n.startsWith("ob_")) names.set(a, n); } else if (!names.has(a)) names.set(a, n); }
@@ -48,7 +60,7 @@ for (const LEVEL of lvs.split(",").map(Number)) {
     }
     if (!FULL && op === 0x20 && stack.length === 0 && (cpu.readmem(pc + 1) | cpu.readmem(pc + 2) << 8) === A.render_frame) { on = false; return false; }
     if (FULL && pc === A.render_done && inB7()) { on = false; return false; }
-    // unwind returns: rts lands at a frame's return address
+    // unwind returns: an rts lands at a stacked return address (a jsr's pc + 3)
     while (stack.length && stack[stack.length - 1][1] === pc) stack.pop();
     if (op === 0x20) {
       const t = cpu.readmem(pc + 1) | cpu.readmem(pc + 2) << 8;

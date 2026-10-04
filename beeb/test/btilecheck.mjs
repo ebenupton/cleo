@@ -1,8 +1,22 @@
-// The Model B's two rings against the level's tiles (tilecheck.mjs's check): at
-// every frame_top, each buffer's window, every char cell no sprite record comes near.
-// MIR=lo,hi counts the cells whose id is in [lo, hi): the mirrored ids, say.
+// The Model B's two rings against the level's tiles (the Master's is tilecheck.mjs):
+// at every frame_top, for each valid buffer (BUF_CXH bit 7 clear), every char cell of
+// its VISROWS x 80 window that no sprite record of either buffer comes within two cells
+// of must hold the bytes of the tile its map id names: the id from MAP5 in bank 5 at
+// ((cy >> 1) + r) * (1 << maplw) + (cx >> 2) + t, the bytes from <idsdir>/L<level>.bin
+// (python3 tools/tileids.py: 256 ids x 64 bytes, a tile being 4 chars x 2 rows, at
+// id * 64 + (y & 1) * 32 + (x & 3) * 8), the cell in the ring at RING[buffer] +
+// ((y % RINGROWS) * ROWBYTES + x * 8) % RINGBYTES.  The sprite records are SPRREC's
+// 10-byte records (column at +5/+6, row +7, width +8, height +9 bit 7 clipped), MAXREC
+// = (RECCNT - SPRREC) / 20.  Independent of the packer's layout and the gather: it
+// reads only the map and the screen.
+// Opened by bopen.mjs openB; each frame is a break at frame_top, with 'keys' from the
+// fixed pattern PAT (s idle, r RIGHT, l LEFT, j UP+RIGHT: a running jump) and hurt = 1,
+// health = 3 written there.
 //   node test/btilecheck.mjs <disc> <labels> <level> <frames> [idsdir=build/tileids]
-// (the ids from python3 tools/tileids.py)
+// MIR=lo,hi also counts the cells whose id is in [lo, hi) (e.g. the mirror kind's ids).
+// Output: the first five bad cells, then "B L<n>: tiles ok | BAD <cells> cells on
+// <frames> frames (<cells> cells checked, <n> mirrored)".  The exit status is 0 either
+// way: read the line.
 import { openB } from "./bopen.mjs";
 import fs from "fs";
 const [disc, labels, lvS, nS, dir = "build/tileids"] = process.argv.slice(2);
@@ -15,7 +29,7 @@ const PAT = "ssrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrjrjrjrjrjsslllllllllllllllll
 const KEYS = { s: 0, r: 2, l: 1, j: 6 };
 const MAXREC = (A.RECCNT - A.SPRREC) / 20;
 // the display's layout, from the build's defs_ld.inc (harness loadLabels); the literals
-// are for a build from before it carried them
+// are for a build from before it carried them (23 rows of 640 bytes, 21 visible)
 const RINGROWS = A.RINGROWS ?? 23, ROWBYTES = A.ROWBYTES ?? 640, VISROWS = A.VISROWS ?? 21, MAP5 = A.MAP5 ?? 0x9C00;
 const RING = [A.RING_A ?? 0x0A80, A.RING_B ?? 0x4680], RB = A.RINGBYTES ?? RINGROWS * ROWBYTES;
 let bad = 0, cells = 0, badf = 0, mc = 0; const MR = (process.env.MIR ?? '0,0').split(',').map(Number);

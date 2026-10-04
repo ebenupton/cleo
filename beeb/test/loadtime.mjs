@@ -1,8 +1,12 @@
-// How long a level load takes: CPU cycles (2 MHz) from level_loop to level_init, the
-// load itself with the palette black -- the level's FIRST load (the resident sets come
-// in with it) and a SECOND (the level ended and loaded again: the harness pins the level
-// number, so it is the same level, as it would stand after any other).
+// How long a level load takes: CPU cycles (2 MHz) from level_loop to level_init, both
+// in bank 7 -- the load itself, with the palette black -- for the level's FIRST load
+// (the resident sets come in with it) and a SECOND (after the first frame_top,
+// 'exiting' is set so the level ends and loads again; the open's `ldx #level` patch
+// pins the level number, so it is the same level, as it would stand after any other).
+// Opened by harness.mjs open (Master) or bopen.mjs openB (Model B) with an onSession
+// hook, so the first load is timed too.
 //   node test/loadtime.mjs master|modelb <disc> <labels> <level>
+// Output: "<machine> L<n>: first load <s> s, second <s> s".
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";
 const [kind, disc, labels, lvS] = process.argv.slice(2);

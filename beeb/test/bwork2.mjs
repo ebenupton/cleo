@@ -1,14 +1,23 @@
-// Frame cost on the Model B: cycles from one frame_top (bank 7) to render_done, less
-// the interrupts, over N frames of a key script; prints the distribution.  BDISC/BLABELS: another build's
-// disc and labels; BDUMP=file writes each frame's work, for comparing two builds frame
-// by frame (the same seed gives the same frames: medians of the differences, not
-// differences of medians).
+// Frame cost on the Model B: the cycles from frame_top to render_done (both in bank 7:
+// the two logic steps and the render, the flip request just made), less the
+// interrupts (irq_handler to its RTI, the RTI's own cycles not counted), over N frames
+// of a seeded key script; prints the distribution.  Opened by bopen.mjs openB; each
+// frame is a break at frame_top with 'keys' written there (LCG from the seed: one of
+// nine key sets -- idle, LEFT, RIGHT, RIGHT+UP, LEFT+UP, UP, DOWN, RIGHT+DOWN,
+// LEFT+DOWN; no FIRE -- held 4-43 frames).  hurt/health are not pinned.  The flip
+// wait at the top of render_frame is inside the window (bwork2 does not take it out;
+// fwork.mjs does).  The same seed gives the same frames on two builds whose logic
+// agrees, so compare frame by frame (medians of the differences, not differences of
+// medians): BDUMP=file writes each frame's work as a JSON array (perfcmp.sh does this).
 //   node test/bwork2.mjs [frames=300] [seed=1] [level=0]
+// BDISC/BLABELS: another build's disc and labels (both or neither).
+// Output: "<n> frames: work median p90 max min cycles (ISR excluded); ISR/frame
+// median", then the same as vsyncs of 40000 cycles.
 import { openB } from "./bopen.mjs";
 import { writeFileSync } from "node:fs";
 const frames = parseInt(process.argv[2] ?? "300"), seed0 = parseInt(process.argv[3] ?? "1"), LEVEL = parseInt(process.argv[4] ?? "0");
 const { s, cpu, A, bank, cyc, runTo, PB } = await openB({ level: LEVEL, ...(process.env.BDISC ? { disc: process.env.BDISC, labels: process.env.BLABELS } : {}) }); const B7 = PB(7);
-// work = frame_top .. the flip request (render_frame's end): everything but the peg wait
+// work = frame_top .. render_done (the flip just requested): everything but the peg wait
 let t0 = -1, work = [], isr = 0, isrs = [], isrAt = -1;
 const meter = cpu.debugInstruction.add((pc, op) => {
   if (pc === A.frame_top && cpu.readmem((A.romsel_cpy ?? 0xf4)) === B7) { t0 = cyc(); isr = 0; }

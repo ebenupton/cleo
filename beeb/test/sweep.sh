@@ -1,15 +1,26 @@
 #!/bin/sh
-# The whole check, the current build against a reference (test/snapshot.sh), both
-# machines, in parallel; prints only what fails, and exits 1 if anything does.
+# The whole behavioural check, the current build (build/) against a reference (REF: a
+# directory from test/snapshot.sh -- its cleo.ssd with master/ and modelb/ labels.txt,
+# game.dbg and defs_ld.inc of THAT disc; every check opens each build with its own
+# labels), both machines, in parallel; prints only what fails, and exits 1 if anything
+# does.  The current build is snapshotted first, so a rebuild during the run is safe.
 #   sh test/sweep.sh REF [jobs=7]
-#   each level, the Master: the visible window and the scene, 400 frames, and 200 after
-#     the level ends and loads again (wincmp.mjs); the Model B: both buffers' windows
-#     and the bar, 300 frames (bwincmp.mjs), and on Watford and Solidisk boards; and
-#     each level on both machines with seeded random keys, throws and all (SEED=7, 500)
-#   the menus, frame-synchronised (menusync.mjs), on both machines
-#   the frame period through a load from the menu (loadsync2.mjs): Master, 8271, 1770
-#   on Watford and Solidisk boards, a whole session's stores into sideways RAM, each
-#     to the bank paged (boardcheck.mjs)
+# The 89 checks:
+#   each of the 16 levels, the Master: the displayable window and the scene, 400 frames
+#     of the fixed key pattern, and 200 after the level ends and loads again (RELOAD=1)
+#     (wincmp.mjs); the Model B: both buffers' windows and the bar, 300 frames
+#     (bwincmp.mjs); and each level on both machines with seeded random keys, throws
+#     and fire included (SEED=7, 500 frames) -- 80 checks
+#   the Model B on Watford and Solidisk boards (BBOARD), level 8, 300 frames -- 2
+#   the menus, frame-synchronised (menusync.mjs), on both machines -- 2
+#   the frame period through a load from the menu (loadsync2.mjs), the new build alone:
+#     Master, 8271, 1770 (BMODEL=B1770) -- 3
+#   on Watford and Solidisk boards, a whole session's stores into sideways RAM, each to
+#     the bank paged (boardcheck.mjs), the new build alone -- 2
+# A check passes on its last result line: "window identical; scene identical",
+# "windows identical", "menus: identical", " 0 irregular" or "every store to the bank
+# paged"; anything else (an error, no result) is printed with the check's name.  About
+# 4-5 minutes with 7 jobs (measured 4 Oct 2026).
 set -e
 cd "$(dirname "$0")/.."
 REF=$1; JOBS=${2:-7}
