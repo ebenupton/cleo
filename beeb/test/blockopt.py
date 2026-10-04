@@ -15,10 +15,9 @@ last.  The pads come after (test/padopt.py).
     python3 test/blockopt.py
 Output: the current cost, the cost outside the blocks, then up to seven orders: score,
 the Model B's and the Master's cycles a frame, the breaks from the current order, the
-block names.  Known limit: a CH label absent from labels.txt sorts to the end and trips
-the assert that the last three blocks are mirror_copy, mir_dirty and lv_reset; the
-current build has no render_core label (it is inlined into render_frame), so the
-script stops there."""
+block names.  A CH label absent from labels.txt sorts to the end and trips the assert
+that the last three blocks are mirror_copy, mir_dirty and lv_reset: keep CH in step
+with frame.s's block labels."""
 import json, re, itertools
 def labels(m):
     d = {}
@@ -30,7 +29,7 @@ for l in open('beebgame/src/pads.inc'):
     mm = re.match(r'(PAD[BM]_\w+) = (\d+)', l)
     if mm: PADS[mm.group(1)] = int(mm.group(2))
 CH = [('match_sprites', 'MS'), ('add_sprite', None), ('draw_sprites', 'SP'), ('erase_old', 'EO'), ('draw_sprite', 'DS'),
-      ('copy_partial', 'CP'), ('render_frame', None), ('render_core', None), ('mark_dirty', None),
+      ('copy_partial', 'CP'), ('render_frame', None), ('mark_dirty', None),
       ('draw_dirty', None), ('mirror_copy', None), ('mir_dirty', None), ('lv_reset', None)]
 _LB = labels('modelb')
 CH.sort(key=lambda c: _LB.get(c[0], 1 << 20))     # as they lie now (a missing label sorts last)

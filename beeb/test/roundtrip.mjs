@@ -17,12 +17,10 @@
 // <stop>_B.ppm (P6) at the end of each stop.
 // Output: the first twelve differing stops, then "<machine> round trip: identical at
 // <n> stops | DIFFERS at <n>/<stops> stops"; exit 1 on a difference.
-// Known limit: to() steps off a break with runFor(1), and jsbeeb then runs the rest of
-// the interrupted 20000-cycle chunk, so the state writes that follow a stop land
-// wherever the CPU has got to -- lives and level are zero page, but exiting and stars
-// are bank 7's, and when another bank is paged at that moment the forced game over is
-// lost and the next menu stop times out ("menu_keys not reached"; seen on both
-// machines, 4 Oct 2026).
+// to() steps off a break with runFor(1), and jsbeeb then runs the rest of the
+// interrupted 20000-cycle chunk, so whatever bank is paged after a stop is the CPU's
+// business: the bank-7 variables (exiting, stars) are written through w7, which pages
+// bank 7's socket for the write and puts ROMSEL back.
 import { findJsbeeb, loadLabels, loadBanks, imgOk, dbgPath } from "./harness.mjs";
 import { boardEmu } from "./bopen.mjs";
 import { pathToFileURL } from "node:url"; import path from "node:path"; import { writeFileSync } from "node:fs";
@@ -41,7 +39,10 @@ async function boot(disc, labels) {
     try { for (let i = 0; i < budget; i++) { await s.runFor(20000); if (at(n)) { await s.runFor(1); return; } } } finally { h.remove(); }
     throw new Error(`${n} not reached`);
   }
-  return { s, cpu, A, to };
+  // a bank-7 variable written with bank 7 paged for the write, then ROMSEL back to the
+  // game's copy (romsel_cpy: the Model B's ROMSEL is write-only, so it cannot be read)
+  const w7 = (a, v) => { const cp = (A.romsel_cpy ?? 0xf4); cpu.writemem(0xfe30, P[3]); cpu.writemem(a, v); cpu.writemem(0xfe30, cpu.readmem(cp)); };
+  return { s, cpu, A, to, w7 };
 }
 const X = await boot(dA, lA), Y = await boot(dB, lB);
 const both = async (f) => { for (const M of [X, Y]) await f(M); };
@@ -74,11 +75,11 @@ async function play(what, n) {
 }
 await menu("title", 6);
 await both((M) => press(M, 13)); await play("game1", 30);
-await both((M) => { M.cpu.writemem(M.A.lives, 0); M.cpu.writemem(M.A.exiting, 1); });
+await both((M) => { M.cpu.writemem(M.A.lives, 0); M.w7(M.A.exiting, 1); });
 await menu("lose", 40);
 await both((M) => press(M, 13)); await menu("title2", 6);
 await both((M) => press(M, 13)); await play("game2", 30);
-await both((M) => { M.cpu.writemem(M.A.level, 15); M.cpu.writemem(M.A.stars, 0); M.cpu.writemem(M.A.exiting, 1); });
+await both((M) => { M.cpu.writemem(M.A.level, 15); M.w7(M.A.stars, 0); M.w7(M.A.exiting, 1); });
 await menu("win", 40);
 await both((M) => press(M, 13)); await menu("title3", 6);
 console.log(`${kind} round trip: ${bad ? `DIFFERS at ${bad}/${stops} stops` : `identical at ${stops} stops`}`);

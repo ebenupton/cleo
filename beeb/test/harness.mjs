@@ -89,13 +89,21 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
 // `ldy hurt; beq; tax; lda frame; and #1; bne` (logic.s @spr), which this pattern
 // does not match: with hurt pinned she is drawn every other frame.
 export function patchBlink(H) {
+  // Two spellings of player_update's blink test (logic.s @spr), old builds and new:
+  //   lda hurt / beq + / lda frame / and #3 / bne         -> lda #0 (the beq is taken)
+  //   ldy hurt / beq @drawp / tax / lda frame / and #1 / bne -> ldy #0 (likewise)
+  // with hurt and frame in zero page (as both are); each found site is patched.
   const ROMSEL = 0xfe30, A = H.A, keep = H.rd((A.romsel_cpy ?? 0xf4));
   H.wr(ROMSEL, 7);
-  const hits = [];
-  for (let a = 0x8000; a < 0xc000 - 8; a++)
-    if (H.rd(a) === 0xa5 && H.rd(a + 1) === A.hurt && H.rd(a + 2) === 0xf0 && H.rd(a + 4) === 0xa5 &&
-        H.rd(a + 5) === (A.frame & 255) && H.rd(a + 6) === 0x29 && H.rd(a + 7) === 0x03 && H.rd(a + 8) === 0xd0) hits.push(a);
-  for (const a of hits) { H.wr(a, 0xa9); H.wr(a + 1, 0x00); }
+  const hits = [], fr = A.frame & 255;
+  for (let a = 0x8000; a < 0xc000 - 9; a++) {
+    const b = (i) => H.rd(a + i);
+    if (b(0) === 0xa5 && b(1) === A.hurt && b(2) === 0xf0 && b(4) === 0xa5 && b(5) === fr &&
+        b(6) === 0x29 && b(7) === 0x03 && b(8) === 0xd0) hits.push([a, 0xa9]);
+    else if (b(0) === 0xa4 && b(1) === A.hurt && b(2) === 0xf0 && b(4) === 0xaa && b(5) === 0xa5 &&
+        b(6) === fr && b(7) === 0x29 && b(8) === 0x01 && b(9) === 0xd0) hits.push([a, 0xa0]);
+  }
+  for (const [a, op] of hits) { H.wr(a, op); H.wr(a + 1, 0x00); }
   H.wr(ROMSEL, keep);
   return hits.length;
 }
