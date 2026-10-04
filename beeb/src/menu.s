@@ -1,18 +1,34 @@
 ; ============================================================================
-; CLEO - the menus: title, help, level select, win/lose, and the top of the game
-; loop.  The menus' image of bank 7 (MNUCODE/MNUBSS; the font, the tune and the title
-; pieces in banks.s's MNUDATA), which the game's image replaces for play and which
-; replaces it again after (disc.s go_game, go_menu).  What they call in bank 7 is the
-; kernel's, which neither image covers: a plain call.
+; Cleo's menus: the title, the help, the level chooser, the win/lose screen, and
+; the top of the game loop (the engine's hook_title and hook_over).  The menus'
+; image of bank 7 (MNUCODE, MNUBSS; the font, the tune and the title pieces are
+; gamedata.s's MNUDATA), which go_game replaces with the game's image for play
+; and go_menu brings back after (disc.s).  Both machines, the same code: what
+; differs is one store in menu_show.  What the menus call in bank 7 is the
+; kernel's, above either image: a plain call (ring_addr7, calc_ring,
+; menu_sections, the palettes, music_stop).
+;   game_main    hook_title: start-up, then the title loop (main.s)
+;   menu_over    hook_over: a game has ended, A = 0 lost or 1 won (main.s)
+;   menu_keys    the once-a-frame key read: the test harness's break point in
+;                the menus (test/menusync.mjs, roundtrip.mjs, loadsync2.mjs)
+; The menus draw into buffer 0 with the window at the origin, a page at a time
+; with the palette black (menu_begin), then flip it in (menu_show); the win/lose
+; screen then animates in the displayed page.  Every screen is laid out for the
+; Model B's window (MENU_LAID_PX of game pixels) and centred in a taller one
+; (TITLE_DY, HELP_DY, WL_DY).  test/harness.mjs patches title_loop's first six
+; bytes (jsr title_menu / beq new_game): keep them.
 ; ============================================================================
         .segment "MNUCODE"
 
 ; ---------------------------------------------------------------- the menus' layout
-; Positions in game pixels, an x even and a y a multiple of 4 where a piece or a glyph
-; row must sit on a char; the screens are laid out for the Model B's 84 px of window
-; and centred in a taller one (TITLE_DY, HELP_DY, WL_DY below).
-MENU_LOGO_X  = 40                  ; the title: the logo, then the items
-MENU_LOGO_Y  = 4
+; Positions in game pixels: an x is even and a piece's y a multiple of
+; MENU_ROWPX, so that pieces sit on chars; text goes on any pixel row.
+MENU_ROWPX   = CHARLINES/2         ; a char row in game pixels (4)
+MENU_LAID_PX = 84                  ; the window height the screens are laid out
+                                    ; for: the Model B's
+        .assert (.not BHW) || (VISLINES/2 = MENU_LAID_PX), error, "the menus are laid out for the Model B's window"
+MENU_LOGO_X  = 40                  ; the title: the logo (its 80 px centred), then the
+MENU_LOGO_Y  = 4                   ;  items
 MENU_ITEMS_Y = 48
 MENU_STEP    = 14                  ;  a line apart
 MENU_NITEMS  = 2
@@ -21,36 +37,81 @@ HELP_Y0      = 16
 HELP_PITCH   = 10
 LEVEL_STEP   = 12                  ; the level chooser's lines, or LEVEL_STEP_TIGHT when
 LEVEL_STEP_TIGHT = 10              ;  all eight would not fit the window
-WL_WORDS_Y   = 4                   ; win/lose: YOU WIN's top (YOU LOSE's a row lower)
+WL_WORDS_Y   = 4                   ; win/lose: YOU WIN's top (YOU LOSE a char row lower)
 WL_YOU_X     = 34                  ;  YOU's x losing, 2 px on winning
 WL_LABEL_X   = 12                  ;  SCORE and HISCORE, their values at WL_VALUE_X
 WL_VALUE_X   = 84
+WL_SCORE_Y   = 64                  ;  the two rows, under big Cleo
+WL_HISCORE_Y = 76
 BIGCLEO_X    = 66                  ;  big Cleo, between the words and the score
 BIGCLEO_Y    = 24
 BIGCLEO_WIN0 = 4                   ;  her frames: TP_CLEO0 + 0..3 losing, + 4..7 winning
-CLEO_SEQ_MASK = 30                 ;  the frame sequences, 2 bits a frame, by (msel & 30)
+CLEO_SEQ_MASK = 30                 ;  the frame sequences, 2 bits a frame, by msel & 30
 WIN_SEQ      = 441                 ;  winning: 441 >> n, losing: $E79E79 >> n
 LOSE_SEQ     = $E79E79
-TITLE_INK_TOP = 4                  ; each screen's ink, top..bottom-1, as laid out for 84 px
-TITLE_INK_BOT = 70
-HELP_INK_TOP = 16
-HELP_INK_BOT = 74
-WL_INK_TOP   = 4
-WL_INK_BOT   = 84
 NUM_DIGITS   = 5                   ; draw_number: the score's digits shown (then "00")
 BLIT_CHUNK   = 128                 ; blit copies a piece's row this much at a time
-; the font (convert.py): A-Z, then > < / . and the digits, GLYPHW x GLYPHH px each
+; the font (convert.py font: tit.png's glyphs in this order): A-Z, then > < / .
+; and the digits, GLYPHW x GLYPHH px each (glyph_index maps the characters)
 GLYPH_GT    = 26
 GLYPH_LT    = 27
 GLYPH_SLASH = 28
 GLYPH_DOT   = 29
 GLYPH_0     = 30
+; A screen's ink spans top..bot-1 as laid out; centred in a window of VISLINES/2
+; px its offset is (VISLINES/2 - bot - top) / 2, rounded to a char row.
+TITLE_TOP     = MENU_LOGO_Y
+TITLE_BOT     = MENU_ITEMS_Y + (MENU_NITEMS-1)*MENU_STEP + GLYPHH
+HELP_TOP      = HELP_Y0
+HELP_BOT      = HELP_Y0 + (HELP_N-1)*HELP_PITCH + GLYPHH
+WL_TOP        = WL_WORDS_Y
+WL_BOT        = WL_HISCORE_Y + GLYPHH
+  .if VISLINES/2 > MENU_LAID_PX
+TITLE_DY = ((VISLINES/2 - TITLE_BOT - TITLE_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1)
+HELP_DY  = ((VISLINES/2 - HELP_BOT - HELP_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1)
+WL_DY    = ((VISLINES/2 - WL_BOT - WL_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1)
+  .else
+TITLE_DY = 0
+HELP_DY  = 0
+WL_DY    = 0
+  .endif
+
+; ---------------------------------------------------------------- variables
+        .segment "MNUBSS"          ; the menus' image: gone while the game runs
+tfine:    .res 1                   ; draw_glyph_rows: ty & 3, and the row's place
+tline:    .res 1
+NUMBUF:   .res NUM_DIGITS+3        ; draw_number's digits, "00" and the end
+menu_ptr: .res 2                   ; menu_list's table (read through its own operands)
+tchar:    .res 1                   ; draw_text's place in the string
+mcount:   .res 1                   ; menu_list: the items, the first's y, the row step,
+mtop:     .res 1                   ;  the selection (win_lose borrows them: the flag,
+mstep:    .res 1                   ;  the frames, the counter)
+msel:     .res 1
+mclear:   .res 1                   ; written by title_menu and level_select; never read
+mlast:    .res 1                   ; the item the cursor was last drawn at
+mbuf:     .res 1                   ; the piece in TBUF (win_lose: big Cleo, one ahead)
+prow:     .res 1                   ; blit: the char row, and the rows left
+pleft:    .res 1
+prows:    .res 1                   ; unpack's piece: its char rows, a row's bytes
+pspan:    .res 2
+TBUF:     .res TBUF_LEN            ; the piece unpacked (assets.py: the largest)
+tx:       .res 1                   ; draw_text's pen: x (even), y
+ty:       .res 1
+        .segment "MNUCODE"
 
 ; ---------------------------------------------------------------- the game loop's top
-; start-up comes here (disc.s go_title), and the game's image comes back to menu_over when a game ends (A = 0 lost, 1 won), with the stack
-; reset: every way out of here is go_game.
+; ----------------------------------------------------------------------------
+; game_main: hook_title -- start-up, then the title loop
+;   In:    nothing (jumped to by the loader with the menus' image in and the
+;          stack reset: ldprog.s ld_image)
+;   Out:   does not return: every way out is new_game's go_game
+;   Uses:  everything
+; The game's state that lives across a session is set once here: rnd's seed, the
+; hi-score, the chooser's reach.  menu_over comes back into title_loop when a
+; game ends (go_menu's load resets the stack again).
+; ----------------------------------------------------------------------------
 game_main:
-        lda #<RND_SEED             ; rnd's seed
+        lda #<RND_SEED
         sta seed
         lda #>RND_SEED
         sta seed+1
@@ -59,11 +120,15 @@ game_main:
         lda #NLEVELS/2-1           ; (a test build: every main level on the chooser)
         sta max_level
   .endif
+; ---- title_loop: the title, then the help or a game (the harness patches the
+;      jsr to lda #0: start a game)
 title_loop:
         jsr title_menu
-        beq new_game               ; A = 0 start, 1 help: Z from menu_list's lda msel
+        beq new_game               ; A = 0 start, 1 help (menu_list's Z)
         jsr help_screen
         bne title_loop             ; (always: help_screen returns Z = 0)
+; ---- new_game: a game's state into zero page, where it survives the image
+;      swap, and the game's image in
 new_game:
         stz score
         sta0 score+1, score+2      ; A = 0 (the Model B's stz)
@@ -71,65 +136,88 @@ new_game:
         .assert LIVES = HEALTH_MAX, error, "new_game: one load for the lives and the health"
         sta lives
         sta health
-        lda max_level              ; 0: level 0, A = 0 for the store below
+        lda max_level              ; 0: level 0 (A = 0 is the store), else the chooser
         beq :+
         jsr level_select
-        asl
+        asl                        ; the main level's index: even
 :       sta level
-        jsr blank_palette          ; the load is dark (go_game takes nothing in A)
-        jmp go_game                ; the game's image, and its level loop (disc.s)
+        jsr blank_palette          ; dark for the load
+        jmp go_game                ; the game's image, then level_loop (disc.s)
+
+; ----------------------------------------------------------------------------
+; menu_over: hook_over -- a game has ended
+;   In:    A = 0 lost, 1 won (go_menu's; jumped to with the menus' image in)
+;   Out:   does not return: back into title_loop
+;   Uses:  everything
+; ----------------------------------------------------------------------------
 menu_over:
         jsr win_lose
         bne title_loop             ; (always: win_lose returns Z = 0)
 
 ; ---------------------------------------------------------------- text
-; draw_text: ptr -> 0-terminated string, A = x (px, even), X = y (px, multiple of 4)
+; ----------------------------------------------------------------------------
+; draw_text: a string in the font at (x, y), into buffer 0
+;   In:    ptr = the string, 0-terminated (its characters: A-Z, space, > < / .,
+;          the digits, and '_' for an erased glyph); A = x (game px, even); X =
+;          y (game px, any row)
+;   Out:   tx = x past the last glyph; ty = y; A = 0 and Z = 1 (the terminator);
+;          Y = the string's length
+;   Uses:  A X Y, w16, w16b, sp, tp, tmp, tmp2, tmp4, tchar, tfine, tline
+;   Pre:   menu_begin has run (buffer 0 selected, the window at the origin); the
+;          string in bank 7 or main RAM
+; A glyph is GLYPHW x GLYPHH game pixels, GLYPHH bytes of a bit a pixel
+; (font_art), or font_blank's zeros for '_'; a space only advances.  No string
+; is 256 characters.
+; ----------------------------------------------------------------------------
 draw_text:
         sta tx
         stx ty
         ldy #0
 @ch:    lda (ptr),y
         beq @done
-        sty tchar                  ; not phy: on a 6502 that is tya/pha, and the
-        cmp #' '                    ; character is in A
+        sty tchar                  ; (not phy: the character is in A and the 6502 has
+        cmp #' '                   ;  no phy)
         beq @space
         cmp #'_'
-        bne :+
-        lda #<font_blank           ; '_' = erase: draw the all-zero glyph (A is dead:
-        sta w16b                   ;  draw_glyph_rows starts with lda tx)
+        bne @glyph
+        lda #<font_blank           ; '_' = erase: the all-zero glyph
+        sta w16b
         lda #>font_blank
         sta w16b+1
-        bne @rows                  ; (always: the font is in bank 7)
-:       jsr glyph_index            ; glyph A's rows: the font is in the overlay beside
-        stzx w16b+1                ; this code (font_art, banks.s), read in place
-                                    ;  through w16b (A live; X is dead: draw_glyph_rows
-                                    ;  sets it before reading it)
+        bne @rows                  ; (always: font_blank is in bank 7)
+@glyph: jsr glyph_index            ; w16b = font_art + 8*glyph, read in place (the font
+        stzx w16b+1                ;  is in this image; A live, X dead: draw_glyph_rows
+        asl                        ;  sets X before reading it)
         asl
         asl
-        asl
-        rol w16b+1                 ; C = 0: the byte it shifts out was 0
-        adc #<font_art
+        rol w16b+1                 ; 8*glyph is 9 bits (40 glyphs); C = 0 after: the bit
+        adc #<font_art             ;  rolled out of w16b+1 was 0
         sta w16b
         lda w16b+1
         adc #>font_art
-        sta w16b+1                 ; glyph rows
+        sta w16b+1
 @rows:  jsr draw_glyph_rows
 @space: lda tx
-        adc #GLYPHW-1              ; C = 1 on every way in: cmp #' ' equal, or the cpx
-                                    ; draw_glyph_rows returns from
-        sta tx
+        adc #GLYPHW-1              ; +GLYPHW: C = 1 on every way in (cmp #' ' equal, or
+        sta tx                     ;  draw_glyph_rows' final cpx)
         ldy tchar
         iny
-        bne @ch                    ; Y > 0: no string is 256 characters
+        bne @ch                    ; (always: Y < 255)
 @done:  rts
 
-; A = ascii -> A = glyph index (0..39: GLYPH_*)
+; ----------------------------------------------------------------------------
+; glyph_index: a character's glyph
+;   In:    A = the character: 'A'..'Z', '>', '<', '/', '.' or '0'..'9'
+;   Out:   A = its glyph index, 0..39 (GLYPH_*)
+;   Uses:  A (C clobbered)
+; Another character comes out as a wrong glyph, not an error.
+; ----------------------------------------------------------------------------
 glyph_index:
         cmp #'A'
         bcc @notalpha
         cmp #'Z'+1
         bcs @notalpha
-        sbc #('A'-1)                ; bcs not taken, so C = 0: subtracts 'A'-1+1 = 'A'
+        sbc #('A'-1)               ; C = 0 (the bcs fell through): A - 'A'
         rts
 @notalpha:
         cmp #'>'
@@ -140,71 +228,82 @@ glyph_index:
         bne :+
         lda #GLYPH_LT
         rts
-:       cmp #'0'                    ; past '>' and '<' only '/', '.' and digits come here
+:       cmp #'0'                   ; below '0' only '/' and '.' come here
         bcs :+
-        eor #'/' ^ GLYPH_SLASH      ; '/' -> GLYPH_SLASH, '.' -> GLYPH_DOT: one eor does both
+        eor #'/' ^ GLYPH_SLASH     ; one eor maps both: '/' -> SLASH, '.' -> DOT
         .assert ('/' ^ GLYPH_SLASH) = ('.' ^ GLYPH_DOT), error, "glyph_index: the slash's and the dot's glyphs differ as the characters do"
         rts
-:       sbc #('0'-GLYPH_0)          ; C = 1 from the bcs: -'0'+GLYPH_0 in one subtraction
+:       sbc #('0'-GLYPH_0)         ; C = 1 (the bcs): A - '0' + GLYPH_0
         rts
 
-; draw the glyph rows at w16b at (tx, ty) : 8x8 px -> 4 chars x 2 char rows
+; ----------------------------------------------------------------------------
+; draw_glyph_rows: one glyph's GLYPHH rows into buffer 0 at (tx, ty)
+;   In:    w16b = the glyph's rows (GLYPHH bytes, a bit a game pixel, bit 7 the
+;          left); tx (even), ty (any row)
+;   Out:   the glyph on the screen; X = GLYPHH, C = 1 (the exit's cpx)
+;   Uses:  A X Y, w16, sp, tp, tmp, tmp2, tmp4, tfine, tline
+; A glyph is 4 chars wide (a pair of game pixels a char) and spans two or three
+; char rows: row r of the glyph is tfine + r game pixel rows below the top of
+; ty's char row, and at MENU_ROWPX and 2*MENU_ROWPX the pen moves one char row
+; down.  Each row writes two scanlines (a game pixel is two) of each of its four
+; chars, in logical colour 3 (pair_tab).
+; ----------------------------------------------------------------------------
 draw_glyph_rows:
         lda tx
         lsr
         sta w16
-        stz w16+1
-        lda ty                     ; any game pixel row: tfine = ty & 3, the glyph's
-        and #CHARLINES/2-1         ;  rows (a game pixel, two lines, each) start that
-        sta tfine                  ;  far into its char row and run on into the next
+        stz w16+1                  ; w16 = the char column
+        lda ty
+        and #MENU_ROWPX-1
+        sta tfine                  ; tfine = ty's place in its char row
         lda ty
         lsr
         lsr
         clc                        ; (ring_addr7 adds the carry in: ty's bit 1 is out)
-        jsr ring_addr7             ; sp = first char (row 0)
-        ldx #0                     ; glyph row 0..GLYPHH-1
-@row:   txa                        ; tline = the glyph row's place from the first char
-        clc                        ;  row's top: the next char row at 4 and 8 (a char
-        adc tfine                  ;  row is CHARLINES/2 game pixels)
-        sta tline
-        cmp #CHARLINES/2
+        jsr ring_addr7             ; sp = the first char: row ty/4, column tx/2
+        ldx #0                     ; X = the glyph row, 0..GLYPHH-1
+@row:   txa
+        clc
+        adc tfine
+        sta tline                  ; tline = the row's place from the first row's top
+        cmp #MENU_ROWPX
         beq @next
-        cmp #CHARLINES
+        cmp #2*MENU_ROWPX
         bne @put
-@next:  lda sp                     ; one char row on (C = 1: the cmp found it equal)
-        adc #(<ROWBYTES) - 1
+@next:  lda sp                     ; a char row boundary: sp += ROWBYTES (C = 1 from the
+        adc #(<ROWBYTES) - 1       ;  cmp that found it equal)
         .assert (<ROWBYTES) <> 0, error, "the carry-in add needs a nonzero low byte"
         sta sp
         lda sp+1
         adc #>ROWBYTES
-        ringup sp
+        ringup sp                  ; the ring's fold
         sta sp+1
 @put:   txa
         tay
         lda (w16b),y
-        sta tmp                    ; row bits
+        sta tmp                    ; the row's bits
         lda tline
         asl
         and #CHARLINES-1
-        sta tmp2                   ; ra: its line in the char row
+        sta tmp2                   ; the row's first scanline in its char
         lda sp
         sta tp
         lda sp+1
-        sta tp+1                   ; remember row start
-        lda #GLYPHW/2              ; the row's chars: two game pixels (a pair) each
-        sta tmp4
-@pair:  lda #0                     ; shift the top two bits of tmp straight out of it
+        sta tp+1                   ; the row's first char, kept for the next row
+        lda #GLYPHW/2
+        sta tmp4                   ; the chars left in the row
+@pair:  lda #0                     ; A = the next two bits, shifted out of tmp's top
         asl tmp
         rol
         asl tmp
         rol
         tay
-        lda pair_tab,y
+        lda pair_tab,y             ; their screen byte
         ldy tmp2
-        sta (sp),y
+        sta (sp),y                 ; both scanlines of the game pixel row
         iny
         sta (sp),y
-        spnext
+        spnext                     ; the next char (sp += CHARBYTES, the ring fold)
         dec tmp4
         bne @pair
         lda tp
@@ -213,37 +312,71 @@ draw_glyph_rows:
         sta sp+1
         inx
         cpx #GLYPHH
-        beq :+
-        jmp @row                   ; (the 6502 spellings put @row out of a branch's reach)
-:       rts
-font_blank: .res GLYPHH, 0         ; the erase glyph ('_' in a string)
-pair_tab: .byte 0, MODE1_DOTS_R, MODE1_DOTS_L, MODE1_DOTS_L|MODE1_DOTS_R   ; logical 3 (yellow)
-                                    ;  on the right, the left, both dots of a game px pair
+        beq @done
+        jmp @row                   ; (@row is out of a branch's reach)
+@done:  rts
 
-; ---------------------------------------------------------------- menu screen helpers
-; clear the ring to black.  The bar is left alone: the menus' frame does not show it
-; (menu_sections, engine.s)
+; ----------------------------------------------------------------------------
+; text_centred: a string centred in the window's width
+;   In:    ptr = the string; X = y
+;   Out:   as draw_text
+;   Uses:  as draw_text
+; x = (WINPX - len*GLYPHW)/2, computed as WINPX/2 - len*GLYPHW/2 without parking
+; A.
+; ----------------------------------------------------------------------------
+text_centred:
+        ldy #$FF
+:       iny
+        lda (ptr),y
+        bne :-                     ; Y = len
+        tya
+        asl
+        asl                        ; A = len*GLYPHW/2 (C = 0: len < 64)
+        .assert GLYPHW = 8, error, "text_centred: two shifts halve a string's width"
+        eor #$FF                   ; -A-1, then + WINPX/2 + 1 = WINPX/2 - A
+        adc #(WINPX/2)+1
+        jmp draw_text
+
+; ---------------------------------------------------------------- a page
+; ----------------------------------------------------------------------------
+; clear_ring: the ring to black
+;   In:    nothing
+;   Out:   CLEAR0 .. $7FFF = 0 (the Model B's mirrors and both rings; the
+;          Master's buffer 0 ring; the bar lies below either, untouched); A = 0,
+;          Y = 0
+;   Uses:  A Y, w16
+; Whole pages, to $8000 where the ring ends (defs.s).  The menus never show the
+; bar's rows (menu_sections), so it stays as the game left it.
+; ----------------------------------------------------------------------------
         .assert <CLEAR0 = 0, error, "the clear is whole pages"
 clear_ring:
-        lda #>CLEAR0               ; to the top ($8000), whole pages: the Model B's
-        sta w16+1                  ; mirrors and rings, the Master's buffer 0 ring
-        lda #0                     ; (the bar is below either)
+        lda #>CLEAR0
+        sta w16+1
+        lda #0
         sta w16
         tay
 @l:     sta (w16),y
         iny
         bne @l
         inc w16+1
-        bpl @l                     ; to $8000 (engine.s asserts the ring ends)
+        bpl @l                     ; to $8000
         rts
 
-; menu_begin: window at (0,0), buffer 0 as work buffer, cleared; screen blanked until
-; menu_show has flipped the finished page in
+; ----------------------------------------------------------------------------
+; menu_begin: a page's start -- buffer 0 as the work buffer, the window at
+;   the origin, the ring cleared, the palette black
+;   In:    nothing
+;   Out:   wx = wy = wcx = wcy = wfine = 0, cur_buf = 0; the back buffer
+;          selected and ring_s/barq computed for it (selbb, calc_ring); the ring
+;          black; A = 0, Y = 0 (clear_ring's)
+;   Uses:  A X Y, w16, calc_ring's and select_backbuf's
+;   Pre:   interrupts on (a pending flip is waited for)
+; ----------------------------------------------------------------------------
 menu_begin:
         jsr blank_palette
-:       lda flip_req               ; the game may still have a flip pending
+:       lda flip_req               ; a flip the game asked for may still be pending
         bne :-
-        sta wx                     ; A = 0: flip_req was
+        sta wx                     ; A = 0 (flip_req's)
         sta wx+1
         sta wy
         sta wy+1
@@ -252,27 +385,48 @@ menu_begin:
         sta wcy
         sta wfine
         sta cur_buf
-        jsr selbb                  ; (bank 6's select_backbuf, through low RAM)
+        jsr selbb                  ; select_backbuf (bank 6, through low RAM)
         jsr calc_ring
         jmp clear_ring
 
-; menu_show: display buffer 0 (build sections, flip)
+; ----------------------------------------------------------------------------
+; menu_show: the finished page onto the screen -- buffer 0's chain built, the
+;   flip taken, the palette back
+;   In:    nothing
+;   Out:   buffer 0 displayed; cur_buf = 1 (the game's first render goes to the
+;          other buffer); next_sect = 0 (and the Master's next_buf); flip_req =
+;          0; A X Y clobbered (set_palette's)
+;   Uses:  A X Y, menu_sections' (build_sections' and BUF_SEC0)
+;   Pre:   flip_req = 0 (every way in has waited for it: menu_begin, or this
+;          routine last time round the win/lose loop)
+; cur_buf is 0 again because the last menu_show left it 1 (win_lose shows a page
+; a frame).  The chain variables are written before the build: the vsync reads
+; them only for a flip, and flip_req is 0 until the inc below.
+; ----------------------------------------------------------------------------
 menu_show:
-        stz cur_buf                ; (A is dead: build_sections loads it)
-    .if BHW
-        sta next_sect              ; A = 0 (the stz).  Before the build: the vsync reads
-    .else                          ;  it only for a flip, and flip_req is 0 until below
-        stz next_buf               ; (the Master: its handler's flip reads it)
-        stz next_sect
-    .endif
-        jsr menu_sections          ; the kernel's (engine.s)
-        inc flip_req               ; 0 -> 1: every way in has waited for it to clear
+        stz cur_buf                ; (A dead: menu_sections reloads it)
+  .if .not BHW                     ; hardware: the Master's flip reads next_buf too
+        stz next_buf
+  .endif
+        sta0 next_sect             ; A = 0 (the Model B's stz): buffer 0's chain
+        jsr menu_sections          ; the kernel's (kernel.s): the bar's rows left out
+        inc flip_req               ; 0 -> 1
 :       lda flip_req
         bne :-
-        inc cur_buf                ; 0 -> 1: next game frame renders into the other buffer
-        jmp set_palette            ; page is on display: colours back
+        inc cur_buf                ; 0 -> 1
+        jmp set_palette            ; the page is on display: colours back
 
-; wait one vsync and return new key edges in A (keys pressed now but not last time)
+; ----------------------------------------------------------------------------
+; menu_keys: one vsync on, the keys newly pressed
+;   In:    keys (the vsync's), last_keys
+;   Out:   A = keys & ~last_keys (pressed now and not last time), Z from it;
+;          last_keys = keys; X = keys
+;   Uses:  A X
+;   Pre:   interrupts on
+; Where the tests stop the menus: every page is drawn and settled by the time
+; this is reached (test/menusync.mjs, roundtrip.mjs, loadsync2.mjs break at this
+; label).
+; ----------------------------------------------------------------------------
 menu_keys:
         lda vsyncs
 :       cmp vsyncs
@@ -285,19 +439,28 @@ menu_keys:
         rts
 
 ; ---------------------------------------------------------------- the title pieces
-; Everything the menus show is on black, so a piece is drawn opaque: no mask.  A piece
-; is a run-length stream (title.bin, convert.py) of its screen bytes in the screen's
-; own order -- a char row at a time, each a column of eight lines after another -- so
-; it unpacks into TBUF as a straight run and goes to the screen a char row at a time.
-; Big Cleo's frames are unpacked a frame ahead (win_lose), so what reaches the screen
-; after the vsync is the copy alone, which stays ahead of the beam.
+; Everything the menus show is on black, so a piece is drawn opaque: no mask.  A
+; piece is a run-length stream (title.bin: convert.py title_rle) of its screen
+; bytes in the screen's own order -- a char row at a time, each char's eight
+; lines after another -- so it unpacks into TBUF as one run and goes to the
+; screen a char row at a time.  Big Cleo's frames are unpacked a frame ahead
+; (win_lose), so what reaches the displayed page after the vsync is the copy
+; alone.
 
-; draw a title piece: A = piece index, spx/spy = position (top-left: char aligned,
-; spx a multiple of 2, spy of 4)
+; ----------------------------------------------------------------------------
+; draw_piece: a title piece onto buffer 0
+;   In:    A = the piece (TP_*); spx, spy = its top left (game px: spx even, spy
+;          a multiple of MENU_ROWPX; the low bytes alone are read)
+;   Out:   the piece drawn; prows, pspan, TBUF = the piece (unpack's); C = 1
+;          (blit's)
+;   Uses:  A X Y, w16, w16b, sp, tp, tmp, tmp2, tmp3, prow, pleft
+;   Keeps: spx, spy
+; ----------------------------------------------------------------------------
 draw_piece:
-        jsr unpack                 ; (leaves spx, spy alone)
-; TBUF -> the screen: prows char rows of pspan bytes, from char column spx/2 of char
-; row spy/4 on
+        jsr unpack
+; ---- blit: TBUF to the screen -- prows char rows of pspan bytes each, from
+;      char column spx/2 of char row spy/4.  Also win_lose's, for a frame
+;      already in TBUF.
 blit:   lda #<TBUF
         sta w16b
         lda #>TBUF
@@ -305,73 +468,81 @@ blit:   lda #<TBUF
         lda spy
         lsr
         lsr
-        sta prow
+        sta prow                   ; the char row
         lda prows
-        sta pleft
+        sta pleft                  ; the rows left
 @row:   lda spx
-        lsr
+        lsr                        ; (C = 0: spx is even)
         sta w16
         lda #0
-        sta w16+1
-        lda prow                   ; (C = 0: spx is even -- ring_addr7 adds the carry in)
-        jsr ring_addr7             ; sp = the row's first byte (Y untouched)
+        sta w16+1                  ; w16 = the char column
+        lda prow
+        jsr ring_addr7             ; sp = the row's first byte (C = 0 in)
         lda pspan
         sta tmp
         lda pspan+1
-        sta tmp2
-@chunk: lda tmp2                   ; BLIT_CHUNK bytes at most at a time: the copy counts
-        bne @full                  ; Y down to 0 with bpl
+        sta tmp2                   ; tmp2:tmp = the row's bytes left
+@chunk: lda tmp2                   ; at most BLIT_CHUNK bytes a copy: Y counts down from
+        bne @full                  ;  the chunk's size - 1 with a bpl
         lda tmp
         cmp #BLIT_CHUNK+1
         bcc @part
 @full:  lda #BLIT_CHUNK
-@part:  sta tmp3
+@part:  sta tmp3                   ; tmp3 = this chunk's bytes
         tay
         dey
 @c:     lda (w16b),y
         sta (sp),y
         dey
         bpl @c
-        lda w16b                   ; (C = 0: dey leaves the carry of the cmp or the
-        clc                        ;  lda, which is not known on the @full way)
+        lda w16b                   ; w16b += tmp3 (C unknown here: the @full way skips
+        clc                        ;  the cmp)
         adc tmp3
         sta w16b
         bcc :+
         inc w16b+1
-:       lda sp                     ; within a row: the ring folds only between rows
-        clc
+:       lda sp                     ; sp += tmp3: within a row the ring never folds (its
+        clc                        ;  end is a row boundary); ring_addr7 folds per row
         adc tmp3
         sta sp
         bcc :+
         inc sp+1
-:       lda tmp
+:       lda tmp                    ; tmp2:tmp -= tmp3
         sec
         sbc tmp3
         sta tmp
         bcs :+
         dec tmp2
 :       ora tmp2
-        bne @chunk
+        bne @chunk                 ; (row's end: C = 1, the last sbc had no borrow)
         inc prow
         dec pleft
         bne @row
         rts
 
-; piece A -> TBUF: its char rows in prows, a row's bytes in pspan.  The stream
-; (convert.py title_rle; assets.inc RLE_*): a byte n < RLE_RUN is n+1 literal bytes
-; after it, RLE_RUN..RLE_END-1 a run of n-RLE_RUNBIAS copies of the byte after it,
-; RLE_END the end.
+; ----------------------------------------------------------------------------
+; unpack: a title piece's stream into TBUF
+;   In:    A = the piece (TP_*)
+;   Out:   TBUF = its screen bytes; prows = its char rows; pspan = a row's bytes
+;          (16-bit: 8 x its columns)
+;   Uses:  A X Y, w16b, tp
+;   Keeps: spx, spy
+; The stream (convert.py title_rle; assets.inc RLE_*): a byte n < RLE_RUN is n+1
+; literal bytes after it; RLE_RUN..RLE_END-1 a run of n - RLE_RUNBIAS copies of
+; the byte after it; RLE_END the end.  Its directory is title.inc (tp_lo, tp_hi,
+; tp_cols, tp_rows).
+; ----------------------------------------------------------------------------
 unpack: tax
         lda tp_lo,x
         sta w16b
         lda tp_hi,x
-        sta w16b+1
+        sta w16b+1                 ; w16b = the stream
         lda tp_rows,x
         sta prows
         lda tp_cols,x
         asl
         asl
-        asl                        ; (8 * 40 columns at most: the high byte is the carry)
+        asl                        ; 8 * the columns (40 at most): bit 8 is the carry
         sta pspan
         lda #0
         rol
@@ -381,7 +552,7 @@ unpack: tax
         lda #>TBUF
         sta tp+1
 @ctl:   ldy #0
-        lda (w16b),y
+        lda (w16b),y               ; the control byte
         cmp #RLE_END
         beq @done
         inc w16b
@@ -396,7 +567,7 @@ unpack: tax
         iny
         dex
         bne @lit
-        tya                        ; the stream on by Y too (C = 0: the cmp #RLE_RUN)
+        tya                        ; the stream on by the literals (C = 0: the cmp)
         adc w16b
         sta w16b
         bcc @adv
@@ -404,7 +575,7 @@ unpack: tax
         bcs @adv                   ; (always: inc leaves the carry)
 @run:   sbc #RLE_RUNBIAS           ; C = 1: n - RLE_RUNBIAS copies
         tax
-        lda (w16b),y
+        lda (w16b),y               ; the byte to repeat
         inc w16b
         bne @r
         inc w16b+1
@@ -421,36 +592,33 @@ unpack: tax
         bcs @ctl                   ; (always)
 @done:  rts
 
-; centred text: ptr -> string, X = y  (x = (160 - len*8)/2)
-text_centred:
-        ldy #$FF
-:       iny
-        lda (ptr),y
-        bne :-
-        tya
-        asl
-        asl                        ; len*GLYPHW/2
-        .assert GLYPHW = 8, error, "text_centred: two shifts halve a string's width"
-        eor #$FF                   ; WINPX/2 - A, without parking A in memory
-        adc #(WINPX/2)+1           ; C = 0 from the second asl: len < 64
-        jmp draw_text
-
-; ---------------------------------------------------------------- generic list menu
-; menu_list: menu_ptr -> table of string pointers (word), A = count, X = first y,
-; mstep = row step, mclear = clear the items' area first; returns A = selected index
+; ---------------------------------------------------------------- a list menu
+; ----------------------------------------------------------------------------
+; menu_list: a page of items with a cursor; returns the one chosen
+;   In:    menu_ptr = a table of the items' strings (words); A = the items; X =
+;          the first item's y; mstep = the rows' step
+;   Out:   A = the chosen item's index, Z from it; mtop, mcount, msel, mlast,
+;          last_keys
+;   Uses:  A X Y, ptr, draw_text's, clear_items', tmp, tmp3
+;   Pre:   menu_begin has run
+; Up and down move the cursor, fire or right chooses.  The page is shown once
+; the items are drawn; a move redraws only the two cursor rows (right after the
+; vsync menu_keys waited for) in the displayed page.  The strings' table is read
+; through this routine's own operand (@mt0): the image is in RAM.
+; ----------------------------------------------------------------------------
 menu_list:
-        ldy menu_ptr               ; the table's address into the one load below: the
-        sty @mt0+1                 ; overlay is in sideways RAM, so the pointer needs
-        ldy menu_ptr+1             ; no zero page
+        ldy menu_ptr
+        sty @mt0+1
+        ldy menu_ptr+1
         sty @mt0+2
         sta mcount
         stx mtop
         lda #$FF
-        sta last_keys
+        sta last_keys              ; every key held counts as held, not pressed
         jsr clear_items
         ldx #0
-        stx msel                   ; (not stz: on the Model B that is lda #0 / sta)
-@it:    stx tmp3
+        stx msel                   ; (X = 0: a stz would cost the Model B a lda)
+@it:    stx tmp3                   ; the item
         txa
         asl
         tay
@@ -461,21 +629,21 @@ menu_list:
         dey
         dex
         bpl @mt0
-        ldx tmp3                   ; the index again, for item_y
-        jsr item_y                 ; X = the index still: A = X = its y
+        ldx tmp3
+        jsr item_y                 ; X = its y
         jsr text_centred
         ldx tmp3
         inx
         cpx mcount
         bne @it
-        jsr @cursor                ; A = 0 = msel: draw_text returns A = 0
+        jsr @cursor                ; A = 0 = msel (draw_text's)
         jsr menu_show
 @loop:  jsr menu_keys
         sta tmp
         and #K_UP
         beq :+
-        dec msel                   ; 0 -> $FF and back: nothing to move up to
-        bpl @move                  ; msel < mcount <= 8: from 1..7 always taken
+        dec msel                   ; 0 -> $FF and back: nothing above
+        bpl @move
         inc msel
 :       lda tmp
         and #K_DOWN
@@ -483,71 +651,78 @@ menu_list:
         ldx msel
         inx
         cpx mcount
-        bcs :+
+        bcs :+                     ; nothing below
         stx msel
-        bcc @move                  ; always: bcs not taken
+        bcc @move                  ; (always: the bcs fell through)
 :       lda tmp
         and #(K_FIRE|K_RIGHT)
         beq @loop
         lda msel
         rts
-        ; cursor moved: the buffer is on display, so touch only the cursor rows (right after
-        ; the vsync menu_keys waited for) rather than clearing and redrawing every item
-@move:  lda mlast
+@move:  lda mlast                  ; the cursor moved: erase the old row's, draw the new
         ldx #<blank_str
         ldy #>blank_str
         jsr @curstr
         lda msel
         jsr @cursor
-        beq @loop                  ; always: draw_text returns Z = 1
-@cursor:
+        beq @loop                  ; (always: draw_text's Z = 1)
+@cursor:                           ; the cursor at item A (and remember where)
         sta mlast
         ldx #<cursor_str
         ldy #>cursor_str
-@curstr:
+@curstr:                           ; the string at Y:X on item A's row, centred
         stx ptr
         sty ptr+1
         tax
         jsr item_y
-        lda #(WINPX-CURSORLEN*8)/2 ; centred, as text_centred puts the items
+        lda #(WINPX-CURSORLEN*GLYPHW)/2   ; centred, as text_centred puts the items
         jmp draw_text
-item_y: lda mtop                   ; X = item index -> A = X = its y
+
+; ----------------------------------------------------------------------------
+; item_y: an item's row
+;   In:    X = the item; mtop, mstep
+;   Out:   A = X = mtop + X*mstep
+;   Uses:  A X (C clobbered)
+; ----------------------------------------------------------------------------
+item_y: lda mtop
         cpx #0
-        beq :++
-:       clc
+        beq @done
+@step:  clc
         adc mstep
         dex
-        bne :-
-:       tax
+        bne @step
+@done:  tax
         rts
-cursor_str: .byte ">                 <", 0
-CURSORLEN = * - cursor_str - 1
-        .assert ((WINPX-CURSORLEN*8)/2) .mod 2 = 0, error, "draw_text's x must be even"
-blank_str:  .byte "_                 _", 0
 
-; if mclear: clear the items' area below the logo, char row mtop/4 to the last (640
-; bytes each, buffer 0's rows)
+; ----------------------------------------------------------------------------
+; clear_items: the items' rows to black
+;   In:    mtop
+;   Out:   buffer 0's char rows mtop/4 .. VISROWS-1 zeroed (ROWBYTES each)
+;   Uses:  A X Y, w16, sp, tmp3
+; From the first item's char row to the window's last; the rows under the window
+; are the menus' bar rows, black since clear_ring.  (Every caller's menu_begin
+; has just cleared the whole ring, so this finds the rows black already.)
+; ----------------------------------------------------------------------------
 clear_items:
-
         lda mtop
         lsr
         lsr
-        tax
+        tax                        ; X = the char row
 @r:     stx tmp3
         lda #0
         sta w16
-        sta w16+1
+        sta w16+1                  ; column 0
         txa
         clc                        ; (ring_addr7 adds the carry in)
-        jsr ring_addr7             ; sp = the row's start
+        jsr ring_addr7
         lda sp
         sta w16
         lda sp+1
-        sta w16+1
+        sta w16+1                  ; w16 = the row's start
         ldx tmp3
         lda #0
         tay
-:       sta (w16),y
+:       sta (w16),y                ; two whole pages
         iny
         bne :-
         inc w16+1
@@ -555,42 +730,34 @@ clear_items:
         iny
         bne :-
         inc w16+1
-        ldy #(ROWBYTES-512)-1      ; the row's third part, past its two whole pages
+        ldy #(ROWBYTES-512)-1      ; and the row's remainder past them
 :       sta (w16),y
         dey
         bpl :-
         inx
-        cpx #VISROWS               ; the window's last row (below: the menus' bar rows,
-                                    ; never drawn, black since clear_ring)
+        cpx #VISROWS
         bne @r
-@done:  rts
+        rts
 
-; ---------------------------------------------------------------- screens
-; title menu: returns 0 start, 1 help, 2 exit
-; ---- a screen laid out for the Model B's 84 px of window, centred in a taller one
-; (the Master's 120): with its ink spanning top..bot-1, the offset is
-; (VISLINES/2 - bot - top) / 2, rounded to a char row (4 px)
-  .if VISLINES/2 > 84
-TITLE_DY = ((VISLINES/2 - TITLE_INK_BOT - TITLE_INK_TOP) / 2 + 2) & $FC   ; the logo's top to the second item's
-HELP_DY  = ((VISLINES/2 - HELP_INK_BOT - HELP_INK_TOP) / 2 + 2) & $FC     ;  last row; the help's lines;
-WL_DY    = ((VISLINES/2 - WL_INK_BOT - WL_INK_TOP) / 2 + 2) & $FC         ;  YOU WIN's top to the hi-score's last
-  .else                            ;  row (YOU LOSE: a row lower, 2 px off)
-TITLE_DY = 0
-HELP_DY  = 0
-WL_DY    = 0
-  .endif
+; ---------------------------------------------------------------- the screens
+; ----------------------------------------------------------------------------
+; title_menu: the title page -- the logo and the two items
+;   In:    mus_on (the tune keeps playing back from the help)
+;   Out:   A = 0 START GAME, 1 HELP (menu_list's), Z from it
+;   Uses:  everything
+; ----------------------------------------------------------------------------
 title_menu:
         lda mus_on
         bne :+
-        jsr music_start            ; only if not already playing (back from help)
+        jsr music_start            ; the tune, unless it is playing already
 :       jsr menu_begin
         lda #MENU_LOGO_X
         sta spx
         lda #MENU_LOGO_Y+TITLE_DY
         sta spy
-        lda #TP_LOGO               ; = 0: both high bytes
+        lda #TP_LOGO               ; = 0: spx+1, spy+1 too (the menus' blit reads
         .assert TP_LOGO = 0, error, "title_menu: TP_LOGO doubles as the zero high bytes"
-        sta spx+1
+        sta spx+1                  ;  only the low bytes: these stores are dead)
         sta spy+1
         jsr draw_piece
         lda #<menu1
@@ -606,20 +773,26 @@ title_menu:
         ldx #MENU_ITEMS_Y+TITLE_DY
         jmp menu_list
 
+; ----------------------------------------------------------------------------
+; help_screen: the help page -- HELP_N centred lines, until fire or right
+;   In:    nothing
+;   Out:   Z = 0 (A = the key bits that ended it)
+;   Uses:  everything
+; ----------------------------------------------------------------------------
 help_screen:
         jsr menu_begin
-        ldy #2*(HELP_N-1)          ; Y = 2i, the last line first: no two lines share a
-@l:     sty tmp3                   ; char row, so the order leaves the same page
+        ldy #2*(HELP_N-1)          ; Y = 2i, the last line first (the lines share no
+@l:     sty tmp3                   ;  char row, so the order shows nowhere)
         lda help_tab,y
         sta ptr
         lda help_tab+1,y
         sta ptr+1
-        tya                        ; y = i*HELP_PITCH+HELP_Y0, the last line at 66: laid
-        asl                        ; out for the Model B's 84 px of window: 2i*4 + 2i (C = 0
-        asl                        ; from the asls)
+        tya                        ; y = i*HELP_PITCH + HELP_Y0 (+ HELP_DY): 2i*4 + 2i
+        asl
+        asl                        ; (C = 0 from the shifts: 8i < 256)
         .assert HELP_PITCH = 10, error, "help_screen: 2i*4 + 2i is i*HELP_PITCH"
         adc tmp3
-        adc #HELP_Y0+HELP_DY       ; i*10+16 (+ HELP_DY)
+        adc #HELP_Y0+HELP_DY
         tax
         jsr text_centred
         ldy tmp3
@@ -634,7 +807,16 @@ help_screen:
         beq :-
         rts
 
-; level select: A = max level index (0..7) -> returns chosen level (0..max)
+; ----------------------------------------------------------------------------
+; level_select: the level chooser -- the main levels reached so far, centred
+;   In:    A = the highest main level reached, 0..7 (max_level)
+;   Out:   A = the chosen one, 0..A in
+;   Uses:  everything
+; The n = A+1 items are LEVEL_STEP apart, or LEVEL_STEP_TIGHT when the list
+; would not fit the window: on the Model B's 84 px all eight are 92 tall at 12,
+; 78 at 10.  The first item's y = (VISLINES/2 - GLYPHH - (n-1)*step) / 2: text
+; goes on any row.
+; ----------------------------------------------------------------------------
 level_select:
         pha
         jsr menu_begin
@@ -644,111 +826,115 @@ level_select:
         sta menu_ptr+1
         lda #1
         sta mclear
-        pla                        ; max = n-1
+        pla                        ; A = n-1
         tax
         inx
-        stx tmp                    ; n
+        stx tmp                    ; tmp = n
         sta tmp2
-        asl tmp2                   ; (n-1)*2
-        ; the items LEVEL_STEP px apart, or LEVEL_STEP_TIGHT when that would not fit the
-        ; window (all eight on the Model B's 84 px: 92 tall at 12, 78 at 10)
+        asl tmp2                   ; tmp2 = (n-1)*2
         .assert LEVEL_STEP = 12 && LEVEL_STEP_TIGHT = 10, error, "level_select builds (n-1)*12 and takes (n-1)*2 off it"
         asl
         asl
         sta tmp3                   ; (n-1)*4
         asl
-        adc tmp3                   ; (n-1)*12 (C = 0: (n-1)*8 <= 56)
+        adc tmp3                   ; A = (n-1)*12 (C = 0: (n-1)*8 <= 56)
         ldy #LEVEL_STEP
-        cmp #VISLINES/2 - GLYPHH + 1   ; the list's height less a glyph's, against the window's
+        cmp #VISLINES/2 - GLYPHH + 1   ; the list's height against the window's
         bcc :+
         sbc tmp2                   ; C = 1: (n-1)*12 - (n-1)*2 = (n-1)*10
         ldy #LEVEL_STEP_TIGHT
         clc
 :       sty mstep
-        ; top y = (VISLINES/2 - GLYPHH - (n-1)*step) / 2 (text goes on any pixel row)
-        eor #$FF                   ; (C = 0 both ways in)
-        adc #VISLINES/2 - GLYPHH + 1
+        eor #$FF                   ; (VISLINES/2 - GLYPHH - A) / 2: -A-1, + (.. + 1)
+        adc #VISLINES/2 - GLYPHH + 1   ;  (C = 0 both ways in)
         lsr
-        tax
+        tax                        ; X = the first item's y
         lda tmp
         jmp menu_list
 
-; win/lose: A = 1 win, 0 lose; score and hi-score shown
+; ----------------------------------------------------------------------------
+; win_lose: the end of a game -- YOU WIN or YOU LOSE, big Cleo animated, the
+;   score and the hi-score, until fire or right
+;   In:    A = 1 won, 0 lost; score, hi_score (BCD)
+;   Out:   Z = 0 (A = the key bits that ended it); mus_on = 0
+;   Uses:  everything (menu_list's variables as its own: mtop the flag, mcount
+;          the frame shown, mbuf the frame in TBUF, msel the counter)
+; The page: the words at the top, big Cleo at BIGCLEO_Y, the two score rows at
+; the bottom.  Big Cleo's frame comes from cleo_frame; it is unpacked a frame
+; ahead, while the page stands, and copied in (blit) right after the vsync
+; menu_keys waited for, so the copy is meant to run ahead of the beam in the
+; displayed page.
+; ----------------------------------------------------------------------------
 win_lose:
-        sta mtop                   ; the win/lose flag (not tmp4: the sprite prologue
-                                    ; uses it, and the lose screen cycled the WIN frames)
-        jsr music_stop             ; the win/lose screen is silent
+        sta mtop                   ; the flag (not a zp temp: draw_text uses tmp..tmp4)
+        jsr music_stop             ; silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "win_lose picks the piece as TP_LOSE - mtop"
-        sta spx+1                  ; A = 0: menu_begin ends in clear_ring, which
-        sta spy+1                  ;  stores A = 0 throughout
-        lda mtop                   ; YOU WIN at WL_WORDS_Y, YOU LOSE a row lower: big
-        eor #1                     ;  Cleo (BIGCLEO_Y) is then centred between the words
-        asl                        ;  and the score -- the lose frames' ink starts 6 px
-        asl                        ;  into the piece, the win frames' at 0 (C = 0 from the asls)
+        sta spx+1                  ; A = 0 (clear_ring's); the menus' blit reads only
+        sta spy+1                  ;  the low bytes: these stores are dead
+        lda mtop                   ; YOU WIN at WL_WORDS_Y, YOU LOSE a char row lower
+        eor #1
+        asl
+        asl                        ; (C = 0 from the shifts)
         adc #WL_WORDS_Y+WL_DY
         sta spy
-        lda mtop                   ; 1 win, 0 lose
+        lda mtop
         asl                        ; (C = 0)
-        adc #WL_YOU_X              ; YOU at 36 / 34
+        adc #WL_YOU_X              ; YOU at 36 winning, 34 losing
         sta spx
         lda #TP_YOU
-        jsr draw_piece             ; (leaves spx, spx+1, spy, spy+1 alone)
+        jsr draw_piece
         lda spx
-        adc #WINPX/2-WL_YOU_X-1    ; C = 1 from draw_piece (blit's last sbc found no
-                                    ;  borrow): WIN at 82 / LOSE at 80; C = 0
+        adc #WINPX/2-WL_YOU_X-1    ; C = 1 (draw_piece's): WIN at 82, LOSE at 80; C = 0
         sta spx
         lda #TP_LOSE+1
-        sbc mtop                   ; C = 0: TP_LOSE - mtop = TP_WIN / TP_LOSE
+        sbc mtop                   ; C = 0: TP_LOSE - mtop = TP_WIN or TP_LOSE
         jsr draw_piece
-@scores:
+        ; ---- the two score rows: a label at WL_LABEL_X, its number at WL_VALUE_X
         lda #<str_score
         sta ptr
         lda #>str_score
         sta ptr+1
-SCORE_Y = 64+WL_DY                 ; 84 px of window: under big Cleo (24..55)
-HISCORE_Y = 76+WL_DY               ; (a glyph row is a multiple of 4)
-        stz t16                    ; the score's BCD (score+0: draw_text leaves t16 alone)
-        ldx #SCORE_Y
-@srow:  lda #WL_LABEL_X            ; a row: the label, then its value at WL_VALUE_X (the
-        jsr draw_text              ;  score column aligned with the hi-score's)
+        stz t16                    ; draw_number's: the score (draw_text leaves t16)
+        ldx #WL_SCORE_Y+WL_DY
+@srow:  lda #WL_LABEL_X
+        jsr draw_text
         lda #WL_VALUE_X
-        ldx ty                     ; the row's y: draw_text leaves ty
+        ldx ty                     ; the row's y (draw_text's)
         jsr draw_number
         ldx ty                     ; (draw_number's stx ty wrote the same y)
-        cpx #HISCORE_Y
+        cpx #WL_HISCORE_Y+WL_DY
         beq @sdone                 ; both rows drawn
         lda #<str_hiscore
         sta ptr
         lda #>str_hiscore
         sta ptr+1
-        lda #hi_score-score        ; the hi-score's (score+3)
+        lda #hi_score-score        ; the hi-score's (score + 3)
         sta t16
-        ldx #HISCORE_Y
-        bne @srow                  ; (always: HISCORE_Y > 0)
-@sdone:
-        lda #$FF
+        ldx #WL_HISCORE_Y+WL_DY
+        bne @srow                  ; (always: the y is not 0)
+        ; ---- big Cleo, animated in the displayed page
+@sdone: lda #$FF
         sta last_keys
-        sta mcount                 ; the frame last drawn  (menu_list's variables: this
-        sta mbuf                   ; the frame in TBUF      screen runs no list, and
-        stz msel                   ; animation counter      tmp2/tmp3 do not survive
-                                    ;                        menu_show's callees)
-        lda #BIGCLEO_X             ; big Cleo's place, once: nothing in the loop moves
-        sta spx                    ; spx/spy (spx+1, spy+1 are 0 from the pieces above)
-        lda #BIGCLEO_Y+WL_DY       ; (ink 24..54 winning, 30..54 losing: 7 and 9 px /
-        sta spy                    ;  9 and 9 px from the words and the score)
-@loop:  jsr cleo_frame             ; the frame for msel: in TBUF already (unpacked a
-        cmp mcount                 ; frame ahead, below) but for the first
-        beq @same
+        sta mcount                 ; no frame shown yet
+        sta mbuf                   ; none in TBUF
+        stz msel                   ; the counter
+        lda #BIGCLEO_X             ; her place, once: nothing in the loop moves spx/spy
+        sta spx
+        lda #BIGCLEO_Y+WL_DY
+        sta spy
+@loop:  jsr cleo_frame             ; the frame for msel
+        cmp mcount
+        beq @same                  ; the one shown
         sta mcount
         cmp mbuf
-        beq :+
+        beq :+                     ; in TBUF already (unpacked a frame ahead, below)
         sta mbuf
         jsr unpack
-:       jsr blit                   ; right after menu_keys' vsync, as the copy it is
+:       jsr blit                   ; right after menu_keys' vsync
 @same:  jsr menu_show
         inc msel
-        jsr cleo_frame             ; the next one, unpacked now, while the page stands
+        jsr cleo_frame             ; the next frame, unpacked now, while the page stands
         cmp mcount
         beq :+
         cmp mbuf
@@ -760,15 +946,22 @@ HISCORE_Y = 76+WL_DY               ; (a glyph row is a multiple of 4)
         beq @loop
         rts
 
-; big Cleo's frame for msel -> A (the piece): the shift count is the same on both arms
+; ----------------------------------------------------------------------------
+; cleo_frame: big Cleo's frame for the counter
+;   In:    msel = the counter; mtop = 1 won, 0 lost
+;   Out:   A = the piece: TP_CLEO0 + (BIGCLEO_WIN0 +) the 2-bit frame
+;   Uses:  A X, w16, w16b
+; The frame is two bits of a sequence word shifted by msel & CLEO_SEQ_MASK
+; (even, so a frame holds for two counts): WIN_SEQ (16 bits) winning, LOSE_SEQ
+; (24) losing.
+; ----------------------------------------------------------------------------
 cleo_frame:
         lda msel
         and #CLEO_SEQ_MASK
-        tax
+        tax                        ; X = the shift, both arms
         lda mtop
         beq @lframe
-        ; win: BIGCLEO_WIN0 + ((WIN_SEQ >> (n & 30)) & 3)
-        lda #<WIN_SEQ
+        lda #<WIN_SEQ              ; winning: BIGCLEO_WIN0 + ((WIN_SEQ >> X) & 3)
         sta w16
         lda #>WIN_SEQ
         sta w16+1
@@ -777,8 +970,8 @@ cleo_frame:
         and #3                     ; (2 bits a frame)
         ora #BIGCLEO_WIN0
         bne @drawc                 ; (always)
-@lframe:                           ; lose: (LOSE_SEQ >> (n & 30)) & 3
-        lda #<LOSE_SEQ
+@lframe:
+        lda #<LOSE_SEQ             ; losing: (LOSE_SEQ >> X) & 3
         sta w16
         lda #>LOSE_SEQ
         sta w16+1
@@ -791,37 +984,50 @@ cleo_frame:
         adc #TP_CLEO0
         rts
 
-; w16 >>= X
-shr16x: txa                        ; Z from X (A dead at both callers)
-        beq :++
-:       lsr w16+1
+; ----------------------------------------------------------------------------
+; shr16x: w16 >>= X
+;   In:    X = the shift count; w16
+;   Out:   w16 shifted; X = 0; A = the count
+;   Uses:  A X
+; shr24x: w16b:w16 (24 bits, w16b the top) >>= X; the same In, Out, Uses
+; ----------------------------------------------------------------------------
+shr16x: txa                        ; Z from X
+        beq @done
+@s:     lsr w16+1
         ror w16
         dex
-        bne :-
-:       rts
-; w16b:w16 (24 bit) >>= X
-shr24x: txa                        ; Z from X (A dead at the caller)
-        beq :++
-:       lsr w16b
+        bne @s
+@done:  rts
+shr24x: txa                        ; Z from X
+        beq @done
+@s:     lsr w16b
         ror w16+1
         ror w16
         dex
-        bne :-
-:       rts
+        bne @s
+@done:  rts
 
-; draw_number: t16 = 0 the score, 3 the hi-score (BCD, ones first); prints it *100 as
-; digits at (A = x, X = y): NUM_DIGITS digits + "00", leading zeros suppressed
+; ----------------------------------------------------------------------------
+; draw_number: a score, times 100, as digits
+;   In:    t16 = 0 the score, hi_score-score the hi-score (BCD, three bytes, the
+;          ones first); A = x (even); X = y
+;   Out:   as draw_text; NUMBUF = the digits drawn
+;   Uses:  as draw_text, and Y
+; NUM_DIGITS digits (the top byte's high nibble is not shown), leading zeros
+; blanked but the last, then "00": the score counts in hundreds.  It enters
+; draw_text past the stores of A and X, which it has made itself.
+; ----------------------------------------------------------------------------
 draw_number:
         sta tx
         stx ty
         ldy t16
         ldx #NUM_DIGITS-1          ; NUMBUF 4..0: each byte's low nibble, then its high
 @d:     lda score,y
-        and #$0F
+        and #$0F                   ; the low BCD digit
         ora #'0'
         sta NUMBUF,x
         dex
-        bmi @z                     ; five: the top byte's high nibble is not shown
+        bmi @z                     ; five stored: the top byte's high nibble unshown
         lda score,y
         lsr
         lsr
@@ -831,10 +1037,8 @@ draw_number:
         sta NUMBUF,x
         iny
         dex
-        bpl @d                     ; (always: X = 3 or 1 here)
-@z:
-        ; suppress leading zeros (keep at least one)
-        ldy #$FF
+        bpl @d                     ; (always: X = 2 or 0 here)
+@z:     ldy #$FF                   ; leading zeros to spaces, but the last digit
 :       iny
         lda NUMBUF,y
         cmp #'0'
@@ -851,13 +1055,22 @@ draw_number:
         sta ptr
         lda #>NUMBUF
         sta ptr+1
-        jmp draw_text+6            ; past its sta tx/stx ty: tx, ty hold A, X already
+        jmp draw_text+6            ; past its sta tx / stx ty (3 bytes each: MNUBSS)
 
-; ---------------------------------------------------------------- strings
+; ---------------------------------------------------------------- tables
+font_blank: .res GLYPHH, 0         ; the erased glyph ('_' in a string)
+pair_tab:   .byte 0, MODE1_DOTS_R, MODE1_DOTS_L, MODE1_DOTS_L|MODE1_DOTS_R
+                                    ; a game pixel pair's screen byte in logical 3
+                                    ; (yellow): the right one lit, the left, both
+cursor_str: .byte ">                 <", 0
+CURSORLEN = * - cursor_str - 1
+        .assert ((WINPX-CURSORLEN*GLYPHW)/2) .mod 2 = 0, error, "draw_text's x must be even"
+blank_str:  .byte "_                 _", 0   ; the cursor's erase
+        .assert * - blank_str = CURSORLEN + 1, error, "blank_str erases the cursor's width"
 menu1:      .word s_start, s_help
 s_start:    .byte "START GAME", 0
 s_help:     .byte "HELP", 0
-help_tab:    .word h1, h2, h3, h4, h5, h6
+help_tab:   .word h1, h2, h3, h4, h5, h6
 h1:         .byte "Z X TO RUN", 0
 h2:         .byte "RETURN TO JUMP", 0
 h3:         .byte "SLASH TO THROW", 0
@@ -866,7 +1079,7 @@ h5:         .byte "STARS TO OPEN", 0
 h6:         .byte "BONUS LEVEL", 0
 level_names: .word l0, l1, l2, l3, l4, l5, l6, l7
 l0:         .byte "CITY GATES", 0
-l1:         .byte "TUTANKHAMUN", 0        ; (levels 1 and 5: the maps swapped, convert.py)
+l1:         .byte "TUTANKHAMUN", 0 ; (levels 1 and 5: the maps swapped, convert.py)
 l2:         .byte "VINEYARDS", 0
 l3:         .byte "CHEFREN", 0
 l4:         .byte "CITADELS", 0
@@ -874,25 +1087,4 @@ l5:         .byte "CHEOPS", 0
 l6:         .byte "ALEXANDRIA", 0
 l7:         .byte "NEFERTITI", 0
 str_score:  .byte "SCORE", 0
-str_hiscore:.byte "HISCORE", 0
-
-        .segment "MNUBSS"
-tfine:     .res 1                  ; draw_glyph_rows: ty & 3, and the row's place
-tline:     .res 1
-NUMBUF:    .res NUM_DIGITS+3       ; draw_number's digits, "00" and the end
-menu_ptr:   .res 2                 ; menu_list's table (read through its own operands)
-tchar:     .res 1                  ; draw_text's place in the string
-mcount:    .res 1
-mtop:      .res 1
-mstep:     .res 1
-msel:      .res 1
-mclear:    .res 1
-mlast:     .res 1                  ; item index the cursor was last drawn at
-mbuf:      .res 1                  ; the piece in TBUF (win_lose: big Cleo a frame ahead)
-prow:      .res 1                  ; blit: the char row, and the rows left
-pleft:     .res 1
-prows:     .res 1                  ; unpack's piece: its char rows, a row's bytes
-pspan:     .res 2
-TBUF:      .res TBUF_LEN           ; the piece unpacked (title.inc: the largest)
-tx:        .res 1
-ty:        .res 1
+str_hiscore: .byte "HISCORE", 0
