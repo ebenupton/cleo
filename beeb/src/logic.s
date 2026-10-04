@@ -1218,9 +1218,10 @@ level_init:
         sta O_EL,y                 ;  "an enemy can reach it", a powerup's box id
         lda q4                     ;  (assets.py); the spike and the switch never read E
         sta O_EH,y
-@box:                              ; ---- into the grid: cells gx0..gx1 x gy..gy1.  gy <= gy1 for every object
+        ; ---- into the grid: cells gx0..gx1 x gy..gy1.  gy <= gy1 for every object
         ; of the 16 levels (no wrap: maps are at most 128 tiles high, and the bat's
         ; extents keep q2 + q4 < 256): at least one grid row
+@box:
 @bx:    grid_rowbase               ; gx = gx0; A = gy << gridsh: the row's first cell.
         clc                        ;  The gx loop steps the cell index with inx
         adc gx                     ;  instead of reshifting
@@ -3507,9 +3508,9 @@ ob_bat:
 @fr:    sta q1
         bge16 px, spx, @wob        ; spx > px: one frame on (facing left)
         inc q1
-@wob:                              ; the wobble: x += bat_off[(s + obj*5) & 15], y += bat_off[((5*s >> 2) +
-        ; obj*7) & 15], s = 2*frame (the original's step count)
-        lda frame
+        ; ---- the wobble: x += bat_off[(s + obj*5) & 15],
+        ; y += bat_off[((5*s >> 2) + obj*7) & 15], s = 2*frame (the original's step count)
+@wob:   lda frame
         asl
         sta t16b                   ; s (low byte: all the indices use)
         lda obj
