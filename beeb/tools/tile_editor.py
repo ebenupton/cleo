@@ -2,16 +2,17 @@
 """Cleo tile dither editor.
 
 Shows a level zoomed 2x, lets you click a tile to select it, view its dithered
-dithered state and paint the pixels by hand.  Hand edits are saved to
-build/tile_edits.json, which convert.py reads and uses in place of the automatic
-dither for those tiles (re-run ./build.sh to bake them into the disc).
+state and paint the pixels by hand.  Hand edits are saved to beeb/tile_edits.json
+(convert._edits_path: beside tools/, not under build/), which convert.py reads and
+uses in place of the automatic dither for those tiles (re-run ./build.sh to bake
+them into the disc).
 
 Run from the beeb/ directory:   python3 tools/tile_editor.py [level] [main|A]
 
 Level view: left-drag scrolls (or use the scrollbars / trackpad).  Click a tile
 to select it.  In the editor on the right, pick a palette colour then click (or
 drag) pixels to paint.  "Revert tile" restores the automatic dither for the
-selected tile.  "Save" writes build/tile_edits.json.
+selected tile.  "Save" writes beeb/tile_edits.json.
 """
 import os
 import sys

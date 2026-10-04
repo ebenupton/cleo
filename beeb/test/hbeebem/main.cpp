@@ -2,7 +2,7 @@
 // tools do (bopen.mjs), run N frames of the same key script, and print the game's
 // state at every frame_top -- plus, at one frame, BeebEm's own rendering of the
 // screen and the display RAM behind it.  Compared against jsbeeb's bdump.mjs.
-//   hbeebem --userdata DIR --disc cleob.ssd --labels labels.txt [--frames N] [--seed S]
+//   hbeebem --userdata DIR --disc cleo.ssd --labels labels.txt [--frames N] [--seed S]
 //           [--level L] [--shot F] [--out PREFIX]
 #include <windows.h>
 #include <map>
@@ -34,8 +34,11 @@ static void wrbank(int bank, int a, unsigned char v) { Roms[socketOf(bank)][a - 
 static long instr = 0;
 extern FILE *VideoLog;
 static bool trace = getenv("HBTRACE") != nullptr;
-static bool runTo(int pc, int bank, long budget) {
-  for (long i = 0; i < budget; i++) { Exec6502Instruction(); instr++; if (ProgramCounter == pc && (!bank || ROMSEL == socketOf(bank))) return true;
+static int ldimg = 0;   // ld_img, the kernel's: the image in bank 7 (0 the game's, 1 the menus': ldprog.s ld_image)
+// run to pc in a bank; img >= 0: with that image in bank 7 as well (a game-image label
+// such as frame_top names a byte of the menus' image too)
+static bool runTo(int pc, int bank, long budget, int img = -1) {
+  for (long i = 0; i < budget; i++) { Exec6502Instruction(); instr++; if (ProgramCounter == pc && (!bank || ROMSEL == socketOf(bank)) && (img < 0 || rdbank(7, ldimg) == img)) return true;
     if (trace && (i % 2000000) == 0) fprintf(stderr, "  [%ld] pc %04x romsel %d cycles %lld\n", instr, ProgramCounter, ROMSEL, (long long)TotalCycles); }
   return false;
 }
@@ -49,7 +52,7 @@ int main(int argc, char **argv) {
     else if (a == "--frames") frames = atoi(v().c_str()); else if (a == "--seed") seed = atoi(v().c_str());
     else if (a == "--level") level = atoi(v().c_str()); else if (a == "--shot") shot = atoi(v().c_str()); else if (a == "--shotevery") every = atoi(v().c_str()); else if (a == "--out") out = v(); }
   { std::ifstream f(labelsFile); std::string t, addr, name; while (f >> t >> addr >> name) if (t == "al") labels[name.substr(1)] = std::stoi(addr, nullptr, 16); }
-  pbank = L("PBANK");
+  pbank = L("PBANK"); ldimg = L("ld_img");
   mainWin = new BeebWin(userdata.c_str());
   { std::string cfg = std::string(mainWin->GetUserDataPath()) + "Roms.cfg";   // the front end does this in BeebEm
     if (!RomConfig.Load(cfg.c_str())) { fprintf(stderr, "cannot load %s\n", cfg.c_str()); return 2; } }
@@ -60,17 +63,22 @@ int main(int argc, char **argv) {
   fprintf(stderr, "RAM banks:"); for (int b = 0; b < 16; b++) if (RomWritable[b]) fprintf(stderr, " %d", b); fprintf(stderr, "\n");
   // SHIFT+BREAK: shift is row 0, column 0 of the matrix
   BeebKeyDown(0, 0); runCycles(2000000); BeebKeyUp(0, 0);
-  // the title loop, in bank 7
+  // the title loop, in bank 7 (the menus' image: a disc load first)
   if (!runTo(L("title_loop"), 7, 400000000L)) { fprintf(stderr, "no title_loop (pc %04x romsel %d)\n", ProgramCounter, ROMSEL); return 3; }
   fprintf(stderr, "title_loop after %ld instructions; PBANK %d %d %d %d board %d\n", instr, socketOf(4), socketOf(5), socketOf(6), socketOf(7), WholeRam[pbank + 4]);
-  { int tl = L("title_loop"); for (int i = 0; i < 6; i++) wrbank(7, tl + i, 0xEA); wrbank(7, tl + 3, 0xA9); wrbank(7, tl + 4, 0);
-    int ll = L("level_loop"), lv = L("level"); bool ok = false;
+  // bopen.mjs's protocol.  title_loop's `jsr title_menu` -> `lda #0` (start a game); nop:
+  // the game's image comes in from the disc.  level_loop is in THAT image, so it is
+  // patched only once the kernel jumps to the image's entry (game_in): `ldx level` ->
+  // `ldx #level`.
+  { int tl = L("title_loop"); wrbank(7, tl, 0xA9); wrbank(7, tl + 1, 0); wrbank(7, tl + 2, 0xEA); }
+  if (!runTo(L("game_in"), 7, 400000000L)) { fprintf(stderr, "no game_in (pc %04x romsel %d)\n", ProgramCounter, ROMSEL); return 3; }
+  { int ll = L("level_loop"), lv = L("level"); bool ok = false;
     for (int a = ll; a < ll + 24; a++) if (rdbank(7, a) == 0xA6 && rdbank(7, a + 1) == (lv & 255)) { wrbank(7, a, 0xA2); wrbank(7, a + 1, level); ok = true; break; }
     if (!ok) { fprintf(stderr, "ldx level not found\n"); return 3; } }
-  if (!runTo(L("level_init"), 7, 2000000000L)) { fprintf(stderr, "no level_init\n"); return 3; }
-  wrbank(7, L("scan_keys"), 0x60);
-  if (!runTo(L("frame_top"), 7, 400000000L)) { fprintf(stderr, "no frame_top\n"); return 3; }
-  // the state, as bdiff.mjs reads it
+  if (!runTo(L("level_init"), 7, 2000000000L, 0)) { fprintf(stderr, "no level_init\n"); return 3; }
+  wrbank(7, L("scan_keys"), 0x60);   // (the kernel's: inputs come from the script only)
+  if (!runTo(L("frame_top"), 7, 400000000L, 0)) { fprintf(stderr, "no frame_top\n"); return 3; }
+  // the state, as bdump.mjs prints it
   const char *zp[] = {"px","py","vx","vy","anim","evframe","facing","running","firing","hurt","control","bx","by","bvx","bvy","bcnt","bactive","bounce","stars","exiting","lives","health","score","frame","wx","wy","lastkeys","gridsh"};
   std::map<std::string,int> two = {{"px",2},{"py",2},{"vx",2},{"vy",2},{"evframe",2},{"bx",2},{"by",2},{"bvx",2},{"bvy",2},{"score",2},{"frame",2},{"wx",2},{"wy",2}};
   int nobj = WholeRam[L("nobj")], objst = L("LV_OBJST"), keysAddr = L("keys");
@@ -79,9 +87,11 @@ int main(int argc, char **argv) {
   for (int f = 0; f < frames; f++) {
     if (hold-- <= 0) { keys = keyset[rnd() % 10]; hold = 4 + rnd() % 40; }
     WholeRam[keysAddr] = keys;
-    if (!runTo(L("frame_top"), 7, 40000000L)) { fprintf(stderr, "frame %d: no frame_top\n", f); return 4; }
+    if (!runTo(L("frame_top"), 7, 40000000L, 0)) { fprintf(stderr, "frame %d: no frame_top\n", f); return 4; }
     std::ostringstream o; o << "f=" << f << " k=" << keys;
-    for (const char *n : zp) { int a = L(n); int v = two.count(n) ? WholeRam[a] | (WholeRam[a+1] << 8) : WholeRam[a]; o << " " << n << "=" << v; }
+    // (rd: through the paging -- score and hiscore are the kernel's, in bank 7, which is
+    // the bank paged at frame_top)
+    for (const char *n : zp) { int a = L(n); int v = two.count(n) ? rd(a) | (rd(a+1) << 8) : rd(a); o << " " << n << "=" << v; }
     for (int k = 0; k < 16; k++) { o << " O" << k << "="; for (int i = 0; i < nobj; i++) o << (i ? "," : "") << (int)rdbank(7, objst + k * 149 + i); }
     o << " disp=" << std::hex << fnv(WholeRam + 0x300, 0x7D00) << std::dec;
     o << " crtc=" << (int)CRTC_HorizontalTotal << "," << (int)CRTC_VerticalTotal << "," << (int)CRTC_VerticalDisplayed << "," << (int)CRTC_VerticalSyncPos << "," << (int)CRTC_InterlaceAndDelay << "," << (int)CRTC_ScanLinesPerChar << "," << (int)CRTC_ScreenStartHigh << "," << (int)CRTC_ScreenStartLow;

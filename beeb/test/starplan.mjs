@@ -1,4 +1,4 @@
-// Which stars to bake (tools/assets.py, NIBSPR): play each level file with bwork2.mjs's
+// Which stars to bake (tools/assets.py STARPLAN): play each level file with bwork2.mjs's
 // seeded key script, find the frames whose work misses the peg (3 vsyncs less the
 // interrupt), and charge every masked star drawn in them its draw and erase cycles.
 // Writes tools/starbake.json: by level file, the vsync's usable cycles V and every frame

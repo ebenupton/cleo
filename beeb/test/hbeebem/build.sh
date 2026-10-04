@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build a headless BeebEm from its Windows source for lock-step tests against jsbeeb
-# (docs/MODEL_B.md, "BeebEm").  The emulation core -- 6502, video, VIAs, memory, discs --
+# (docs/history/MODEL_B.md, "BeebEm").  The emulation core -- 6502, video, VIAs, memory, discs --
 # has no Win32 in it; this supplies a shim windows.h, a stub BeebWin, stubs for the
 # peripherals it links against, and a harness (main.cpp) that boots a disc the way
 # bopen.mjs does and prints the game's state at every frame_top, with a picture, the

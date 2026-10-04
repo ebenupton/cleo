@@ -3,7 +3,8 @@
 // player unhurt.  An instruction's cycles are the time to the next one (an interrupt's
 // entry lands on the instruction it broke into).  The spin-waits are idle, not work,
 // and are left out: wait_flip and game.s fl_wait (the frame loop's vsync wait).
-// For the cycle grind (tools/cycgrind.py): JSON, by "file:line", with the frame total.
+// For the grinds (tools/cycgrind/ and tools/bytegrind/: regions.py, apply.py): JSON, by
+// "file:line", with the frame total.
 //   node test/linecyc.mjs master|modelb <disc> <labels> <out.json> [levels=0,2,4,8,9] [frames=150]
 import { open } from "./harness.mjs";
 import { openB } from "./bopen.mjs";

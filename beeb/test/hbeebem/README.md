@@ -2,8 +2,9 @@
 
 BeebEm is Windows-only, but its emulation core is plain C++: this directory builds
 just that core on macOS (or Linux) with a stub front end, and a harness that drives
-the disc on a Model B exactly as `test/bopen.mjs` drives jsbeeb -- SHIFT-BREAK, the
-title skipped, `scan_keys` stubbed, the same key script -- and prints the game's state
+the disc on a Model B as `test/bopen.mjs` drives jsbeeb -- SHIFT-BREAK, `title_loop`
+patched to start a game, the level set in `level_loop` once the game's image is in bank
+7 (`game_in`), `scan_keys` stubbed, the same key script -- and prints the game's state
 at every `frame_top`: the zero-page logic, the object arrays, a hash of the display
 RAM, the CRTC registers.  `test/bdump.mjs` prints the same line from jsbeeb, and
 `cmpdump.py` finds the first frame that differs.
