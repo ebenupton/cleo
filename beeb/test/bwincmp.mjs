@@ -1,5 +1,5 @@
 // Two Model B builds, frame by frame: each buffer's 21 visible rows at its own window
-// (BUF_CX/BUF_CY) in its ring, and the bar -- what the player can see.  The same key
+// (BUF_CXL/BUF_CY) in its ring, and the bar -- what the player can see.  The same key
 // script as wincmp.mjs (the Master's), with the player held unhurt.
 //   node test/bwincmp.mjs <discA> <labelsA> <discB> <labelsB> <level> [frames=300]
 // Each build's debug file (beside its labels) says which bank BUF_CY is in.
@@ -18,8 +18,8 @@ const RK = (f) => { if (f !== _kf) { _kf = f; if (_hold-- <= 0) { _rng = (_rng *
 const KEYAT = (f) => process.env.SEED ? RK(f) : KK(PAT[f % PAT.length]);
 const KK = (c) => ({ s: 0, r: 2, l: 1, j: 4 })[c] ?? 0;
 const RING = [0x0A80, 0x4680], RINGBYTES = 23 * 640, BAR = [0x0300, 0x0800];
-const window = (m, bf) => [m.A.BUF_CXH !== undefined ? m.cpu.readmem(m.A.BUF_CX + bf) | (m.cpu.readmem(m.A.BUF_CXH + bf) << 8)
-                                                     : m.cpu.readmem(m.A.BUF_CX + 2 * bf) | (m.cpu.readmem(m.A.BUF_CX + 2 * bf + 1) << 8),
+const window = (m, bf) => [m.A.BUF_CXH !== undefined ? m.cpu.readmem(m.A.BUF_CXL + bf) | (m.cpu.readmem(m.A.BUF_CXH + bf) << 8)
+                                                     : m.cpu.readmem(m.A.BUF_CXL + 2 * bf) | (m.cpu.readmem(m.A.BUF_CXL + 2 * bf + 1) << 8),
                            m.bank(m.cyBank, () => m.cpu.readmem(m.A.BUF_CY + bf))];
 let bad = 0, badFrames = 0;
 for (let f = 0; f < +nS; f++) {

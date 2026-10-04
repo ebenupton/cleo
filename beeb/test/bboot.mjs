@@ -22,7 +22,7 @@ if (process.env.BSWRAM) { const SW = process.env.BSWRAM.split(",").map(Number); 
 const where = () => { const pc = cpu.pc, b = cpu.readmem((A.romsel_cpy ?? 0xf4)); let best = null; for (const [a, n] of names) if (a <= pc && (best === null || a > best[0])) best = [a, n]; return `pc ${pc.toString(16)} bank ${b} (${best ? best[1] + "+" + (pc - best[0]).toString(16) : "?"})`; };
 s.keyDown(16); s.reset(true); await s.runFor(2_000_000); s.keyUp(16);
 let t = 0;
-const step = async (sec, label) => { for (let i = 0; i < sec * 20; i++) { await s.runFor(100_000); } t += sec; console.log(`t=${t}s ${label}: ${where()} MUSON=${cpu.readmem(A.MUSON)}`); };
+const step = async (sec, label) => { for (let i = 0; i < sec * 20; i++) { await s.runFor(100_000); } t += sec; console.log(`t=${t}s ${label}: ${where()} mus_on=${cpu.readmem(A.mus_on)}`); };
 await step(secs, "after boot");
 writeFileSync(`${out}/b_title.png`, await s.screenshotActive());
 // RETURN starts the game (the title menu's first item)

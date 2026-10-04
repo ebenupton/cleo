@@ -51,7 +51,7 @@ at both its call and its definition. Blank columns: the line never ran during pl
   Model B matters most**, and within it the full places: bank 7's game image
   (segments GAMECODE, GAMEDATA, ENGCODE: 21 bytes spare) and the resident kernel
   (KRNCODE: none spare); low RAM (LOWCODE); LDPROG. The menus' image (MNUCODE,
-  MUSCODE) and the Master have room, but a byte saved anywhere counts.
+  MUSCODE) and the Master have room, but a byte SAVED anywhere counts.
 - **Cycles -- cycle-neutral**: on every line that runs in play (non-blank columns),
   the rewrite takes **no more cycles than the original on any path, on both
   machines**, counting page crossings (a taken branch +1, +1 more into another page;
@@ -67,7 +67,7 @@ at both its call and its definition. Blank columns: the line never ran during pl
 
 1. **Timing-critical code: do not touch.** The interrupt chain step in
    `beebgame/src/engine/kernel.s` (`isr_body` / `irq_handler` through `@xit`, `@kend`,
-   `KILLPAL`), the vsync handler up to and including its CRTC, palette and VIA writes,
+   `killpal`), the vsync handler up to and including its CRTC, palette and VIA writes,
    the Model B's interrupt stub in `beebgame/src/low.s` (`irq_handler` .. `irq_ret`:
    `STUBLAT` depends on its cycles), the disc drivers, NMI code and sector loops in
    `disc.s`, any hold or delay loop. Comments with cycle counts mark such code.

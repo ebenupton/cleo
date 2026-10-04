@@ -6,12 +6,12 @@ import path from "node:path";
 export * from "../beebgame/test/lib/harness.mjs";
 
 // the game state a scene is of: the player, the frame, the level
-// The score as a number, whatever its encoding: BCD (3 bytes, ones first: hiscore
+// The score as a number, whatever its encoding: BCD (3 bytes, ones first: hi_score
 // follows it at +3, since 2 Oct 2026) or binary (2 bytes) before
 function scoreValue(H, b) {
   const A = H.A, r = (i) => H.rd(A.score + i);
   let v;
-  if (A.hiscore - A.score === 3) { v = 0; for (let i = 2; i >= 0; i--) v = v * 100 + (r(i) >> 4) * 10 + (r(i) & 15); }
+  if (A.hi_score - A.score === 3) { v = 0; for (let i = 2; i >= 0; i--) v = v * 100 + (r(i) >> 4) * 10 + (r(i) & 15); }
   else v = r(0) | r(1) << 8;
   b.writeUIntLE(v, 0, 3);
 }

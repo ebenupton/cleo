@@ -467,7 +467,7 @@ def star_class(cm, x, y):
 #                  its position is never stored back: process_object re-reads the home
 #                  position every frame and ob_bat draws at ox + fc/2, oy + fd/2 with
 #                  fc clamped to [0, e0*16] and fd to [0, e1*16].  So it stays in its
-#                  own rectangle however far the player runs.  Plus the batoff wobble.
+#                  own rectangle however far the player runs.  Plus the bat_off wobble.
 #   7,9,10,12      static;  11 vanish animates as tiles, not a sprite
 TYPE_IDS = {1: (43, 45), 2: (46, 53), 3: (54, 60), 4: (61, 66), 5: (67, 75),
             6: (76, 84), 7: (85, 92), 9: (93, 96), 10: (97, 97), 12: (100, 102)}
@@ -837,7 +837,7 @@ def pack_tiles(lv, sub):
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc, name_of(lv, sub), demoted)
     assert all(B['slot'][k] == idof[k] + TOFF for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
-    B['shape'] = dict(ntiles=NT, mapshr=lw, nhalf=NHALF, half0=half0, half1=half1, half2=half2,
+    B['shape'] = dict(ntiles=NT, map_shr=lw, nhalf=NHALF, half0=half0, half1=half1, half2=half2,
                       halfpage=B['HALFPAGE'] >> 8, halfoff=B['HALFOFF'], mir0=mir0, nmir=NMIR,
                       solidfill=0x0F if sol0 == 1 else 0x00)    # (beebgame levelfile.Shape)
     B['mir'] = bytes(B['slot'][mirrored[k]] for k in mirs)

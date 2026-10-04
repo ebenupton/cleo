@@ -9,8 +9,8 @@ const frames = parseInt(process.argv[2] ?? "100"), seed0 = parseInt(process.argv
 const shot = parseInt(process.argv[5] ?? "-1"), out = process.argv[6] ?? "build/jb", every = parseInt(process.argv[7] ?? "0");
 // BDISC / BLABELS: another disc image and its labels
 const B = await openB({ level: LEVEL, disc: process.env.BDISC ?? "build/cleo.ssd", labels: process.env.BLABELS ?? "build/modelb/labels.txt" }); const { s, cpu, A, bank } = B;
-const zp = ["px","py","vx","vy","anim","evframe","facing","running","firing","hurt","control","bx","by","bvx","bvy","bcnt","bactive","bounce","stars","exiting","lives","health","score","frame","wx","wy","lastkeys","gridsh"];
-const two = new Set(["px","py","vx","vy","evframe","bx","by","bvx","bvy","score","frame","wx","wy"]);
+const zp = ["px","py","vx","vy","anim","ev_frame","facing","running","firing","hurt","control","bx","by","bvx","bvy","bcnt","bactive","bounce","stars","exiting","lives","health","score","frame","wx","wy","last_keys","gridsh"];
+const two = new Set(["px","py","vx","vy","ev_frame","bx","by","bvx","bvy","score","frame","wx","wy"]);
 const NOBJ = cpu.readmem(A.nobj), OBJN = 149;
 const fnv = (a, n) => { let h = 2166136261; for (let i = 0; i < n; i++) { h ^= cpu.readmem(a + i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; };
 let rng = seed0 >>> 0; const rnd = () => (rng = (Math.imul(rng, 1103515245) + 12345) >>> 0, rng >>> 16);

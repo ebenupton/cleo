@@ -24,7 +24,7 @@ for (const level of levels) for (const seed of sd.split(",").map(Number)) {
       r.push(H.cpu.readmem(a.LV_OBJST + i));
     }
     for (const n of ZP) if (a[n] !== undefined) { r.push(H.cpu.readmem(a[n])); r.push(H.cpu.readmem(a[n] + 1)); }
-    const ns = H.cpu.readmem(a.NSPR); r.push(ns);
+    const ns = H.cpu.readmem(a.nspr); r.push(ns);
     for (let i = 0; i < ns; i++) for (const t of ["SPR_ID", "SPR_XL", "SPR_XH", "SPR_YL", "SPR_YH"]) {
       const v = H.cpu.readmem(a[t] + i);
       r.push(SA && t === "SPR_ID" && ((v >= 34 && v <= 42) || v >= 103) ? -1 : v);

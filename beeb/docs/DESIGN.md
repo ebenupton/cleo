@@ -11,12 +11,12 @@ how it meets the engine, its menus, its packer and its tests.
 |---|---|
 | `src/main.s` | the root: the engine's sources and the game's, in order, and the hooks the engine calls (`hook_title`, `hook_play`, `hook_over`, `hook_image`, `hook_hud`) |
 | `src/logic.s` | the logic: the player, the boomerang, the objects and their collision grid, the HUD (`bar_bg`, `bar_digit`, `redraw_hud`), `rnd` |
-| `src/game.s` | the game loop from `level_loop`, `load_level`, the camera clamp, the sound effects (`sfxtab`, resident) |
+| `src/game.s` | the game loop from `level_loop`, `load_level`, the camera clamp, the sound effects (`sfx_tab`, resident) |
 | `src/menu.s` | the menus' image: the top of the game loop (`game_main`, `title_loop`, `new_game`, `menu_over`) and the screens |
 | `src/gamedata.s` | the tables: the altitude classes, the HUD's digits, the object state; the tune, the font, the title pieces |
 | `src/keymap.inc` | the keys, for the engine's keyboard scan |
 | `tools/convert.py` | the original game's data (`assets/v500/`, CleoV500.jar's contents) to the BBC's: art dithered to MODE 1, the maps, the objects, the tile set, the bar, the font, the title pieces |
-| `tools/assets.py` | the packer: what goes in each level (written by beebgame's `levelfile.py`: the header's game fields HDR_STARTX..HDR_SPECIAL are Cleo's), SPRC, SPRX, imgtab.bin, assets.inc |
+| `tools/assets.py` | the packer: what goes in each level (written by beebgame's `levelfile.py`: the header's game fields HDR_STARTX..HDR_SPECIAL are Cleo's), SPRC, SPRX, img_tab.bin, assets.inc |
 
 `build.sh` sets beebgame's build driver going (`beebgame/tools/build.sh`) with Cleo's
 root, assets step and tune.
@@ -49,7 +49,7 @@ packer's bytes on either machine.  Each object's box id is
 in its e0 (logic.s: ob_star, ob_tramp), and a box-drawn object that overlaps another
 static object is marked disturbable (e1), so it is redrawn rather than kept.
 The directory is split (SPRGEOM): a level carries the images' addresses, and the
-geometry, by shape, is `sprgeom.inc` in bank 7's GAMEDATA (`SPRG_FL` carries the
+geometry, by shape, is `sprgeom.inc` in bank 7's GAMEDATA (`sprg_fl` carries the
 mirror, Cleo's being by id).  Against the masked format: frame work -5.2% on the
 Model B and -6.2% on the Master (every level faster), sprites 23.0K to 10.3K, bank 7
 +443 bytes free, loads 2-3 seconds shorter.  (The masked format placed box stars and
@@ -69,7 +69,7 @@ them, so the build stops if the code moves.
 `title_loop`, `new_game`, `menu_over`), the title, help, level select and win/lose
 screens, the font, and the title tune with its player.  It draws into buffer 0 with
 the window at the origin, the palette black until a page is finished and flipped in,
-calling the kernel for the sections, the palette and `ringaddr7`.  On the Model B the
+calling the kernel for the sections, the palette and `ring_addr7`.  On the Model B the
 screens are laid out for its window, 84 game pixels tall.
 
 Everything the menus draw is on black, so the title pieces (the logo, YOU, WIN, LOSE
@@ -82,9 +82,9 @@ vsync is the copy alone, which stays ahead of the beam (no torn frame: counted o
 machines).  The 11,574-byte masked title pack is 5,394 bytes of streams (each piece padded to whole char rows).
 
 The tune is stepped once a frame from the interrupt: the vsync's `sound_tick` raises
-MUSTICK while MUSON is set, and the stub (the Model B's, with bank 7 already paged) or
+mus_tick while mus_on is set, and the stub (the Model B's, with bank 7 already paged) or
 the handler (the Master's, which pages it) calls `music_tick`.  `music_stop` (the
-kernel's, called by every load) clears MUSON, so the interrupt never calls into the
+kernel's, called by every load) clears mus_on, so the interrupt never calls into the
 menus' image while the game's is in.
 
 

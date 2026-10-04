@@ -21,7 +21,7 @@ for (let f = 0; f < N; f++) {
   H.wr(A.keys, k); H.wr(A.hurt, 1); H.wr(A.health, 3);
   await H.runTo(A.frame_top);
   const cur = (H.rd(0xfe34) >> 2) & 1;   // the buffer the CPU sees (ACCCON X)
-  const cx = H.inBank("BUF_CX", () => (A.BUF_CXH !== undefined ? H.rd(A.BUF_CX + cur) | (H.rd(A.BUF_CXH + cur) << 8) : H.rd(A.BUF_CX + 2 * cur) | (H.rd(A.BUF_CX + 2 * cur + 1) << 8))), cy = H.inBank("BUF_CY", () => H.rd(A.BUF_CY + cur));
+  const cx = H.inBank("BUF_CXL", () => (A.BUF_CXH !== undefined ? H.rd(A.BUF_CXL + cur) | (H.rd(A.BUF_CXH + cur) << 8) : H.rd(A.BUF_CXL + 2 * cur) | (H.rd(A.BUF_CXL + 2 * cur + 1) << 8))), cy = H.inBank("BUF_CY", () => H.rd(A.BUF_CY + cur));
   if (cx & 0x8000) continue;
   const lw = H.rd(A.maplw), stride = 1 << lw;
   const recs = [];

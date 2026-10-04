@@ -5,7 +5,7 @@ start.  A block's cost -- the page crossings of its taken branches and of the in
 reads of its data -- is tabulated for every start, both machines (the Model B's
 blocks run on from ENGCODE's start as the Master's do, the total being fixed), then
 orders are searched from random starts, with a small charge for every block moved.
-drawsprite and draw_dirty stay in order, and the other files' three blocks stay last.  The pads
+draw_sprite and draw_dirty stay in order, and the other files' three blocks stay last.  The pads
 come after (test/padopt.py).
     for m in master modelb; do PHASEDUMP=build/pd_$m.json node test/cycprof.mjs $m build/cleo.ssd build/$m/labels.txt; done
     python3 test/blockopt.py"""
@@ -19,9 +19,9 @@ PADS = {}
 for l in open('beebgame/src/pads.inc'):
     mm = re.match(r'(PAD[BM]_\w+) = (\d+)', l)
     if mm: PADS[mm.group(1)] = int(mm.group(2))
-CH = [('match_sprites', 'MS'), ('addsprite', None), ('draw_sprites', 'SP'), ('erase_old', 'EO'), ('drawsprite', 'DS'),
+CH = [('match_sprites', 'MS'), ('add_sprite', None), ('draw_sprites', 'SP'), ('erase_old', 'EO'), ('draw_sprite', 'DS'),
       ('copy_partial', 'CP'), ('render_frame', None), ('render_core', None), ('mark_dirty', None),
-      ('draw_dirty', None), ('mirror_copy', None), ('mirdirty', None), ('lvreset', None)]
+      ('draw_dirty', None), ('mirror_copy', None), ('mir_dirty', None), ('lv_reset', None)]
 _LB = labels('modelb')
 CH.sort(key=lambda c: _LB.get(c[0], 1 << 20))     # as they lie now
 def extents(m):
@@ -101,9 +101,9 @@ while improved:
 import random
 random.seed(2)
 K = n - 3                                   # the last three: other files, kept last
-assert [c[0] for c in CH[K:]] == ['mirror_copy', 'mirdirty', 'lvreset']
+assert [c[0] for c in CH[K:]] == ['mirror_copy', 'mir_dirty', 'lv_reset']
 def disp(o): return sum(1 for i in range(n - 1) if o[i + 1] != o[i] + 1) + (o[0] != 0)
-FIX = [[c[0] for c in CH].index(x) for x in ('drawsprite', 'draw_dirty', 'mirror_copy', 'mirdirty', 'lvreset')]
+FIX = [[c[0] for c in CH].index(x) for x in ('draw_sprite', 'draw_dirty', 'mirror_copy', 'mir_dirty', 'lv_reset')]
 def ok(o): p = [o.index(i) for i in FIX]; return p == sorted(p)
 def sc(o):
     if not ok(o): return 1e9

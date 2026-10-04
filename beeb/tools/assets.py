@@ -18,7 +18,7 @@ them identically (build.sh checks).  What this writes to $BD:
                   sprite placement list, the RLE map, the finished sprite directory,
                   and last the Master's LV_PAGE0 in two whole sectors
    SPRC, SPRX     the sprites, as above
-   imgtab.bin     per image and box: which shared file holds it and where (ldprog.s)
+   img_tab.bin     per image and box: which shared file holds it and where (ldprog.s)
    digits.bin     the HUD's digits packed, digtab.bin their decode (bank 7, banks.s);
                   font.bin (the menus' glyphs); alt.bin (the altitude classes);
                   music.bin (build/MUSIC, midi2snd.py's: the menus' tune); title.bin
@@ -96,7 +96,7 @@ ALWAYS_IDS = range(43)                      # the ids a level draws whatever its
 # The resident sprites are one file (SPRC), everything else -- the enemies, the box
 # stars -- another (SPRX), which a load stages and copies from: the level's subset, to
 # the addresses placed below.  (The Master keeps SPRX resident after its first read:
-# ldprog.s.)  imgtab says where in SPRX each item is.
+# ldprog.s.)  img_tab says where in SPRX each item is.
 NIMG = len(m.images)
 # item keys: ('img', j) | ('box', k) | ('tr', k) | ('sb', k) | ('pw', k) -> a small integer
 # the placement lists and the directory template use
@@ -200,28 +200,28 @@ COMMON_END = B4_DATA[0] + len(sprc4)
 assert COMMON_END <= B4_DATA[1] and C5_BASE + C5_LEN <= B5_DATA[1] and MAP5 + 0x2000 <= 0xBC00
 sprc = sprc4 + sprc5
 out('SPRC', sprc)
-sprx, imgtab = bytearray(), bytearray()
+sprx, img_tab = bytearray(), bytearray()
 for j in range(NIMG):
     if j in common_addr:
-        imgtab += bytes(5); continue        # (never placed: resident)
+        img_tab += bytes(5); continue        # (never placed: resident)
     o, n = len(sprx), len(m.img_bytes[j]); sprx += m.img_bytes[j]
-    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])   # file 0 (SPRX), offset, length
+    img_tab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])   # file 0 (SPRX), offset, length
 for k in range(NBOXART):                    # the box stars' boxes
     o, n = len(sprx), len(m.box_bytes[k]); sprx += m.box_bytes[k]
-    imgtab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])
+    img_tab += bytes([0, o & 255, o >> 8, n & 255, n >> 8])
 BAKEITEM0 = NIMG + NBOXART                  # the baked slots: made by the loader (ldprog.s bake)
-bakegeom = bytearray()                  # tiles where the object stands (its tile in the
+bake_geom = bytearray()                  # tiles where the object stands (its tile in the
 for k_ in m.BAKE_KINDS:                 # placement entry's mask field; skip: the first tile
     wc, lines, dx, dty, ov = k_[:5]     # row from its bottom char row)
     skip = k_[5] if len(k_) > 5 else 0
     o = len(sprx); sprx += ov
     assert lines <= 32 and len(ov) == 2 * wc * lines
-    bakegeom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, skip])
-bakekind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)] + [m.PW_KIND] * PWMAX)
-# (no imgtab entries: placewalk bakes them before it looks)
+    bake_geom += bytes([wc, lines, dx & 255, (dx >> 8) & 255, dty & 255, o & 255, o >> 8, skip])
+bake_kind = bytes([0] * TRMAX + [1 + k % 6 for k in range(NSTAR * 6)] + [m.PW_KIND] * PWMAX)
+# (no img_tab entries: place_walk bakes them before it looks)
 assert len(sprx) <= 0x4000                  # STAGE's 16K
 out('SPRX', sprx)
-out('imgtab.bin', imgtab)
+out('img_tab.bin', img_tab)
 print('sprites: SPRC %d bytes (bank 4 $%04X-$%04X, bank 5 $%04X-$%04X), SPRX %d bytes'
       % (len(sprc), B4_DATA[0], COMMON_END, C5_BASE, B5_TOP, len(sprx)))
 
@@ -462,9 +462,9 @@ def settle_level(level, img_addr, img_bank, regions):
 # Cleo's fields in the level header (logic.s level_init): the start and exit, in tiles,
 # and the special tiles' ids (the vanishing blocks, the flowers)
 HDR_STARTX, HDR_STARTY, HDR_EXITX, HDR_EXITY, HDR_SPECIAL = 2, 3, 4, 5, 8
-# logic.s RNGTAB: inrange's limit quads (lo, hi, lo2, hi2, each +128: rx > lo && rx <
+# logic.s RNGTAB: in_range's limit quads (lo, hi, lo2, hi2, each +128: rx > lo && rx <
 # hi && ry > lo2 && ry < hi2), every level's header tail -- the loader puts it at LV_HDR
-# + 32, in its page ($82), where inrange's hot reads need it.  Append new quads, never
+# + 32, in its page ($82), where in_range's hot reads need it.  Append new quads, never
 # insert: callers hold fixed offsets (ldx #n), and a quad put in mid-table once shifted
 # every later one under them (the bat read Cleo's band, the vanishing platforms never
 # saw her feet).
@@ -702,7 +702,7 @@ if STARPLAN:
     cand = {(key, xy) for key, (V, fl) in frames.items() for w, st in fl for xy in st
             if m.star_class(m.maps[key], *xy) == 0 and m.bake_star(m.maps[key], *xy) is not None}
     size = lambda key, xy: sum(len(b) for b in m.bake_star(m.maps[key], *xy))
-    saved = [0.0]
+    SAVED = [0.0]
     while cand:
         best = max(cand, key=lambda kx: (gain(*kx) / size(*kx), kx))
         key, xy = best
@@ -722,11 +722,11 @@ if STARPLAN:
             CHOSEN[key].pop(); _bakes.pop(key, None)
             continue
         V, fl = frames[key]
-        saved[0] += gain(key, xy) / played(*key)
+        SAVED[0] += gain(key, xy) / played(*key)
         for f in fl:
             if xy in f[1]:
                 f[0] -= f[1].pop(xy)
-    print('stars chosen (the plan\'s frames: %d vsyncs saved): %s' % (saved[0], ', '.join('L%d: %d' % (k[0] * 2 + k[1], len(v)) for k, v in sorted(CHOSEN.items()) if v)))
+    print('stars chosen (the plan\'s frames: %d vsyncs SAVED): %s' % (SAVED[0], ', '.join('L%d: %d' % (k[0] * 2 + k[1], len(v)) for k, v in sorted(CHOSEN.items()) if v)))
 _spare4 = _spare5 = 0x10000
 for lv in range(8):
     for sub in (0, 1):
@@ -784,10 +784,10 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
     f.write('MAXSPRDEF = %d\nBINMAXDEF = %d\n' % (MAXSPR, BINMAX))
     f.write('B4_DATA_END = $%04X\nB5_TOP = $%04X\nMAP5 = $%04X\n' % (B4_DATA[1], B5_TOP, MAP5))
     f.write('B4_CODE_END = $%04X\nB5_CODE_END = $%04X\n' % (B4_CODE_END, B5_CODE_END))
-print('MAXSPR %d BINMAX %d; imgtab %d entries' % (MAXSPR, BINMAX, len(imgtab) // 5))
+print('MAXSPR %d BINMAX %d; img_tab %d entries' % (MAXSPR, BINMAX, len(img_tab) // 5))
 out('nibtab.bin', m.NIBTAB)             # the engine's L0TAB, L1TAB, NMASK (banks.s)
-out('bakegeom.bin', bytes(bakegeom))   # the baker's tables (ldprog.s)
-out('bakekind.bin', bakekind)
+out('bake_geom.bin', bytes(bake_geom))   # the baker's tables (ldprog.s)
+out('bake_kind.bin', bake_kind)
 json.dump({'%d' % (lv * 2 + sub): [[k[0], k[1], list(_bk[3][k]), list(BAKEAT[(lv, sub)][k]), list(_bk[2][k])] for k in sorted(_bk[2])]
            for lv in range(8) for sub in (0, 1) for _bk in [level_bakes(lv, sub)]},
           open(os.path.join(OUT, 'bakes.json'), 'w'))   # (test/bakecheck.mjs: what the loader must make)
@@ -807,7 +807,7 @@ for i in range(NDIR):
 assert len(shapes) <= 256
 with open(os.path.join(OUT, 'sprgeom.inc'), 'w') as f:
     f.write('; generated by tools/assets.py: the sprites\' geometry by shape\n')
-    f.write('SPRG_IX: .byte %s\n' % ', '.join(map(str, six)))
-    for name, k in (('SPRG_W', 0), ('SPRG_RX', 1), ('SPRG_RY', 2), ('SPRG_LN', 3), ('SPRG_FL', 4)):
+    f.write('sprg_ix: .byte %s\n' % ', '.join(map(str, six)))
+    for name, k in (('sprg_w', 0), ('sprg_rx', 1), ('sprg_ry', 2), ('sprg_ln', 3), ('sprg_fl', 4)):
         f.write('%s: .byte %s\n' % (name, ', '.join(str(sh[k]) for sh in shapes)))
 print('sprite geometry: %d ids, %d shapes: %d bytes of geometry' % (NDIR, len(shapes), NDIR + 5 * len(shapes)))

@@ -50,13 +50,13 @@ def load_cands():
 allc = load_cands()
 done = {x['id'] for x in record}
 CONF = {'high': 0, 'medium': 1, 'low': 2}
-def saved(c, k):
+def SAVED(c, k):
     try:
         return int(c.get(k, 0) or 0)
     except (TypeError, ValueError):
         return 0
 cands = [c for c in allc if c['id'] not in done]
-cands.sort(key=lambda c: (CONF.get(str(c.get('confidence', 'low')).lower(), 2), -(2 * saved(c, 'bytes_modelb') + saved(c, 'bytes_master'))))
+cands.sort(key=lambda c: (CONF.get(str(c.get('confidence', 'low')).lower(), 2), -(2 * SAVED(c, 'bytes_modelb') + SAVED(c, 'bytes_master'))))
 say('%d candidates (%d already recorded)' % (len(cands), len(done)))
 
 ANON = re.compile(r'^:(\s|$)')
@@ -255,7 +255,7 @@ def try_batch(batch):
                         record.append(dict(id=c['id'], outcome='kept', file=c['file'], lo=lo, batch=len(batch), dB=dB, dM=dM,
                                            sB=sB, sM=sM, original=c['original'], proposal=c['proposal']))
                     json.dump(record, open(LOG, 'w'), indent=1)
-                    say('  kept %d (%s): %d / %d bytes saved, cycles %+d / %+d -> %d / %d bytes' % (len(batch), ' '.join(c['id'] for c in batch), sB, sM, dB, dM, sz['modelb'], sz['master']))
+                    say('  kept %d (%s): %d / %d bytes SAVED, cycles %+d / %+d -> %d / %d bytes' % (len(batch), ' '.join(c['id'] for c in batch), sB, sM, dB, dM, sz['modelb'], sz['master']))
                     return len(batch)
                 why = 'slower (Model B %+d, Master %+d)' % (dB, dM)
             else:
@@ -270,7 +270,7 @@ def try_batch(batch):
         say('  rejected %s: %s' % (batch[0]['id'], why))
         run('./build.sh')
         return 0
-    if why.startswith('no smaller') and all(saved(c, 'bytes_modelb') <= 0 and saved(c, 'bytes_master') <= 0 for c in batch):
+    if why.startswith('no smaller') and all(SAVED(c, 'bytes_modelb') <= 0 and SAVED(c, 'bytes_master') <= 0 for c in batch):
         for c in batch:
             record.append(dict(id=c['id'], outcome=why, file=c['file'], lo=c['_at'][1]))
         json.dump(record, open(LOG, 'w'), indent=1)
@@ -284,7 +284,7 @@ def grind(queue):
     while queue:
         batch, rest, used = [], [], {}
         for c in queue:
-            if saved(c, 'bytes_modelb') < 0 or saved(c, 'bytes_master') < 0:
+            if SAVED(c, 'bytes_modelb') < 0 or SAVED(c, 'bytes_master') < 0:
                 record.append(dict(id=c['id'], outcome='grows', file=c.get('file'), lo=c.get('lo'))); continue
             at = locate(c)
             if at is None:

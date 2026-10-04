@@ -72,7 +72,7 @@ latter randomised at level start exactly as the original does).
 `alt[tile*8 + column]` = ground height in that pixel column: 128 = no ground, otherwise
 the altitude (8 = solid full tile; other values give slopes). This is the *only* collision
 data — walls, floors and slopes all come from it, sampled at a few points around the
-player and objects (`getinfo`/`getaltitude` in `logic.s`). The port deduplicates the 8-byte
+player and objects (`get_info`/`get_altitude` in `logic.s`). The port deduplicates the 8-byte
 rows into classes (`ALTCLS` + `ALTTAB`).
 
 Tile attributes were not in a file; they were **constants in the code**: conveyor "push"
@@ -104,7 +104,7 @@ constants — gravity `+80`, drag `*31>>5`, jump `−1280`, etc.). Every place t
 "improved" a formula later turned out to be a bug. Specific things learned the hard way:
 
 - The frame loop is fixed-step; the original runs 25 Hz logic. Timers compare frame
-  counters with *unsigned* deltas (`frame − evframe`); a signed compare made the hurt
+  counters with *unsigned* deltas (`frame − ev_frame`); a signed compare made the hurt
   flash and control lock stick after the 8-bit counter wrapped.
 - Collision probes need full 16-bit `>>3` shifts — 8-bit shortcuts break past x = 256.
 - The original clips sprites per pixel; objects legitimately sit partly off the top of

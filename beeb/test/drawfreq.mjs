@@ -1,4 +1,4 @@
-// How often each sprite id is drawn a frame, per level: every entry to drawsprite (bank
+// How often each sprite id is drawn a frame, per level: every entry to draw_sprite (bank
 // 7, A = the id) over the usual key script with the player unhurt.  The packer weighs
 // its placements by these (tools/assets.py, tools/drawfreq.json: this tool writes it,
 // both machines averaged -- their windows differ).
@@ -19,7 +19,7 @@ async function one(machine, level) {
   const sock7 = machine === "master" ? 7 : M.PB(7);
   const n = new Map();
   const hook = cpu.debugInstruction.add((pc) => {
-    if (pc === A.drawsprite && cpu.readmem((A.romsel_cpy ?? 0xf4)) === sock7) n.set(cpu.a, (n.get(cpu.a) ?? 0) + 1);
+    if (pc === A.draw_sprite && cpu.readmem((A.romsel_cpy ?? 0xf4)) === sock7) n.set(cpu.a, (n.get(cpu.a) ?? 0) + 1);
     return false;
   });
   for (let f = 0; f < frames; f++) {

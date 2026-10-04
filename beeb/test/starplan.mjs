@@ -29,10 +29,10 @@ for (let lv = 0; lv < 16; lv++) {
       if (isrAt >= 0) { if (op === 0x40) { isrTot += now + 6 - isrAt; isrAt = -1; lastPc = -1; } return false; }
       if (pc === A.frame_top) { t0 = now; work = 0; fr_ = []; }
       else if (pc === A.render_done && t0 >= 0) { total++; frames.push([work, fr_]); t0 = -1; }
-      if (pc === A.drawsprite && dRet < 0) { dRet = ret(cpu.s); dC = 0; dKey = MASKSTAR(cpu.a) ? `${(cpu.readmem(A.spx) | cpu.readmem(A.spx + 1) << 8) >> 3},${(cpu.readmem(A.spy) | cpu.readmem(A.spy + 1) << 8) >> 3}` : null; }
+      if (pc === A.draw_sprite && dRet < 0) { dRet = ret(cpu.s); dC = 0; dKey = MASKSTAR(cpu.a) ? `${(cpu.readmem(A.spx) | cpu.readmem(A.spx + 1) << 8) >> 3},${(cpu.readmem(A.spy) | cpu.readmem(A.spy + 1) << 8) >> 3}` : null; }
       else if (pc === dRet) { if (dKey) fr_.push([dKey, dC]); dRet = -1; }
       if (pc === A.erase_old && eRet < 0) eRet = ret(cpu.s); else if (pc === eRet) eRet = -1;
-      if (eRet >= 0 && pc === A.callbank && cbRet < 0) { cbRet = ret(cpu.s); cbC = 0; const rp = cpu.readmem(A.rp) | cpu.readmem(A.rp + 1) << 8; const rd = (o) => machine === "master" ? cpu.readmem(rp + o) : cpu.readmem(rp + o);
+      if (eRet >= 0 && pc === A.call_bank && cbRet < 0) { cbRet = ret(cpu.s); cbC = 0; const rp = cpu.readmem(A.rp) | cpu.readmem(A.rp + 1) << 8; const rd = (o) => machine === "master" ? cpu.readmem(rp + o) : cpu.readmem(rp + o);
         const id = rd(0); cbKey = MASKSTAR(id) ? `${(rd(1) | rd(2) << 8) >> 3},${(rd(3) | rd(4) << 8) >> 3}` : null; }
       else if (pc === cbRet) { if (cbKey) fr_.push([cbKey, cbC]); cbRet = -1; }
       return false;

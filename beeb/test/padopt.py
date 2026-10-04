@@ -16,7 +16,7 @@ LIM = 64                                    # the largest pad tried
 # the pads in ENGCODE's order, each before its routine (BB: before render_frame, the
 # Model B's only; the code after it is render_frame)
 NAMES = [('MS', 'match_sprites'), ('SP', 'draw_sprites'), ('EO', 'erase_old'),
-         ('DS', 'drawsprite'), ('CP', 'copy_partial'), ('BB', 'render_frame')]
+         ('DS', 'draw_sprite'), ('CP', 'copy_partial'), ('BB', 'render_frame')]
 
 
 def labels(m):

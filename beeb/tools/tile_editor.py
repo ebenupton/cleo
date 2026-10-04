@@ -2,7 +2,7 @@
 """Cleo tile dither editor.
 
 Shows a level zoomed 2x, lets you click a tile to select it, view its dithered
-state and paint the pixels by hand.  Hand edits are saved to beeb/tile_edits.json
+state and paint the pixels by hand.  Hand edits are SAVED to beeb/tile_edits.json
 (convert._edits_path: beside tools/, not under build/), which convert.py reads and
 uses in place of the automatic dither for those tiles (re-run ./build.sh to bake
 them into the disc).
@@ -243,7 +243,7 @@ class Editor:
         out = {str(k): v.tolist() for k, v in edits.items()}
         with open(convert._edits_path, 'w') as f:
             json.dump(out, f)
-        self.status.config(text='saved %d edits -> build/tile_edits.json' % len(out))
+        self.status.config(text='SAVED %d edits -> build/tile_edits.json' % len(out))
 
 
 def main():
