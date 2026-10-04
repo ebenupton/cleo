@@ -3,10 +3,8 @@ beeb/build/
 /v500/
 *.ssd
 !/cleo.ssd
-beeb/profile/
 .DS_Store
 *.jar
 screenshots/
 __pycache__/
-beeb/modelb/
 beeb/test/hbeebem/build/
