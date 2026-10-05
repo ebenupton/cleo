@@ -209,9 +209,16 @@ game_over:
 ; volume latch with the attenuation (hw.inc SN_*) -- and the frames to hold
 ; them.  sound_tick's end mark silences channel 2 and the noise channel, so
 ; every effect plays on SFX_CH or, the throw, on the noise channel (SN_NOISE,
-; whose latch's low 3 bits pick the noise).
+; whose latch's low 3 bits pick the noise).  The data byte that follows a latch
+; replaces the noise control on the noise channel, so there it repeats lo4 (a 0
+; there turned the throw's white noise periodic).
 .macro SFX ch, lo4, hi, att, dur
+  .if ch = SN_NOISE
+        .assert hi = 0, error, "SFX: a noise step has no period high bits"
+        .byte SN_LATCH | (ch << SN_CHSHIFT) | lo4, lo4
+  .else
         .byte SN_LATCH | (ch << SN_CHSHIFT) | lo4, hi
+  .endif
         .byte SN_LATCH | SN_VOL | (ch << SN_CHSHIFT) | att, dur
 .endmacro
 SFX_CH = 2                         ; the effects' tone channel
@@ -225,9 +232,9 @@ sfx_star:  SFX SFX_CH, 0, 4, 0, 2
            SFX SFX_CH, 0, 3, 0, 3
            SFX SFX_CH, 0, 3, 6, 3
            .byte SFX_END
-sfx_throw: SFX SN_NOISE, 4, 0, 2, 2
-           SFX SN_NOISE, 5, 0, 5, 3
-           SFX SN_NOISE, 5, 0, 9, 3
+sfx_throw: SFX SN_NOISE, SN_WHITE | 0, 0, 2, 2   ; white noise, the fastest rate,
+           SFX SN_NOISE, SN_WHITE | 1, 0, 5, 3   ;  then the next, fading
+           SFX SN_NOISE, SN_WHITE | 1, 0, 9, 3
            .byte SFX_END
 sfx_hit:   SFX SFX_CH, 0, 40, 0, 4
            SFX SFX_CH, 0, 48, 2, 4

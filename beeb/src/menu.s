@@ -58,23 +58,23 @@ GLYPH_LT    = 27
 GLYPH_SLASH = 28
 GLYPH_DOT   = 29
 GLYPH_0     = 30
-; A screen's ink spans top..bot-1 as laid out; centred in a window of VISLINES/2
-; px its offset is (VISLINES/2 - bot - top) / 2, rounded to a char row.
+; The picture a menu shows is the window (VISLINES/2 px, y 0 down) and, above it,
+; the bar's section (MENU_BAND_PX: menu_sections points it at ring rows below the
+; window, cleared, so it shows black).  A screen's ink spans top..bot-1 as laid
+; out (y >= 0: the band cannot hold ink); centred in the whole picture its offset
+; is (VISLINES/2 - MENU_BAND_PX - bot - top) / 2, rounded to a char row, and never
+; above y = 0.
+MENU_BAND_PX  = BARROWS*CHARLINES/2
 TITLE_TOP     = MENU_LOGO_Y
 TITLE_BOT     = MENU_ITEMS_Y + (MENU_NITEMS-1)*MENU_STEP + GLYPHH
 HELP_TOP      = HELP_Y0
 HELP_BOT      = HELP_Y0 + (HELP_N-1)*HELP_PITCH + GLYPHH
 WL_TOP        = WL_WORDS_Y
 WL_BOT        = WL_HISCORE_Y + GLYPHH
-  .if VISLINES/2 > MENU_LAID_PX
-TITLE_DY = ((VISLINES/2 - TITLE_BOT - TITLE_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1)
-HELP_DY  = ((VISLINES/2 - HELP_BOT - HELP_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1)
-WL_DY    = ((VISLINES/2 - WL_BOT - WL_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1)
-  .else
-TITLE_DY = 0
-HELP_DY  = 0
-WL_DY    = 0
-  .endif
+MENU_ROOM = VISLINES/2 - MENU_BAND_PX     ; the picture's height less the band, twice its centre
+TITLE_DY = .max(0, ((MENU_ROOM - TITLE_BOT - TITLE_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
+HELP_DY  = .max(0, ((MENU_ROOM - HELP_BOT - HELP_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
+WL_DY    = .max(0, ((MENU_ROOM - WL_BOT - WL_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
 
 ; ---------------------------------------------------------------- variables
         .segment "MNUBSS"          ; the menus' image: gone while the game runs
@@ -814,8 +814,9 @@ help_screen:
 ;   Uses:  everything
 ; The n = A+1 items are LEVEL_STEP apart, or LEVEL_STEP_TIGHT when the list
 ; would not fit the window: on the Model B's 84 px all eight are 92 tall at 12,
-; 78 at 10.  The first item's y = (VISLINES/2 - GLYPHH - (n-1)*step) / 2: text
-; goes on any row.
+; 78 at 10.  The first item's y = (VISLINES/2 - MENU_BAND_PX - GLYPHH -
+; (n-1)*step) / 2, the list centred in the picture with the bar's band (the
+; screens' rule, above), and 0 when that is negative: text goes on any row.
 ; ----------------------------------------------------------------------------
 level_select:
         pha
@@ -845,9 +846,11 @@ level_select:
         ldy #LEVEL_STEP_TIGHT
         clc
 :       sty mstep
-        eor #$FF                   ; (VISLINES/2 - GLYPHH - A) / 2: -A-1, + (.. + 1)
-        adc #VISLINES/2 - GLYPHH + 1   ;  (C = 0 both ways in)
-        lsr
+        eor #$FF                   ; (VISLINES/2 - MENU_BAND_PX - GLYPHH - A) / 2:
+        adc #VISLINES/2 - MENU_BAND_PX - GLYPHH + 1   ;  -A-1, + (.. + 1) (C = 0 both
+        bcs :+                     ;  ways in); no carry: negative, so 0
+        lda #0
+:       lsr
         tax                        ; X = the first item's y
         lda tmp
         jmp menu_list

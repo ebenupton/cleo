@@ -581,10 +581,10 @@ RNGTAB_QUADS = [
     ('BOOM_BAT',    (-12, 12, -12, 12)),
     ('BAT_STOMP',   (-16, 16, -12, 16)),
     ('BAT',         (-12, 12, -128, 127)),
-    # the mask and the mummy -- the biggest box where every Cleo frame (0-26) overlaps every
-    # frame of both (67-84) by a pixel; the original's (-16, 16, -24, 20) hit with no pixels
-    # touching at most of its offsets
-    ('WALKER',      (-8, 8, -14, 12)),
+    # the mask and the mummy: across, the widest band where every Cleo frame (0-26) overlaps
+    # every frame of both (67-84) by a pixel (the original's -16..16 hit with no pixels
+    # touching); down, the original's -24..20, the sprites' full height
+    ('WALKER',      (-8, 8, -24, 20)),
     ('BOOM_WALKER', (-10, 10, -16, 8)),
     # (+1: ob_spike sets the x limit by its height)
     ('SPIKE',       (-8, 0, -24, 8)),
