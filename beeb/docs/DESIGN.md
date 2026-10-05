@@ -25,7 +25,7 @@ is what today's build gives and the symbol is what to read.
 Where the game's code and data sit: `GAMECODE` and `GAMEDATA` are in bank 7's game image
 (`__B7_START__`), `GAMEBSS`/`GAMEROWH`/`GAMEOBJ` are its variables (zeroed as the image
 comes in), `GAMELVL` is the room below them (`__GAMELVL_RUN__`, $8220 today, after the
-engine's `ENGLVL`), `GAMEHI` is the resident page at the top of the bank (`__GAMEHI_RUN__`),
+engine's `ENGLVL`), `GAMEHI` is the resident bytes ending the bank at $BFFF, after `KRNHW` (`__GAMEHI_RUN__`),
 `ZPGAME` follows the engine's zero page (`__ZPGAME_RUN__`), and `MNUCODE`/`MNUBSS` are the
 menus' image.  The layout is `beebgame/cfg/banks.cfg`'s.
 
