@@ -346,9 +346,9 @@ of `menu.s`: `MENU_LOGO_X/Y`, `MENU_ITEMS_Y`, `MENU_STEP`, `HELP_Y0`/`HELP_PITCH
 `LEVEL_STEP`/`LEVEL_STEP_TIGHT`, `WL_*`, `BIGCLEO_*`).  The picture a menu shows is the window
 and, above it, the bar's section (`MENU_BAND_PX`, 8 px: `menu_sections` points it at cleared
 ring rows below the window, so it is black).  Each screen is centred in that whole picture by
-`TITLE_DY`/`HELP_DY`/`WL_DY` = `max(0, ((VISLINES/2 - MENU_BAND_PX - INK_BOT - INK_TOP) / 2 + 2)
-& $FC)`: never above the window's top, so on the Model B, laid out for its own window, they are
-0.  `level_select` lists the names (`level_names`: `l0..l7`) `LEVEL_STEP` apart, or
+`TITLE_DY`/`HELP_DY`/`WL_DY` = `((VISLINES/2 - MENU_BAND_PX - INK_BOT - INK_TOP) / 2 + 2) & $FC`,
+a whole number of char rows (pieces sit on chars), negative to move a screen up but never so
+far that its ink starts above the window's top.  `level_select` lists the names (`level_names`: `l0..l7`) `LEVEL_STEP` apart, or
 `LEVEL_STEP_TIGHT` when all eight would not fit the window, its first row centred the same way
 at run time.
 

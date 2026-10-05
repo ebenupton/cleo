@@ -62,7 +62,8 @@ GLYPH_0     = 30
 ; the bar's section (MENU_BAND_PX: menu_sections points it at ring rows below the
 ; window, cleared, so it shows black).  A screen's ink spans top..bot-1 as laid
 ; out (y >= 0: the band cannot hold ink); centred in the whole picture its offset
-; is (VISLINES/2 - MENU_BAND_PX - bot - top) / 2, rounded to a char row, and never
+; is (VISLINES/2 - MENU_BAND_PX - bot - top) / 2, rounded to a char row (pieces sit
+; on chars), negative to move a screen up, but never so far that its ink starts
 ; above y = 0.
 MENU_BAND_PX  = BARROWS*CHARLINES/2
 TITLE_TOP     = MENU_LOGO_Y
@@ -72,9 +73,9 @@ HELP_BOT      = HELP_Y0 + (HELP_N-1)*HELP_PITCH + GLYPHH
 WL_TOP        = WL_WORDS_Y
 WL_BOT        = WL_HISCORE_Y + GLYPHH
 MENU_ROOM = VISLINES/2 - MENU_BAND_PX     ; the picture's height less the band, twice its centre
-TITLE_DY = .max(0, ((MENU_ROOM - TITLE_BOT - TITLE_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
-HELP_DY  = .max(0, ((MENU_ROOM - HELP_BOT - HELP_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
-WL_DY    = .max(0, ((MENU_ROOM - WL_BOT - WL_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
+TITLE_DY = .max(-(TITLE_TOP & ~(MENU_ROWPX-1)), ((MENU_ROOM - TITLE_BOT - TITLE_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
+HELP_DY  = .max(-(HELP_TOP & ~(MENU_ROWPX-1)), ((MENU_ROOM - HELP_BOT - HELP_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
+WL_DY    = .max(-(WL_TOP & ~(MENU_ROWPX-1)), ((MENU_ROOM - WL_BOT - WL_TOP) / 2 + MENU_ROWPX/2) & ~(MENU_ROWPX-1))
 
 ; ---------------------------------------------------------------- variables
         .segment "MNUBSS"          ; the menus' image: gone while the game runs
@@ -87,7 +88,6 @@ mcount:   .res 1                   ; menu_list: the items, the first's y, the ro
 mtop:     .res 1                   ;  the selection (win_lose borrows them: the flag,
 mstep:    .res 1                   ;  the frames, the counter)
 msel:     .res 1
-mclear:   .res 1                   ; written by title_menu and level_select; never read
 mlast:    .res 1                   ; the item the cursor was last drawn at
 mbuf:     .res 1                   ; the piece in TBUF (win_lose: big Cleo, one ahead)
 prow:     .res 1                   ; blit: the char row, and the rows left
@@ -599,8 +599,8 @@ unpack: tax
 ;          the first item's y; mstep = the rows' step
 ;   Out:   A = the chosen item's index, Z from it; mtop, mcount, msel, mlast,
 ;          last_keys
-;   Uses:  A X Y, ptr, draw_text's, clear_items', tmp, tmp3
-;   Pre:   menu_begin has run
+;   Uses:  A X Y, ptr, draw_text's, tmp, tmp3
+;   Pre:   menu_begin has run (the ring is black: the items are drawn on it)
 ; Up and down move the cursor, fire or right chooses.  The page is shown once
 ; the items are drawn; a move redraws only the two cursor rows (right after the
 ; vsync menu_keys waited for) in the displayed page.  The strings' table is read
@@ -615,7 +615,6 @@ menu_list:
         stx mtop
         lda #$FF
         sta last_keys              ; every key held counts as held, not pressed
-        jsr clear_items
         ldx #0
         stx msel                   ; (X = 0: a stz would cost the Model B a lda)
 @it:    stx tmp3                   ; the item
@@ -694,51 +693,6 @@ item_y: lda mtop
 @done:  tax
         rts
 
-; ----------------------------------------------------------------------------
-; clear_items: the items' rows to black
-;   In:    mtop
-;   Out:   buffer 0's char rows mtop/4 .. VISROWS-1 zeroed (ROWBYTES each)
-;   Uses:  A X Y, w16, sp, tmp3
-; From the first item's char row to the window's last; the rows under the window
-; are the menus' bar rows, black since clear_ring.  (Every caller's menu_begin
-; has just cleared the whole ring, so this finds the rows black already.)
-; ----------------------------------------------------------------------------
-clear_items:
-        lda mtop
-        lsr
-        lsr
-        tax                        ; X = the char row
-@r:     stx tmp3
-        lda #0
-        sta w16
-        sta w16+1                  ; column 0
-        txa
-        clc                        ; (ring_addr7 adds the carry in)
-        jsr ring_addr7
-        lda sp
-        sta w16
-        lda sp+1
-        sta w16+1                  ; w16 = the row's start
-        ldx tmp3
-        lda #0
-        tay
-:       sta (w16),y                ; two whole pages
-        iny
-        bne :-
-        inc w16+1
-:       sta (w16),y
-        iny
-        bne :-
-        inc w16+1
-        ldy #(ROWBYTES-512)-1      ; and the row's remainder past them
-:       sta (w16),y
-        dey
-        bpl :-
-        inx
-        cpx #VISROWS
-        bne @r
-        rts
-
 ; ---------------------------------------------------------------- the screens
 ; ----------------------------------------------------------------------------
 ; title_menu: the title page -- the logo and the two items
@@ -755,21 +709,15 @@ title_menu:
         sta spx
         lda #MENU_LOGO_Y+TITLE_DY
         sta spy
-        lda #TP_LOGO               ; = 0: spx+1, spy+1 too (the menus' blit reads
-        .assert TP_LOGO = 0, error, "title_menu: TP_LOGO doubles as the zero high bytes"
-        sta spx+1                  ;  only the low bytes: these stores are dead)
-        sta spy+1
-        jsr draw_piece
+        lda #TP_LOGO               ; (the menus' blit reads spx and spy's low
+        jsr draw_piece             ;  bytes only)
         lda #<menu1
         sta menu_ptr
         lda #>menu1
         sta menu_ptr+1
         lda #MENU_STEP
         sta mstep
-        lda #1
-        sta mclear
-        asl                        ; A = MENU_NITEMS
-        .assert MENU_NITEMS = 2, error, "title_menu: the item count is mclear's 1 doubled"
+        lda #MENU_NITEMS
         ldx #MENU_ITEMS_Y+TITLE_DY
         jmp menu_list
 
@@ -825,8 +773,6 @@ level_select:
         sta menu_ptr
         lda #>level_names
         sta menu_ptr+1
-        lda #1
-        sta mclear
         pla                        ; A = n-1
         tax
         inx
@@ -873,8 +819,6 @@ win_lose:
         jsr music_stop             ; silent
         jsr menu_begin
         .assert TP_WIN = TP_LOSE - 1, error, "win_lose picks the piece as TP_LOSE - mtop"
-        sta spx+1                  ; A = 0 (clear_ring's); the menus' blit reads only
-        sta spy+1                  ;  the low bytes: these stores are dead
         lda mtop                   ; YOU WIN at WL_WORDS_Y, YOU LOSE a char row lower
         eor #1
         asl
