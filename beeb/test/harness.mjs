@@ -81,13 +81,12 @@ export async function open({ disc, labels, level, quiet = true, onSession = null
 
 // While 'hurt' is set the player is drawn only on some frames (the flashing), so a
 // measurement with hurt pinned sees a part-absent player.  This looks through bank 7
-// for the byte pattern `lda hurt; beq +4; lda frame; and #3; bne` (zero-page lda,
-// $A5) and turns each `lda hurt` into `lda #0` so the draw is unconditional; zeroing
-// 'hurt' itself would strip her invulnerability and let a hit zero 'control', which
-// changes how many frames a run takes.  Returns the number of sites patched (open
-// warns unless quiet when it is not 1).  The current logic.s spells the test
-// `ldy hurt; beq; tax; lda frame; and #1; bne` (logic.s @spr), which this pattern
-// does not match: with hurt pinned she is drawn every other frame.
+// for player_update's blink test in either spelling -- today's `ldy hurt; beq; tax;
+// lda frame; and #1; bne` (logic.s @spr) or older builds' `lda hurt; beq +4; lda
+// frame; and #3; bne` -- and turns its load of hurt into a load of 0, so the draw is
+// unconditional; zeroing 'hurt' itself would strip her invulnerability and let a hit
+// zero 'control', which changes how many frames a run takes.  Returns the number of
+// sites patched (open warns unless quiet when it is not 1).
 export function patchBlink(H) {
   // Two spellings of player_update's blink test (logic.s @spr), old builds and new:
   //   lda hurt / beq + / lda frame / and #3 / bne         -> lda #0 (the beq is taken)

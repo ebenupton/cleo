@@ -19,15 +19,18 @@
 ;
 ; The two rules the collision code keeps:
 ;   -- no intermediate positions.  A frame moves Cleo (dxl, dyl) and the boomerang
-;      (bdx, bdy) in one go; a test against an object looks at where she is, and
-;      failing that at the whole box between where she was and where she is
-;      (csweep, bsweep: span over each axis).  Nothing is tested at a position
+;      (bdx, bdy) in one go; a test against a thin or stompable object looks at
+;      where she is, and failing that at the whole box between where she was and
+;      where she is (csweep, bsweep: span over each axis); a big enemy that cannot
+;      be stomped (the mask, the mummy, the red snake) is tested where both were
+;      drawn, by the frames' own boxes (body_hit).  Nothing is tested at a position
 ;      between a frame's ends.
 ;   -- the limits are the packer's.  Every test is in_range's quad (lo, hi, lo2,
 ;      hi2: rx > lo, rx < hi, ry > lo2, ry < hi2, each stored + RQ_BIAS), read from
 ;      RNGTAB by its RQ_* offset (assets.inc, from tools/assets.py RNGTAB_QUADS); the
 ;      loader puts the table in with the level's header (its tail: RNGTAB = LV_HDR +
-;      HDR_LEN).  The one quad the game writes is the spike's x limit (ob_spike).
+;      HDR_LEN).  The game writes two: the spike's x limit (ob_spike) and RQ_BODY,
+;      built for each body_hit from the two frames' boxes.
 ; ============================================================================
 
 ; ---------------------------------------------------------------- constants
@@ -2735,8 +2738,9 @@ rbias:
 ;          trampoline band a 12-px fall would cross)
 ;   Uses:  A, sweep's
 ;   Keeps: X Y
-;   Cost:  measured 115 (Model B) / 130 (Master) cycles a frame in its own lines,
-;          4 calls (as process_object's)
+; The stars, the trampolines, the snake, the bat and the spike: the objects a
+; frame's move can pass, or whose stomp is told from the move.  (The box a diagonal
+; move spans is bigger than the path: big enemies use body_hit instead.)
 ; ----------------------------------------------------------------------------
 csweep:
         jsr in_range               ; where she is: the hits, and quick
@@ -3240,8 +3244,9 @@ ob_snake:
 ;          byte -127..RSNAKE_UP; B (O_BL) 0, or knocked: 1 flying right, 2 left; C
 ;          and D (O_CL/CH, O_DL/DH) the knock's flight (its y and x offsets); rx,
 ;          spx, spy, health, hurt, px
-;   Out:   its fields; Cleo hit; the boomerang stopped (bcnt), the score, sfx_req;
-;          its sprites (the snake while up, and the basket)
+;   Out:   its fields; Cleo hit while the snake is up (body_draw: the frames
+;          drawn); the boomerang stopped (bcnt), the score, sfx_req; its sprites
+;          (the snake while up, and the basket)
 ;   Uses:  A X Y, ox, oy, q1, q6, rise, rx, ry, spx, spy (Y = obj again after the
 ;          calls that change it)
 ; A is the original's (CleoApp.run case 3: A++, and at 17 A = -(rnd&63)-64): the
@@ -3686,10 +3691,10 @@ bat_off:
 ;   In:    Y = obj, otype (OT_MASK or OT_MUMMY: the frame set); its fields in
 ;          place: A (O_AL/AH) the path's far end (48..192), B (O_BL/BH) the offset
 ;          along it (-2..194), C (O_CL) the direction (0 right, 1 left), E (O_EL)
-;          the counter (even, 0..10); rx, spx, health, hurt, bvx
-;   Out:   its fields; rx, spx += B; Cleo hit; the boomerang stopped (bcnt); its
-;          sprite
-;   Uses:  A X Y (Y = obj again after player_hit)
+;          the counter (even, 0..10); spx, health, hurt, bvx
+;   Out:   its fields; spx += B; Cleo hit (body_draw: the frames drawn); the
+;          boomerang stopped (bcnt); its sprite
+;   Uses:  A X Y, rx, ry (Y = obj again after player_hit)
 ; The step is WALK_STEP a frame (the original's 1 and 2).  B's high byte is only
 ; ever 0 or $FF (B is -2..194), so most of the compares are on its low byte with
 ; the sign byte tested first.

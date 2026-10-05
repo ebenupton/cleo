@@ -63,7 +63,9 @@ The sound effects (`sfx_tab`: `sfx_jump`, `sfx_star`, `sfx_throw`, `sfx_hit`, `s
 `sfx_power`, `sfx_die`, ids `SFX_*` in `logic.s`) are steps of the `SFX` macro -- the chip's
 tone latch with the period's low 4 bits, the period's high 6 bits, the volume latch with the
 attenuation, and frames to hold -- ending in `SFX_END`.  Everything plays on tone channel
-`SFX_CH` = 2 except the throw, on the noise channel (`SN_NOISE`).  They are `PLACEH
+`SFX_CH` = 2 except the throw, on the noise channel (`SN_NOISE`, `SN_WHITE` noise).  On the
+noise channel a data byte replaces the noise control, so there `SFX` repeats the control in
+the step's second byte (a 0 there made the throw periodic noise).  They are `PLACEH
 "MRAMCODE", "KRNCODE"` with the kernel's `sound_tick`, which plays `sfx_req` from the vsync.
 
 ## 3. The logic (`logic.s`)
@@ -268,6 +270,18 @@ box between where she was and where she is against the quad (`sweep`: `span` on 
 `dxl`, then on y over `dyl`).  The boomerang's tests (`bsweep`) sweep its last move
 (`bdx`/`bdy`) the same way, so it cannot pass through an enemy between frames; its flight is
 made 8 px at a time with the map read between, so it stops in the first solid.
+
+The box a diagonal move spans is bigger than the path, so the sweep overstates contact
+with a big object.  The enemies that cannot be stomped -- the mask, the mummy and the red
+snake -- are too big to pass in one frame's move and are tested where both were drawn
+instead (`body_draw` -> `body_hit`): each frame's box from `sprgeom` (Cleo's as `cleo_id`,
+the frame `player_update` last drew), pulled in `HIT_INSET` (4 px) a side, is turned into the
+run-time quad `RQ_BODY` (lo = the near edges' difference, hi = the far edges') and tested by
+`in_range`.  The objects run before Cleo's step, so that is where she was drawn last frame.
+Measured in the emulator against the pixels drawn: 0 of 46 jumps over a still mask hit with
+no pixels touching (9 under the sweep), 3 of 56 over a mask walking at her (17).  The snake
+and the bat keep the sweep: a 12-px fall can take Cleo from above one to level with it in a
+frame, and only the swept move tells a stomp.
 
 `in_range`: X = a quad's offset in `RNGTAB`; a quad is `lo, hi, lo2, hi2`, each stored
 `+ RQ_BIAS` (128), tested open at both ends (`rx > lo && rx < hi && ry > lo2 && ry < hi2`)
