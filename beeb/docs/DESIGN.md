@@ -220,9 +220,13 @@ constants block at the top names every rate and limit).  Notable:
 - `ob_bat`: chases within its hover rectangle (`fc`, `fd` clamped to 0..A, 0..B), the
   `bat_off` wobble by `frame` and `obj`; a stomp (`RQ_BAT_STOMP`, she was above by more than
   `BAT_STOMP_Y` where her move began) or the boomerang drops it (`BATFALL_A0`, `BAT_GRAV`).
-- `ob_walker` (mask and mummy): patrols 0..A by `WALK_STEP` (3) a frame; `RQ_WALKER` is, across,
-  the widest band where every Cleo frame overlaps every walker frame by a pixel (-8..8), and,
-  down, the original's full height (-24..20) (the quad's comment in `assets.py`).
+- `ob_walker` (mask and mummy): patrols 0..A by `WALK_STEP` (3) a frame.  It, and the red
+  snake, touch Cleo by `body_draw`/`body_hit`: where both were drawn (Cleo's frame as
+  `cleo_id`, the enemy's this frame), each frame's box from `sprgeom` pulled in `HIT_INSET`
+  (4 px) a side, built into the run-time quad `RQ_BODY` and tested by `in_range`.  Neither can
+  be stomped, and a body cannot be passed in one frame's move, so no sweep: the box a
+  diagonal move spans overstated jumps over them (measured: 9 of 46 jumps hit with no pixels
+  touching, against 0 now).  The snake and the bat keep `csweep`: their stomps need it.
 - `ob_spike`: a dormancy counter `-127..SPIKE_UP`, out below `SPIKE_OUT`; it writes its own
   hit box's x limit into `RNGTAB+RQ_SPIKE+1` from its height each frame.
 - `ob_flame`: a frame every other rendered frame.  `ob_powerup`: with health below

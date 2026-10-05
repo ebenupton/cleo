@@ -577,14 +577,9 @@ RNGTAB_QUADS = [
     # the boomerang's
     ('BOOM_SNAKE',  (-8, 8, -16, 4)),
     ('BOOM_RSNAKE', (-12, 12, -18, 2)),
-    ('RSNAKE',      (-10, 10, -8, 16)),
     ('BOOM_BAT',    (-12, 12, -12, 12)),
     ('BAT_STOMP',   (-16, 16, -12, 16)),
     ('BAT',         (-12, 12, -128, 127)),
-    # the mask and the mummy: across, the widest band where every Cleo frame (0-26) overlaps
-    # every frame of both (67-84) by a pixel (the original's -16..16 hit with no pixels
-    # touching); down, the original's -24..20, the sprites' full height
-    ('WALKER',      (-8, 8, -24, 20)),
     ('BOOM_WALKER', (-10, 10, -16, 8)),
     # (+1: ob_spike sets the x limit by its height)
     ('SPIKE',       (-8, 0, -24, 8)),
@@ -609,6 +604,10 @@ RNGTAB_QUADS = [
     # the health powerup's baked box (-6..6, 4..14) grown the same way
     ('GUARD_PW',    (-27, 25, -39, 26)),
     ('GUARD_BPW',   (-45, 46, -50, 33)),
+    # the mask, the mummy and the red snake: written at run time (logic.s body_hit) from
+    # the two frames drawn, so its values here are only its room.  (Last: the two quads
+    # it replaced leave every guard band's offset where its pairing needs it.)
+    ('BODY',        (0, 0, 0, 0)),
 ]
 RQ = {n: 4 * i for i, (n, q) in enumerate(RNGTAB_QUADS)}
 RNGTAB = bytes(v + RQ_BIAS for n, q in RNGTAB_QUADS for v in q)

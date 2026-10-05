@@ -103,6 +103,8 @@ BAT_STOMP_Y = 4                    ; a stomp: Cleo above it by more than this wh
                                    ;  move began
 BATOFF_N  = 16                     ; bat_off's entries (the wobble)
 WALK_STEP = 3                      ; the mask's and mummy's step a frame
+HIT_INSET = 4                      ; body_hit: each frame's box pulled in this far (px)
+                                   ;  each side, off the art's transparent corners
 WALK_E_WRAP = 12                   ;  their counter: 0, 2 .. 10, then 0
 WALK_FRAME_E = 3                   ;  a frame every 3 of it
 WALK_STAND_F = 8                   ;  the standing frame, at either end of the walk
@@ -296,6 +298,8 @@ exiting:   .res 1                  ;  the level is over (the exit reached, or no
 gridsh:    .res 1                  ;  log2 of the collision grid's width in cells,
 bin_ok:    .res 1                  ;  the bin walk's list is current: its gx1, or 0 for none
 rise:      .res 2                  ; the red snake's rise above its basket (ob_rsnake)
+cleo_id:   .res 1                  ; the sprite Cleo was last drawn as (player_update):
+                                   ;  her body for body_hit, where she was drawn
         .segment "GAMEROWH"
 MROWH:     .res MAPROWS            ; the map rows' addresses, high bytes (level_init fills
                                    ;  both; the map queries read them)
@@ -562,7 +566,7 @@ hi_score:  .res 3
         lda spy+1
         sta oy+1
 .endmacro
-; addb_rxspx: rx and spx += B (O_BL/BH,y): the snake's and the walker's offset along
+; addb_rxspx: rx and spx += B (O_BL/BH,y): the snake's offset along
 ; their path, applied to where they are and where they draw
 .macro addb_rxspx
         clc
@@ -2134,7 +2138,8 @@ player_update:
         bcc @j22
         lda #SPR_CLEO_FALL
 @sprf:  ora facing
-@spr:   ldy hurt                   ; the frame stays in A (Y is dead: see below)
+@spr:   sta cleo_id                ; her body for the objects' next test (body_hit)
+        ldy hurt                   ; the frame stays in A (Y is dead: see below)
         beq @drawp
         tax                        ; flashing: hold the frame in X for the test
         lda frame
@@ -2500,6 +2505,101 @@ ob_none:
 os_oxy:
         oxy_set
         rts
+
+; ----------------------------------------------------------------------------
+; body_draw: a big enemy's hit on Cleo, by the frames drawn, then its sprite
+;   In:    A = the enemy's sprite this frame; spx, spy = where it draws
+;   Out:   Cleo hit (player_hit) if she is alive, not invulnerable, and body_hit
+;          finds their bodies touching; the sprite added (add_sprite's tail)
+;   Uses:  A X, body_hit's, player_hit's;  Y = obj on the way out
+; For the enemies that cannot be stomped (the mask, the mummy, the red snake): a
+; body is too big to pass in one frame's move, so where they are is tested, not
+; the stretch moved (csweep), whose box overstates a diagonal move.
+; ----------------------------------------------------------------------------
+body_draw:
+        pha                        ; the sprite, for add_sprite
+        ldx health
+        beq @draw                  ; dead: nothing touches her
+        ldx hurt
+        bne @draw                  ; invulnerable
+        jsr body_hit
+        bcc @draw
+        lda rx+1                   ; knocked back from it: player_hit reads only
+        sta hx+1                   ;  hx+1's sign
+        jsr player_hit
+@draw:  ldy obj
+        pla
+        jmp add_sprite
+
+; ----------------------------------------------------------------------------
+; body_hit: do Cleo's and an enemy's bodies touch, where both were drawn?
+;   In:    A = the enemy's sprite; spx, spy = where it draws; cleo_id, px, py
+;   Out:   C = 1 if the two frames' boxes, each pulled in HIT_INSET px on every
+;          side, overlap;  rx, ry = the enemy less Cleo;  RNGTAB's RQ_BODY quad
+;          written
+;   Uses:  A X Y, swd
+; A frame's box is its shape's (sprgeom: sprg_ix) drawn extent about its
+; reference point: across [-rx, 2w - rx), down [-ry, ln - ry) (w in byte columns of
+; two pixels; ln stored rows, a pixel each: these shapes are not SPF_FULLRES).
+; With each box pulled in k on every side, the enemy's at r and Cleo's at 0
+; overlap iff, on each axis, Cleo's near edge < the enemy's far edge and the
+; enemy's near edge < Cleo's far edge -- lo < r < hi with
+;   lo = (rxE - rxC) - 2wE + 2k        hi = (rxE - rxC) + 2wC - 2k
+; and so down (ry, ln for 2w): a quad, which in_range tests.  The sums are bytes,
+; biased (RQ_BIAS) as in_range compares: every term is under 64.
+; ----------------------------------------------------------------------------
+body_hit:
+        tax
+        lda sprg_ix,x
+        tax                        ; X = the enemy's shape
+        ldy cleo_id
+        lda sprg_ix,y
+        tay                        ; Y = Cleo's shape
+        lda sprg_rx,x              ; ---- across: d = rxE - rxC
+        sec
+        sbc sprg_rx,y
+        sta swd
+        sec
+        sbc sprg_w,x
+        sec
+        sbc sprg_w,x
+        clc
+        adc #RQ_BIAS+2*HIT_INSET
+        sta RNGTAB+RQ_BODY         ; lo = d - 2wE + 2k
+        lda sprg_w,y
+        asl                        ; (C = 0: w < 128)
+        adc swd
+        clc
+        adc #RQ_BIAS-2*HIT_INSET
+        sta RNGTAB+RQ_BODY+1       ; hi = d + 2wC - 2k
+        lda sprg_ry,x              ; ---- down: d = ryE - ryC
+        sec
+        sbc sprg_ry,y
+        sta swd
+        sec
+        sbc sprg_ln,x
+        clc
+        adc #RQ_BIAS+2*HIT_INSET
+        sta RNGTAB+RQ_BODY+2       ; lo = d - lnE + 2k
+        lda sprg_ln,y
+        clc
+        adc swd
+        clc
+        adc #RQ_BIAS-2*HIT_INSET
+        sta RNGTAB+RQ_BODY+3       ; hi = d + lnC - 2k
+        ldx #2                     ; ---- r = the enemy less Cleo: down, then across
+        .assert spy = spx+2 && py = px+2 && ry = rx+2, error, "body_hit: the axes' pairs two bytes apart"
+@r:     sec
+        lda spx,x
+        sbc px,x
+        sta rx,x
+        lda spx+1,x
+        sbc px+1,x
+        sta rx+1,x
+        dex
+        dex
+        bpl @r
+        ldx #RQ_BODY               ; falls into in_range
 
 ; ----------------------------------------------------------------------------
 ; in_range: is (rx, ry) inside a quad's open box?
@@ -3201,31 +3301,7 @@ ob_rsnake:
         sta bcnt
         lda #SFX_KILL
         sta sfx_req
-@hitp:  dif16 rx, ox, px           ; afresh: the boomerang test above may leave rx
-        lda q6                     ;  boomerang-relative, and a boomerang passing the
-        beq @draw                  ;  snake while Cleo stood at its height would read
-                                   ;  as Cleo touching it
-        lda health
-        beq @draw
-        sec                        ; ry = oy - py + rise, in one pass: the difference
-        lda oy                     ;  waits in X (low) and Y (high)
-        sbc py
-        tax
-        lda oy+1
-        sbc py+1
-        tay
-        clc
-        txa
-        adc rise
-        sta ry
-        tya
-        adc rise+1
-        sta ry+1
-        ldy obj
-        ldx #RQ_RSNAKE
-        jsr csweep
-        bcc @draw
-        hit_cleo @draw
+@hitp:
 @draw:  lda q6                     ; rising, at the top, sinking: a frame pair each
         beq @basket
         ldx #SPR_RSNAKE0
@@ -3241,7 +3317,7 @@ ob_rsnake:
 @fr1:   mov16 spy, oy
         add16 spy, rise            ; the snake at oy + the parabola
         lda q1
-        jsr add_sprite
+        jsr body_draw              ; her body against this frame's, then drawn
 @basket:                           ; spx = ox still: ox was copied from it on entry and
         mov16 spy, oy              ;  nothing since writes spx
         lda #SPR_BASKET
@@ -3648,13 +3724,13 @@ ob_walker:
         sta O_BH,y                 ;  2 (high byte 0), so the high byte is $FF
 @stop:  lda #0
 @cset:  sta O_CL,y
-@coll:  addb_rxspx
-        lda health
-        beq @boom
-        ldx #RQ_WALKER
-        jsr csweep
-        bcc @boom
-        hit_cleo @boom
+@coll:  clc                        ; spx += B: where it draws (its rx is body_hit's
+        lda spx                    ;  and boom_rel's own)
+        adc O_BL,y
+        sta spx
+        lda spx+1
+        adc O_BH,y
+        sta spx+1
 @boom:  boom_test RQ_BOOM_WALKER, @draw
         bit bvx+1                  ; hit: it walks the boomerang's way (C = 0 right if B <
         bmi @bleft                 ;  A, 1 left if B > 0), and the boomerang stops
@@ -3694,7 +3770,7 @@ ob_walker:
         bne @s5                    ; the mask: C = 0 from the cpx
         adc #SPR_MUMMY0-SPR_MASK0-1 ; the mummy: C = 1, so A + 9, and C = 0 again
 @s5:    adc #SPR_MASK0
-        jmp add_sprite
+        jmp body_draw              ; her body against this frame's, then drawn
 @f0:    lda O_CL,y                 ; C = 0: the bcc
         bcc @sp
 @f2:    lda #2                     ; C = 0: the bcc
