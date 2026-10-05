@@ -220,9 +220,9 @@ constants block at the top names every rate and limit).  Notable:
 - `ob_bat`: chases within its hover rectangle (`fc`, `fd` clamped to 0..A, 0..B), the
   `bat_off` wobble by `frame` and `obj`; a stomp (`RQ_BAT_STOMP`, she was above by more than
   `BAT_STOMP_Y` where her move began) or the boomerang drops it (`BATFALL_A0`, `BAT_GRAV`).
-- `ob_walker` (mask and mummy): patrols 0..A by `WALK_STEP` (3) a frame; `RQ_WALKER` is the
-  biggest box where every Cleo frame overlaps every walker frame by a pixel (the quad's
-  comment in `assets.py`).
+- `ob_walker` (mask and mummy): patrols 0..A by `WALK_STEP` (3) a frame; `RQ_WALKER` is, across,
+  the widest band where every Cleo frame overlaps every walker frame by a pixel (-8..8), and,
+  down, the original's full height (-24..20) (the quad's comment in `assets.py`).
 - `ob_spike`: a dormancy counter `-127..SPIKE_UP`, out below `SPIKE_OUT`; it writes its own
   hit box's x limit into `RNGTAB+RQ_SPIKE+1` from its height each frame.
 - `ob_flame`: a frame every other rendered frame.  `ob_powerup`: with health below
@@ -343,10 +343,14 @@ reset.
 
 The screens are laid out for the Model B's 84 game pixels of window (the constants at the top
 of `menu.s`: `MENU_LOGO_X/Y`, `MENU_ITEMS_Y`, `MENU_STEP`, `HELP_Y0`/`HELP_PITCH`,
-`LEVEL_STEP`/`LEVEL_STEP_TIGHT`, `WL_*`, `BIGCLEO_*`) and centred in a taller one by
-`TITLE_DY`/`HELP_DY`/`WL_DY` = `((VISLINES/2 - INK_BOT - INK_TOP) / 2 + 2) & $FC` when
-`VISLINES/2 > 84` (the Master's 120).  `level_select` lists the names (`level_names`:
-`l0..l7`) `LEVEL_STEP` apart or `LEVEL_STEP_TIGHT` when all eight would not fit.
+`LEVEL_STEP`/`LEVEL_STEP_TIGHT`, `WL_*`, `BIGCLEO_*`).  The picture a menu shows is the window
+and, above it, the bar's section (`MENU_BAND_PX`, 8 px: `menu_sections` points it at cleared
+ring rows below the window, so it is black).  Each screen is centred in that whole picture by
+`TITLE_DY`/`HELP_DY`/`WL_DY` = `max(0, ((VISLINES/2 - MENU_BAND_PX - INK_BOT - INK_TOP) / 2 + 2)
+& $FC)`: never above the window's top, so on the Model B, laid out for its own window, they are
+0.  `level_select` lists the names (`level_names`: `l0..l7`) `LEVEL_STEP` apart, or
+`LEVEL_STEP_TIGHT` when all eight would not fit the window, its first row centred the same way
+at run time.
 
 `menu_begin`: palette black, wait for a pending flip, window at the origin, buffer 0 as work
 buffer (`selbb`, `calc_ring`), `clear_ring`.  `menu_show`: the kernel's `menu_sections`,
