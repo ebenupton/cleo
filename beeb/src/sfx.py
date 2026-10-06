@@ -48,9 +48,15 @@ EFFECTS = [
         (1, [S(30, 300, 220, -4, 14, 0), S(20, KEEP, KEEP, -10, 18, 0)]),
         (3, [S(40, NW_LO, 200, -5, 0, 0)]),
     ]),
-    # a trampoline: a boing, a fast rise then a slow sag
+    # a trampoline: a boing -- a twang that drops, then wobbles about its note at ~8 Hz,
+    # each swing smaller, fading as the spring settles; an octave below for body
     ('bounce', 4, [
-        (1, [S(4, 420, 240, -8, -45, 0), S(12, KEEP, KEEP, -18, 6, 0)]),
+        (1, [S(2, 280, 254, -4, 70, 0), S(3, KEEP, KEEP, -8, -36, 0), S(3, KEEP, KEEP, -8, 36, 0),
+             S(3, KEEP, KEEP, -10, -26, 0), S(3, KEEP, KEEP, -12, 26, 0), S(3, KEEP, KEEP, -14, -16, 0),
+             S(4, KEEP, KEEP, -16, 16, 0)]),
+        (2, [S(2, 560, 150, -2, 140, 0), S(3, KEEP, KEEP, -5, -72, 0), S(3, KEEP, KEEP, -5, 72, 0),
+             S(3, KEEP, KEEP, -6, -52, 0), S(3, KEEP, KEEP, -7, 52, 0), S(3, KEEP, KEEP, -8, -32, 0),
+             S(4, KEEP, KEEP, -9, 32, 0)]),
     ]),
     # a switch thrown: a clunk
     ('switch', 5, [
