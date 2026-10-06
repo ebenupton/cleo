@@ -18,26 +18,23 @@ EFFECTS = [
         (0, [S(3, 95, 240, -10, 0, 0), S(12, 63, 240, -16, 0, 0)]),
         (1, [S(15, 127, 140, -9, 0, 0)]),
     ]),
-    # the boomerang thrown: a 'vwhip' -- a swish of noise swelling and dying, its rate rising
-    # then falling (clocked by the silent tone 2), over a pitch whipping up
+    # the boomerang thrown: a soft whoosh -- noise alone, swelling gently and fading, its rate
+    # drifting down (clocked by the silent tone 2); never loud
     ('throw', 3, [
-        (2, [S(4, 60, 0, 0, -12, 0), S(6, KEEP, 0, 0, 10, 0)]),
-        (3, [S(3, NW_T2, 190, 22, 0, 0), S(7, KEEP, KEEP, -30, 0, 0)]),
-        (1, [S(6, 320, 200, -26, -38, 0)]),
+        (2, [S(12, 40, 0, 0, 3, 0)]),
+        (3, [S(5, NW_T2, 40, 18, 0, 0), S(7, KEEP, KEEP, -16, 0, 0)]),
     ]),
-    # she is hurt: a harsh, falling buzz over a thud
+    # she is hurt: the port's original effect, three falling tones
     ('hit', 7, [
-        (1, [S(10, 500, 254, -22, 8, 31)]),
-        (3, [S(6, NP_LO, 200, -30, 0, 0)]),
+        (2, [S(4, 640, 240, 0, 0, 0), S(4, 768, 208, 0, 0, 0), S(5, 960, 160, 0, 0, 0)]),
     ]),
     # the boomerang caught: a light pluck (id 4: bit 2 set, see the docstring)
     ('catch', 2, [
         (0, [S(2, 150, 220, -60, 0, 0), S(4, 100, 200, -48, 0, 0)]),
     ]),
-    # an enemy killed: a falling two-step cry with a puff of noise
+    # an enemy killed: the port's original effect, four tones falling and fading
     ('kill', 6, [
-        (0, [S(6, 180, 240, -10, 8, 0), S(10, 260, KEEP, -18, 14, 0)]),
-        (3, [S(8, NW_MID, 180, -22, 0, 0)]),
+        (2, [S(2, 96, 240, 0, 0, 0), S(2, 144, 224, 0, 0, 0), S(3, 192, 192, 0, 0, 0), S(3, 256, 144, 0, 0, 0)]),
     ]),
     # a powerup or a switch: an arpeggio up, C5 E5 G5 C6 E6
     ('power', 6, [
