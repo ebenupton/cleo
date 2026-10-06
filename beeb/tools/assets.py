@@ -430,7 +430,8 @@ out('alt.bin', m.altfile)
 out('BAR', m.barbytes)
 MUS = os.path.join(BEEB, 'build', 'MUSIC')
 if not os.path.exists(MUS):
-    os.system('python3 %s %s %s' % (os.path.join(BEEB, 'beebgame', 'tools', 'midi2snd.py'), os.path.join(BEEB, 'assets', 'v500', 'thm.mid'), MUS))
+    os.system('python3 %s %s%s %s' % (os.path.join(BEEB, 'beebgame', 'tools', 'midi2snd.py'), '--fx ' if os.environ.get('TUNEFX') == '1' else '',
+                                      os.path.join(BEEB, 'assets', 'v500', 'thm.mid'), MUS))
 out('music.bin', open(MUS, 'rb').read())
 # the title pieces (convert.py: run-length streams of screen-order bytes) for the menus'
 # image: the streams, and their directory with the stream addresses as symbols (gamedata.s

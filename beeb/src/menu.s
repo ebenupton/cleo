@@ -186,16 +186,15 @@ draw_text:
         sta w16b+1
         bne @rows                  ; (always: font_blank is in bank 7)
 @glyph: jsr glyph_index            ; w16b = font_art + 8*glyph, read in place (the font
-        asl                        ;  is in this image), as 2*(4*glyph + font_art/2) + 1:
-        asl                        ;  4*glyph < 256 (40 glyphs), so C = 0 here
-        adc #<(font_art/2)
+        stzx w16b+1                ;  is in this image; A live, X dead: draw_glyph_rows
+        asl                        ;  sets X before reading it)
+        asl
+        asl
+        rol w16b+1                 ; 8*glyph is 9 bits (40 glyphs); C = 0 after: the bit
+        adc #<font_art             ;  rolled out of w16b+1 was 0
         sta w16b
-        lda #>(font_art/2)
-        adc #0
-        .assert (font_art & 1) = 1, error, "draw_text: the sec is font_art's low bit (odd)"
-        sec                        ; font_art's low bit
-        rol w16b
-        rol
+        lda w16b+1
+        adc #>font_art
         sta w16b+1
 @rows:  jsr draw_glyph_rows
 @space: lda tx

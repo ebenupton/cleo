@@ -16,7 +16,9 @@ set -e
 cd "$(dirname "$0")"
 [ -f beebgame/tools/build.sh ] || { echo "beebgame is missing: git submodule update --init"; exit 1; }
 export GAME_MAIN=src/main.s GAME_SRC=src DISC_TITLE=CLEO DISC_OUT=build/cleo.ssd GAME_NAME=Cleo
-export GAME_MUSIC="python3 beebgame/tools/midi2snd.py assets/v500/thm.mid build/MUSIC"
+# the title tune for the richer player (TUNEFX: a struck melody with vibrato, the backing's
+# chord arpeggiated, its bass on the noise channel at its own pitch)
+export GAME_MUSIC="python3 beebgame/tools/midi2snd.py --fx assets/v500/thm.mid build/MUSIC" TUNEFX=${TUNEFX:-1}
 export GAME_ASSETS="python3 tools/assets.py" GAME_NOANON=1   # (no anonymous labels in src/ either)
 # the engine's sound effects player in bank 6 (src/sfx.py's effects), and the room for it
 # there: mirrored tiles where a level would not fit otherwise (tools/convert.py), and the

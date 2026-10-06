@@ -74,6 +74,11 @@ player is not stepped through a disc load (the engine's `ld_go` resets it), so t
 last frame holds `EXIT_WAIT` (40) vsyncs for the exit's fanfare (`game.s fl_over`).  The
 effects cost about 700 cycles a frame in play (the player's vsync steps, the chip's writes).
 
+The title tune (`thm.mid`) plays on the engine's richer player (`TUNEFX`, `midi2snd.py
+--fx`, split at G3): the melody struck and with vibrato, the backing's chords arpeggiated,
+its bass on the noise channel at its true pitch (the tones stop at 122 Hz: the old reduction
+played it an octave up) and both ringing on through the staccato backing's rests.
+
 The player's room in bank 6 is the tiles': `TOFF` (12) slots start above it, so the two
 fullest levels (L4B, L2B) store some full tiles as mirror images of others (`TILEMIRROR`:
 `convert.py pack_tiles`, only as many as the level needs, the least used first; 8 and 2
