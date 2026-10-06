@@ -137,10 +137,10 @@ new_game:
         sta lives
         sta health
         lda max_level              ; 0: level 0 (A = 0 is the store), else the chooser
-        beq :+
+        beq @skip
         jsr level_select
         asl                        ; the main level's index: even
-:       sta level
+@skip:  sta level
         jsr blank_palette          ; dark for the load
         jmp go_game                ; the game's image, then level_loop (disc.s)
 
@@ -222,19 +222,19 @@ glyph_index:
         rts
 @notalpha:
         cmp #'>'
-        bne :+
+        bne @skip
         lda #GLYPH_GT
         rts
-:       cmp #'<'
-        bne :+
+@skip:  cmp #'<'
+        bne @skip2
         lda #GLYPH_LT
         rts
-:       cmp #'0'                   ; below '0' only '/' and '.' come here
-        bcs :+
+@skip2: cmp #'0'                   ; below '0' only '/' and '.' come here
+        bcs @skip3
         eor #'/' ^ GLYPH_SLASH     ; one eor maps both: '/' -> SLASH, '.' -> DOT
         .assert ('/' ^ GLYPH_SLASH) = ('.' ^ GLYPH_DOT), error, "glyph_index: the slash's and the dot's glyphs differ as the characters do"
         rts
-:       sbc #('0'-GLYPH_0)         ; C = 1 (the bcs): A - '0' + GLYPH_0
+@skip3: sbc #('0'-GLYPH_0)         ; C = 1 (the bcs): A - '0' + GLYPH_0
         rts
 
 ; ----------------------------------------------------------------------------
@@ -328,9 +328,9 @@ draw_glyph_rows:
 ; ----------------------------------------------------------------------------
 text_centred:
         ldy #$FF
-:       iny
+@loop:  iny
         lda (ptr),y
-        bne :-                     ; Y = len
+        bne @loop                  ; Y = len
         tya
         asl
         asl                        ; A = len*GLYPHW/2 (C = 0: len < 64)
@@ -352,8 +352,8 @@ text_centred:
 ; ----------------------------------------------------------------------------
 menu_begin:
         jsr blank_palette
-:       lda flip_req               ; a flip the game asked for may still be pending
-        bne :-
+@loop:  lda flip_req               ; a flip the game asked for may still be pending
+        bne @loop
         sta wx                     ; A = 0 (flip_req's)
         sta wx+1
         sta wy
@@ -412,8 +412,8 @@ menu_show:
         sta0 next_sect             ; A = 0 (the Model B's stz): buffer 0's chain
         jsr menu_sections          ; the kernel's (kernel.s): the bar's rows left out
         inc flip_req               ; 0 -> 1
-:       lda flip_req
-        bne :-
+@loop:  lda flip_req
+        bne @loop
         inc cur_buf                ; 0 -> 1
         jmp set_palette            ; the page is on display: colours back
 
@@ -430,8 +430,8 @@ menu_show:
 ; ----------------------------------------------------------------------------
 menu_keys:
         lda vsyncs
-:       cmp vsyncs
-        beq :-
+@loop:  cmp vsyncs
+        beq @loop
         lda keys
         tax
         eor last_keys
@@ -499,21 +499,21 @@ blit:   lda #<TBUF
         clc                        ;  the cmp)
         adc tmp3
         sta w16b
-        bcc :+
+        bcc @skip
         inc w16b+1
-:       lda sp                     ; sp += tmp3: within a row the ring never folds (its
+@skip:  lda sp                     ; sp += tmp3: within a row the ring never folds (its
         clc                        ;  end is a row boundary); ring_addr7 folds per row
         adc tmp3
         sta sp
-        bcc :+
+        bcc @skip2
         inc sp+1
-:       lda tmp                    ; tmp2:tmp -= tmp3
+@skip2: lda tmp                    ; tmp2:tmp -= tmp3
         sec
         sbc tmp3
         sta tmp
-        bcs :+
+        bcs @skip3
         dec tmp2
-:       ora tmp2
+@skip3: ora tmp2
         bne @chunk                 ; (row's end: C = 1, the last sbc had no borrow)
         inc prow
         dec pleft
@@ -556,9 +556,9 @@ unpack: tax
         cmp #RLE_END
         beq @done
         inc w16b
-        bne :+
+        bne @skip
         inc w16b+1
-:       cmp #RLE_RUN
+@skip:  cmp #RLE_RUN
         bcs @run
         tax                        ; n + 1 literals
         inx
@@ -640,20 +640,20 @@ menu_list:
 @loop:  jsr menu_keys
         sta tmp
         and #K_UP
-        beq :+
+        beq @skip
         dec msel                   ; 0 -> $FF and back: nothing above
         bpl @move
         inc msel
-:       lda tmp
+@skip:  lda tmp
         and #K_DOWN
-        beq :+
+        beq @skip2
         ldx msel
         inx
         cpx mcount
-        bcs :+                     ; nothing below
+        bcs @skip2                 ; nothing below
         stx msel
         bcc @move                  ; (always: the bcs fell through)
-:       lda tmp
+@skip2: lda tmp
         and #(K_FIRE|K_RIGHT)
         beq @loop
         lda msel
@@ -701,9 +701,9 @@ item_y: lda mtop
 ; ----------------------------------------------------------------------------
 title_menu:
         lda mus_on
-        bne :+
+        bne @skip
         jsr music_start            ; the tune, unless it is playing already
-:       jsr menu_begin
+@skip:  jsr menu_begin
         lda #MENU_LOGO_X
         sta spx
         lda #MENU_LOGO_Y+TITLE_DY
@@ -749,9 +749,9 @@ help_screen:
         jsr menu_show
         lda #$FF
         sta last_keys
-:       jsr menu_keys
+@loop:  jsr menu_keys
         and #(K_FIRE|K_RIGHT)
-        beq :-
+        beq @loop
         rts
 
 ; ----------------------------------------------------------------------------
@@ -786,16 +786,16 @@ level_select:
         adc tmp3                   ; A = (n-1)*12 (C = 0: (n-1)*8 <= 56)
         ldy #LEVEL_STEP
         cmp #VISLINES/2 - GLYPHH + 1   ; the list's height against the window's
-        bcc :+
+        bcc @skip
         sbc tmp2                   ; C = 1: (n-1)*12 - (n-1)*2 = (n-1)*10
         ldy #LEVEL_STEP_TIGHT
         clc
-:       sty mstep
+@skip:  sty mstep
         eor #$FF                   ; (VISLINES/2 - MENU_BAND_PX - GLYPHH - A) / 2:
         adc #VISLINES/2 - MENU_BAND_PX - GLYPHH + 1   ;  -A-1, + (.. + 1) (C = 0 both
-        bcs :+                     ;  ways in); no carry: negative, so 0
+        bcs @skip2                 ;  ways in); no carry: negative, so 0
         lda #0
-:       lsr
+@skip2: lsr
         tax                        ; X = the first item's y
         lda tmp
         jmp menu_list
@@ -874,14 +874,14 @@ win_lose:
         beq @same                  ; the one shown
         sta mcount
         jsr @unpk                  ; unless in TBUF already (unpacked a frame ahead, below)
-:       jsr blit                   ; right after menu_keys' vsync
+        jsr blit                   ; right after menu_keys' vsync
 @same:  jsr menu_show
         inc msel
         jsr cleo_frame             ; the next frame, unpacked now, while the page stands
         cmp mcount
-        beq :+
+        beq @skip2
         jsr @unpk
-:       jsr menu_keys
+@skip2: jsr menu_keys
         and #(K_FIRE|K_RIGHT)
         beq @loop
 @wret:  rts
@@ -977,15 +977,15 @@ draw_number:
         dex
         bpl @d                     ; (always: X = 2 or 0 here)
 @z:                                ; leading zeros to spaces, but the last digit (X = $FF:
-:       inx                        ;  the digit loop ends on dex from 0)
+@loop:  inx                        ;  the digit loop ends on dex from 0)
         lda NUMBUF,x
         cmp #'0'
-        bne :+
+        bne @skip
         lda #' '
         sta NUMBUF,x
         cpx #NUM_DIGITS-2
-        bne :-
-:       lda #'0'                   ; then the "00", and the end
+        bne @loop
+@skip:  lda #'0'                   ; then the "00", and the end
         sta NUMBUF+NUM_DIGITS
         sta NUMBUF+NUM_DIGITS+1
         stz NUMBUF+NUM_DIGITS+2

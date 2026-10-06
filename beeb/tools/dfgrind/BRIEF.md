@@ -106,11 +106,10 @@ totals rise by at most 4 cycles, and one of them is better.
 3. **Registers.** Never assume A, X or Y dead: prove it from the code that follows and
    from EVERY caller, and state it. (An earlier grind's edit inlined an add through X
    "dead" and broke the boomerang 380 frames into a level.)
-4. **Anonymous labels.** `:` lines are referenced by counting (`:+`, `:--`). Adding or
-   removing one retargets every branch that counts past it -- including `:` emitted
-   inside macros (`ringup`, `spnext`, `spcold`, `pagestep`, others in macros.s). If
-   your rewrite changes the count, say so in `anon_change` (the applier refuses those
-   unless you restructure so the count is unchanged -- prefer that).
+4. **Never an anonymous label.** No `:` label and no `:+` / `:-` reference, ever: the
+   build rejects them (beebgame tools/noanon.py).  Name every new label: a cheap one
+   (`@name`, unique in its scope) in code.  A label you add must not end a cheap scope
+   (a normal label or an equate does).
 5. **Cheap labels** (`@x`) are scoped by the last normal label: adding a normal label
    ends the scope. Bank-site macros (`bankimm`, `setbank`, `BANKREF`, `wrsel`,
    `wrback`, `wrselx`, `ldpbank`) record an instruction's address for the boot loader
@@ -177,7 +176,6 @@ per independent change; each a single contiguous line range of one file:
 - `assumption` -- every fact outside the range the rewrite depends on, and where you
   verified it ("A dead: both callers at frame.s:1180,1204 reload A"); cite the
   annotation (line and fact: "2210: X dead, out:AY") for every fact taken from it
-- `anon_change` -- "" or how the anonymous-label count changes
 - `argument` -- why the behaviour is identical, path by path
 - `confidence` -- high / medium / low
 

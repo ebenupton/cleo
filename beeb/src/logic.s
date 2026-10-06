@@ -423,13 +423,13 @@ hi_score:  .res 3
         bit var+1
         bpl label
 .endmacro
-; submin0 n: A = max(A - n, 0), unsigned (one ':' forward skip)
-.macro submin0 n
+; submin0 n, done: A = max(A - n, 0), unsigned; done, the skip's label, the caller's
+.macro submin0 n, done
         sec
         sbc #n
-        bcs :+                     ; no borrow: A >= n, the difference stands
+        bcs done                   ; no borrow: A >= n, the difference stands
         lda #0
-:
+done:
 .endmacro
 ; beq16 var, label: branch if var = 0
 .macro beq16 var, label
@@ -516,15 +516,16 @@ hi_score:  .res 3
         ldy obj
 .endmacro
 ; grid_rowbase: A = gy << gridsh (the grid row's first cell), gx = gx0; X = 0.
-; gridsh >= 2: every map is at least 256 px wide (maplw >= 5).  One ':' loop.
+; gridsh >= 2: every map is at least 256 px wide (maplw >= 5).  The loop's label,
+; @rowbase_shift: one expansion a scope.
 .macro grid_rowbase
         lda gx0
         sta gx
         lda gy
         ldx gridsh
-:       asl
+@rowbase_shift: asl
         dex
-        bne :-
+        bne @rowbase_shift
 .endmacro
 ; bin_range w, g0, g1, len: the grid cells a window edge covers: g0 = w >> 6 (w <
 ; 16384) and g1 = (w + len) >> 6 -- g0 + len's 64s, + 1 if w's remainder carries.
@@ -633,16 +634,16 @@ hi_score:  .res 3
         sta O_AL,y
 .endmacro
 ; adds8 var: var (16-bit) += A (a signed byte), without building the word: the high
-; byte pre-borrowed when A is negative.  Two ':' skips.
-.macro adds8 var
-        bpl :+
+; byte pre-borrowed when A is negative.  add, done: the two skips' labels, the caller's.
+.macro adds8 var, add, done
+        bpl add
         dec var+1
-:       clc
+add:    clc
         adc var
         sta var
-        bcc :+
+        bcc done
         inc var+1
-:
+done:
 .endmacro
 ; oin f, lo / oout f, lo: an object's field byte (lo,y) into zero page f, and back
 .macro oin f, lo
@@ -818,9 +819,9 @@ get_altitude:
         lda qy                     ; (C = 1 from the bcs that came here: - 8)
         sbc #TILEPX
         sta qy
-        bcs :+
+        bcs @skip
         dec qy+1
-:       jsr get_info
+@skip:  jsr get_info
         bne @top                   ; (an alt byte is never 0)
 @above: txa
         lsr
@@ -977,9 +978,9 @@ level_init:
         dex                        ; X = $FF: the loop left X = 0
         txa                        ; A = $FF = GRID_NONE: every cell empty
         .assert GRID_NONE = $FF, error, "level_init fills the grid with X's $FF"
-:       sta LV_GRID-GRIDN,x        ; X = $FF..$80: LV_GRID+127 down to +0
+@loop:  sta LV_GRID-GRIDN,x        ; X = $FF..$80: LV_GRID+127 down to +0
         dex
-        bmi :-
+        bmi @loop
         ; ---- the objects, last to first
         ldy nobj
         jmp @nextobj+2             ; to the loop's beq @objdone (ldy obj is 2 bytes: obj
@@ -1068,21 +1069,21 @@ level_init:
         dex
 @t256a: cpx #OT_MUMMY-OT_MASK+1    ; OT_MASK, OT_MUMMY: X = 0, 1 (3, 4 wrap to $FE, $FF);
         bcc @t256                  ;  OT_SNAKE joins at the cpx with X = 0
-:       inx                        ; OT_BAT: X = $FF + 1 = 0 (A keeps otype for the cmps)
-        bne :+
+        inx                        ; OT_BAT: X = $FF + 1 = 0 (A keeps otype for the cmps)
+        bne @skip2
         jmp @t4
-:       inx                        ; OT_RSNAKE: X = $FE + 2 = 0; the rest are 4..9
+@skip2: inx                        ; OT_RSNAKE: X = $FE + 2 = 0; the rest are 4..9
         beq @t3
-:       cmp #OT_FLAME
-        bne :+
+        cmp #OT_FLAME
+        bne @skip4
         jmp @t9
-:       cmp #OT_VANISH
-        bne :+
+@skip4: cmp #OT_VANISH
+        bne @skip5
         jmp @t11
-:       cmp #OT_SWITCH
-        bne :+
+@skip5: cmp #OT_SWITCH
+        bne @skip6
         jmp @t12
-:       jmp @t10                   ; OT_SPIKE, OT_POWERUP: the defaults, and e0, e1 into E
+@skip6: jmp @t10                   ; OT_SPIKE, OT_POWERUP: the defaults, and e0, e1 into E
 @t0:    jsr rnd                    ; (drawn as the original did, so the enemies' draws
         lda q5                     ;  follow as they were)
         sta O_AL,y                 ; A = e2: its phase in the spin (the packer's, balanced
@@ -1100,7 +1101,7 @@ level_init:
         dec a
 @s0:
   .endif
-:       lsr
+        lsr
         lsr
         lsr
         sta gy
@@ -1110,7 +1111,7 @@ level_init:
         ora #TILEPX/2              ; a trampoline stands at 8x + 4: x*8 has bit 2 clear,
         sta O_XL,y                 ;  so the + 4 cannot carry into O_XH
         lda q1
-        submin0 2
+        submin0 2, @gx0ok
         lsr
         lsr
         lsr
@@ -1139,7 +1140,7 @@ level_init:
         sta O_AH,y
         bpl @g1                    ; @t4's tail, then @box (N = 0: txa of X = A>>5 <= 7)
 @t3:    lda q2                     ; the red snake: gy = (y-4)>>3 (it rises)
-        submin0 4
+        submin0 4, @gy4ok
         lsr
         lsr
         lsr
@@ -1190,9 +1191,9 @@ level_init:
         lda t16+1
         sta O_DH,y
         lda q2                     ; gy = max(y-1, 0)>>3, gy1 = (y + e1)>>3
-        beq :+
+        beq @skip8
         sbc #0                     ; C = 0 from mod16's exit (bcc -> rts): A - 1
-:       lsr
+@skip8: lsr
         lsr
         lsr
         sta gy
@@ -1215,7 +1216,7 @@ level_init:
 @gy1:   sta gy1
         bpl @box                   ; gy = q2>>3 < 32: N = 0
 @t9:    lda q2                     ; the flame: gy = (y-2)>>3, gy1 = y>>3
-        submin0 2
+        submin0 2, @gy2ok
         lsr
         lsr
         lsr
@@ -1309,11 +1310,11 @@ mod16:
         tax
         lda t16+1
         sbc t16b+1
-        bcc :+
+        bcc @skip
         sta t16+1
         stx t16
         bcs mod16                  ; C = 1: the bcc above was not taken
-:       rts
+@skip:  rts
 
 ; ---------------------------------------------------------------- the frame
 ; ----------------------------------------------------------------------------
@@ -1346,9 +1347,9 @@ mod16:
 ; ----------------------------------------------------------------------------
 game_frame:
         inc frame
-        bne :+
+        bne @skip2
         inc frame+1
-:
+@skip2:
   .if BHW                          ; (CPU spelling: bounce = 0 first, its 0 in A for the
         lda #0                     ;  clock's wrap; the Master clears it after with stz)
         sta bounce
@@ -1376,9 +1377,9 @@ game_frame:
         ; even, as both targets are.)
         ldx #CAM_AHEAD_R
         lda facing                 ; 1 = left
-        beq :+
+        beq @skip3
         ldx #CAM_AHEAD_L
-:       cpx cam_off
+@skip3: cpx cam_off
         beq @offok
         lda cam_off                ; (C is still cpx's)
         bcs @offup                 ; target > cam_off (cpx: C set when X >= cam_off)
@@ -1561,12 +1562,12 @@ player_hit:
         sta vy                     ;  byte
         .assert <KNOCK_VX = 0 && <JUMP_VY = 0 && <TRAMP_VY = 0 && <BOOM_VX = 0, error, "the speeds' low bytes are 0: only their high bytes are stored"
         dec health                 ; Z: no health left
-        beq :+                     ; A = 0: no knockback, vx+1 = 0
+        beq @skip                  ; A = 0: no knockback, vx+1 = 0
         lda #>KNOCK_VX
         bit hx+1
-        bmi :+
+        bmi @skip
         lda #>(-KNOCK_VX)          ; -768 is $FD00: the HIGH byte is the non-zero one
-:       sta vx+1
+@skip:  sta vx+1
         lda #>JUMP_VY
         sta vy+1
         lda #SFX_HIT
@@ -1757,9 +1758,9 @@ player_update:
         ; ---- the vertical velocity
         bmi16 vy, @grav            ; rising: gravity's step
         lda alt
-        beq :+
+        beq @onfloor
         bpl @grav                  ; in the air: gravity's step
-:       stz vy                     ; on the ground (or in it): vy = 0 or a jump's, JUMP_VY =
+@onfloor: stz vy                   ; on the ground (or in it): vy = 0 or a jump's, JUMP_VY =
         ldx firing                 ;  $FB00 (low byte zero either way); X, so A stays 0
         bne @stand                 ;  (the Model B's stz is lda #0)
         lda control
@@ -1769,7 +1770,7 @@ player_update:
         bne @leap
 @stand:
   .if BHW                          ; (CPU spelling: A = 0 on every way in on the B,
-        sta vy+1                   ;  whose stz at ':' is lda #0; the Master's stz
+        sta vy+1                   ;  whose stz at @onfloor is lda #0; the Master's stz
   .else                            ;  keeps A = alt -- negative in the ground -- on
         stz vy+1                   ;  the firing way, so its sta would store alt)
   .endif
@@ -1813,9 +1814,9 @@ player_update:
         clc
         adc py
         sta py
-        bcc :+
+        bcc @skip2
         inc py+1
-:
+@skip2:
         feet_alt
 @down:  lda alt                    ; ---- down: dy = min(dy, alt); dpx+1 = 0 here
         beq @dland
@@ -1855,9 +1856,9 @@ player_update:
         ldx control                ; X, not A: A keeps q6 for the push test
         beq @nofric
         ldx alt
-        beq :+
+        beq @skip3
         bpl @air
-:       cmp #PUSH_NONE             ; A = q6 (the push), still
+@skip3: cmp #PUSH_NONE             ; A = q6 (the push), still
         beq @air
         ; the ground's: vx = vx*58>>6 + push*48 (two of the original's vx*61>>6 +
         ; push*24), as vx - ceil(3w/32) with w = vx - 512p: 3w = 3vx - 1536p, whose
@@ -1881,9 +1882,9 @@ player_update:
         ldx #0
         tya
         adc t16+1                  ; A = 3w high, N = its sign
-        bpl :+
+        bpl @skip4
         dex
-:       stx t16+1                  ; t16+1:A:t16 = 3w sign-extended to 24 bits
+@skip4: stx t16+1                  ; t16+1:A:t16 = 3w sign-extended to 24 bits
 .repeat 3
         asl t16                    ; the 24 bits left by three: t16+1:A = floor(3w/32),
         rol                        ;  t16 = the dropped bits, (3w & 31) << 3
@@ -1931,12 +1932,12 @@ player_update:
         sta facing
         lda running
         ora firing
-        bne :+
+        bne @skip5
         sta anim                   ; A = running|firing = 0: a run starts its anim over
-:       lda alt                    ; the acceleration: ACC_AIR in the air or with no push,
-        beq :+                     ;  else ACC_GROUND -- two of the original's 288 and 36,
+@skip5: lda alt                    ; the acceleration: ACC_AIR in the air or with no push,
+        beq @skip6                 ;  else ACC_GROUND -- two of the original's 288 and 36,
         bpl @acc480                ;  through its friction (each pairs with one: 480 with
-:       lda q6                     ;  vx*3>>3, 72 with vx*58>>6), which hold the original's
+@skip6: lda q6                     ;  vx*3>>3, 72 with vx*58>>6), which hold the original's
         cmp #PUSH_NONE             ;  top speed, KNOCK_VX (768), exactly
         bne @acc72
 @acc480:
@@ -1964,16 +1965,16 @@ player_update:
         asl                        ; two steps' (|A| < 64)
         sta dpx
         beq @hdone                 ; dpx = 0: dpx+1 is dead after @hdone (the fall rewrites it)
-:       sta dpx+1                  ; only its sign is read (@hnext, @hstep): dpx itself carries it; qx = px and qy = py + CLEO_FEET already, set at @push
+        sta dpx+1                  ; only its sign is read (@hnext, @hstep): dpx itself carries it; qx = px and qy = py + CLEO_FEET already, set at @push
 @hstep: bmi @hneg
         inc qx
         bne @hget
         inc qx+1
         bne @hget                  ; always: qx+1 <= 8 (px is inside the map, < 2048)
 @hneg:  lda qx
-        bne :+
+        bne @skip8
         dec qx+1
-:       dec qx
+@skip8: dec qx
 @hget:  jsr get_altitude
         bpl @hok                   ; N from get_altitude's closing sbc
         cmp #$FF
@@ -2167,9 +2168,9 @@ player_update:
         sta bdx                    ; its move this frame (none unless it flies)
         sta bdy
         lda bactive
-        bne :+
+        bne @skip9
         jmp @bdone
-:       lda bcnt
+@skip9: lda bcnt
         cmp #BCNT_HIT
         bcc @bfly
         jmp @bcount                ; hit or stopped: it no longer flies
@@ -2220,10 +2221,10 @@ player_update:
         clc                        ;  again (its spin); hit or stopped, from BCNT_HIT to
         adc #2                     ;  BCNT_GONE, gone
         cmp #BCNT_HIT
-        bne :+
+        bne @skip10
         lda #0
 @bstore:
-:       sta bcnt
+@skip10: sta bcnt
         cmp #BCNT_GONE
         bne @bcatch
 @bgone: stz01 bactive              ; bactive is 1 here (0/1 flag, nonzero on entry)
@@ -2355,9 +2356,9 @@ brel:
         clc
         adc #BOOM_REF_DY
         sta ry
-        bcc :+
+        bcc @skip
         inc ry+1
-:       rts
+@skip:  rts
 
 ; ----------------------------------------------------------------------------
 ; bmove: the boomerang moves on one axis, and the map query's pixel follows
@@ -2369,9 +2370,9 @@ brel:
 bmove:
         ldy #0
         ora #0
-        bpl :+
+        bpl @skip
         dey
-:       clc
+@skip:  clc
         adc bx,x
         sta bx,x
         sta qx,x
@@ -2533,9 +2534,9 @@ body_hit:
         ldy cleo_id
         lda #RQ_BIAS+2*HIT_INSET_GROUND
         cpy #SPR_CLEO_JUMP         ; her air frames (jump, mid-air, fall, dead) from
-        bcc :+                     ;  here: the larger inset
+        bcc @skip                  ;  here: the larger inset
         lda #RQ_BIAS+2*HIT_INSET_AIR
-:       sta hit_k
+@skip:  sta hit_k
         lda sprg_ix,y
         tay                        ; Y = Cleo's shape
         lda sprg_rx,x              ; ---- across: d = rxE - rxC
@@ -2653,19 +2654,19 @@ span:
         jsr rbias                  ; one end, biased (rbias keeps Y, r's high byte)
         sta swa
         lda swd                    ; the other: r + swd, swd sign-extended into Y
-        bpl :+
+        bpl @skip
         dey
-:       clc
+@skip:  clc
         adc swlo
         bcc @y
         iny
 @y:     jsr rbias
         cmp swa                    ; A the high end, swa the low
-        bcs :+
+        bcs @skip2
         ldy swa
         sta swa
         tya
-:       cmp RNGTAB,x               ; high end > lo
+@skip2: cmp RNGTAB,x               ; high end > lo
         beq @no
         bcc @no
         lda swa
@@ -3249,9 +3250,9 @@ ob_rsnake:
         lda rise_tab,x
         sta rise
         and #$80                   ; its high byte: the sign (0, or $FF)
-        beq :+
+        beq @skip
         lda #$FF
-:       sta rise+1
+@skip:  sta rise+1
         lda #1                     ; q6 = 1: the snake is out
         bne @vis                   ; always: A = 1
 @nowarm:
@@ -3443,9 +3444,9 @@ ob_bat:
 @rxpos: beq16 rx, @ydir
         beq16 fc, @ydir            ; (C >= 0 always: it stays in 0..A, so no sign test)
         lda fc
-        bne :+
+        bne @skip
         dec fc+1
-:       dec fc
+@skip:  dec fc
 @ydir:  bpl16 ry, @rypos
         lda fd                     ; she is above: D < B, no faster
         cmp O_BL,y
@@ -3519,9 +3520,9 @@ ob_bat:
         tax
         lda dyl                    ; (dyl's sign into the high byte)
         and #$80
-        beq :+
+        beq @skip2
         lda #$FF
-:       adc ry+1
+@skip2: adc ry+1
         bmi @nostomp
         bne @fall
         cpx #BAT_STOMP_Y+1
@@ -3567,7 +3568,7 @@ ob_bat:
         and #BATOFF_N-1
         tax
         lda bat_off,x
-        adds8 spx
+        adds8 spx, @xadd, @xdone
         lda t16b
         asl
         asl                        ; A = 5*s, low byte only: the high byte of 5*s is dead
@@ -3585,7 +3586,7 @@ ob_bat:
         and #BATOFF_N-1
         tax
         lda bat_off,x
-        adds8 spy
+        adds8 spy, @yadd, @ydone
         lda q1
         jmp add_sprite
 @dead:  lda O_DL,y                 ; falling (in place), until D >= B + 256: D - B's high
@@ -4185,11 +4186,11 @@ bar_bg:
 rnd:
         lsr seed+1
         ror seed
-        bcc :+
+        bcc @skip
         lda seed+1
         eor #RND_TAPS
         sta seed+1
-:       lda seed
+@skip:  lda seed
         rts
 
 ; ---------------------------------------------------------------- tables

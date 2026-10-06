@@ -86,15 +86,15 @@ level_loop:
         zero mapw+1, maph+1
         ldx LV_HDR+HDR_LW
         stx maplw
-:       asl mapw
+@loop:  asl mapw
         rol mapw+1
         dex
-        bne :-
+        bne @loop
         ldx LV_HDR+HDR_LH
-:       asl maph
+@loop2: asl maph
         rol maph+1
         dex
-        bne :-
+        bne @loop2
         ; ---- the camera's range: maxwx = mapw - WINPX, maxwy = maph - VISLINES/2
         lda mapw                   ; C = 0: the last rol shifted out maph's bit 15
         sbc #WINPX-1
@@ -127,8 +127,8 @@ level_loop:
 ;      peg.
 fl_wait:
         lda vsyncs
-:       cmp vsyncs
-        beq :-
+@loop:  cmp vsyncs
+        beq @loop
 ; ---- frame_loop: the peg.  A rendered frame every VSPEG vsyncs, and the logic
 ;      takes one step a frame, at twice the original's rates (logic.s
 ;      game_frame).  No catching up: time lost to a long frame is dropped, so
@@ -168,9 +168,9 @@ fl_over:
         beq game_won
         lsr                        ; the main level reached: the chooser's reach
         cmp max_level
-        bcc :+
+        bcc @skip
         sta max_level
-:       jmp level_loop
+@skip:  jmp level_loop
 
 ; ----------------------------------------------------------------------------
 ; game_won, game_over: the game has ended -- the hi-score, then the menus
@@ -190,11 +190,11 @@ game_over:
         sbc score+1
         lda hi_score+2
         sbc score+2
-        bcs :+                     ; hi_score >= score: stands
+        bcs @skip                  ; hi_score >= score: stands
         mov16 hi_score, score
         lda score+2
         sta hi_score+2
-:       jsr blank_palette          ; dark for the load (keeps X)
+@skip:  jsr blank_palette          ; dark for the load (keeps X)
         txa                        ; A = 0 lost, 1 won
         jmp go_menu                ; the menus' image, then hook_over (disc.s)
 
