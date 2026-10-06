@@ -72,9 +72,9 @@ VISLINES_ALL = (240, 168)
 # the packer runs before the assembler; sprloops.s and gather.s assert them (exactly on the
 # Model B, at most on the Master), so the build stops if they move.
 # bank 4: the row loop and blitters (SPR4CODE)
-B4_CODE_END = 0x838C
+B4_CODE_END = 0x838A
 # bank 5: the same, the gather and its variables (MAP5BSS)
-B5_CODE_END = 0x841B
+B5_CODE_END = 0x8419
 # the top 1K of banks 4 and 5: the expansion tables and SWAPTAB (defs.inc L0TAB; the cfg's
 # B4T, B5T)
 B4_DATA_END = 0xBC00

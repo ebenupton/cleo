@@ -1626,7 +1626,7 @@ player_dead:
         jmp add_sprite
 
 ; ----------------------------------------------------------------------------
-; fall2, move2: the frame's vertical motion -- the original's two steps of velocity
+; fall2, move2g: the frame's vertical motion -- the original's two steps of velocity
 ; and move, summed into dpx
 ;   In:    vy
 ;   Out:   vy stepped (gravity); dpx = the two moves' sum, clamped to MAXFALL down
@@ -1636,22 +1636,17 @@ player_dead:
 ; A step is its gravity, vy = (vy + GRAV) * 31 >> 5, then its move, (vy + 128) >> 8
 ; (MAXDWY0 down at most).  No position between the two is kept: player_update
 ; makes the whole move against the map, and the objects test the stretch it covered
-; (dxl, dyl: csweep).  fall2: both steps with gravity (a fall, a death); move2: a
-; jump's or a stand's -- the first move without it and the second with it only if
-; rising (the original's second step took gravity on vy < 0).  q5 holds the first
-; move.  Z = 0 on exit: fstep2 ends on a dex to $FF, an unequal cmp, or lda #MAXFALL.
+; (dxl, dyl: csweep).  fall2: both steps with gravity (a fall, a death); move2g: a
+; jump's second step, q5 = its first move set by the caller (the first without
+; gravity, the second with it: rising; a stand's two moves are 0 and player_update
+; makes none).  q5 holds the first move.  Z = 0 on exit: fstep2 ends on an adc to a
+; negative sum, an unequal cmp, or lda #MAXFALL.
 ; ----------------------------------------------------------------------------
 fall2:
         jsr gravity
         jsr step1
-        sta q5
-        jmp move2g                 ; the second gravity and move: move2's rising tail
-move2:
-        jsr step1
-        sta q5
-        bit vy+1
-        bpl fstep2
-; ---- move2g: the second step's gravity (fall2's, and move2's when rising)
+        sta q5                     ; and on into the second gravity and move
+; ---- move2g: the second step's gravity (fall2's, and a jump's)
 move2g: jsr gravity
 ; ---- fstep2: the second step's move, summed with the first (q5) into dpx
 fstep2: jsr step1
@@ -1729,7 +1724,7 @@ gravity:
 ;   Pre:   bank 7 paged
 ;   Cost:  measured 845 cycles a frame in this routine's own lines on both machines
 ;          (test/linecyc.mjs, L0/4/8/10, 60 frames, 4 Oct 2026)
-; The vertical move: fall2/move2 give the frame's dy (dpx) and the map is asked
+; The vertical move: fall2/move2g give the frame's dy (dpx) and the map is asked
 ; (get_altitude under her feet) until the move is made -- going up, back down a
 ; pixel at a time while the altitude says she is inside the ground; going down,
 ; the lesser of dy and the altitude, and where the altitude is short of dy, from
@@ -1771,15 +1766,7 @@ player_update:
         beq @stand
         lda keys
         and #(K_UP|K_FIRE)
-        beq @stand
-        lda #>JUMP_VY
-        sta vy+1
-        inx                        ; X = 1 = SFX_JUMP: firing, in X, tested 0 above
-        .assert SFX_JUMP = 1, error, "player_update: the jump's sfx is firing + 1"
-        stx sfx_req
-        bne @move                  ; always: X = 1
-@grav:  jsr fall2
-        bne @mvd                   ; always: fstep2 returns Z = 0
+        bne @leap
 @stand:
   .if BHW                          ; (CPU spelling: A = 0 on every way in on the B,
         sta vy+1                   ;  whose stz at ':' is lda #0; the Master's stz
@@ -1787,9 +1774,21 @@ player_update:
         stz vy+1                   ;  the firing way, so its sta would store alt)
   .endif
         lda #1
-        sta control                ; and on into move2
-@move:  jsr move2
-@mvd:   txa                        ; X = dpx+1, 0 or $FF (fall2/move2)
+        sta control
+        bne @vdone                 ; always: vy = 0 moves her by 0 (two steps of 0, no
+                                   ;  gravity): py and alt stand; dpx, dpx+1 are dead
+                                   ;  at @vdone (the move across rewrites them)
+@leap:  lda #>JUMP_VY
+        sta vy+1
+        inx                        ; X = 1 = SFX_JUMP: firing, in X, tested 0 above
+        .assert SFX_JUMP = 1, error, "player_update: the jump's sfx is firing + 1"
+        stx sfx_req
+        .assert <JUMP_VY = 0 && >JUMP_VY >= $80, error, "player_update: a jump's first move is >JUMP_VY"
+        sta q5                     ; the first move: step1 of JUMP_VY, its high byte
+        jsr move2g                 ; rising: the second with gravity
+        bne @mvd                   ; always: fstep2 returns Z = 0
+@grav:  jsr fall2
+@mvd:   txa                        ; X = dpx+1, 0 or $FF (fall2/move2g)
         bpl @down
         clc                        ; ---- up: py += dpx (dpx+1 = $FF), then back down
         lda py                     ;  while inside the ground
@@ -1806,16 +1805,17 @@ player_update:
 @dland: sta dpx                    ; alt 0: on the ground, dy = 0 (alt and py stand)
         beq @vdone                 ; always: A = 0
 @dlp:   tax                        ; 0 < alt <= dy: the altitude looks a tile ahead at
-        clc                        ;  most, and a frame's fall (12) can reach it -- go
-        adc py                     ;  alt, and look again from there (else she stops
-        sta py                     ;  short, alt 0 in the air: the standing frame)
+        eor #$FF                   ;  most, and a frame's fall (12) can reach it -- go
+        sec                        ;  alt, and look again from there (else she stops
+        adc dpx                    ;  short, alt 0 in the air: the standing frame)
+        sta dpx                    ; dy - alt (dy + ~alt + 1)
+        txa
+        clc
+        adc py
+        sta py
         bcc :+
         inc py+1
-:       lda dpx
-        stx dpx
-        sec
-        sbc dpx
-        sta dpx                    ; dy - alt
+:
         feet_alt
 @down:  lda alt                    ; ---- down: dy = min(dy, alt); dpx+1 = 0 here
         beq @dland
@@ -1964,10 +1964,7 @@ player_update:
         asl                        ; two steps' (|A| < 64)
         sta dpx
         beq @hdone                 ; dpx = 0: dpx+1 is dead after @hdone (the fall rewrites it)
-        and #$80
-        beq :+
-        lda #$FF
-:       sta dpx+1                  ; qx = px and qy = py + CLEO_FEET already, set at @push
+:       sta dpx+1                  ; only its sign is read (@hnext, @hstep): dpx itself carries it; qx = px and qy = py + CLEO_FEET already, set at @push
 @hstep: bmi @hneg
         inc qx
         bne @hget
@@ -2213,9 +2210,8 @@ player_update:
         jsr bmove                  ; by += it, and qy = by
         jsr get_altitude           ; in a solid: it stops there
         bpl @bmore
-        lda #BCNT_HIT
-        sta bcnt
-        bne @bcount                ; always
+        lda #BCNT_HIT+2            ; stopped in a solid: BCNT_HIT, and this frame's count
+        bne @bstore                ; always
 @bmore: lda bmx
         ora bmy
         bne @bm
@@ -2226,6 +2222,7 @@ player_update:
         cmp #BCNT_HIT
         bne :+
         lda #0
+@bstore:
 :       sta bcnt
         cmp #BCNT_GONE
         bne @bcatch
@@ -2653,22 +2650,16 @@ in_range:
 ; ----------------------------------------------------------------------------
 span:
         sta swlo
-        sty swhi
-        jsr rbias                  ; one end, biased
+        jsr rbias                  ; one end, biased (rbias keeps Y, r's high byte)
         sta swa
-        lda swd                    ; the other: r + swd (swd sign-extended into Y)
-        ldy #0
-        ora #0
+        lda swd                    ; the other: r + swd, swd sign-extended into Y
         bpl :+
         dey
 :       clc
         adc swlo
-        pha
-        tya
-        adc swhi
-        tay
-        pla
-        jsr rbias
+        bcc @y
+        iny
+@y:     jsr rbias
         cmp swa                    ; A the high end, swa the low
         bcs :+
         ldy swa
@@ -3257,11 +3248,10 @@ ob_rsnake:
         tax                        ;  -15..16 -> 17..31, 0..16)
         lda rise_tab,x
         sta rise
-        ldx #0                     ; its high byte: the sign
-        ora #0
-        bpl :+
-        dex
-:       stx rise+1
+        and #$80                   ; its high byte: the sign (0, or $FF)
+        beq :+
+        lda #$FF
+:       sta rise+1
         lda #1                     ; q6 = 1: the snake is out
         bne @vis                   ; always: A = 1
 @nowarm:

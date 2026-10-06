@@ -341,30 +341,6 @@ text_centred:
 
 ; ---------------------------------------------------------------- a page
 ; ----------------------------------------------------------------------------
-; clear_ring: the ring to black
-;   In:    nothing
-;   Out:   CLEAR0 .. $7FFF = 0 (the Model B's mirrors and both rings; the
-;          Master's buffer 0 ring; the bar lies below either, untouched); A = 0,
-;          Y = 0
-;   Uses:  A Y, w16
-; Whole pages, to $8000 where the ring ends (defs.s).  The menus never show the
-; bar's rows (menu_sections), so it stays as the game left it.
-; ----------------------------------------------------------------------------
-        .assert <CLEAR0 = 0, error, "the clear is whole pages"
-clear_ring:
-        lda #>CLEAR0
-        sta w16+1
-        lda #0
-        sta w16
-        tay
-@l:     sta (w16),y
-        iny
-        bne @l
-        inc w16+1
-        bpl @l                     ; to $8000
-        rts
-
-; ----------------------------------------------------------------------------
 ; menu_begin: a page's start -- buffer 0 as the work buffer, the window at
 ;   the origin, the ring cleared, the palette black
 ;   In:    nothing
@@ -388,8 +364,31 @@ menu_begin:
         sta wfine
         sta cur_buf
         jsr selbb                  ; select_backbuf (bank 6, through low RAM)
-        jsr calc_ring
-        jmp clear_ring
+        jsr calc_ring              ; then falls into clear_ring (its one caller)
+
+; ----------------------------------------------------------------------------
+; clear_ring: the ring to black
+;   In:    nothing
+;   Out:   CLEAR0 .. $7FFF = 0 (the Model B's mirrors and both rings; the
+;          Master's buffer 0 ring; the bar lies below either, untouched); A = 0,
+;          Y = 0
+;   Uses:  A Y, w16
+; Whole pages, to $8000 where the ring ends (defs.s).  The menus never show the
+; bar's rows (menu_sections), so it stays as the game left it.
+; ----------------------------------------------------------------------------
+        .assert <CLEAR0 = 0, error, "the clear is whole pages"
+clear_ring:
+        lda #>CLEAR0
+        sta w16+1
+        lda #0
+        sta w16
+        tay
+@l:     sta (w16),y
+        iny
+        bne @l
+        inc w16+1
+        bpl @l                     ; to $8000
+        rts
 
 ; ----------------------------------------------------------------------------
 ; menu_show: the finished page onto the screen -- buffer 0's chain built, the
@@ -874,24 +873,23 @@ win_lose:
         cmp mcount
         beq @same                  ; the one shown
         sta mcount
-        cmp mbuf
-        beq :+                     ; in TBUF already (unpacked a frame ahead, below)
-        sta mbuf
-        jsr unpack
+        jsr @unpk                  ; unless in TBUF already (unpacked a frame ahead, below)
 :       jsr blit                   ; right after menu_keys' vsync
 @same:  jsr menu_show
         inc msel
         jsr cleo_frame             ; the next frame, unpacked now, while the page stands
         cmp mcount
         beq :+
-        cmp mbuf
-        beq :+
-        sta mbuf
-        jsr unpack
+        jsr @unpk
 :       jsr menu_keys
         and #(K_FIRE|K_RIGHT)
         beq @loop
-        rts
+@wret:  rts
+; ---- @unpk: frame A into TBUF unless mbuf says it is there
+@unpk:  cmp mbuf
+        beq @wret
+        sta mbuf
+        jmp unpack
 
 ; ----------------------------------------------------------------------------
 ; cleo_frame: big Cleo's frame for the counter

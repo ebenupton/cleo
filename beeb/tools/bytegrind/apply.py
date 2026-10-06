@@ -145,6 +145,9 @@ def restore(prev):
         open(path, 'w').write(text)
 
 ASSETS = os.path.join(BEEB, 'tools', 'assets.py')
+def CODE_END_FAIL(out):
+    """the build stopped on a sprite bank's code-end assert (sprloops.s, gather.s)"""
+    return "code must end where its sprites start" in out or "code must end at B5_CODE_END" in out
 # the files that hold each sprite bank's code-end assert
 BANKFILES = {4: os.path.join(BEEB, 'beebgame/src/engine/sprloops.s'), 5: os.path.join(BEEB, 'beebgame/src/engine/gather.s')}
 def bank_ends():
@@ -167,7 +170,7 @@ def build(batch):
     rc, out = run('./build.sh')
     if rc == 0:
         return True, before
-    if "code must end where its sprites start" not in out:
+    if not CODE_END_FAIL(out):
         return False, before
     saved_src = {b: open(f).read() for b, f in BANKFILES.items()}
     try:
@@ -189,7 +192,7 @@ def build(batch):
         rc, out = run('./build.sh')
         if rc == 0:
             return True, before
-        if "code must end where its sprites start" not in out:
+        if not CODE_END_FAIL(out):
             break
         s = open(ASSETS).read()
         for b, f in BANKFILES.items():
