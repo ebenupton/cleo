@@ -32,8 +32,7 @@ clamp_window:
         lda wx+1
         bmi @wx0
         ldx wx                     ; X = wx for @wxok
-        cpx maxwx
-        lda wx+1
+        cpx maxwx                  ; (A = wx+1 still, from the bmi's load)
         sbc maxwx+1
         bmi @wxok                  ; wx < maxwx: in range
         lda maxwx+1
@@ -47,9 +46,8 @@ clamp_window:
         sta wx
         lda wy+1
         bmi @wy0
-        lda wy
-        cmp maxwy
-        lda wy+1
+        ldx wy                     ; X dead: A keeps wy+1 for the sbc
+        cpx maxwy
         sbc maxwy+1
         bmi @wyok                  ; wy < maxwy: in range
         lda maxwy

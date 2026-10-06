@@ -186,15 +186,16 @@ draw_text:
         sta w16b+1
         bne @rows                  ; (always: font_blank is in bank 7)
 @glyph: jsr glyph_index            ; w16b = font_art + 8*glyph, read in place (the font
-        stzx w16b+1                ;  is in this image; A live, X dead: draw_glyph_rows
-        asl                        ;  sets X before reading it)
-        asl
-        asl
-        rol w16b+1                 ; 8*glyph is 9 bits (40 glyphs); C = 0 after: the bit
-        adc #<font_art             ;  rolled out of w16b+1 was 0
+        asl                        ;  is in this image), as 2*(4*glyph + font_art/2) + 1:
+        asl                        ;  4*glyph < 256 (40 glyphs), so C = 0 here
+        adc #<(font_art/2)
         sta w16b
-        lda w16b+1
-        adc #>font_art
+        lda #>(font_art/2)
+        adc #0
+        .assert (font_art & 1) = 1, error, "draw_text: the sec is font_art's low bit (odd)"
+        sec                        ; font_art's low bit
+        rol w16b
+        rol
         sta w16b+1
 @rows:  jsr draw_glyph_rows
 @space: lda tx
@@ -254,9 +255,10 @@ draw_glyph_rows:
         sta w16
         stz w16+1                  ; w16 = the char column
         lda ty
+        tax                        ; (X is free until the ldx #0 below)
         and #MENU_ROWPX-1
         sta tfine                  ; tfine = ty's place in its char row
-        lda ty
+        txa
         lsr
         lsr
         clc                        ; (ring_addr7 adds the carry in: ty's bit 1 is out)
@@ -474,8 +476,7 @@ blit:   lda #<TBUF
 @row:   lda spx
         lsr                        ; (C = 0: spx is even)
         sta w16
-        lda #0
-        sta w16+1                  ; w16 = the char column
+        stz w16+1                  ; w16 = the char column
         lda prow
         jsr ring_addr7             ; sp = the row's first byte (C = 0 in)
         lda pspan
@@ -684,12 +685,11 @@ menu_list:
 ;   Uses:  A X (C clobbered)
 ; ----------------------------------------------------------------------------
 item_y: lda mtop
-        cpx #0
-        beq @done
-@step:  clc
+@step:  dex                        ; X steps of mstep (X < 128: 0 goes negative)
+        bmi @done
+        clc
         adc mstep
-        dex
-        bne @step
+        bcc @step                  ; (always: every row is on the screen, < 256)
 @done:  tax
         rts
 
@@ -908,43 +908,36 @@ cleo_frame:
         tax                        ; X = the shift, both arms
         lda mtop
         beq @lframe
+        .assert WIN_SEQ < $10000, error, "cleo_frame takes WIN_SEQ's top byte as 0"
         lda #<WIN_SEQ              ; winning: BIGCLEO_WIN0 + ((WIN_SEQ >> X) & 3)
         sta w16
         lda #>WIN_SEQ
         sta w16+1
-        jsr shr16x
-        lda w16
-        and #3                     ; (2 bits a frame)
-        ora #BIGCLEO_WIN0
-        bne @drawc                 ; (always)
+        lda #^WIN_SEQ              ; 0: 24 bits with zeros on top, as 16 shifted
+        beq @shift                 ; (always)
 @lframe:
         lda #<LOSE_SEQ             ; losing: (LOSE_SEQ >> X) & 3
         sta w16
         lda #>LOSE_SEQ
         sta w16+1
         lda #^LOSE_SEQ
-        sta w16b
+@shift: sta w16b
         jsr shr24x
         lda w16
-        and #3
+        and #3                     ; (2 bits a frame)
+        ldx mtop                   ; (X dead: shr24x left 0)
+        beq @drawc
+        ora #BIGCLEO_WIN0
 @drawc: clc
         adc #TP_CLEO0
         rts
 
 ; ----------------------------------------------------------------------------
-; shr16x: w16 >>= X
-;   In:    X = the shift count; w16
+; shr24x: w16b:w16 (24 bits, w16b the top) >>= X
+;   In:    X = the shift count; w16, w16b
 ;   Out:   w16 shifted; X = 0; A = the count
 ;   Uses:  A X
-; shr24x: w16b:w16 (24 bits, w16b the top) >>= X; the same In, Out, Uses
 ; ----------------------------------------------------------------------------
-shr16x: txa                        ; Z from X
-        beq @done
-@s:     lsr w16+1
-        ror w16
-        dex
-        bne @s
-@done:  rts
 shr24x: txa                        ; Z from X
         beq @done
 @s:     lsr w16b
@@ -985,14 +978,14 @@ draw_number:
         iny
         dex
         bpl @d                     ; (always: X = 2 or 0 here)
-@z:     ldy #$FF                   ; leading zeros to spaces, but the last digit
-:       iny
-        lda NUMBUF,y
+@z:                                ; leading zeros to spaces, but the last digit (X = $FF:
+:       inx                        ;  the digit loop ends on dex from 0)
+        lda NUMBUF,x
         cmp #'0'
         bne :+
         lda #' '
-        sta NUMBUF,y
-        cpy #NUM_DIGITS-2
+        sta NUMBUF,x
+        cpx #NUM_DIGITS-2
         bne :-
 :       lda #'0'                   ; then the "00", and the end
         sta NUMBUF+NUM_DIGITS

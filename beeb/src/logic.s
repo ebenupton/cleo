@@ -750,12 +750,7 @@ get_altitude:
         cmp maph+1
         bcs @offj
         memo_test @read            ; the memo's tile?  (A = qy+1)
-        lda ma                     ; yes: its column's three tiles, as map_col gave them
-        sta tp
-        lda mb
-        sta tp+1
-        lda mt
-        jmp @have
+        jmp @have                  ; yes: its tile (mt); ma and mb, the two others, are read in place
 @offj:  jmp @off                   ; (off the map: out of a branch's reach)
 @read:  lda qy+1                   ; tilexy's, in line: the row into X, the column into Y
         tile_coord qy
@@ -771,8 +766,7 @@ get_altitude:
         sta map_ptr+1
         jsr map_col                ; A = the tile, tp = the one above, tp+1 the one below
         sta mt                     ; the memo: this tile, its column's two others, where
-        tay                        ;  it is
-        lda tp
+        lda tp                     ;  it is
         sta ma
         lda tp+1
         sta mb
@@ -788,8 +782,8 @@ get_altitude:
         sta mkyhi
         sta mok                    ; qy+1 + 1: nonzero (qy+1 < maph+1 <= 8)
         inc mok
-        tya
-@have:  altof
+@have:  lda mt                     ; the tile, from the memo either way
+        altof
         tax                        ; X = n3, the alt byte
         lda qy
         and #TILEPX-1
@@ -807,7 +801,7 @@ get_altitude:
         cmp maph+1                 ;  ALT_OUTSIDE past the map's bottom (tilexy's test)
         lda #ALT_OUTSIDE
         bcs @below2
-@below: lda tp+1
+@below: lda mb                     ; the memo's tile below
         altof
 @below2:
         lsr
@@ -827,7 +821,7 @@ get_altitude:
         bcs :+
         dec qy+1
 :       jsr get_info
-        jmp @top
+        bne @top                   ; (an alt byte is never 0)
 @above: txa
         lsr
         lsr
@@ -844,15 +838,14 @@ get_altitude:
         cmp maph+1                 ;  ALT_OUTSIDE above the map's top (qy+1 = $FF) or past
         lda #ALT_OUTSIDE           ;  its bottom
         bcs @top
-@up:    lda tp
+@up:    lda ma                     ; the memo's tile above
         altof                      ; (on into @top)
 @top:   tax
         and #NIBBLE
         cmp #TILEPX
         beq @full                  ; a full tile above: its n4 - 8 - n5
-        lda #0                     ; else 0 - n5 - 1 (n4, which was 0: @d2's in line)
-        sec
-        sbc q5
+        lda #1                     ; else 0 - n5: C = 0 from the cmp (a low nibble below 8),
+        sbc q5                     ;  so 1 - n5 - 1
         rts
 @full:  txa
         lsr
@@ -1061,11 +1054,10 @@ level_init:
         lsr
         lsr
         lsr
-        sta gy1
-        ldy obj
+        sta gy1                    ; (Y = obj still: the ldy obj after the y's @x8)
         lda otype                  ; A = otype for the cmps below; X counts it down
         tax                        ;  (X is dead: the cases and @box set it first)
-        .assert OT_STAR = 0 && OT_TRAMP = 1 && OT_SNAKE = 2 && OT_MASK = 5 && OT_MUMMY = 6, error, "level_init's type ladder counts X down from otype"
+        .assert OT_STAR = 0 && OT_TRAMP = 1 && OT_SNAKE = 2 && OT_RSNAKE = 3 && OT_BAT = 4 && OT_MASK = 5 && OT_MUMMY = 6, error, "level_init's type ladder counts X down from otype"
         beq @t0                    ; OT_STAR
         dex
         beq @t1                    ; OT_TRAMP
@@ -1074,15 +1066,13 @@ level_init:
         dex
         dex
         dex
-        cpx #OT_MUMMY-OT_MASK+1    ; OT_MASK, OT_MUMMY: X = 0, 1 (3, 4 wrap to $FE, $FF)
-        bcs :+
-@t256a: jmp @t256
-:       cmp #OT_RSNAKE
-        bne :+
-        jmp @t3
-:       cmp #OT_BAT
+@t256a: cpx #OT_MUMMY-OT_MASK+1    ; OT_MASK, OT_MUMMY: X = 0, 1 (3, 4 wrap to $FE, $FF);
+        bcc @t256                  ;  OT_SNAKE joins at the cpx with X = 0
+:       inx                        ; OT_BAT: X = $FF + 1 = 0 (A keeps otype for the cmps)
         bne :+
         jmp @t4
+:       inx                        ; OT_RSNAKE: X = $FE + 2 = 0; the rest are 4..9
+        beq @t3
 :       cmp #OT_FLAME
         bne :+
         jmp @t9
@@ -1099,9 +1089,17 @@ level_init:
         inc stars                  ;  over the stars a screen shows at once)
         lda gy                     ; gy1 = y>>3 (the prologue's gy), gy = (y-1)>>3
         sta gy1
+  .if BHW                          ; (CPU spelling: max(q2-1, 0) through X, dead here)
+        ldx q2
+        beq @s0
+        dex
+@s0:    txa
+  .else
         lda q2
-        beq :+
-        deca                       ; A - 1; the carry is dead (lsr follows)
+        beq @s0                    ; 0 stays 0, else A - 1
+        dec a
+@s0:
+  .endif
 :       lsr
         lsr
         lsr
@@ -1117,8 +1115,14 @@ level_init:
         lsr
         lsr
         sta gx0                    ; gx0 = (x-2)>>3, gx1 = (x+1)>>3, gy = gy1 = (y+1)>>3
+  .if BHW                          ; (CPU spelling: q1 + 1 through X, dead here)
+        ldx q1
+        inx
+        txa
+  .else
         lda q1
-        inca                       ; A + 1; the carry is dead (lsr follows)
+        inc a
+  .endif
         lsr
         lsr
         lsr
@@ -1133,7 +1137,7 @@ level_init:
         sta O_AL,y
         txa
         sta O_AH,y
-        jmp @g1                    ; @t4's tail, then @box
+        bpl @g1                    ; @t4's tail, then @box (N = 0: txa of X = A>>5 <= 7)
 @t3:    lda q2                     ; the red snake: gy = (y-4)>>3 (it rises)
         submin0 4
         lsr
@@ -1260,17 +1264,14 @@ level_init:
         jmp @ol
 @objdone:
         ; ---- Cleo's state
-        .assert vx = px+4 && anim = vx+4, error, "level_init: @ps copies px..vx and zeroes vx..anim with one count"
-        ldx #vx-px                 ; px, py = startx, starty; vx, vy, anim = 0 (Y = 0 on
-@ps:    lda startx,x               ;  both ways in: ldy nobj / ldy obj).  X = 4 copies
-        sta px,x                   ;  exitx's low byte into vx and clears anim; X = 1
-        sty vx,x                   ;  and 0 clear vx again after
+        .assert vx = px+4 && anim = vx+4 && ev_frame = anim+1 && facing = ev_frame+2 && running = facing+1 && firing = running+1, error, "level_init: @ps copies px..py and zeroes vx..firing with one count"
+        ldx #firing-vx             ; px, py = startx, starty; vx..firing = 0 (Y = 0 on
+@ps:    lda startx,x               ;  both ways in: ldy nobj / ldy obj).  X = 9..4 copy
+        sta px,x                   ;  startx+9..+4 into vx+5..vx, each cleared later at
+        sty vx,x                   ;  X - 4; ev_frame's zero is overwritten just below
         dex
         bpl @ps
         mov16 ev_frame, frame
-        sty facing
-        sty running
-        sty firing
         sty bactive
         sty exiting
         sty frame
@@ -1431,14 +1432,13 @@ game_frame:
         zero bin_nstar, bin_noth
 @rows:  grid_rowbase               ; gx = gx0; A = gy << gridsh, once a row
         sta grow
-@cells: lda grow
-        clc
-        adc gx
+        clc                        ; (@cells is entered with A = grow, C = 0)
+@cells: adc gx
         tax
         lda LV_GRID,x
 @walk:  cmp #GRID_NONE
         beq @cellend
-        sta bent
+@link:  sta bent
         tax
         lda LV_BOBJ,x
         tay
@@ -1467,20 +1467,22 @@ game_frame:
         jsr process_object
         setbank BANK_LVL, BANK_LVL, 2
 @skip:  ldx bent
-@sk2:   lda LV_BNEXT,x
-        jmp @walk
+@sk2:   lda LV_BNEXT,x             ; the chain's next link: the end test here, not
+        cmp #GRID_NONE             ;  back through @walk
+        bne @link
 @cellend:
         lda gx
         cmp gx1
         beq @rowend
         inc gx
-        bne @cells                 ; gx < gx1 <= 255: never 0
+        lda grow
+        bcc @cells                 ; gx < gx1 (cells < GRIDN = 128): C = 0 from the cmp
 @rowend:
         lda gy
         cmp gy1
         beq @runlist
         inc gy
-        jmp @rows
+        bcc @rows                  ; gy < gy1: C = 0 from the cmp
 @runlist:
         ldx #0                     ; the stars (test at the bottom: bin_i kept in step
         cpx bin_nstar              ;  with X)
@@ -1518,9 +1520,8 @@ game_frame:
         beq @nokill                ;  a fall off the map leaves health 0 with hurt clear,
                                    ;  and a kill tile under her then took 0 to 255, alive.)
         mov16 qx, px               ; (alive, a kill tile hits through the invulnerability)
-        clc
-        lda py
-        adc #CLEO_KILLY
+        lda py                     ; C = 1 here: both ways to @rldone leave a cpx that
+        adc #CLEO_KILLY-1          ;  found X = bin_noth, and nothing since touches C
         sta qy
         lda py+1
         adc #0                     ; A = qy+1, never stored: nothing reads it before it
@@ -1994,11 +1995,10 @@ player_update:
         bcc @alt0
         inc py+1
         bcs @alt0                  ; always: C = 1, the adc's carry
-@stepn: clc                        ; negative: high byte of the addend is $FF
-        adc py
-        sta py
-        bcs @alt0                  ; no borrow (255 times in 256): py+1 is unchanged
+@stepn: lda py                     ; negative means -1 (below it was a wall): py -= 1
+        bne @sdec                  ;  (A is dead: @alt0 reloads it)
         dec py+1
+@sdec:  dec py
 @alt0:  lda #0                     ; alt = 0 (A is dead: @hnext reloads it)
 @alt:   sta alt
 @hnext: ldx dpx+1                  ; steps -= dir; X holds the direction for @hl (X is
@@ -2039,19 +2039,18 @@ player_update:
         lda #SFX_THROW
         sta sfx_req
         bne @animdone              ; always: SFX_THROW <> 0
+        .assert <* <> $FF, error, "player_update: @animtab must not cross a page"
+@animtab:                          ; by running (0/1): the stand's wrap, the run's
+        .byte IDLE_ANIM, RUN_ANIM
 @tend:  cmp #THROW_END
         bne @animdone
         stz01 firing               ; 1 -> 0 (firing is only ever 0 or 1): Z = 1 on both
         beq @animdone              ;  (the Model B's dec; the cmp #THROW_END, which stz keeps)
 @notfiring:
-        ldx running                ; A = anim still
-        beq @idle
-        cmp #RUN_ANIM
+        ldx running                ; A = anim still; X = running for the wrap's table
+        cmp @animtab,x
         bne @animdone
-        beq @zanim                 ; always: Z = 1 from the cmp #RUN_ANIM
-@idle:  cmp #IDLE_ANIM
-        bne @animdone
-@zanim: stz anim
+        stz anim
 @animdone:
         ; ---- the timers: hurt clears after HURT_F frames (the original's 64 steps),
         ; control comes back after CTRL_F; the deltas unsigned, so they work across the
@@ -2230,17 +2229,13 @@ player_update:
 :       sta bcnt
         cmp #BCNT_GONE
         bne @bcatch
-        lda #0
-        sta bactive
-        beq @bdone                 ; always
+@bgone: stz01 bactive              ; bactive is 1 here (0/1 flag, nonzero on entry)
+        bcs @bdone                 ; always: C = 1 from the cmp's match or bsweep's hit
 @bcatch:
         jsr brel                   ; caught?  The box it crossed meets Cleo's: rx, ry
         ldx #RQ_BOOM_STAR          ;  in -7..7 (a star's -8..8 band, open)
         jsr bsweep
-        bcc @bdraw
-        stz01 bactive              ; bactive is 1 here (0/1 flag, nonzero on entry)
-@bdraw: lda bactive
-        beq @bdone
+        bcs @bgone
         mov16 spx, bx
         mov16 spy, by
         lda bcnt
@@ -2292,21 +2287,20 @@ player_update:
 ; pull stays put until it would move a pixel a step).
 ; ----------------------------------------------------------------------------
 bstep:
-        lda bvx+1,x                ; t16 = bv >> 4 (arithmetic): four rotates of the
-        sta t16+1                  ;  pair, the sign rolled in from a cmp #$80
-        lda bvx,x
-        ldy #4
-@shr:   pha
-        lda t16+1
+        lda bvx+1,x                ; t16 = bv, then bv -= t16 >> 4, >> 6, >> 7: one
+        sta t16+1                  ;  arithmetic shift of the pair (the sign rolled in
+        lda bvx,x                  ;  from a cmp #$80), Y the shifts left of seven;
+        sta t16                    ;  a subtract when Y reaches 3, 1 and 0
+        ldy #7
+@shr:   lda t16+1
         cmp #$80
-        ror
-        sta t16+1
-        pla
-        ror
+        ror t16+1
+        ror t16
         dey
-        bne @shr
-        sta t16
-        ldy #3                     ; bv -= bv>>4, then >>6, then >>7
+        cpy #3
+        beq @d
+        cpy #2
+        bcs @shr
 @d:     sec
         lda bvx,x
         sbc t16
@@ -2314,18 +2308,8 @@ bstep:
         lda bvx+1,x
         sbc t16+1
         sta bvx+1,x
-        lda t16+1                  ; t16 >>= 2, then 1
-        cmp #$80
-        ror t16+1
-        ror t16
-        cpy #3
-        bne @d1
-        lda t16+1
-        cmp #$80
-        ror t16+1
-        ror t16
-@d1:    dey
-        bne @d
+        tya
+        bne @shr
         lda rx,x                   ; bv += 4*r
         sta t16
         lda rx+1,x
@@ -2338,12 +2322,11 @@ bstep:
         lda bvx,x
         adc t16
         sta bvx,x
+        tay                        ; the new low byte, for the rounding below
         lda bvx+1,x
         adc t16+1
         sta bvx+1,x
-        lda bvx,x                  ; A = 2 * ((bv + 128) >> 8)
-        cmp #$80
-        lda bvx+1,x
+        cpy #$80                   ; A = 2 * ((bv + 128) >> 8): the high byte in A
         adc #0
         asl
         rts
@@ -2477,7 +2460,7 @@ process_object:
 ; ----------------------------------------------------------------------------
 os_vanish:
         oin fe, O_EL
-        jsr os_oxy
+        oxy_set                    ; ox, oy = spx, spy: where it maps its tiles
         jsr ob_vanish              ; the frame's two steps: its count's map writes fall
         jsr ob_vanish              ;  on every fourth
         ldy obj
@@ -2501,16 +2484,6 @@ os_switch:
         oout fd, O_DL
 ; ---- ob_none: type OT_NONE, nothing to do (and os_switch's rts)
 ob_none:
-        rts
-
-; ----------------------------------------------------------------------------
-; os_oxy: ox, oy = spx, spy -- the object's position, kept while a handler moves
-; spx/spy (the red snake draws twice; the vanishing block maps its tiles)
-;   Uses:  A
-;   Keeps: X Y
-; ----------------------------------------------------------------------------
-os_oxy:
-        oxy_set
         rts
 
 ; ----------------------------------------------------------------------------
@@ -2759,8 +2732,7 @@ csweep:
         ora dyl
         bne @go
 @r:     rts                        ; (C = 0: she did not move)
-@go:    sty swy
-        lda dyl
+@go:    lda dyl
         sta swe
         lda dxl
         bcc sweep                  ; always: C = 0 from in_range's miss
@@ -2775,19 +2747,18 @@ csweep:
 ; Falls into sweep.
 ; ----------------------------------------------------------------------------
 bsweep:
-        sty swy
         lda bdy
         sta swe
         lda bdx
 ; ----------------------------------------------------------------------------
 ; sweep: the two axes' spans
-;   In:    A = the move across, swe = the move down, swy = Y to restore; X = the
-;          quad; rx, ry
+;   In:    A = the move across, swe = the move down; X = the quad; rx, ry
 ;   Out:   C = 1 if rx over A meets the quad's x pair and ry over swe its y pair
-;   Uses:  A, swd, span's
-;   Keeps: X (stepped to the y pair and back), Y (from swy)
+;   Uses:  A, swd, swy, span's
+;   Keeps: X (stepped to the y pair and back), Y (kept in swy)
 ; ----------------------------------------------------------------------------
 sweep:
+        sty swy                    ; both ways in save Y here, once
         sta swd
         lda rx
         ldy rx+1
@@ -2949,7 +2920,7 @@ ob_star1:
         sta sfx_req
         lda #SPARKLE0              ; the sparkle's first step: its count, and A for @anim
         sta O_AL,y
-        bne @anim                  ; always
+        bne @spin                  ; always; A = SPARKLE0 < SPARKLE_END: @anim's test cannot pass
 @phase: lda O_AL,y                 ; the spin: the level's star clock plus this star's
         clc                        ;  phase (A, the packer's), mod STARCLK -- a star out
         adc star_clk               ;  of the bin window keeps its place in step
@@ -3169,18 +3140,17 @@ ob_snake:
         .assert SNAKE_E_WRAP = 12, error, "ob_snake: @ftab has an entry for each count 0..11"
 @done:  rts
 ; ---- @adv: one step of the state machine (two a frame)
-@adv:   lda O_EL,y                 ; both arms step the counter
-        clc
-        adc #1
+@adv:   ldx O_EL,y                 ; both arms step the counter (X is reloaded below)
+        inx
+        txa
         sta O_EL,y
         ldx O_CL,y                 ; (X is free here: the handler never reads it before a
         cpx #2                     ;  load)
         bcs @s23
         cmp #SNAKE_E_WRAP
         beq @z                     ; E = 12: back to 0, a pause frame (no step)
-        cmp #0                     ; the pause frames 0, 3, 6, 9: no step
-        beq @ar
-        cmp #SNAKE_PAUSE
+        cmp #SNAKE_PAUSE           ; the pause frames 3, 6, 9: no step (0 is @z's: E is
+                                   ;  0..11 while walking, so E + 1 is never 0)
         beq @ar
         cmp #2*SNAKE_PAUSE
         beq @ar
@@ -3196,7 +3166,7 @@ ob_snake:
         lda O_BH,y
         adc #0                     ; C = 1: + 1
         sta O_BH,y
-        lda #0                     ; the low byte the carry left
+        txa                        ; A = 0, the low byte the carry left (X = 0: @c0)
 @c0c:   cmp O_AL,y                 ; B = A: on to state 1
         bne @ar
         lda O_BH,y
@@ -3326,10 +3296,10 @@ ob_rsnake:
         cmp #0                     ; A still holds the counter; ldx did not touch it
         beq @fr
         ldx #SPR_RSNAKE0+4
-@fr:    stx q1
-        bge16 px, ox, @fr1
-        inc q1                     ; (+1: facing left)
-@fr1:   mov16 spy, oy
+@fr:    bge16 px, ox, @fr1         ; (X kept: the macro uses A only)
+        inx                        ; (+1: facing left)
+@fr1:   stx q1
+        mov16 spy, oy
         add16 spy, rise            ; the snake at oy + the parabola
         lda q1
         jsr body_draw              ; her body against this frame's, then drawn
@@ -3419,8 +3389,6 @@ ob_bat:
         sta fd
         lda O_DH,y
         sta fd+1
-        lda O_CL,y
-        sta fc
         lda O_CH,y
         sta fc+1
         ; the move: rx and spx += C >> 1, ry and spy += D >> 1 (arithmetic; the
@@ -3428,7 +3396,8 @@ ob_bat:
         cmp #$80                   ; A = fc+1
         ror
         tax
-        lda fc
+        lda O_CL,y                 ; (Y = obj still; lda and sta leave the ror's C)
+        sta fc
         ror
         tay
         clc
@@ -3520,25 +3489,19 @@ ob_bat:
         sta O_DH,y
         jsr boom_ready
         bcc @player
-        lda rx                     ; rx, ry (Cleo's) kept on the stack across the
-        pha                        ;  boomerang's test: her tests below read them
-        lda rx+1
-        pha
-        lda ry
-        pha
-        lda ry+1
-        pha
+        ldx #3                     ; rx, ry (Cleo's) kept on the stack across the
+@keep:  lda rx,x                   ;  boomerang's test: her tests below read them
+        pha                        ;  (ry+1 first, rx last: ry = rx+2)
+        dex
+        bpl @keep
         jsr boom_rel
         ldx #RQ_BOOM_BAT
         jsr bsweep
-        pla                        ; pla/sta do not touch carry
-        sta ry+1
-        pla
-        sta ry
-        pla
-        sta rx+1
-        pla
-        sta rx
+        ldx #$FC                   ; back rx first: rx+4,x wraps in zero page to rx..ry+1;
+@back:  pla                        ;  pla, sta, inx do not touch carry
+        sta rx+4,x
+        inx
+        bne @back
         bcc @player
         lda #BCNT_HIT              ; bcnt first: the kill does not read it
         sta bcnt
@@ -3684,11 +3647,14 @@ ob_bat:
         txa
         adc spx+1
         sta spx+1
-        bgt16 spx, px, @f66
-        lda #SPR_BAT0+4            ; (falling: the wide pair, facing Cleo)
-        bne @fgo                   ; always: Z = 0 from the lda
-@f66:   lda #SPR_BAT0+5
-@fgo:   jmp add_sprite
+        lda px                     ; (falling: the wide pair, facing Cleo) C = spx > px:
+        cmp spx                    ;  bgt16's sign bit, px - spx's bit 7, shifted out,
+        lda px+1                   ;  so the frame is one on when it is
+        sbc spx+1
+        asl
+        lda #SPR_BAT0+4
+        adc #0
+        jmp add_sprite
 @done:  rts
 ; the wobble's offsets (ob_bat @wob), a sine of sorts over BATOFF_N steps
 bat_off:
@@ -3771,28 +3737,21 @@ ob_walker:
         beq @f8
         cmp O_AL,y
         bcs @f8
-        ldx O_EL,y                 ; E in X, so each arm can load its frame early: the
-        cpx #WALK_FRAME_E          ;  walk's four frame pairs, one every WALK_FRAME_E of E
-        bcc @f0
-        cpx #2*WALK_FRAME_E
-        bcc @f2
-        cpx #3*WALK_FRAME_E
-        lda #4
-        bcc @fr                    ; C = 0: C + 4
-        lda #6-1                   ; C = 1 (the cpx fell through): C + 6
-@fr:    adc O_CL,y
+        ldx O_EL,y                 ; the walk's four frame pairs, one every WALK_FRAME_E
+        lda walk_fr,x              ;  of E (0, 2 .. 10: ob_walker's own wrap, from
+        adc O_CL,y                 ;  level_init's clear); C = 0: the bcs fell through
 @sp:    ldx otype                  ; the frame stays in A: no round trip through q1
         cpx #OT_MUMMY              ; otype is OT_MASK or OT_MUMMY (the two table entries)
         bne @s5                    ; the mask: C = 0 from the cpx
         adc #SPR_MUMMY0-SPR_MASK0-1 ; the mummy: C = 1, so A + 9, and C = 0 again
 @s5:    adc #SPR_MASK0
         jmp body_draw              ; her body against this frame's, then drawn
-@f0:    lda O_CL,y                 ; C = 0: the bcc
-        bcc @sp
-@f2:    lda #2                     ; C = 0: the bcc
-        bcc @fr
 @f8:    lda #WALK_STAND_F
         bne @sp
+; the walk's frame pair by E: (E / WALK_FRAME_E) * 2, E = 0 .. WALK_E_WRAP-2
+walk_fr:
+        .byte 0,0,0,2,2,2,4,4,4,6,6
+        .assert WALK_FRAME_E = 3 && WALK_E_WRAP = 12 && * - walk_fr = WALK_E_WRAP-1, error, "walk_fr: one entry per E"
 
 ; ---------------------------------------------------------------- the spike (7)
 ; ----------------------------------------------------------------------------
@@ -3958,6 +3917,8 @@ ob_vanish:
         bcc @set
         lda #VANISH_END
         sbc fe                     ; carry is already set: bcc fell through
+        bne @half                  ; A = 0 only when fe = VANISH_END: the count wraps
+        sta fe                     ;  (nothing below reads fe)
 @half:  lsr
 @set:   sta q1
         mov16 qx, ox               ; the tiles at (ox>>3, oy>>3) and one right: the frame's
@@ -3972,11 +3933,7 @@ ob_vanish:
         lda LV_HDR+HDR_SPECIAL+1,x
         jsr map_put
         dey
-        lda fe                     ; the count's wrap first (mark_dirty leaves fe alone),
-        eor #VANISH_END            ;  so the marks can be the tail
-        bne @mk                    ; A = 0 when fe = VANISH_END
-        sta fe
-@mk:    tya                        ; tile x
+        tya                        ; tile x
         ldx q5                     ; (falls into mark_pair; A, X, Y dead on return)
 ; ----------------------------------------------------------------------------
 ; mark_pair: tiles (A, X) and (A+1, X) marked dirty, in that order (the vanishing
@@ -4017,15 +3974,12 @@ ob_switch:
         jsr add_score
         lda #SFX_POWER
         sta sfx_req
-        lda fc                     ; the rows: fc of them from fb (q5: the grid-walk cursor
-        beq @set                   ;  gx/gy must stay intact)
-        sta q4
-        lda fb
-        sta q5
+        lda fc                     ; the rows: fc of them from fb, counted in place (fb, fc
+        beq @set                   ;  are os_switch's copies, only read back from the record)
 @rl:    ldx fa
         dex
         dex
-        lda q5
+        lda fb
         jsr map_tile               ; map_ptr = the row, Y = X = fa-2, A = (row),fa-2
         iny
         iny
@@ -4036,10 +3990,10 @@ ob_switch:
         iny
         jsr map_put                ; -> (row),fa+1
         lda fa
-        ldx q5
+        ldx fb
         jsr mark_pair              ; (row),fa and (row),fa+1
-        inc q5
-        dec q4
+        inc fb
+        dec fc
         bne @rl
 @set:   inc fd                     ; fd = 0 here (bne @draw fell through): now 1
 @draw:  lda fd
@@ -4184,9 +4138,8 @@ redraw_hud:
 draw_score:
         ldx #HUD_NSLOTS-1
 @d:     stx q1                     ; the slot (bar_digit keeps q1)
-        lda #HUD_NSLOTS-1
-        sec
-        sbc q1                     ; the digit's number, 0..4: its byte, and C = the high
+        lda #HUD_NSLOTS-1          ; (C = 1 here: bar_digit returns from an equal compare,
+        sbc q1                     ;  and bcs @d is taken) the digit's number, 0..4: its byte, and C = the high
         lsr                        ;  nibble's
         tay
         lda score,y

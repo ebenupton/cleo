@@ -420,6 +420,9 @@ _dpk, _dtab = _digits()
 out('digits.bin', _dpk)
 out('digtab.bin', _dtab)
 out('font.bin', m.font)
+# logic.s get_altitude relies on every alt byte being nonzero (a bne for a jmp) and on
+# its low nibble, the ground's height in the tile, being at most TILEPX = 8 (a cmp's carry)
+assert all(b != 0 and (b & 15) <= 8 for b in m.altfile), 'alt.bin: an alt byte is 0 or its low nibble is above 8'
 out('alt.bin', m.altfile)
 out('BAR', m.barbytes)
 MUS = os.path.join(BEEB, 'build', 'MUSIC')
