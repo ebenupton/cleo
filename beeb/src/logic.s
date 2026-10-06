@@ -106,8 +106,10 @@ BAT_STOMP_Y = 4                    ; a stomp: Cleo above it by more than this wh
                                    ;  move began
 BATOFF_N  = 16                     ; bat_off's entries (the wobble)
 WALK_STEP = 3                      ; the mask's and mummy's step a frame
-HIT_INSET = 4                      ; body_hit: each frame's box pulled in this far (px)
-                                   ;  each side, off the art's transparent corners
+HIT_INSET_AIR = 4                  ; body_hit: each frame's box pulled in this far (px)
+HIT_INSET_GROUND = 2               ;  each side, off the art's transparent corners --
+                                   ;  less on the ground, where her feet and the enemy's
+                                   ;  head are solid to the box's edge (measured)
 WALK_E_WRAP = 12                   ;  their counter: 0, 2 .. 10, then 0
 WALK_FRAME_E = 3                   ;  a frame every 3 of it
 WALK_STAND_F = 8                   ;  the standing frame, at either end of the walk
@@ -303,6 +305,7 @@ bin_ok:    .res 1                  ;  the bin walk's list is current: its gx1, o
 rise:      .res 2                  ; the red snake's rise above its basket (ob_rsnake)
 cleo_id:   .res 1                  ; the sprite Cleo was last drawn as (player_update):
                                    ;  her body for body_hit, where she was drawn
+hit_k:     .res 1                  ; body_hit's RQ_BIAS + 2 x its inset, by cleo_id
         .segment "GAMEROWH"
 MROWH:     .res MAPROWS            ; the map rows' addresses, high bytes (level_init fills
                                    ;  both; the map queries read them)
@@ -507,7 +510,8 @@ hi_score:  .res 3
 .macro hit_cleo skip
         lda hurt
         bne skip
-        mov16 hx, rx
+        lda rx+1                   ; player_hit reads only hx+1's sign
+        sta hx+1
         jsr player_hit
         ldy obj
 .endmacro
@@ -2537,10 +2541,11 @@ body_draw:
 ; ----------------------------------------------------------------------------
 ; body_hit: do Cleo's and an enemy's bodies touch, where both were drawn?
 ;   In:    A = the enemy's sprite; spx, spy = where it draws; cleo_id, px, py
-;   Out:   C = 1 if the two frames' boxes, each pulled in HIT_INSET px on every
-;          side, overlap;  rx, ry = the enemy less Cleo;  RNGTAB's RQ_BODY quad
+;   Out:   C = 1 if the two frames' boxes, each pulled in on every side --
+;          HIT_INSET_GROUND px, or HIT_INSET_AIR while Cleo is drawn in the air --
+;          overlap;  rx, ry = the enemy less Cleo;  RNGTAB's RQ_BODY quad
 ;          written
-;   Uses:  A X Y, swd
+;   Uses:  A X Y, swd, hit_k
 ; A frame's box is its shape's (sprgeom: sprg_ix) drawn extent about its
 ; reference point: across [-rx, 2w - rx), down [-ry, ln - ry) (w in byte columns of
 ; two pixels; ln stored rows, a pixel each: these shapes are not SPF_FULLRES).
@@ -2556,6 +2561,11 @@ body_hit:
         lda sprg_ix,x
         tax                        ; X = the enemy's shape
         ldy cleo_id
+        lda #RQ_BIAS+2*HIT_INSET_GROUND
+        cpy #SPR_CLEO_JUMP         ; her air frames (jump, mid-air, fall, dead) from
+        bcc :+                     ;  here: the larger inset
+        lda #RQ_BIAS+2*HIT_INSET_AIR
+:       sta hit_k
         lda sprg_ix,y
         tay                        ; Y = Cleo's shape
         lda sprg_rx,x              ; ---- across: d = rxE - rxC
@@ -2567,13 +2577,13 @@ body_hit:
         sec
         sbc sprg_w,x
         clc
-        adc #RQ_BIAS+2*HIT_INSET
+        adc hit_k
         sta RNGTAB+RQ_BODY         ; lo = d - 2wE + 2k
         lda sprg_w,y
         asl                        ; (C = 0: w < 128)
         adc swd
-        clc
-        adc #RQ_BIAS-2*HIT_INSET
+        sec                        ; - (RQ_BIAS + 2k) = RQ_BIAS - 2k, mod 256
+        sbc hit_k
         sta RNGTAB+RQ_BODY+1       ; hi = d + 2wC - 2k
         lda sprg_ry,x              ; ---- down: d = ryE - ryC
         sec
@@ -2582,13 +2592,13 @@ body_hit:
         sec
         sbc sprg_ln,x
         clc
-        adc #RQ_BIAS+2*HIT_INSET
+        adc hit_k
         sta RNGTAB+RQ_BODY+2       ; lo = d - lnE + 2k
         lda sprg_ln,y
         clc
         adc swd
-        clc
-        adc #RQ_BIAS-2*HIT_INSET
+        sec
+        sbc hit_k
         sta RNGTAB+RQ_BODY+3       ; hi = d + lnC - 2k
         ldx #2                     ; ---- r = the enemy less Cleo: down, then across
         .assert spy = spx+2 && py = px+2 && ry = rx+2, error, "body_hit: the axes' pairs two bytes apart"
@@ -3576,7 +3586,8 @@ ob_bat:
         ldx #RQ_BAT
         jsr csweep
         bcc @draw
-        mov16 hx, rx               ; knocked back from the bat (hx's sign)
+        lda rx+1                   ; knocked back from the bat: player_hit reads
+        sta hx+1                   ;  only hx+1's sign
         jsr player_hit
         ldy obj
 @draw:  lda O_EL,y                 ; the flap's three frame pairs by E: 0..1 and 4..5 the

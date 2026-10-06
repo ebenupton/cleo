@@ -224,11 +224,12 @@ constants block at the top names every rate and limit).  Notable:
   `BAT_STOMP_Y` where her move began) or the boomerang drops it (`BATFALL_A0`, `BAT_GRAV`).
 - `ob_walker` (mask and mummy): patrols 0..A by `WALK_STEP` (3) a frame.  It, and the red
   snake, touch Cleo by `body_draw`/`body_hit`: where both were drawn (Cleo's frame as
-  `cleo_id`, the enemy's this frame), each frame's box from `sprgeom` pulled in `HIT_INSET`
-  (4 px) a side, built into the run-time quad `RQ_BODY` and tested by `in_range`.  Neither can
-  be stomped, and a body cannot be passed in one frame's move, so no sweep: the box a
-  diagonal move spans overstated jumps over them (measured: 9 of 46 jumps hit with no pixels
-  touching, against 0 now).  The snake and the bat keep `csweep`: their stomps need it.
+  `cleo_id`, the enemy's this frame), each frame's box from `sprgeom` pulled in a few pixels
+  a side (`HIT_INSET_GROUND` 2, `HIT_INSET_AIR` 4: see section 4), built into the run-time
+  quad `RQ_BODY` and tested by `in_range`.  Neither can be stomped, and a body cannot be
+  passed in one frame's move, so no sweep: the box a diagonal move spans overstated jumps
+  over them (measured: 9 of 46 jumps hit with no pixels touching, against 0 now).  The snake
+  and the bat keep `csweep`: their stomps need it.
 - `ob_spike`: a dormancy counter `-127..SPIKE_UP`, out below `SPIKE_OUT`; it writes its own
   hit box's x limit into `RNGTAB+RQ_SPIKE+1` from its height each frame.
 - `ob_flame`: a frame every other rendered frame.  `ob_powerup`: with health below
@@ -275,9 +276,14 @@ The box a diagonal move spans is bigger than the path, so the sweep overstates c
 with a big object.  The enemies that cannot be stomped -- the mask, the mummy and the red
 snake -- are too big to pass in one frame's move and are tested where both were drawn
 instead (`body_draw` -> `body_hit`): each frame's box from `sprgeom` (Cleo's as `cleo_id`,
-the frame `player_update` last drew), pulled in `HIT_INSET` (4 px) a side, is turned into the
+the frame `player_update` last drew), pulled in a few pixels a side, is turned into the
 run-time quad `RQ_BODY` (lo = the near edges' difference, hi = the far edges') and tested by
-`in_range`.  The objects run before Cleo's step, so that is where she was drawn last frame.
+`in_range`.  The inset is `HIT_INSET_AIR` (4 px) while Cleo is drawn in the air
+(`SPR_CLEO_JUMP` and up) and `HIT_INSET_GROUND` (2 px) otherwise: in the air the boxes'
+transparent corners made the larger inset necessary for fair jumps, while on the ground her
+feet and an enemy's head are solid to the boxes' edges -- with 4 px a mask walking below her
+on a step 16 px lower, heads and feet plainly overlapping, never touched her (120 of 126
+frame pairs share pixels at that offset).  The objects run before Cleo's step, so that is where she was drawn last frame.
 Measured in the emulator against the pixels drawn: 0 of 46 jumps over a still mask hit with
 no pixels touching (9 under the sweep), 3 of 56 over a mask walking at her (17).  The snake
 and the bat keep the sweep: a 12-px fall can take Cleo from above one to level with it in a
