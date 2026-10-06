@@ -427,13 +427,13 @@ hi_score:  .res 3
         bit var+1
         bpl label
 .endmacro
-; submin0 n, done: A = max(A - n, 0), unsigned; done, the skip's label, the caller's
-.macro submin0 n, done
+; submin0 n: A = max(A - n, 0), unsigned (one ':' forward skip)
+.macro submin0 n
         sec
         sbc #n
-        bcs done                   ; no borrow: A >= n, the difference stands
+        bcs :+                     ; no borrow: A >= n, the difference stands
         lda #0
-done:
+:
 .endmacro
 ; beq16 var, label: branch if var = 0
 .macro beq16 var, label
@@ -520,16 +520,15 @@ done:
         ldy obj
 .endmacro
 ; grid_rowbase: A = gy << gridsh (the grid row's first cell), gx = gx0; X = 0.
-; gridsh >= 2: every map is at least 256 px wide (maplw >= 5).  The loop's label,
-; @rowbase_shift: one expansion a scope.
+; gridsh >= 2: every map is at least 256 px wide (maplw >= 5).  One ':' loop.
 .macro grid_rowbase
         lda gx0
         sta gx
         lda gy
         ldx gridsh
-@rowbase_shift: asl
+:       asl
         dex
-        bne @rowbase_shift
+        bne :-
 .endmacro
 ; bin_range w, g0, g1, len: the grid cells a window edge covers: g0 = w >> 6 (w <
 ; 16384) and g1 = (w + len) >> 6 -- g0 + len's 64s, + 1 if w's remainder carries.
@@ -638,16 +637,16 @@ done:
         sta O_AL,y
 .endmacro
 ; adds8 var: var (16-bit) += A (a signed byte), without building the word: the high
-; byte pre-borrowed when A is negative.  add, done: the two skips' labels, the caller's.
-.macro adds8 var, add, done
-        bpl add
+; byte pre-borrowed when A is negative.  Two ':' skips.
+.macro adds8 var
+        bpl :+
         dec var+1
-add:    clc
+:       clc
         adc var
         sta var
-        bcc done
+        bcc :+
         inc var+1
-done:
+:
 .endmacro
 ; oin f, lo / oout f, lo: an object's field byte (lo,y) into zero page f, and back
 .macro oin f, lo
@@ -1115,7 +1114,7 @@ level_init:
         ora #TILEPX/2              ; a trampoline stands at 8x + 4: x*8 has bit 2 clear,
         sta O_XL,y                 ;  so the + 4 cannot carry into O_XH
         lda q1
-        submin0 2, @gx0ok
+        submin0 2
         lsr
         lsr
         lsr
@@ -1144,7 +1143,7 @@ level_init:
         sta O_AH,y
         bpl @g1                    ; @t4's tail, then @box (N = 0: txa of X = A>>5 <= 7)
 @t3:    lda q2                     ; the red snake: gy = (y-4)>>3 (it rises)
-        submin0 4, @gy4ok
+        submin0 4
         lsr
         lsr
         lsr
@@ -1220,7 +1219,7 @@ level_init:
 @gy1:   sta gy1
         bpl @box                   ; gy = q2>>3 < 32: N = 0
 @t9:    lda q2                     ; the flame: gy = (y-2)>>3, gy1 = y>>3
-        submin0 2, @gy2ok
+        submin0 2
         lsr
         lsr
         lsr
@@ -3572,7 +3571,7 @@ ob_bat:
         and #BATOFF_N-1
         tax
         lda bat_off,x
-        adds8 spx, @xadd, @xdone
+        adds8 spx
         lda t16b
         asl
         asl                        ; A = 5*s, low byte only: the high byte of 5*s is dead
@@ -3590,7 +3589,7 @@ ob_bat:
         and #BATOFF_N-1
         tax
         lda bat_off,x
-        adds8 spy, @yadd, @ydone
+        adds8 spy
         lda q1
         jmp add_sprite
 @dead:  lda O_DL,y                 ; falling (in place), until D >= B + 256: D - B's high

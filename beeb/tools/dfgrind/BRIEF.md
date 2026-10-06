@@ -106,8 +106,9 @@ totals rise by at most 4 cycles, and one of them is better.
 3. **Registers.** Never assume A, X or Y dead: prove it from the code that follows and
    from EVERY caller, and state it. (An earlier grind's edit inlined an add through X
    "dead" and broke the boomerang 380 frames into a level.)
-4. **Never an anonymous label.** No `:` label and no `:+` / `:-` reference, ever: the
-   build rejects them (beebgame tools/noanon.py).  Name every new label: a cheap one
+4. **No anonymous labels in code.** No `:` label and no `:+` / `:-` reference outside a
+   macro's body (macros keep theirs: never add or remove one there without counting every
+   reference past it).  Name every new label in code: a cheap one
    (`@name`, unique in its scope) in code.  A label you add must not end a cheap scope
    (a normal label or an equate does).
 5. **Cheap labels** (`@x`) are scoped by the last normal label: adding a normal label
