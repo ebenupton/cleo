@@ -656,9 +656,13 @@ menu_list:
 @skip2: lda tmp
         and #(K_FIRE|K_RIGHT)
         beq @loop
+        lda #SFX_SELECT
+        jsr sfx_request
         lda msel
         rts
-@move:  lda mlast                  ; the cursor moved: erase the old row's, draw the new
+@move:  lda #SFX_MOVE
+        jsr sfx_request
+        lda mlast                  ; the cursor moved: erase the old row's, draw the new
         ldx #<blank_str
         ldy #>blank_str
         jsr @curstr

@@ -710,12 +710,17 @@ for (lv, sub), cm in maps.items():
 #   half0 .. half0+NHALF-1  half tiles: one char row stored (32 bytes, from HALFPAGE), the
 #                        other a fill or the same row again; three runs -- top row fills
 #                        (to half1), bottom row fills (to half2), both rows the stored one
+#   mir0 .. mir0+NMIR-1  (TILEMIRROR) full tiles drawn mirrored left-right from a stored
+#                        one, MIRTAB's id: only as many as the bank needs, the least used
+#                        first; none in a level that fits without
 #   FLAT0 .. 253         flat tiles, NFLAT of them: two bytes alternating down every char
 #                        (FLATTAB)
 #   254, 255             the solids, cyan and black (FLATTAB's last two pairs): the level's
 #                        other solid, where it has both
 # So NFLAT + 3 ids are fills (id 0, the flats, the two solids) and cost no bank 6 room; the
-# rest are the tiles.
+# rest are the tiles.  A mirror is exact: the dither is per game pixel with no position
+# term, so a game pixel's 2x2 dots move as a unit -- reverse the chars and swap each
+# byte's two game pixels, ((b & $33) << 2) | ((b & $CC) >> 2) (the engine's tiles.s @mir).
 # ----------------------------------------------------------------------------
 # NFLAT, the flat tiles a level may have, is a build parameter (NFLAT=n sh build.sh; 4 by
 # default): each is two bytes of FLATTAB in bank 6 in place of 64 in the tile run, but takes
@@ -726,6 +731,16 @@ NFLAT = int(os.environ.get('NFLAT', '4'))
 # the flats, then the two solids at the top
 FLAT0 = SOLID_CYAN - NFLAT
 assert 0 < NFLAT < 64, NFLAT
+# TILEMIRROR (build.sh): mirrored full tiles, where a level would not fit bank 6 without;
+# MAXMIR, MIRTAB's length (bank 5), for assets.inc
+TILEMIRROR = os.environ.get('TILEMIRROR') == '1'
+MAXMIR = 24
+def mirror_tile(t):
+    """A tile's 64 bytes mirrored left-right: each char row's chars reversed, each byte's
+    two game pixels swapped."""
+    t = bytes(t)
+    return bytes(((b & 0x33) << 2) | ((b & 0xCC) >> 2)
+                 for cr in range(2) for c in range(4) for b in t[cr * 32 + (3 - c) * 8:cr * 32 + (4 - c) * 8])
 # tiles in a set file: 16K, what either machine stages at a time
 TILE_CHUNK = 256
 # ONE tile set: every distinct tile any level uses, once, in files of at most TILE_CHUNK cut
@@ -784,7 +799,7 @@ def _flat_pair_row(row):
 B_TILES, B_TILES_END = 0x8600, 0xC000
 # id k's slot is k + TOFF, the first slots clear of bank 6's code and variables (init.s and
 # defs.inc assert it, from assets.inc)
-TOFF = 2
+TOFF = 12
 def _layout(stored, hlist, halfpair, base, end, loc, name='', demoted=0):
     """The bank 6 layout of a level's stored tiles: slot[k] = i + 1 + TOFF for the i-th (id
     0, the solid, has none); NT the slot count; the halves from HALFPAGE, the first page
@@ -871,16 +886,37 @@ def pack_tiles(lv, sub):
     halfpair = bytes(p[0] for p in pal8) + bytes(p[1] for p in pal8)
     hpairsec = halfpair + hlow
     assert len(flats) <= NFLAT, (lv, sub, len(flats))
-    # (every stored tile must fit the bank: _layout asserts it)
-    stored = sorted(fulls, key=loc)
-    NT, NHALF = len(stored), len(hlist)
+    # mirrors (TILEMIRROR): only while the bank is short, the least used first; a mirror's
+    # source stays a stored tile (every stored tile must fit the bank: _layout asserts it)
+    need = lambda nt: B_TILES + (nt + 1 + TOFF) * 64 + len(hlist) * 32 + len(halfpair) > B_TILES_END
+    bypat = {}
+    for k in fulls:
+        bypat.setdefault(k[0], []).append(k)
+    mirrored = {}                       # key -> its source's key
+    cand = sorted((k for k in fulls if mirror_tile(k[0]) != k[0] and mirror_tile(k[0]) in bypat),
+                  key=lambda k: (use[k], loc(k)))
+    for k in (cand if TILEMIRROR else []):
+        if not need(len(fulls) - len(mirrored)):
+            break
+        if k in mirrored.values():
+            continue
+        srcs = [x for x in bypat[mirror_tile(k[0])] if x not in mirrored]
+        if srcs:
+            mirrored[k] = srcs[0]
+    assert len(mirrored) <= MAXMIR, (lv, sub, len(mirrored))
+    stored = sorted((k for k in fulls if k not in mirrored), key=loc)
+    mirs = sorted(mirrored, key=lambda k: loc(mirrored[k]))
+    NT, NHALF, NMIR = len(stored), len(hlist), len(mirs)
     idof = {k: i + 1 for i, k in enumerate(stored)}
     half0 = NT + 1
     half1 = half0 + len(halves['top'])
     half2 = half1 + len(halves['bot'])
     for i, h in enumerate(hlist):
         idof[h[0]] = half0 + i
-    assert half0 + NHALF <= FLAT0, (lv, sub, half0 + NHALF)
+    mir0 = half0 + NHALF
+    for i, k in enumerate(mirs):
+        idof[k] = mir0 + i
+    assert mir0 + NMIR <= FLAT0, (lv, sub, mir0 + NMIR)
     for i, (k, fp) in enumerate(flats):
         idof[k] = FLAT0 + i
     for k, cs in groups.items():
@@ -898,14 +934,13 @@ def pack_tiles(lv, sub):
     B = _layout(stored, hlist, halfpair, B_TILES, B_TILES_END, loc, name_of(lv, sub), demoted)
     assert all(B['slot'][k] == idof[k] + TOFF for k in stored)
     B['tiles'] = _tilelist(files, stored, loc)
-    # the header's shape (beebgame levelfile.Shape): mir0 and nmir are the format's, kept
-    # from the removed mirrored tiles (the first id past the halves, and 0)
+    # the header's shape (beebgame levelfile.Shape)
     B['shape'] = dict(ntiles=NT, map_shr=lw, nhalf=NHALF, half0=half0, half1=half1, half2=half2,
                       halfpage=B['HALFPAGE'] >> 8, halfoff=B['HALFOFF'],
-                      mir0=half0 + NHALF, nmir=0,
+                      mir0=mir0, nmir=NMIR,
                       solidfill=0x0F if sol0 == 1 else 0x00)
-    # the format's mirrored-tile section, empty
-    B['mir'] = b''
+    # the mirrored-tile section (MIRTAB): each mirror's source's id
+    B['mir'] = bytes(idof[mirrored[k]] for k in mirs)
     assert B['HALFOFF'] + NHALF <= 64, (lv, sub, 'the halves outgrow HLOW (gather.s)')
     # The Master's LV_PAGE0 for these slots: per id, the pair the Model B's gather computes
     # (256 low bytes, then 256 high).  An id no tile has -- the rows past the map's end are
@@ -917,6 +952,10 @@ def pack_tiles(lv, sub):
     for k in stored:
         s_, a_ = idof[k], B['slot'][k]
         blo[s_], bhi[s_] = (a_ & 3) << 6, (B_TILES >> 8) + (a_ >> 2)
+    # a mirror: kind GL_MIRROR (3) at its source's slot
+    for i, k in enumerate(mirs):
+        a_ = B['slot'][mirrored[k]]
+        blo[mir0 + i], bhi[mir0 + i] = ((a_ & 3) << 6) | 3, (B_TILES >> 8) + (a_ >> 2)
     for i, h in enumerate(hlist):
         t, kk = half0 + i, B['HALFOFF'] + i
         # a half's page less $80 marks it a half; its low byte the slot in the page and hlow
@@ -926,7 +965,7 @@ def pack_tiles(lv, sub):
         blo[FLAT0 + j], bhi[FLAT0 + j] = 2 * j, 0x40
     B['page0'] = bytes(blo + bhi)
     return dict(local=local, B=B, flat=flattab, halves=halflist, hpair=hpairsec,
-                ntiles=NT, nhalf=NHALF, nflat=len(flats), usage=usage)
+                ntiles=NT, nhalf=NHALF, nmir=NMIR, nflat=len(flats), usage=usage)
 
 # ----------------------------------------------------------------------------
 # Sprites

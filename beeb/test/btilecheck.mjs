@@ -21,6 +21,9 @@ import { openB } from "./bopen.mjs";
 import fs from "fs";
 const [disc, labels, lvS, nS, dir = "build/tileids"] = process.argv.slice(2);
 const lv = +lvS, N = +nS;
+// TP="x,y;x,y;...": Cleo put at each (game pixels) in turn, TPF frames each (20), the
+// camera following her -- to bring chosen map cells into the window
+const TP = (process.env.TP ?? '').split(';').filter(Boolean).map(p => p.split(',').map(Number)), TPF = +(process.env.TPF ?? 20);
 const exp = fs.readFileSync(`${dir}/L${lv}.bin`);
 const B = await openB({ level: lv, disc, labels });
 const { cpu, A, bank } = B;
@@ -35,6 +38,7 @@ const RING = [A.RING_A ?? 0x0A80, A.RING_B ?? 0x4680], RB = A.RINGBYTES ?? RINGR
 let bad = 0, cells = 0, badf = 0, mc = 0; const MR = (process.env.MIR ?? '0,0').split(',').map(Number);
 for (let f = 0; f < N; f++) {
   bank(7, () => { cpu.writemem(A.keys, KEYS[PAT[f % PAT.length]]); cpu.writemem(A.hurt, 1); cpu.writemem(A.health, 3); });
+  if (TP.length) bank(7, () => { const [x, y] = TP[Math.floor(f / TPF) % TP.length]; cpu.writemem(A.px, x & 255); cpu.writemem(A.px + 1, x >> 8); cpu.writemem(A.py, y & 255); cpu.writemem(A.py + 1, y >> 8); });
   await B.runTo(A.frame_top, 7);
   const lw = rd(A.maplw), stride = 1 << lw;
   let fb = 0;

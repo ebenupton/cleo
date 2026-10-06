@@ -74,7 +74,7 @@ VISLINES_ALL = (240, 168)
 # bank 4: the row loop and blitters (SPR4CODE)
 B4_CODE_END = 0x838A
 # bank 5: the same, the gather and its variables (MAP5BSS)
-B5_CODE_END = 0x8419
+B5_CODE_END = 0x8451
 # the top 1K of banks 4 and 5: the expansion tables and SWAPTAB (defs.inc L0TAB; the cfg's
 # B4T, B5T)
 B4_DATA_END = 0xBC00
@@ -90,8 +90,11 @@ B5_DATA = (B5_CODE_END, MAP5)
 B5_TOP = MAP5
 # bank 6: the tiles from here (page aligned), above the code (the cfg's B6X), to the end
 TILES_BASE, B6X = m.B_TILES, m.B_TILES_END
-# a shared file's stage: 16K on either machine (defs.inc STAGE)
-STAGE_LEN = 0x4000
+# a shared file's stage: 16K on either machine, a page less on the Model B with LDBIG
+# (defs.inc STAGE: the load-time program's room)
+STAGE_LEN = 0x4000 - (0x100 if os.environ.get('LDBIG') == '1' else 0)
+for k in range(3):
+    assert os.path.getsize(os.path.join(BEEB, 'build', 'TILES%d' % k)) <= STAGE_LEN, 'TILES%d: past the stage' % k
 # img_tab's entry: file, offset (2), length (2)
 IMGTAB_LEN = 5
 # the window's width in game px (engine/defs.s WINPX); the collision grid's cell (logic.s
@@ -917,6 +920,8 @@ with open(os.path.join(OUT, 'assets.inc'), 'w') as f:
             % (B4_DATA[0], len(sprc4), C5_BASE, len(sprc5), len(sprx)))
     # id k's tile slot is k + TOFF (convert.py)
     f.write('TOFF = %d\n' % m.TOFF)
+    # MIRTAB's length (TILEMIRROR: the most mirrored tiles a level has, convert.py)
+    f.write('MAXMIR = %d\n' % m.MAXMIR)
     # the title pieces (convert.py pieces, in order)
     f.write('TP_LOGO = 0\nTP_YOU = 1\nTP_WIN = 2\nTP_LOSE = 3\nTP_CLEO0 = 4\n')
     # the largest piece, unpacked (menu.s)

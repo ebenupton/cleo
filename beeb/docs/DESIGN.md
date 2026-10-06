@@ -14,7 +14,8 @@ is what today's build gives and the symbol is what to read.
 |---|---|
 | `src/main.s` | the root: `cpu.inc`, `defs.inc`, the engine's sources and the game's in order (`logic.s`, `game.s`, `menu.s`, then `low.s`, `disc.s`, `mirror.s` on the Model B, `banks.s`, `gamedata.s`, `init.s`), and the hooks the engine calls: `hook_title = game_main`, `hook_play = level_loop`, `hook_over = menu_over`, `hook_image = bar_bg`, `hook_hud = redraw_hud` |
 | `src/logic.s` | the port of `CleoApp.run()`: the constants, the object arrays, the zero-page state (`ZPGAME`), the map queries, `level_init`, `game_frame`, the player, the boomerang, the thirteen object handlers, the collision tests, the HUD digits, `rnd`, the tables `RNGTAB`/`MROWL`/`MROWH`, `score`/`hi_score` |
-| `src/game.s` | the game loop (`clamp_window`, `level_loop`, `frame_loop`, `frame_top`, `fl_over`, `game_over`) and the sound effects (`sfx_tab`, resident with the kernel's `sound_tick`) |
+| `src/game.s` | the game loop (`clamp_window`, `level_loop`, `frame_loop`, `frame_top`, `fl_over`, `game_over`) |
+| `src/sfx.py` | the sound effects, for the engine's bank 6 player (`SOUND6`; `GAME_SFX`, packed by `beebgame/tools/sfx.py` into `sfxdata.inc`'s `SFX_*`) |
 | `src/menu.s` | the menus' image of bank 7: `game_main`, `title_loop`, `new_game`, `menu_over`; the title, help, level select and win/lose screens; `draw_text`, the title pieces' `unpack`/`blit` |
 | `src/gamedata.s` | the tables: `alt_tab` (`alt.bin`), the HUD digits (`digits.bin`, `digtab.bin`), `sprgeom.inc`; the object state (`GAMEOBJ`: `LV_OBJST`, `LV_GRID`, `LV_BOBJ`, `LV_BNEXT`, `LV_BINSTAR`, `LV_BINOTH`); the menus' `music_addr`, `font_art`, `title.inc` and `title_art` |
 | `src/keymap.inc` | `key_tab`/`key_bits` (`KEYN` = 10), included by the kernel's `scan_keys` |
@@ -59,14 +60,27 @@ won) for `hook_over`.
 
 `clamp_window` clamps `wx` to [0, `maxwx`] and even, `wy` to [0, `maxwy`].
 
-The sound effects (`sfx_tab`: `sfx_jump`, `sfx_star`, `sfx_throw`, `sfx_hit`, `sfx_kill`,
-`sfx_power`, `sfx_die`, ids `SFX_*` in `logic.s`) are steps of the `SFX` macro -- the chip's
-tone latch with the period's low 4 bits, the period's high 6 bits, the volume latch with the
-attenuation, and frames to hold -- ending in `SFX_END`.  Everything plays on tone channel
-`SFX_CH` = 2 except the throw, on the noise channel (`SN_NOISE`, `SN_WHITE` noise).  On the
-noise channel a data byte replaces the noise control, so there `SFX` repeats the control in
-the step's second byte (a 0 there made the throw periodic noise).  They are `PLACEH
-"MRAMCODE", "KRNCODE"` with the kernel's `sound_tick`, which plays `sfx_req` from the vsync.
+The sound effects are `src/sfx.py`'s, played by the engine's player in bank 6 (`SOUND6`,
+`beebgame/src/engine/sound6.s`: four voices -- the three tones and the noise -- each a script
+of segments that hold a period and a level while sweeping them, an effect's priority deciding
+which voice it may take).  `build.sh` sets `SOUND6=1 GAME_SFX=src/sfx.py`; the packer writes
+`sfxdata.inc`, whose `SFX_*` ids the game passes to `sfx_request` (the kernel: X and Y kept, C
+= bit 2 of the id -- `logic.s`'s `sfx_go` branches on it, and `@bgone` takes C = 1 from
+`SFX_CATCH`'s, asserted).  Thirteen: `jump`, `star`, `throw` (noise clocked by a falling,
+silent tone 2), `hit`, `catch` (the boomerang back in her hand), `kill`, `power`, `die` (her
+last health, or the fall off the map), `bounce` (a trampoline), `switch`, `exit` (a fanfare),
+and the menus' `move` and `select` on the noise, as the title tune holds the tones.  The
+player is not stepped through a disc load (the engine's `ld_go` resets it), so the level's
+last frame holds `EXIT_WAIT` (40) vsyncs for the exit's fanfare (`game.s fl_over`).  The
+effects cost about 700 cycles a frame in play (the player's vsync steps, the chip's writes).
+
+The player's room in bank 6 is the tiles': `TOFF` (12) slots start above it, so the two
+fullest levels (L4B, L2B) store some full tiles as mirror images of others (`TILEMIRROR`:
+`convert.py pack_tiles`, only as many as the level needs, the least used first; 8 and 2
+today), drawn reversed by the engine's blitter (about 190 cycles a frame on every level) and
+baked so by the load-time program, which with them needs the Model B's 2.75K (`LDBIG`).
+`test/tilecheck.mjs` and `btilecheck.mjs` take `TP` (positions to put Cleo at) to bring the
+mirrored cells into view.
 
 ## 3. The logic (`logic.s`)
 
@@ -450,7 +464,8 @@ level files are shared, so both runs must write them identically (the build `cmp
    of at most `TILE_CHUNK` (256) tiles, most-used first (223, 61, 105 today).
 8. **`pack_tiles(lv, sub)`**: the level's ids.  0 is the solid it uses more (cyan on ties,
    the fill byte `solidfill` $0F or $00 in the shape); 1..NT the full tiles, slot `id + TOFF`
-   in bank 6; the halves in three runs (top row a fill, bottom row a fill, both rows the one
+   in bank 6; with `TILEMIRROR`, the mirrored tiles from `mir0` after the halves (only where
+   the level would not fit otherwise; `MIRTAB` their sources' ids); the halves in three runs (top row a fill, bottom row a fill, both rows the one
    stored), their fills from a palette of at most 8 pairs and `hlow` bits; `FLAT0..253` the
    flats (`NFLAT`, a build knob, default 4; more than that demotes the least used to full
    tiles); 254/255 the solids.  Identical tiles share an id (bytes, attribute and class).

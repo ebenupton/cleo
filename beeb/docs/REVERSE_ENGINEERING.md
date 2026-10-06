@@ -113,8 +113,11 @@ bar backdrop, the digits 0..9 at `(63 + n%5*8, n//5*8)`, the background indices 
 icons are crops of the sprites (Cleo's head = sprite 0, the heart = 97, the star = 34).
 `thm.mid` is ordinary MIDI; `beebgame/tools/midi2snd.py` reduces it to three voices at 50 Hz
 (Cleo's `1:max/0:min/0:min2`: the melody the highest note of channel 1, the backing the two
-lowest of channel 0).  `snd` was not decoded: the port's effects are authored in `game.s`
-(`sfx_tab`, the `SFX` macro's chip latches).
+lowest of channel 0).  `snd` is a Nokia Smart Messaging ringtone (OTT: `02 4A 3A`, a basic
+song titled "titles", one pattern of 157 instructions at 160 bpm): a monophonic version of the
+title tune, for handsets without MIDI.  This version never loads it (`CleoApp` plays only
+`thm.mid`, through `Manager.createPlayer`), and the original has no sound effects: the port's
+are its own (`src/sfx.py`).
 
 ## 4. The logic
 
@@ -153,7 +156,7 @@ turned out to be a bug.  Learned the hard way:
 | `bar.png` | `bar16`/`bar_icon`, `digits`; `assets.py _digits` | `BAR` (1280 bytes to `BARADDR`), `digits.bin`, `digtab.bin` |
 | `tit.png` | `font`, `pieces`, `title_rle` | `font.bin`, `title.bin` + `title.inc` |
 | `thm.mid` | `beebgame/tools/midi2snd.py` | `build/MUSIC` -> `music.bin` (`music_addr`) |
-| `snd` | -- | `game.s sfx_tab`, re-authored |
+| `snd` | -- | unused (the title tune as a ringtone); the effects are the port's, `src/sfx.py` |
 | `CleoApp.run()` | by hand | `logic.s`, `game.s`, `menu.s` |
 
 ## 6. Tooling that paid for itself

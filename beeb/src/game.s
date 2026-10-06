@@ -1,12 +1,10 @@
 ; ============================================================================
 ; Cleo's game loop: the camera clamp, the level loop (the engine's hook_play),
-; the frame loop pegged to the vsync, the end of a game, and the sound effects'
-; data.  GAMECODE (bank 7, the game's image) on both machines, the same code for
-; both; the sound effects go where the engine's sound_tick runs (PLACEH: the
-; kernel on the Model B, main RAM on the Master).
+; the frame loop pegged to the vsync, the end of a game.  GAMECODE (bank 7, the
+; game's image) on both machines, the same code for both.  (The sound effects are
+; src/sfx.py's, for the engine's player: SOUND6.)
 ;   clamp_window   wx into [0, maxwx] and even, wy into [0, maxwy] (game_frame)
 ;   level_loop     hook_play: load the level, set it up, run its frames (main.s)
-;   sfx_tab        the sound effects by SFX_ id (logic.s), for sound_tick
 ; Labels the test harness holds to (test/harness.mjs and the tools on it):
 ; level_loop must start with its `ldx level` within 24 bytes; frame_top is the
 ; once-a-frame break; fl_wait is the idle spin the cycle counts leave out
@@ -129,6 +127,7 @@ fl_wait:
         lda vsyncs
 @loop:  cmp vsyncs
         beq @loop
+EXIT_WAIT = 40                     ; vsyncs the level's last frame holds: the exit's fanfare (src/sfx.py)
 ; ---- frame_loop: the peg.  A rendered frame every VSPEG vsyncs, and the logic
 ;      takes one step a frame, at twice the original's rates (logic.s
 ;      game_frame).  No catching up: time lost to a long frame is dropped, so
@@ -155,6 +154,11 @@ frame_top:
 fl_over:
         ldx lives
         beq game_over              ; X = 0: lost
+        lda vsyncs                 ; the exit's fanfare (logic.s SFX_EXIT) plays out over
+        clc                        ;  the last frame: the effects player is not stepped
+        adc #EXIT_WAIT             ;  through the load
+@fan:   cmp vsyncs
+        bne @fan
   .if .not ALLLEVELS               ; (a test build plays every bonus level)
         lda stars                  ; stars left uncollected: skip the bonus level --
         beq @next1                 ;  level |= 1 (odd), then +1 is the next main level
@@ -197,62 +201,3 @@ game_over:
 @skip:  jsr blank_palette          ; dark for the load (keeps X)
         txa                        ; A = 0 lost, 1 won
         jmp go_menu                ; the menus' image, then hook_over (disc.s)
-
-; ---------------------------------------------------------------- the sound effects
-        PLACEH "MRAMCODE", "KRNCODE"    ; with sound_tick: bank 7 on the Model B, main
-                                        ; RAM on the Master (hardware: its interrupt)
-; A sound effect (kernel.s sound_tick) is SFX steps, then SFX_END.  A step is
-; SFXSTEP_LEN bytes: the chip's three bytes -- the channel's tone latch with the
-; period's low 4 bits, the period's high 6 bits as a data byte, the channel's
-; volume latch with the attenuation (hw.inc SN_*) -- and the frames to hold
-; them.  sound_tick's end mark silences channel 2 and the noise channel, so
-; every effect plays on SFX_CH or, the throw, on the noise channel (SN_NOISE,
-; whose latch's low 3 bits pick the noise).  The data byte that follows a latch
-; replaces the noise control on the noise channel, so there it repeats lo4 (a 0
-; there turned the throw's white noise periodic).
-.macro SFX ch, lo4, hi, att, dur
-  .if ch = SN_NOISE
-        .assert hi = 0, error, "SFX: a noise step has no period high bits"
-        .byte SN_LATCH | (ch << SN_CHSHIFT) | lo4, lo4
-  .else
-        .byte SN_LATCH | (ch << SN_CHSHIFT) | lo4, hi
-  .endif
-        .byte SN_LATCH | SN_VOL | (ch << SN_CHSHIFT) | att, dur
-.endmacro
-SFX_CH = 2                         ; the effects' tone channel
-sfx_tab:   .word sfx_jump, sfx_star, sfx_throw, sfx_hit, sfx_kill, sfx_power, sfx_die
-sfx_jump:  SFX SFX_CH, 8, 12, 0, 2
-           SFX SFX_CH, 4, 9, 2, 2
-           SFX SFX_CH, 0, 7, 4, 2
-           SFX SFX_CH, 8, 5, 6, 3
-           .byte SFX_END
-sfx_star:  SFX SFX_CH, 0, 4, 0, 2
-           SFX SFX_CH, 0, 3, 0, 3
-           SFX SFX_CH, 0, 3, 6, 3
-           .byte SFX_END
-sfx_throw: SFX SN_NOISE, SN_WHITE | 0, 0, 2, 2   ; white noise, the fastest rate,
-           SFX SN_NOISE, SN_WHITE | 1, 0, 5, 3   ;  then the next, fading
-           SFX SN_NOISE, SN_WHITE | 1, 0, 9, 3
-           .byte SFX_END
-sfx_hit:   SFX SFX_CH, 0, 40, 0, 4
-           SFX SFX_CH, 0, 48, 2, 4
-           SFX SFX_CH, 0, 60, 5, 5
-           .byte SFX_END
-sfx_kill:  SFX SFX_CH, 0, 6, 0, 2
-           SFX SFX_CH, 0, 9, 1, 2
-           SFX SFX_CH, 0, 12, 3, 3
-           SFX SFX_CH, 0, 16, 6, 3
-           .byte SFX_END
-sfx_power: SFX SFX_CH, 0, 6, 0, 3
-           SFX SFX_CH, 0, 5, 0, 3
-           SFX SFX_CH, 0, 4, 0, 3
-           SFX SFX_CH, 0, 3, 0, 6
-           .byte SFX_END
-sfx_die:   SFX SFX_CH, 0, 12, 0, 6
-           SFX SFX_CH, 0, 16, 1, 6
-           SFX SFX_CH, 0, 22, 2, 8
-           SFX SFX_CH, 0, 30, 4, 10
-           SFX SFX_CH, 0, 40, 7, 12
-           .byte SFX_END
-        .assert sfx_star - sfx_jump = 4*SFXSTEP_LEN + 1, error, "an sfx step is SFXSTEP_LEN bytes"
-        .assert SFX_JUMP = 1 && SFX_DIE = 7, error, "sfx_tab is indexed by the 1-based SFX_ ids"

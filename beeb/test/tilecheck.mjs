@@ -21,6 +21,9 @@ import { open } from "./harness.mjs";
 import fs from "fs";
 const [disc, labels, lvS, nS, dir = "build/tileids"] = process.argv.slice(2);
 const lv = +lvS, N = +nS;
+// TP="x,y;x,y;...": Cleo put at each (game pixels) in turn, TPF frames each (20), the
+// camera following her -- to bring chosen map cells into the window
+const TP = (process.env.TP ?? '').split(';').filter(Boolean).map(p => p.split(',').map(Number)), TPF = +(process.env.TPF ?? 20);
 const exp = fs.readFileSync(`${dir}/L${lv}.bin`);
 const H = await open({ disc, labels, level: lv });
 const A = H.A;
@@ -36,6 +39,7 @@ const bank = (b, f) => { const was = H.rd((A.romsel_cpy ?? 0xf4)); H.wr((A.romse
 for (let f = 0; f < N; f++) {
   const pc = PAT[f % PAT.length]; const k = pc === "j" ? 6 : KEYS[pc];
   H.wr(A.keys, k); H.wr(A.hurt, 1); H.wr(A.health, 3);
+  if (TP.length) { const [x, y] = TP[Math.floor(f / TPF) % TP.length]; H.wr(A.px, x & 255); H.wr(A.px + 1, x >> 8); H.wr(A.py, y & 255); H.wr(A.py + 1, y >> 8); }
   await H.runTo(A.frame_top);
   const cur = (H.rd(0xfe34) >> 2) & 1;   // the buffer the CPU sees (ACCCON X: 1 = shadow)
   const cx = H.inBank("BUF_CXL", () => (A.BUF_CXH !== undefined ? H.rd(A.BUF_CXL + cur) | (H.rd(A.BUF_CXH + cur) << 8) : H.rd(A.BUF_CXL + 2 * cur) | (H.rd(A.BUF_CXL + 2 * cur + 1) << 8))), cy = H.inBank("BUF_CY", () => H.rd(A.BUF_CY + cur));

@@ -14,8 +14,8 @@
 ; Exported: level_init and game_frame (game.s's level loop), redraw_hud (hook_hud:
 ; the engine's render_frame, main.s), bar_bg (hook_image: the loader, main.s), the
 ; game state the menus set (level, lives, seed, max_level, score, hi_score) and
-; read (exiting, stars: game.s).  The sound effect ids (SFX_*) index game.s's
-; sfx_tab.
+; read (exiting, stars: game.s).  The sound effects are src/sfx.py's (SFX_*, for
+; the engine's sfx_request).
 ;
 ; The two rules the collision code keeps:
 ;   -- no intermediate positions.  A frame moves Cleo (dxl, dyl) and the boomerang
@@ -150,15 +150,19 @@ HUD_SLOT_SCORE0 = 4
 HUD_NSLOTS      = 9
 DIGIT_ROWBYTES = TILECHARS*CHARBYTES ; a digit's char row: 4 chars
 DEC_BASE  = 10                     ; the stars' two decimal digits (redraw_hud)
-; the sound effects: 1-based into game.s's sfx_tab (sfx_jump, sfx_star, ... in this
-; order); sfx_req takes one (the kernel's sound_tick plays it)
-SFX_JUMP  = 1
-SFX_STAR  = 2
-SFX_THROW = 3
-SFX_HIT   = 4
-SFX_KILL  = 5
-SFX_POWER = 6
-SFX_DIE   = 7
+; the sound effects: src/sfx.py's, played by the engine's player in bank 6 (SOUND6);
+; SFX_* (sfxdata.inc) to sfx_request, which keeps X and Y
+; sfx_go id, target: ask for effect id and branch to target, always -- sfx_request
+; leaves C = bit 2 of the id
+.macro sfx_go id, target
+        lda #id
+        jsr sfx_request
+  .if id & 4
+        bcs target
+  .else
+        bcc target
+  .endif
+.endmacro
 
 ; ---------------------------------------------------------------- object arrays (bank 7)
 ; OBJ_MAX (levelfmt.inc) objects at most, a byte a field each, from LV_OBJST
@@ -1322,7 +1326,7 @@ mod16:
 ;   In:    keys; the game's state; bank 7 paged
 ;   Out:   frame + 1; star_clk stepped; wx, wy (the camera, clamped) while alive;
 ;          the objects in the window processed (their state, the sprite list, the
-;          score, bar_dirty, sfx_req); then Cleo's step (player_update, or
+;          score, bar_dirty, its sound); then Cleo's step (player_update, or
 ;          player_dead); exiting set when the level ends
 ;   Uses:  A X Y, everything the handlers use (ZPGAME's scratch, spx/spy)
 ;   Post:  bank 7 paged
@@ -1543,7 +1547,7 @@ game_frame:
 ;   In:    hx+1's sign = the enemy's side (rx+1: negative, it is to her left)
 ;   Out:   health - 1; hurt, control = 1, 0; ev_frame = frame; vx = KNOCK_VX away
 ;          from it (0 with no health left), vy = JUMP_VY; bar_dirty = 1 (the HUD's
-;          health); sfx_req = SFX_HIT
+;          health); SFX_HIT asked for, SFX_DIE when it took her last health
 ;   Uses:  A
 ;   Keeps: X Y
 ; ----------------------------------------------------------------------------
@@ -1570,9 +1574,12 @@ player_hit:
 @skip:  sta vx+1
         lda #>JUMP_VY
         sta vy+1
+        lda health
+        beq @dead
         lda #SFX_HIT
-        sta sfx_req
-        rts
+        .byte OP_BIT_ABS           ; (skips the lda below)
+@dead:  lda #SFX_DIE               ; the last health: her death's sound
+        jmp sfx_request
 
 ; ----------------------------------------------------------------------------
 ; player_dead: her step with no health: the fall, then the respawn
@@ -1718,7 +1725,7 @@ gravity:
 ;          set it: the only way in); bounce taken by game_frame; the objects run
 ;   Out:   px, py, vx, vy, anim, facing, running, firing, hurt, control, alt; dxl,
 ;          dyl = her move (for next frame's csweep); the boomerang's bx, by, bvx,
-;          bvy, bcnt, bactive, bdx, bdy; health = 0 off the map's bottom; sfx_req;
+;          bvy, bcnt, bactive, bdx, bdy; health = 0 off the map's bottom; its sound;
 ;          exiting = 1 in the exit's box; her sprite and the boomerang's added
 ;   Uses:  A X Y, qx, qy, q6, dpx, t16, pxs, pys, bmx, bmy, spx, spy, and
 ;          get_altitude's (the memo)
@@ -1779,11 +1786,10 @@ player_update:
         bne @vdone                 ; always: vy = 0 moves her by 0 (two steps of 0, no
                                    ;  gravity): py and alt stand; dpx, dpx+1 are dead
                                    ;  at @vdone (the move across rewrites them)
-@leap:  lda #>JUMP_VY
+@leap:  lda #SFX_JUMP
+        jsr sfx_request
+        lda #>JUMP_VY
         sta vy+1
-        inx                        ; X = 1 = SFX_JUMP: firing, in X, tested 0 above
-        .assert SFX_JUMP = 1, error, "player_update: the jump's sfx is firing + 1"
-        stx sfx_req
         .assert <JUMP_VY = 0 && >JUMP_VY >= $80, error, "player_update: a jump's first move is >JUMP_VY"
         sta q5                     ; the first move: step1 of JUMP_VY, its high byte
         jsr move2g                 ; rising: the second with gravity
@@ -1845,7 +1851,7 @@ player_update:
         zero health, control, vx, vx+1
         jsr bar_touch
         lda #SFX_DIE
-        sta sfx_req
+        jsr sfx_request
 @push:  feet_qy                    ; the tile under her feet: its push
         jsr get_tile_attr
         and #PUSH_MASK
@@ -2034,9 +2040,7 @@ player_update:
         lda #>(-BOOM_VX)
 @bdir:  sta bvx+1
         inc bactive                ; 0 here: a throw starts only with bactive clear
-        lda #SFX_THROW
-        sta sfx_req
-        bne @animdone              ; always: SFX_THROW <> 0
+        sfx_go SFX_THROW, @animdone
         .assert <* <> $FF, error, "player_update: @animtab must not cross a page"
 @animtab:                          ; by running (0/1): the stand's wrap, the run's
         .byte IDLE_ANIM, RUN_ANIM
@@ -2233,8 +2237,10 @@ player_update:
         jsr brel                   ; caught?  The box it crossed meets Cleo's: rx, ry
         ldx #RQ_BOOM_STAR          ;  in -7..7 (a star's -8..8 band, open)
         jsr bsweep
-        bcs @bgone
-        mov16 spx, bx
+        bcc @bshow                 ; not caught: it flies on
+        .assert SFX_CATCH & 4, error, "player_update: @bgone wants C = 1, sfx_request's bit 2 of SFX_CATCH"
+        sfx_go SFX_CATCH, @bgone   ; caught: its sound, and gone (C = 1)
+@bshow: mov16 spx, bx
         mov16 spy, by
         lda bcnt
         clc
@@ -2265,6 +2271,8 @@ player_update:
         cpx #EXIT_H
         bcs @noexit
         inc exiting                ; 0 here in play: the loop leaves on any nonzero
+        lda #SFX_EXIT              ; its fanfare, over the next level's load
+        jmp sfx_request
 @noexit:
         rts
 
@@ -2909,7 +2917,7 @@ ob_star1:
         dec stars
         jsr add_score              ; A = SCORE_STAR still; it ends in jmp bar_touch (Y kept)
         lda #SFX_STAR
-        sta sfx_req
+        jsr sfx_request
         lda #SPARKLE0              ; the sparkle's first step: its count, and A for @anim
         sta O_AL,y
         bne @spin                  ; always; A = SPARKLE0 < SPARKLE_END: @anim's test cannot pass
@@ -2952,7 +2960,7 @@ ob_star1:
 ;          bouncing, two steps a frame; E (O_EL) its rest state's baked box id (0:
 ;          none); rx, ry, spx, spy, health, vy
 ;   Out:   O_AL; Cleo bounced (vy = TRAMP_VY, py set TRAMP_SINK into its band,
-;          sfx_req) when she lands on it; its sprite added (box_safe's for the rest
+;          its sound) when she lands on it; its sprite added (box_safe's for the rest
 ;          box)
 ;   Uses:  A X Y, q2, box_safe's
 ; Falls into box_safe for the rest box.
@@ -2987,8 +2995,8 @@ ob_tramp:
         lda spy+1
         sbc #0
         sta py+1
-        lda #SFX_JUMP
-        sta sfx_req
+        lda #SFX_BOUNCE
+        jsr sfx_request
 @draw:  lda O_AL,y                 ; at rest (0): its rest state's baked box, if it has
         bne @bounce                ;  one (assets.py: an id a trampoline; 0 for none)
         lda O_EL,y
@@ -3057,7 +3065,7 @@ box_safe:
 ;          still at an end, 4-5 dying: 4 flying right, 5 left), E (O_EL) the
 ;          counter; rx, ry, spx, spy, health, hurt, vy
 ;   Out:   its fields; rx, spx += B; Cleo hit (player_hit) or bounced (bounce); the
-;          boomerang stopped (bcnt = BCNT_HIT), the score, sfx_req; its sprite
+;          boomerang stopped (bcnt = BCNT_HIT), the score, its sound; its sprite
 ;   Uses:  A X Y (Y = obj again after add_score, player_hit)
 ;   Cost:  measured 180 cycles a frame, 1.3 snakes (as po_star's)
 ; ----------------------------------------------------------------------------
@@ -3109,9 +3117,7 @@ ob_snake:
         jsr add_score
 @kz:    lda #0
         sta O_EL,y
-        lda #SFX_KILL
-        sta sfx_req
-        bne @boom                  ; always: SFX_KILL <> 0
+        sfx_go SFX_KILL, @boom
 @draw:  snake_bge 1-SNAKE_FLYMAX   ; B <= -SNAKE_FLYMAX (flown off left): not drawn
         bcc @done
         txa                        ; B - A >= SNAKE_FLYMAX (off right): not drawn (C = 1:
@@ -3217,7 +3223,7 @@ ob_snake:
 ;          and D (O_CL/CH, O_DL/DH) the knock's flight (its y and x offsets); rx,
 ;          spx, spy, health, hurt, px
 ;   Out:   its fields; Cleo hit while the snake is up (body_draw: the frames
-;          drawn); the boomerang stopped (bcnt), the score, sfx_req; its sprites
+;          drawn); the boomerang stopped (bcnt), the score, its sound; its sprites
 ;          (the snake while up, and the basket)
 ;   Uses:  A X Y, ox, oy, q1, q6, rise, rx, ry, spx, spy (Y = obj again after the
 ;          calls that change it)
@@ -3276,7 +3282,7 @@ ob_rsnake:
 @kr:    lda #BCNT_HIT
         sta bcnt
         lda #SFX_KILL
-        sta sfx_req
+        jsr sfx_request
 @hitp:
 @draw:  lda q6                     ; rising, at the top, sinking: a frame pair each
         beq @basket
@@ -3362,7 +3368,7 @@ ob_rsnake:
 ;          (O_EL) the counter: flapping 0..7, BAT_DEAD_E dead; rx, ry, spx, spy,
 ;          health, hurt, vy, dyl, frame
 ;   Out:   its fields; rx, ry, spx, spy moved by half the velocity; Cleo hit or
-;          bounced; the boomerang stopped, the score, sfx_req; its sprite (wobbled
+;          bounced; the boomerang stopped, the score, its sound; its sprite (wobbled
 ;          by bat_off while alive)
 ;   Uses:  A X Y, fc, fd, q1, t16, t16b, the stack (4 bytes); Y = obj again after
 ;          add_score, player_hit
@@ -3505,9 +3511,7 @@ ob_bat:
         sta O_AH,y
         lda #BAT_DEAD_E
         sta O_EL,y
-        lda #SFX_KILL
-        sta sfx_req
-        bne @draw                  ; SFX_KILL <> 0
+        sfx_go SFX_KILL, @draw
 @player:
         lda health
         beq @draw
@@ -3825,7 +3829,7 @@ ob_flame:
 ; pickup animation
 ;   In:    Y = obj; A (O_AL) the pickup's progress (0 at rest, 1..PICKUP_END), E
 ;          (O_EL) its baked box id, in place; rx, ry, health
-;   Out:   O_AL; health = HEALTH_MAX, bar_dirty, sfx_req on a pickup; its sprite
+;   Out:   O_AL; health = HEALTH_MAX, bar_dirty, its sound on a pickup; its sprite
 ;          (box_safe's at rest)
 ;   Uses:  A X Y, q2, box_safe's (Y = obj again after bar_touch)
 ; ----------------------------------------------------------------------------
@@ -3843,9 +3847,7 @@ ob_powerup:
         sta health
         jsr bar_touch              ; A = 1 on return and Y kept (lda #1 / sta bar_dirty)
         sta O_AL,y                 ; the pickup starts (O_AL was 0: bne @adv fell through)
-        lda #SFX_POWER
-        sta sfx_req
-        bne @draw                  ; Z = 0: SFX_POWER <> 0
+        sfx_go SFX_POWER, @draw
 @adv:   cmp #PICKUP_END
         bcs @done
         adc #2                     ; C = 0: the bcs was not taken; two steps
@@ -3951,7 +3953,7 @@ mark_pair:
 ;          row, fc = the rows (0: none), fd = its state (0 unthrown) -- os_switch's
 ;          copies of A..D; rx, ry
 ;   Out:   fd = 1 once thrown; the map rewritten and marked (mark_pair); the score
-;          (SCORE_SWITCH), sfx_req; its sprite by fd
+;          (SCORE_SWITCH), its sound; its sprite by fd
 ;   Uses:  A X Y, q4, q5, map_ptr, mark_pair's
 ;   Post:  bank 7 paged
 ; ----------------------------------------------------------------------------
@@ -3963,8 +3965,8 @@ ob_switch:
         bcc @draw
         lda #SCORE_SWITCH          ; (BCD)
         jsr add_score
-        lda #SFX_POWER
-        sta sfx_req
+        lda #SFX_SWITCH
+        jsr sfx_request
         lda fc                     ; the rows: fc of them from fb, counted in place (fb, fc
         beq @set                   ;  are os_switch's copies, only read back from the record)
 @rl:    ldx fa
