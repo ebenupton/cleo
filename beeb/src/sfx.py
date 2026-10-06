@@ -18,11 +18,11 @@ EFFECTS = [
         (0, [S(3, 95, 240, -10, 0, 0), S(12, 63, 240, -16, 0, 0)]),
         (1, [S(15, 127, 140, -9, 0, 0)]),
     ]),
-    # the boomerang thrown: a soft whoosh -- noise alone, swelling gently and fading, its rate
-    # drifting down (clocked by the silent tone 2); never loud
+    # the boomerang thrown: a whoosh -- noise alone, swelling and fading, its rate drifting
+    # down (clocked by the silent tone 2); its peak near the other effects' level
     ('throw', 3, [
         (2, [S(12, 40, 0, 0, 3, 0)]),
-        (3, [S(5, NW_T2, 40, 18, 0, 0), S(7, KEEP, KEEP, -16, 0, 0)]),
+        (3, [S(5, NW_T2, 120, 27, 0, 0), S(7, KEEP, KEEP, -30, 0, 0)]),
     ]),
     # she is hurt: the port's original effect, three falling tones
     ('hit', 7, [
