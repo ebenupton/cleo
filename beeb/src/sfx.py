@@ -18,10 +18,12 @@ EFFECTS = [
         (0, [S(3, 95, 240, -10, 0, 0), S(12, 63, 240, -16, 0, 0)]),
         (1, [S(15, 127, 140, -9, 0, 0)]),
     ]),
-    # the boomerang thrown: a whoosh, noise clocked by a falling (silent) tone 2
+    # the boomerang thrown: a 'vwhip' -- a swish of noise swelling and dying, its rate rising
+    # then falling (clocked by the silent tone 2), over a pitch whipping up
     ('throw', 3, [
-        (2, [S(10, 24, 0, 0, 5, 0)]),
-        (3, [S(10, NW_T2, 210, -20, 0, 0)]),
+        (2, [S(4, 60, 0, 0, -12, 0), S(6, KEEP, 0, 0, 10, 0)]),
+        (3, [S(3, NW_T2, 190, 22, 0, 0), S(7, KEEP, KEEP, -30, 0, 0)]),
+        (1, [S(6, 320, 200, -26, -38, 0)]),
     ]),
     # she is hurt: a harsh, falling buzz over a thud
     ('hit', 7, [
@@ -48,15 +50,11 @@ EFFECTS = [
         (1, [S(30, 300, 220, -4, 14, 0), S(20, KEEP, KEEP, -10, 18, 0)]),
         (3, [S(40, NW_LO, 200, -5, 0, 0)]),
     ]),
-    # a trampoline: a boing -- a twang that drops, then wobbles about its note at ~8 Hz,
-    # each swing smaller, fading as the spring settles; an octave below for body
+    # a trampoline: a short, sharp boing -- struck hard, dropping, then a fast wobble
+    # (~12 Hz) dying in 0.2 s
     ('bounce', 4, [
-        (1, [S(2, 280, 254, -4, 70, 0), S(3, KEEP, KEEP, -8, -36, 0), S(3, KEEP, KEEP, -8, 36, 0),
-             S(3, KEEP, KEEP, -10, -26, 0), S(3, KEEP, KEEP, -12, 26, 0), S(3, KEEP, KEEP, -14, -16, 0),
-             S(4, KEEP, KEEP, -16, 16, 0)]),
-        (2, [S(2, 560, 150, -2, 140, 0), S(3, KEEP, KEEP, -5, -72, 0), S(3, KEEP, KEEP, -5, 72, 0),
-             S(3, KEEP, KEEP, -6, -52, 0), S(3, KEEP, KEEP, -7, 52, 0), S(3, KEEP, KEEP, -8, -32, 0),
-             S(4, KEEP, KEEP, -9, 32, 0)]),
+        (1, [S(2, 200, 254, -20, 100, 0), S(2, KEEP, KEEP, -36, -60, 0), S(2, KEEP, KEEP, -44, 44, 0),
+             S(2, KEEP, KEEP, -52, -30, 0), S(2, KEEP, KEEP, -60, 20, 0)]),
     ]),
     # a switch thrown: a clunk
     ('switch', 5, [
