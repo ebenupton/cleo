@@ -665,6 +665,12 @@ def pack_level(lv, sub):
             assert (qc[2], qc[0]) > (pc[2], pc[0]) or ((qc[2], qc[0]) == (pc[2], pc[0]) and qi < pi), \
                 ('%s: an object listed before the powerup it can be drawn over' % name, o, (x, y))
     _tr, _st, _by, _at = level_bakes(lv, sub)
+    # a red snake knocked flying sends its pot off sideways, up to a screen and more either
+    # way (logic.s ob_rsnake @knocked): a trampoline at the pot's height within a screen
+    # width of it is crossed, so it is disturbable too, as one on a walker's track is
+    pb = m._SPRBOX[SPR['BASKET']]
+    pot_reach = [(8 * x + pb[0] - WINPX, 8 * x + pb[1] + WINPX, 8 * y + pb[2], 8 * y + pb[3])
+                 for (t, x, y, ex) in L['objs'] if t == OT['RSNAKE']]
     # the objects' extras: e0 a star's first box id (the sky's six, the black's, or its own
     # baked six; 0 for masked frames), a powerup's baked box id (logic.s ob_powerup), a
     # trampoline's rest box id (0: none); e1 whether an enemy's reach covers it
@@ -685,7 +691,7 @@ def pack_level(lv, sub):
             e[0] = BOXID0 + NBOXART + _tr[oi] if oi in _tr else 0
             b = m.TYPE_BOX[OT['TRAMP']]
             selfbox = (8 * x + b[0], 8 * x + b[1], 8 * y + b[2], 8 * y + b[3])
-            e[1] = 1 if m.box_reachable(b, x, y, reach, skip=selfbox) else 0
+            e[1] = 1 if m.box_reachable(b, x, y, reach + pot_reach, skip=selfbox) else 0
         objs.append([t, x, y] + e)
     # The stars' phases (e2): a star's spin step is the level's star clock plus its phase
     # (logic.s ob_star), so the stars a screen shows at once can be spread across the spin
